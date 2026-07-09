@@ -531,6 +531,35 @@ function App() {
                     </div>
                   ))}
                 </div>
+                {cartItems.length > 0 && (() => {
+                  const cartCats = new Set(cartItems.map(i => i.categoria).filter(Boolean))
+                  const related = produtos
+                    .filter(p => cartCats.has(p.categoria) && !cart[p.id] && p.preco > 0)
+                    .slice(0, 5)
+                  if (related.length === 0) return null
+                  return (
+                    <div className="cart-related">
+                      <h4><i className="fa-solid fa-link"></i> Itens Relacionados</h4>
+                      {related.map(p => (
+                        <div key={p.id} className="cart-related-item">
+                          <div className="cart-related-img">
+                            {p.imagem
+                              ? <img src={p.imagem} alt={p.nome} onError={e => { e.target.style.display = 'none' }} />
+                              : <i className="fa-solid fa-box"></i>}
+                          </div>
+                          <div className="cart-related-info">
+                            <span className="cart-related-name">{p.nome}</span>
+                            <span className="cart-related-price">{formatPreco(p.preco)}</span>
+                          </div>
+                          <button className="cart-related-add" onClick={() => {
+                            setCart(prev => ({ ...prev, [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, foto: p.foto, estoque: p.estoque, categoria: p.categoria, qty: 1 } }))
+                            showToast(`${p.nome} adicionado ao carrinho!`, 'success')
+                          }}><i className="fa-solid fa-plus"></i></button>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
                 <div className="cart-footer">
                   <div className="cart-summary">
                     <span>Total</span>
