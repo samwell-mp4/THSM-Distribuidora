@@ -39,6 +39,7 @@ export default function UserDashboard({ produtos = [], onVoltar }) {
   const [processing, setProcessing] = useState(false)
   const [prodSearch, setProdSearch] = useState('')
   const [prodCategoria, setProdCategoria] = useState('TODOS')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const currentUser = useMemo(() => {
     try { const d = localStorage.getItem(LS_SESSAO); return d ? JSON.parse(d) : null } catch { return null }
@@ -186,38 +187,57 @@ export default function UserDashboard({ produtos = [], onVoltar }) {
     )
   }
 
+  const tabLabel = tab === 'produtos' ? 'Produtos' : tab === 'pedidos' ? 'Meus Pedidos' : tab === 'financeiro' ? 'Financeiro' : ''
+
   return (
     <div className="admin">
-      <aside className="admin-sidebar">
-        <div className="admin-logo">
-          <i className="fa-solid fa-cubes"></i>
-          <div>
-            <strong>THSM Distribuidora</strong>
-            <span>Cliente</span>
+      {/* Mobile header */}
+      <div className="admin-mobile-top">
+        <button className="admin-hamburger" onClick={() => setSidebarOpen(true)}>
+          <i className="fa-solid fa-bars"></i>
+        </button>
+        <span className="admin-mobile-title">{tabLabel}</span>
+        <button className="admin-hamburger" onClick={onVoltar} style={{ fontSize: '0.9rem' }}>
+          <i className="fa-solid fa-arrow-left"></i>
+        </button>
+      </div>
+
+      {/* Sidebar overlay on mobile */}
+      {sidebarOpen && <div className="admin-overlay" onClick={() => setSidebarOpen(false)} />}
+
+      <aside className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}>
+        <div className="admin-sidebar-header">
+          <div className="admin-logo">
+            <i className="fa-solid fa-cubes"></i>
+            <div>
+              <strong>THSM Distribuidora</strong>
+              <span>Cliente</span>
+            </div>
           </div>
+          <button className="admin-hamburger close" onClick={() => setSidebarOpen(false)} style={{ display: 'none' }}>
+            <i className="fa-solid fa-times"></i>
+          </button>
         </div>
         <nav className="admin-nav">
-          <button className={`admin-nav-item ${tab === 'produtos' ? 'active' : ''}`} onClick={() => setTab('produtos')}>
-            <i className="fa-solid fa-box"></i> Produtos
+          <button className={`admin-nav-item ${tab === 'produtos' ? 'active' : ''}`} onClick={() => { setTab('produtos'); setSidebarOpen(false) }}>
+            <i className="fa-solid fa-box"></i> <span>Produtos</span>
           </button>
-          <button className={`admin-nav-item ${tab === 'pedidos' ? 'active' : ''}`} onClick={() => setTab('pedidos')}>
-            <i className="fa-solid fa-clipboard-list"></i> Meus Pedidos
+          <button className={`admin-nav-item ${tab === 'pedidos' ? 'active' : ''}`} onClick={() => { setTab('pedidos'); setSidebarOpen(false) }}>
+            <i className="fa-solid fa-clipboard-list"></i> <span>Meus Pedidos</span>
           </button>
-          <button className={`admin-nav-item ${tab === 'financeiro' ? 'active' : ''}`} onClick={() => setTab('financeiro')}>
-            <i className="fa-solid fa-coins"></i> Financeiro
+          <button className={`admin-nav-item ${tab === 'financeiro' ? 'active' : ''}`} onClick={() => { setTab('financeiro'); setSidebarOpen(false) }}>
+            <i className="fa-solid fa-coins"></i> <span>Financeiro</span>
             {pendentes.length > 0 && <span className="admin-badge">{pendentes.length}</span>}
           </button>
         </nav>
         <div className="admin-sidebar-footer">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.5rem', borderRadius: '8px', background: 'rgba(255,255,255,0.05)' }}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 700 }}>
-              {currentUser?.nome?.charAt(0)?.toUpperCase() || 'U'}
+          <div className="admin-user-card">
+            <div className="admin-user-avatar">{currentUser?.nome?.charAt(0)?.toUpperCase() || 'U'}</div>
+            <div className="admin-user-info">
+              <div className="admin-user-name">{currentUser?.nome || 'Usuário'}</div>
+              <div className="admin-user-email">{currentUser?.email || ''}</div>
             </div>
-            <div style={{ flex: 1, overflow: 'hidden' }}>
-              <div style={{ fontSize: '0.78rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{currentUser?.nome || 'Usuário'}</div>
-              <div style={{ fontSize: '0.65rem', opacity: 0.5 }}>{currentUser?.email || ''}</div>
-            </div>
-            <button onClick={onVoltar} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: '0.85rem' }} title="Voltar ao Catálogo">
+            <button onClick={onVoltar} className="admin-user-back" title="Voltar ao Catálogo">
               <i className="fa-solid fa-arrow-left"></i>
             </button>
           </div>
@@ -273,9 +293,9 @@ export default function UserDashboard({ produtos = [], onVoltar }) {
                     <tbody>
                       {filtered.map((p, idx) => (
                         <tr key={p.id || idx}>
-                          <td className="td-prod-name">{p.nome}</td>
-                          <td>{p.categoria || '-'}</td>
-                          <td className="td-price">{formatPreco(p.preco)}</td>
+                          <td className="td-prod-name" data-label="Produto">{p.nome}</td>
+                          <td data-label="Categoria">{p.categoria || '-'}</td>
+                          <td className="td-price" data-label="Preço">{formatPreco(p.preco)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -340,13 +360,13 @@ export default function UserDashboard({ produtos = [], onVoltar }) {
                   <tbody>
                     {userOrders.map(o => (
                       <tr key={o.id}>
-                        <td>#{o.id.toString().slice(-6)}</td>
-                        <td>{formatDate(o.date)}</td>
-                        <td>{o.items.reduce((s, i) => s + i.qty, 0)} itens</td>
-                        <td className="td-price">{formatPreco(o.total)}</td>
-                        <td>{o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}</td>
-                        <td><span className={`status-tag status-${o.status}`}>{o.status}</span></td>
-                        <td>
+                        <td data-label="Pedido">#{o.id.toString().slice(-6)}</td>
+                        <td data-label="Data">{formatDate(o.date)}</td>
+                        <td data-label="Itens">{o.items.reduce((s, i) => s + i.qty, 0)} itens</td>
+                        <td className="td-price" data-label="Total">{formatPreco(o.total)}</td>
+                        <td data-label="Pagamento">{o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}</td>
+                        <td data-label="Status"><span className={`status-tag status-${o.status}`}>{o.status}</span></td>
+                        <td data-label="Ações">
                           <div className="td-actions">
                             <button className="action-btn" title="Ver detalhes" onClick={() => setSelectedOrder(o)}>
                               <i className="fa-solid fa-eye"></i>
@@ -435,10 +455,10 @@ export default function UserDashboard({ produtos = [], onVoltar }) {
                         const order = allOrders.find(o => o.id === f.orderId)
                         return (
                           <tr key={f.id} className={overdue ? 'row-overdue' : ''}>
-                            <td className="td-prod-name">{f.itemName} ({f.qty}x)</td>
-                            <td className="td-price">{formatPreco(f.value)}</td>
-                            <td>{formatDate(f.dueDate)}</td>
-                            <td>
+                            <td className="td-prod-name" data-label="Item">{f.itemName} ({f.qty}x)</td>
+                            <td className="td-price" data-label="Valor">{formatPreco(f.value)}</td>
+                            <td data-label="Vencimento">{formatDate(f.dueDate)}</td>
+                            <td data-label="Dias">
                               {f.status === 'pago' ? (
                                 <span className="days-ok">Pago</span>
                               ) : diff > 0 ? (
@@ -449,12 +469,12 @@ export default function UserDashboard({ produtos = [], onVoltar }) {
                                 <span className="days-future">Faltam {Math.abs(diff)} dias</span>
                               )}
                             </td>
-                            <td>
+                            <td data-label="Status">
                               <span className={`status-tag ${overdue ? 'status-atrasado' : f.status === 'pendente' ? 'status-pendente' : 'status-pago'}`}>
                                 {overdue ? 'Atrasado' : f.status === 'pendente' ? 'Pendente' : 'Pago'}
                               </span>
                             </td>
-                            <td>
+                            <td data-label="Ações">
                               <div className="td-actions">
                                 {f.status === 'pendente' && (
                                   <button className="action-btn action-confirm" title="Pagar" onClick={() => openPayment(f)}>
@@ -479,6 +499,27 @@ export default function UserDashboard({ produtos = [], onVoltar }) {
           </div>
         )}
       </main>
+
+      {/* Sticky bottom nav for mobile */}
+      <nav className="admin-bottom-nav">
+        <button className={`admin-bottom-item ${tab === 'produtos' ? 'active' : ''}`} onClick={() => setTab('produtos')}>
+          <i className="fa-solid fa-box"></i>
+          <span>Produtos</span>
+        </button>
+        <button className={`admin-bottom-item ${tab === 'pedidos' ? 'active' : ''}`} onClick={() => setTab('pedidos')}>
+          <i className="fa-solid fa-clipboard-list"></i>
+          <span>Pedidos</span>
+        </button>
+        <button className={`admin-bottom-item ${tab === 'financeiro' ? 'active' : ''}`} onClick={() => setTab('financeiro')}>
+          <i className="fa-solid fa-coins"></i>
+          <span>Financeiro</span>
+          {pendentes.length > 0 && <span className="admin-bottom-badge">{pendentes.length}</span>}
+        </button>
+        <button className="admin-bottom-item" onClick={onVoltar}>
+          <i className="fa-solid fa-arrow-left"></i>
+          <span>Voltar</span>
+        </button>
+      </nav>
 
       {showPayment && (
         <div className="admin-overlay" onClick={closePayment}>

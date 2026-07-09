@@ -8,7 +8,10 @@ import './App.css'
 const LS_USUARIOS = 'thsm_usuarios'
 const LS_SESSAO = 'thsm_sessao'
 const LS_ORDERS = 'thsm_admin_orders'
+const LS_ADMIN = 'thsm_admin_auth'
 const WEBHOOK_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook-test/novo-pedido'
+const ADMIN_USER = 'thsmadmin'
+const ADMIN_PASS = 'th2026smdistribuidora!'
 
 function App() {
   const [showAdmin, setShowAdmin] = useState(false)
@@ -33,7 +36,27 @@ function App() {
   const [loginSenha, setLoginSenha] = useState('')
   const [isRegistering, setIsRegistering] = useState(false)
   const [showUserDash, setShowUserDash] = useState(false)
+  const [showAdminLogin, setShowAdminLogin] = useState(false)
+  const [adminUser, setAdminUser] = useState('')
+  const [adminPass, setAdminPass] = useState('')
+  const [adminAuth, setAdminAuth] = useState(() => {
+    try { const d = localStorage.getItem(LS_ADMIN); return d ? JSON.parse(d) : null } catch { return null }
+  })
   const ITEMS_PER_PAGE = 12
+
+  const loginAdmin = () => {
+    if (adminUser === ADMIN_USER && adminPass === ADMIN_PASS) {
+      const auth = { loggedIn: true, timestamp: Date.now() }
+      localStorage.setItem(LS_ADMIN, JSON.stringify(auth))
+      setAdminAuth(auth)
+      setShowAdminLogin(false)
+      setAdminUser('')
+      setAdminPass('')
+      setShowAdmin(true)
+    } else {
+      alert('Usuário ou senha incorretos')
+    }
+  }
 
   // Auth
   const [usuarios, setUsuarios] = useState(() => {
@@ -256,7 +279,7 @@ function App() {
   }
 
   // Admin & UserDash views
-  if (showAdmin) return <Admin produtos={produtos} onVoltar={() => setShowAdmin(false)} />
+  if (showAdmin && adminAuth?.loggedIn) return <Admin produtos={produtos} onVoltar={() => { setShowAdmin(false); localStorage.removeItem(LS_ADMIN); setAdminAuth(null) }} />
   if (showUserDash) return <UserDashboard produtos={produtos} onVoltar={() => setShowUserDash(false)} />
 
   return (
@@ -272,7 +295,7 @@ function App() {
       <header className="header">
         <div className="header-inner">
           <div className="header-brand">
-            <div className="brand-icon" onDoubleClick={() => setShowAdmin(true)} title="Clique duas vezes para admin"><i className="fa-solid fa-cubes"></i></div>
+            <div className="brand-icon" onDoubleClick={() => setShowAdminLogin(true)} title="Admin"><i className="fa-solid fa-cubes"></i></div>
             <div>
               <h1>THSM Distribuidora</h1>
               <span className="header-sub">Catálogo de Produtos</span>
@@ -661,6 +684,33 @@ function App() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ADMIN LOGIN MODAL */}
+      {showAdminLogin && (
+        <div className="overlay" onClick={() => setShowAdminLogin(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '380px' }}>
+            <button className="modal-close" onClick={() => setShowAdminLogin(false)}><i className="fa-solid fa-xmark"></i></button>
+            <div className="modal-body" style={{ textAlign: 'center' }}>
+              <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem' }}>
+                <i className="fa-solid fa-crown" style={{ color: '#f59e0b', fontSize: '1.3rem' }}></i>
+              </div>
+              <h2 style={{ fontSize: '1.1rem', marginBottom: '0.25rem' }}>Acesso Administrativo</h2>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>Informe suas credenciais</p>
+              <div className="form-group" style={{ textAlign: 'left' }}>
+                <label>Usuário</label>
+                <input type="text" placeholder="thsmadmin" value={adminUser} onChange={e => setAdminUser(e.target.value)} />
+              </div>
+              <div className="form-group" style={{ textAlign: 'left' }}>
+                <label>Senha</label>
+                <input type="password" placeholder="••••••••" value={adminPass} onChange={e => setAdminPass(e.target.value)} onKeyDown={e => e.key === 'Enter' && loginAdmin()} />
+              </div>
+              <button className="btn-next" style={{ width: '100%', marginTop: '0.5rem' }} disabled={!adminUser || !adminPass} onClick={loginAdmin}>
+                <i className="fa-solid fa-lock-open"></i> Entrar
+              </button>
+            </div>
           </div>
         </div>
       )}
