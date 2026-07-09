@@ -754,6 +754,37 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* Mobile user bottom nav */}
+      {currentUser && cartCount === 0 && (
+        <div className="mobile-user-nav">
+          <button className="mobile-user-item" onClick={() => setShowUserDash(true)}>
+            <i className="fa-solid fa-clipboard-list"></i>
+            <span>Pedidos</span>
+          </button>
+          <button className="mobile-user-item" onClick={() => { setShowUserDash(true); /* will default to financeiro if we pass tab */ }}>
+            <i className="fa-solid fa-coins"></i>
+            <span>Financeiro</span>
+          </button>
+          <button className="mobile-user-item" onClick={logout}>
+            <i className="fa-solid fa-right-from-bracket"></i>
+            <span>Sair</span>
+          </button>
+        </div>
+      )}
+
+      {/* Mobile cart sticky footer */}
+      {cartCount > 0 && (
+        <div className="mobile-cart-bar">
+          <div className="mobile-cart-info">
+            <span className="mobile-cart-count"><i className="fa-solid fa-bag-shopping"></i> {cartCount} {cartCount === 1 ? 'item' : 'itens'}</span>
+            <span className="mobile-cart-total">{formatPreco(cartTotal)}</span>
+          </div>
+          <button className="mobile-cart-btn" onClick={() => setCartOpen(true)}>
+            Ver Carrinho <i className="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+      )}
     </div>
   )
 }
