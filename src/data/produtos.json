@@ -1,0 +1,4808 @@
+﻿[
+    {
+        "id":  185,
+        "nome":  "BANHO DE 12 OLEOS",
+        "descricao":  null,
+        "preco":  35.00,
+        "estoque":  24,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/d5bc559a741dd0f.webp"
+    },
+    {
+        "id":  340,
+        "nome":  "BATOM DUO MATTE (VALOR UNITARIO)",
+        "descricao":  "Valor unitário",
+        "preco":  30.00,
+        "estoque":  9,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/8f86d08acde82fe.webp"
+    },
+    {
+        "id":  697,
+        "nome":  "BATOM RUBY ROSE MOOD",
+        "descricao":  null,
+        "preco":  35.00,
+        "estoque":  2,
+        "categoria":  "COSMETICOS",
+        "imagem":  ""
+    },
+    {
+        "id":  336,
+        "nome":  "BODY SPLASH",
+        "descricao":  "Valor unitário",
+        "preco":  59.99,
+        "estoque":  19,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/359ce47c4a37774.webp"
+    },
+    {
+        "id":  691,
+        "nome":  "CABO DE CARREGADOR TIPO C",
+        "descricao":  null,
+        "preco":  20.00,
+        "estoque":  1,
+        "categoria":  "VARIEDADES",
+        "imagem":  ""
+    },
+    {
+        "id":  223,
+        "nome":  "CAIXA DE CONE TRUFADO - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  170.00,
+        "estoque":  3,
+        "categoria":  "ALIMENTOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/cd1f1c4cd7228f8.webp"
+    },
+    {
+        "id":  244,
+        "nome":  "CAIXA DE SOM PNEUZINHO - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  150.00,
+        "estoque":  1,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/91609cc7f41f628.webp"
+    },
+    {
+        "id":  422,
+        "nome":  "CAMISETA MASC P - SEM DEVOLUCAO - SEM COMISSAO",
+        "descricao":  null,
+        "preco":  30.00,
+        "estoque":  0,
+        "categoria":  "VESTUARIO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/64e139a76017f6c.webp"
+    },
+    {
+        "id":  286,
+        "nome":  "CANELA DE VELHO",
+        "descricao":  null,
+        "preco":  20.00,
+        "estoque":  22,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b7dc58fd4c47b28.webp"
+    },
+    {
+        "id":  692,
+        "nome":  "CANETA TOUCH PARA CELULAR E TABLET",
+        "descricao":  null,
+        "preco":  10.00,
+        "estoque":  1,
+        "categoria":  "VARIEDADES",
+        "imagem":  ""
+    },
+    {
+        "id":  247,
+        "nome":  "CAPA COLCHAO CASAL",
+        "descricao":  null,
+        "preco":  99.00,
+        "estoque":  3,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/91af6a92ed2138c.webp"
+    },
+    {
+        "id":  341,
+        "nome":  "CAPA DE CHUVA SIMPLES",
+        "descricao":  null,
+        "preco":  10.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/6aed1cda9ab4539.webp"
+    },
+    {
+        "id":  298,
+        "nome":  "CAPA DE SOFA PARA 2 E 3 LUGARES",
+        "descricao":  null,
+        "preco":  260.00,
+        "estoque":  1,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/5e16bb75eafa509.webp"
+    },
+    {
+        "id":  220,
+        "nome":  "CARRINHO DE CONTROLE REMOTO - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  120.00,
+        "estoque":  2,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/e376a5d8e8f4520.webp"
+    },
+    {
+        "id":  694,
+        "nome":  "CARTILAGEM 18 ERVAS (PRETO)",
+        "descricao":  null,
+        "preco":  25.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  ""
+    },
+    {
+        "id":  284,
+        "nome":  "CARTILAGEM DE TUBARAO",
+        "descricao":  null,
+        "preco":  15.00,
+        "estoque":  25,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/3cb72a9bca4caeb.webp"
+    },
+    {
+        "id":  280,
+        "nome":  "CASTANHA DA INDIA",
+        "descricao":  null,
+        "preco":  20.00,
+        "estoque":  42,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b504eff3d78fe83.webp"
+    },
+    {
+        "id":  248,
+        "nome":  "CHAPINHA - SEM DEVOLUCAO",
+        "descricao":  "Conferir a marca disponível",
+        "preco":  299.00,
+        "estoque":  1,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/28b03fba54e0c3b.webp"
+    },
+    {
+        "id":  305,
+        "nome":  "COBRE LEITO CASAL PADRAO",
+        "descricao":  null,
+        "preco":  250.00,
+        "estoque":  1,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b9bd7b1514b38e0.webp"
+    },
+    {
+        "id":  306,
+        "nome":  "COBRE LEITO CASAL QUEEN",
+        "descricao":  null,
+        "preco":  275.00,
+        "estoque":  2,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/324ab49db3af53a.webp"
+    },
+    {
+        "id":  174,
+        "nome":  "COBRE LEITO INFANTIL - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  199.00,
+        "estoque":  3,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/1f03c2690455a02.webp"
+    },
+    {
+        "id":  307,
+        "nome":  "COBRE LEITO KING",
+        "descricao":  null,
+        "preco":  299.00,
+        "estoque":  4,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/f6a297aa3c2ba28.webp"
+    },
+    {
+        "id":  221,
+        "nome":  "COBREDOM - SEM DEVOLUCAO",
+        "descricao":  "Consultar as cores disponíveis",
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c5f8fbe0560dfdc.webp"
+    },
+    {
+        "id":  245,
+        "nome":  "CORTINA BLACKOUT 2,8 X 2,6M",
+        "descricao":  null,
+        "preco":  299.00,
+        "estoque":  5,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/366755e1fc020b3.webp"
+    },
+    {
+        "id":  228,
+        "nome":  "COZEDOR DE OVOS - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  150.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/5c6b2427d842150.webp"
+    },
+    {
+        "id":  315,
+        "nome":  "CREME DE PENTEAR APALUZA 200ML",
+        "descricao":  null,
+        "preco":  20.00,
+        "estoque":  22,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a27eeb34899d595.webp"
+    },
+    {
+        "id":  316,
+        "nome":  "CREME DE PENTEAR BANHO DE VERNIZ 200ML",
+        "descricao":  null,
+        "preco":  20.00,
+        "estoque":  10,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/66bac39b6d831e3.webp"
+    },
+    {
+        "id":  308,
+        "nome":  "CREME DE PENTEAR LEITE SILICONADO",
+        "descricao":  null,
+        "preco":  30.00,
+        "estoque":  55,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/6ca99c2ba7490ee.webp"
+    },
+    {
+        "id":  226,
+        "nome":  "CRONOGRAMA CAPILAR - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  240.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/aa3e71a1124e714.webp"
+    },
+    {
+        "id":  273,
+        "nome":  "CRONOGRAMA DIVA",
+        "descricao":  null,
+        "preco":  110.00,
+        "estoque":  1,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/73f144a49f1ec88.webp"
+    },
+    {
+        "id":  170,
+        "nome":  "DESODORANTE ARABE",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  2,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/6d40838adc50b6a.webp"
+    },
+    {
+        "id":  690,
+        "nome":  "ESCOVA MAGICA",
+        "descricao":  null,
+        "preco":  15.00,
+        "estoque":  -1,
+        "categoria":  "VARIEDADES",
+        "imagem":  ""
+    },
+    {
+        "id":  702,
+        "nome":  "ESCOVA POLVO",
+        "descricao":  null,
+        "preco":  15.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  ""
+    },
+    {
+        "id":  277,
+        "nome":  "ESFOLIANTE",
+        "descricao":  null,
+        "preco":  26.00,
+        "estoque":  46,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9da770b5111bba4.webp"
+    },
+    {
+        "id":  225,
+        "nome":  "ESFOLIANTE PARA O ROSTO BEIJINHOS",
+        "descricao":  null,
+        "preco":  25.00,
+        "estoque":  2,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/62dd2d8feff76d1.webp"
+    },
+    {
+        "id":  700,
+        "nome":  "FONE LELONG",
+        "descricao":  null,
+        "preco":  30.00,
+        "estoque":  0,
+        "categoria":  "ELETRONICOS",
+        "imagem":  ""
+    },
+    {
+        "id":  200,
+        "nome":  "GARRAFA ALCE",
+        "descricao":  null,
+        "preco":  36.00,
+        "estoque":  9,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/6ad37b215461622.webp"
+    },
+    {
+        "id":  197,
+        "nome":  "GARRAFA EMBORRACHADO STANLEY",
+        "descricao":  null,
+        "preco":  100.00,
+        "estoque":  3,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/ae37785bcc8dd2e.webp"
+    },
+    {
+        "id":  229,
+        "nome":  "GEL DE VIRILHA",
+        "descricao":  null,
+        "preco":  55.00,
+        "estoque":  10,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0248a710c9497f3.webp"
+    },
+    {
+        "id":  693,
+        "nome":  "GEL DETONA DOR (VERDE)",
+        "descricao":  null,
+        "preco":  25.00,
+        "estoque":  1,
+        "categoria":  "COSMETICOS",
+        "imagem":  ""
+    },
+    {
+        "id":  292,
+        "nome":  "GEL REDUTOR DE MEDIDAS",
+        "descricao":  null,
+        "preco":  30.00,
+        "estoque":  2,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/d2b0c71fdc79016.webp"
+    },
+    {
+        "id":  182,
+        "nome":  "GELATINA",
+        "descricao":  "Valor unitário",
+        "preco":  40.00,
+        "estoque":  61,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/6806d318a90f978.webp"
+    },
+    {
+        "id":  239,
+        "nome":  "GLOSS BUBBAPOP",
+        "descricao":  null,
+        "preco":  30.00,
+        "estoque":  10,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/f093ca6c0b0182b.webp"
+    },
+    {
+        "id":  189,
+        "nome":  "GLOSS GLOW LOVE",
+        "descricao":  null,
+        "preco":  25.00,
+        "estoque":  9,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/7c5c6615215c5b9.webp"
+    },
+    {
+        "id":  190,
+        "nome":  "GLOSS ISIS",
+        "descricao":  null,
+        "preco":  30.00,
+        "estoque":  17,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/e82072f1d2d6d51.webp"
+    },
+    {
+        "id":  698,
+        "nome":  "GLOSS LIP HONEY",
+        "descricao":  null,
+        "preco":  99.00,
+        "estoque":  1,
+        "categoria":  "COSMETICOS",
+        "imagem":  ""
+    },
+    {
+        "id":  236,
+        "nome":  "GLOSS REFRI",
+        "descricao":  null,
+        "preco":  30.00,
+        "estoque":  26,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/93a2cd9dcc9f146.webp"
+    },
+    {
+        "id":  177,
+        "nome":  "GOTA MILAGROSA",
+        "descricao":  null,
+        "preco":  15.00,
+        "estoque":  76,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/e809d7bce9323dc.webp"
+    },
+    {
+        "id":  235,
+        "nome":  "HIDRATANTE",
+        "descricao":  "Pistache Talco Amêndoas Rosa mosqueta Frutas vermelhas Elastina Aveia e mel Babá Bell tangerina Vitamina E Pitaya",
+        "preco":  25.00,
+        "estoque":  56,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/534fa7af1e12927.webp"
+    },
+    {
+        "id":  275,
+        "nome":  "HIDRATANTE AROMAS",
+        "descricao":  "Consultar os aromas que tem",
+        "preco":  40.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/ca26c7fd9b62477.webp"
+    },
+    {
+        "id":  242,
+        "nome":  "HIDRATANTE SWISS BEAUTY",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  12,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a1a9ade0a4478a8.webp"
+    },
+    {
+        "id":  269,
+        "nome":  "INTIMO",
+        "descricao":  null,
+        "preco":  15.00,
+        "estoque":  152,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/7e694862060ca55.webp"
+    },
+    {
+        "id":  202,
+        "nome":  "JOGO 3 PANELAS DE ALUMINIO BATIDO - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  499.00,
+        "estoque":  1,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/592f1b665f9775b.webp"
+    },
+    {
+        "id":  203,
+        "nome":  "JOGO 4 PANELAS DE ALUMINIO BATIDO - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  420.00,
+        "estoque":  4,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/40fcd678748b36b.webp"
+    },
+    {
+        "id":  201,
+        "nome":  "JOGO DE 5 PANELAS DE ALUMINIO BATIDO - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  499.00,
+        "estoque":  4,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9ecabf84b362d3b.webp"
+    },
+    {
+        "id":  299,
+        "nome":  "JOGO DE BANHEIRO AVELUDADO 3 PECAS",
+        "descricao":  null,
+        "preco":  110.00,
+        "estoque":  5,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/387cce9aa1080db.webp"
+    },
+    {
+        "id":  180,
+        "nome":  "JOGO DE COPO WHEATON - SEM DEVOLUCAO",
+        "descricao":  "Consultar os modelos disponíveis",
+        "preco":  55.00,
+        "estoque":  9,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/6a6294a41134937.webp"
+    },
+    {
+        "id":  188,
+        "nome":  "JOGO DE COZINHA CAMPESTRE - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/21682c9b13a60df.webp"
+    },
+    {
+        "id":  296,
+        "nome":  "JOGO DE PASSADEIRA COM 2 TAPETES ZEBRINHA",
+        "descricao":  null,
+        "preco":  99.00,
+        "estoque":  0,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/f73506e4d5da5b5.webp"
+    },
+    {
+        "id":  227,
+        "nome":  "JOGO DE TACA MAJESTIC AMBAR - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  99.00,
+        "estoque":  1,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/6df69959ea0c94d.webp"
+    },
+    {
+        "id":  407,
+        "nome":  "JOGO DE TAPETE MOLDURA",
+        "descricao":  null,
+        "preco":  120.00,
+        "estoque":  7,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/fd65a45a7099b44.webp"
+    },
+    {
+        "id":  406,
+        "nome":  "JOGO DE TAPETE SOMBREADO",
+        "descricao":  null,
+        "preco":  130.00,
+        "estoque":  6,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9e0904e67080cb5.webp"
+    },
+    {
+        "id":  416,
+        "nome":  "KIT 3 PARES DE MEIA FEMININAS CANO ALTO",
+        "descricao":  null,
+        "preco":  26.00,
+        "estoque":  0,
+        "categoria":  "VESTUARIO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/eb45ad5035230c9.webp"
+    },
+    {
+        "id":  415,
+        "nome":  "KIT 3 PARES MEIAS INFANTIS MASCULINAS",
+        "descricao":  "Tamanho 27 - 31",
+        "preco":  26.00,
+        "estoque":  -1,
+        "categoria":  "VESTUARIO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9191aa7caca06ad.webp"
+    },
+    {
+        "id":  418,
+        "nome":  "KIT 4 PARES DE MAIS MASCULINAS CANO ALTO",
+        "descricao":  null,
+        "preco":  35.00,
+        "estoque":  0,
+        "categoria":  "VESTUARIO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/3d1df5d1dee0cdf.webp"
+    },
+    {
+        "id":  417,
+        "nome":  "KIT 4 PARES DE MEIAS FEMININAS CANO ALTO",
+        "descricao":  null,
+        "preco":  35.00,
+        "estoque":  0,
+        "categoria":  "VESTUARIO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/799d78a8049a963.webp"
+    },
+    {
+        "id":  241,
+        "nome":  "KIT ATIVADOR DE CACHOS SE LIBERTA BONITA",
+        "descricao":  null,
+        "preco":  80.00,
+        "estoque":  6,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/fbb24904270abd4.webp"
+    },
+    {
+        "id":  389,
+        "nome":  "KIT BABABELL BANANA",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  14,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b36595f603aca89.webp"
+    },
+    {
+        "id":  254,
+        "nome":  "KIT BABOSA 1L",
+        "descricao":  null,
+        "preco":  180.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a5350856ab3d3e5.webp"
+    },
+    {
+        "id":  261,
+        "nome":  "KIT BANANA E MEL 1L - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  180.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c99c51eb0accd5c.webp"
+    },
+    {
+        "id":  260,
+        "nome":  "KIT BANHO DE VERNIZ 1L - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  240.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/5cd2d9d466a14d8.webp"
+    },
+    {
+        "id":  187,
+        "nome":  "KIT BEIJINHOS",
+        "descricao":  "Conferir aromas Uvámelanciamorango",
+        "preco":  80.00,
+        "estoque":  15,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/8fd1803b4db68c0.webp"
+    },
+    {
+        "id":  386,
+        "nome":  "KIT BOMBA DE CAFEINA 3 ITENS",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  15,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/8cc855ef0d5a6b7.webp"
+    },
+    {
+        "id":  259,
+        "nome":  "KIT BUBACHIC 1L - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  240.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/48ca5966a90c9e4.webp"
+    },
+    {
+        "id":  274,
+        "nome":  "KIT CABELO  CACHOS PERFEITOS",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  13,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/428e2ecbc96c956.webp"
+    },
+    {
+        "id":  285,
+        "nome":  "KIT CABELO  LEITE CAPILAR",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  3,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/f3341e58bdc8068.webp"
+    },
+    {
+        "id":  295,
+        "nome":  "KIT CABELO  OLEO DE COCO",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  23,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/31229a15f501498.webp"
+    },
+    {
+        "id":  283,
+        "nome":  "KIT CABELO  VERNIZ",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  6,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/595a89722da0735.webp"
+    },
+    {
+        "id":  278,
+        "nome":  "KIT CABELO AMEIXA NEGRA",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  1,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/5df68baafe93a0e.webp"
+    },
+    {
+        "id":  183,
+        "nome":  "KIT CABELO APALUZA",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  2,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/7e14afb095590e6.webp"
+    },
+    {
+        "id":  249,
+        "nome":  "KIT CABELO BABOSA",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  15,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/524ae20160469f2.webp"
+    },
+    {
+        "id":  265,
+        "nome":  "KIT CABELO BANANA",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/ab65bd7e2951ce5.webp"
+    },
+    {
+        "id":  279,
+        "nome":  "KIT CABELO CAVALO PRETO",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  16,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c9cd12984a95889.webp"
+    },
+    {
+        "id":  276,
+        "nome":  "KIT CABELO DPANTENOL",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  13,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/cccdf6acf183f0c.webp"
+    },
+    {
+        "id":  178,
+        "nome":  "KIT CABELO GORDURA DE RA",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  5,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/37a151deb618b99.webp"
+    },
+    {
+        "id":  175,
+        "nome":  "KIT CABELO LISO IMEDIATO",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  6,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9a8b1c0bcc473fa.webp"
+    },
+    {
+        "id":  264,
+        "nome":  "KIT CABELO MACA VERDE",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/431cdee9421f2a8.webp"
+    },
+    {
+        "id":  282,
+        "nome":  "KIT CABELO MANDIOCA",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  8,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/7796711e06bd34c.webp"
+    },
+    {
+        "id":  263,
+        "nome":  "KIT CABELO MELANCIA",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  10,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/347d715f13f639e.webp"
+    },
+    {
+        "id":  267,
+        "nome":  "KIT CABELO MORANGO",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  7,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/53927f12b7600d4.webp"
+    },
+    {
+        "id":  184,
+        "nome":  "KIT CABELO OLEO DE ARGAN",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  7,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/8fd5d23df9beff6.webp"
+    },
+    {
+        "id":  222,
+        "nome":  "KIT CABELO OMEGA 3",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  11,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/226d28e1509ea7a.webp"
+    },
+    {
+        "id":  179,
+        "nome":  "KIT CABELO QUIABO",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  12,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/55ad788929040c2.webp"
+    },
+    {
+        "id":  266,
+        "nome":  "KIT CABELO TUTIFRUTI",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  16,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/92fd259a2aa1135.webp"
+    },
+    {
+        "id":  268,
+        "nome":  "KIT CABELO UVA",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/aafc5adcee851ee.webp"
+    },
+    {
+        "id":  210,
+        "nome":  "KIT CALCINHA INFANTIL BOXER C/12 - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  205.00,
+        "estoque":  0,
+        "categoria":  "VESTUARIO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/6ba2e353ca0f191.webp"
+    },
+    {
+        "id":  272,
+        "nome":  "KIT CAUTERIZACAO 1L - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  240.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9b9d328d9322330.webp"
+    },
+    {
+        "id":  205,
+        "nome":  "KIT COLAGENO - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  240.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c7f72080a5d2822.webp"
+    },
+    {
+        "id":  252,
+        "nome":  "KIT CRESCE MAIS 1L - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  240.00,
+        "estoque":  1,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/5c12223a011e5a7.webp"
+    },
+    {
+        "id":  251,
+        "nome":  "KIT CRESCE MAIS CACHOS 1L - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  240.00,
+        "estoque":  4,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/325e4145526785c.webp"
+    },
+    {
+        "id":  666,
+        "nome":  "KIT DE BELEZA INFANTIL 7 ITENS MASCULINO CAPILAR",
+        "descricao":  "ENCOMENDA!!ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS!!",
+        "preco":  160.00,
+        "estoque":  -1,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/5436955cbebd7f8.webp"
+    },
+    {
+        "id":  270,
+        "nome":  "KIT EVOLUX 1L - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  260.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/71cb051bd368022.webp"
+    },
+    {
+        "id":  253,
+        "nome":  "KIT MAIS LISO BOTOX 1L - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  240.00,
+        "estoque":  2,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9beae796e816cf6.webp"
+    },
+    {
+        "id":  258,
+        "nome":  "KIT MAMONA 1L - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  240.00,
+        "estoque":  1,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/eb87b70c2f88e4c.webp"
+    },
+    {
+        "id":  231,
+        "nome":  "KIT MONOVIN - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  240.00,
+        "estoque":  2,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/bc6d3c332a8b789.webp"
+    },
+    {
+        "id":  257,
+        "nome":  "KIT OBRIGATORIO 1L - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  240.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/80922ee3ba0756b.webp"
+    },
+    {
+        "id":  204,
+        "nome":  "KIT OLEO EXTRAORDINARIO",
+        "descricao":  null,
+        "preco":  80.00,
+        "estoque":  12,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b56dc5d2c9943ba.webp"
+    },
+    {
+        "id":  217,
+        "nome":  "KIT PASSADEIRA COZINHA - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  140.00,
+        "estoque":  2,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/4b7903214f13051.webp"
+    },
+    {
+        "id":  388,
+        "nome":  "KIT PENTEIA CABELO 3 ITENS",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/29f82d1818f2193.webp"
+    },
+    {
+        "id":  211,
+        "nome":  "KIT PERFUME DESODORANTE - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  80.00,
+        "estoque":  -1,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c9ede2c5b0a73dd.webp"
+    },
+    {
+        "id":  256,
+        "nome":  "KIT PLASTICA DOS FIOS - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  240.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/25f6ad1ca44e920.webp"
+    },
+    {
+        "id":  387,
+        "nome":  "KIT POS PROGRESSIVA 3 ITENS",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  2,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b4a8a5ee9878e3c.webp"
+    },
+    {
+        "id":  206,
+        "nome":  "KIT SWEET LIFE - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  240.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9d11b77ccc45a0d.webp"
+    },
+    {
+        "id":  171,
+        "nome":  "KIT TALHER - SEM DEVOLUCAO",
+        "descricao":  "Conferir as cores disponíveis!!",
+        "preco":  99.00,
+        "estoque":  2,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/57170796d3ffed8.webp"
+    },
+    {
+        "id":  237,
+        "nome":  "KIT UTENSILIOS 12 PCS - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/3f7271724c95ac9.webp"
+    },
+    {
+        "id":  255,
+        "nome":  "KIT WHEY 1L - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  180.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/93aefc3f7711e38.webp"
+    },
+    {
+        "id":  232,
+        "nome":  "LENCOL CASAL",
+        "descricao":  "Conferir cores disponíveis",
+        "preco":  140.00,
+        "estoque":  40,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9d32ea415f7e3ee.webp"
+    },
+    {
+        "id":  301,
+        "nome":  "LENCOL CASAL QUEEN",
+        "descricao":  "Valor unitário 1 lençol elástico 2 fronhas",
+        "preco":  140.00,
+        "estoque":  15,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/565bddb6f21a1cd.webp"
+    },
+    {
+        "id":  234,
+        "nome":  "LENCOL DE SOLTEIRO",
+        "descricao":  null,
+        "preco":  85.00,
+        "estoque":  25,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/45d352d51bff0e2.webp"
+    },
+    {
+        "id":  300,
+        "nome":  "LENCOL KING (MAIOR)",
+        "descricao":  "Valor unitário 1 lençol com elástico 2 fronhas",
+        "preco":  140.00,
+        "estoque":  24,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0cd7c833a73d765.webp"
+    },
+    {
+        "id":  213,
+        "nome":  "MALETA DE MAQUIAGEM - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  499.00,
+        "estoque":  1,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/56e40ec392eb739.webp"
+    },
+    {
+        "id":  193,
+        "nome":  "MANGUEIRA 20M - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  160.00,
+        "estoque":  1,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/6e8262346817702.webp"
+    },
+    {
+        "id":  192,
+        "nome":  "MANGUEIRA 30M - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  199.00,
+        "estoque":  3,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/bbd948f947db56c.webp"
+    },
+    {
+        "id":  219,
+        "nome":  "MANTA COM SHERPA - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  250.00,
+        "estoque":  15,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/73c11e58fde856a.webp"
+    },
+    {
+        "id":  682,
+        "nome":  "MANTA SIMPLES 1,8 X 2,0M CORES LISAS",
+        "descricao":  null,
+        "preco":  60.00,
+        "estoque":  31,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/70b0a671387eb79.webp"
+    },
+    {
+        "id":  701,
+        "nome":  "MAQUIAGEM VARIADA",
+        "descricao":  null,
+        "preco":  20.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  ""
+    },
+    {
+        "id":  371,
+        "nome":  "MAQUINA DRAGAO",
+        "descricao":  null,
+        "preco":  60.00,
+        "estoque":  10,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/ce75f52aea71787.webp"
+    },
+    {
+        "id":  288,
+        "nome":  "MASCARA BOMBA EXPLOSION",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  9,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/4000706decd7060.webp"
+    },
+    {
+        "id":  339,
+        "nome":  "MASCARA CAPILAR 1KG ARGAN",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  15,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/38a8de125f109ee.webp"
+    },
+    {
+        "id":  338,
+        "nome":  "MASCARA CAPILAR 1KG ARGAN",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/ebaeb9762826d06.webp"
+    },
+    {
+        "id":  337,
+        "nome":  "MASCARA CAPILAR 1KG HIDRATACAO",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  10,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/3ad9da69c9c1c60.webp"
+    },
+    {
+        "id":  696,
+        "nome":  "MASCARA NUTRICAO 1KG",
+        "descricao":  null,
+        "preco":  45.00,
+        "estoque":  1,
+        "categoria":  "COSMETICOS",
+        "imagem":  ""
+    },
+    {
+        "id":  289,
+        "nome":  "MASCARA RECONSTRUCAO 1KG",
+        "descricao":  null,
+        "preco":  45.00,
+        "estoque":  15,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/041dddd82f81fc3.webp"
+    },
+    {
+        "id":  176,
+        "nome":  "MICOSAN",
+        "descricao":  null,
+        "preco":  15.00,
+        "estoque":  36,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/38162ce9d381327.webp"
+    },
+    {
+        "id":  199,
+        "nome":  "MINI PROCESSADOR - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  280.00,
+        "estoque":  2,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/27582981adbd3ea.webp"
+    },
+    {
+        "id":  198,
+        "nome":  "MISTEIRA - SEM DEVOLUCAO",
+        "descricao":  "Consultar a marca por que pode variar",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b9c49490570fef3.webp"
+    },
+    {
+        "id":  271,
+        "nome":  "MOUSSE",
+        "descricao":  null,
+        "preco":  45.00,
+        "estoque":  3,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/620f4e198049a71.webp"
+    },
+    {
+        "id":  262,
+        "nome":  "NATGEL SPRAY",
+        "descricao":  null,
+        "preco":  25.00,
+        "estoque":  17,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/780ec21fd68f35f.webp"
+    },
+    {
+        "id":  186,
+        "nome":  "OLEO EXTRAORDINARIO",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  18,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c9f26e8aa82378a.webp"
+    },
+    {
+        "id":  312,
+        "nome":  "OLEO EXTRAORDINARIO CACHOS",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  11,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/bb5f30e9c759e32.webp"
+    },
+    {
+        "id":  310,
+        "nome":  "OLEO EXTRAORDINARIO LISO",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  10,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/90f0af41a752683.webp"
+    },
+    {
+        "id":  209,
+        "nome":  "OLEO GLYCOLIC",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  12,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/755d0f45cd07932.webp"
+    },
+    {
+        "id":  195,
+        "nome":  "ORAPRONOBIS",
+        "descricao":  null,
+        "preco":  25.00,
+        "estoque":  17,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/04cb3604ee2d29d.webp"
+    },
+    {
+        "id":  207,
+        "nome":  "PANELA DE ARROZ 10 XICARAS - SEM DEVOLUCAO",
+        "descricao":  "Consultar a marca",
+        "preco":  499.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/451ceeda2769571.webp"
+    },
+    {
+        "id":  215,
+        "nome":  "PANO DE PRATO ATOALHADO",
+        "descricao":  null,
+        "preco":  25.00,
+        "estoque":  50,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/5e94b4ea570e11a.webp"
+    },
+    {
+        "id":  433,
+        "nome":  "PANO DE PRATO BORDADO",
+        "descricao":  null,
+        "preco":  14.00,
+        "estoque":  53,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/56bf1026722b953.webp"
+    },
+    {
+        "id":  304,
+        "nome":  "PANO DE PRATO COMUM/SIMPLES",
+        "descricao":  "Valor unitário",
+        "preco":  8.00,
+        "estoque":  378,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/599ef55978b84a7.webp"
+    },
+    {
+        "id":  429,
+        "nome":  "PANO DE PRATO FELPUDO",
+        "descricao":  null,
+        "preco":  12.00,
+        "estoque":  30,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/4c5f06c8502850f.webp"
+    },
+    {
+        "id":  428,
+        "nome":  "PANO DE PRATO GIGANTE",
+        "descricao":  null,
+        "preco":  20.00,
+        "estoque":  151,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/3214a583d9b3c0a.webp"
+    },
+    {
+        "id":  297,
+        "nome":  "PASSADEIRA ZEBRINHA",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  15,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/33b6cd32bdaf84e.webp"
+    },
+    {
+        "id":  374,
+        "nome":  "PERFUME AGUA DE CHEIRO",
+        "descricao":  "TalcoMystic Absinto Café kayak",
+        "preco":  50.00,
+        "estoque":  10,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/f4f249ca2cc671d.webp"
+    },
+    {
+        "id":  212,
+        "nome":  "PERFUME ARABE",
+        "descricao":  "Conferir as fragrâncias disponíveis",
+        "preco":  65.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c36f399783c558e.webp"
+    },
+    {
+        "id":  664,
+        "nome":  "PERFUME ARABE ASSAD",
+        "descricao":  "ENCOMENDA!!ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS!!",
+        "preco":  280.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9a0b3cc97a75400.webp"
+    },
+    {
+        "id":  246,
+        "nome":  "PERFUME BRANDCOLLECTION",
+        "descricao":  null,
+        "preco":  160.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/834dd631a43fd25.webp"
+    },
+    {
+        "id":  169,
+        "nome":  "PERFUME DE CALCINHA",
+        "descricao":  null,
+        "preco":  25.00,
+        "estoque":  25,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9892e4924c61282.webp"
+    },
+    {
+        "id":  373,
+        "nome":  "PERFUME IMPORTADO INSPIRACOES 100ML",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  31,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/2c2197958f5b67a.webp"
+    },
+    {
+        "id":  243,
+        "nome":  "PIPOQUEIRA ELETRICA",
+        "descricao":  null,
+        "preco":  255.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/1f1f41e894e1303.webp"
+    },
+    {
+        "id":  317,
+        "nome":  "POMADA MASSAGEADORA ERVA MILAGROSA",
+        "descricao":  null,
+        "preco":  25.00,
+        "estoque":  3,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/ef137cab6c062d1.webp"
+    },
+    {
+        "id":  318,
+        "nome":  "POMADA MASSAGEADORA SUCURI",
+        "descricao":  null,
+        "preco":  20.00,
+        "estoque":  4,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/047ab5387ced873.webp"
+    },
+    {
+        "id":  687,
+        "nome":  "RECEBIMENTO EM ATRASO",
+        "descricao":  null,
+        "preco":  1.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  ""
+    },
+    {
+        "id":  173,
+        "nome":  "REPARADOR DE PONTAS ARGAN",
+        "descricao":  null,
+        "preco":  35.00,
+        "estoque":  24,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/bb33b9a420aa027.webp"
+    },
+    {
+        "id":  172,
+        "nome":  "REPARADOR DE PONTAS CAVIAR",
+        "descricao":  null,
+        "preco":  35.00,
+        "estoque":  23,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/97368bec2183d6f.webp"
+    },
+    {
+        "id":  309,
+        "nome":  "REPARADOR DE PONTAS OLEO DE COCO",
+        "descricao":  null,
+        "preco":  35.00,
+        "estoque":  23,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/fdaf7abd9b35c14.webp"
+    },
+    {
+        "id":  238,
+        "nome":  "REPARADOR DE PONTAS RICINO",
+        "descricao":  null,
+        "preco":  35.00,
+        "estoque":  23,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b805eef661b89d9.webp"
+    },
+    {
+        "id":  196,
+        "nome":  "REPARADOR DE PONTAS TUTIFRUTI",
+        "descricao":  null,
+        "preco":  35.00,
+        "estoque":  16,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/98ba5baf4e7b649.webp"
+    },
+    {
+        "id":  194,
+        "nome":  "ROUPAO - SEM DEVOLUCAO",
+        "descricao":  "Conferir tamanho e cores",
+        "preco":  200.00,
+        "estoque":  2,
+        "categoria":  "VESTUARIO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/2fe51eea9b075ed.webp"
+    },
+    {
+        "id":  311,
+        "nome":  "SABONETE ANTIACNE",
+        "descricao":  null,
+        "preco":  10.00,
+        "estoque":  17,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/fc85678d568368e.webp"
+    },
+    {
+        "id":  699,
+        "nome":  "SABONETE INTIMO BARBATIMAO",
+        "descricao":  null,
+        "preco":  20.00,
+        "estoque":  1,
+        "categoria":  "COSMETICOS",
+        "imagem":  ""
+    },
+    {
+        "id":  314,
+        "nome":  "SEBO DE CARNEIRO 200G BISNAGA",
+        "descricao":  null,
+        "preco":  20.00,
+        "estoque":  14,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/e3208447779e7e7.webp"
+    },
+    {
+        "id":  313,
+        "nome":  "SEBO DE CARNEIRO 250G POTE",
+        "descricao":  "Valor unitário",
+        "preco":  20.00,
+        "estoque":  9,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/685f919ea1159ea.webp"
+    },
+    {
+        "id":  208,
+        "nome":  "SEBO DE CARNEIRO COM UREIA",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  7,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/ed5765d801e00f9.webp"
+    },
+    {
+        "id":  214,
+        "nome":  "SECADOR - SEM DEVOLUCAO",
+        "descricao":  "Confirma a marca disponível",
+        "preco":  399.00,
+        "estoque":  3,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/807a708070440a1.webp"
+    },
+    {
+        "id":  414,
+        "nome":  "BOBOJACO UNISSEX",
+        "descricao":  "NodeloConsulte se temos o seu tamanho",
+        "preco":  320.00,
+        "estoque":  0,
+        "categoria":  "VESTUARIO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/2f48e140f1074cb.webp"
+    },
+    {
+        "id":  515,
+        "nome":  "3 PARES DE MEIA CANO CURTO MASCULINA",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  24.00,
+        "estoque":  0,
+        "categoria":  "VESTUARIO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/afdccd813cc6761.webp"
+    },
+    {
+        "id":  514,
+        "nome":  "3 PARES DE MEIA MASCULINA CANO ALTO",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  24.00,
+        "estoque":  2,
+        "categoria":  "VESTUARIO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/74d9a21b4b2b74b.webp"
+    },
+    {
+        "id":  513,
+        "nome":  "3 PARES DE MEIAS FEMININAS CANO CURTO",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  24.00,
+        "estoque":  0,
+        "categoria":  "VESTUARIO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/22a197bb19d110a.webp"
+    },
+    {
+        "id":  519,
+        "nome":  "AIR FRYER",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  599.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/98a01d9bd7599e6.webp"
+    },
+    {
+        "id":  353,
+        "nome":  "ALEXA - SEM COMISSAO",
+        "descricao":  "Sem comissão!!",
+        "preco":  500.00,
+        "estoque":  1,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/72c32aea66062c7.webp"
+    },
+    {
+        "id":  522,
+        "nome":  "APARELHO DE JANTAR",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  499.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0cbd5ec7ee6b1b1.webp"
+    },
+    {
+        "id":  619,
+        "nome":  "APARELHO DE JANTAR BRASILIA 20 PECAS",
+        "descricao":  "Encomenda Encomendas devem ser feitas até o 3 dia do mês do seu acerto!!",
+        "preco":  499.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/2c3a361be2dcef3.webp"
+    },
+    {
+        "id":  348,
+        "nome":  "ARMARIO DESMONTAVEL GUARDA ROUPA",
+        "descricao":  null,
+        "preco":  399.00,
+        "estoque":  1,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/bab622360f36590.webp"
+    },
+    {
+        "id":  497,
+        "nome":  "ASPIRADOR DE PO",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  599.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/8a58553708cfe21.webp"
+    },
+    {
+        "id":  499,
+        "nome":  "ASPIRADOR DE PO VASSOURA",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/fb4cfbe1f94c656.webp"
+    },
+    {
+        "id":  613,
+        "nome":  "BABY LISS",
+        "descricao":  "Encomenda Encomendas devem ser feitas até o 3 dia do mês do seu acerto!!",
+        "preco":  280.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/5e6ed90c864cb70.webp"
+    },
+    {
+        "id":  492,
+        "nome":  "BABY LISS PHILCO",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/79ecfb478abb354.webp"
+    },
+    {
+        "id":  582,
+        "nome":  "BALANCO INFANTIL MADEIRA",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  89.99,
+        "estoque":  1,
+        "categoria":  "BRINQUEDOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/31f24dace7dd717.webp"
+    },
+    {
+        "id":  493,
+        "nome":  "BATEDEIRA",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/38ceb47efdda6ab.webp"
+    },
+    {
+        "id":  521,
+        "nome":  "BEBEDOURO",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  999.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/6fe1d67494e7315.webp"
+    },
+    {
+        "id":  596,
+        "nome":  "BICICLETA BARRA FORTE ARO 26",
+        "descricao":  "Sem comissão .Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  1499.00,
+        "estoque":  0,
+        "categoria":  "BICICLETAS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/6ec2a57b81bdd6a.webp"
+    },
+    {
+        "id":  384,
+        "nome":  "BOMBA FILTRO DAGUA",
+        "descricao":  null,
+        "preco":  40.00,
+        "estoque":  1,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c1564f1e7f9680f.webp"
+    },
+    {
+        "id":  587,
+        "nome":  "BONECA ANGELINA 62 FRASE",
+        "descricao":  "",
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "BRINQUEDOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/fbceb6cbb4858dd.webp"
+    },
+    {
+        "id":  484,
+        "nome":  "BONECA HONEY BEE",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "BRINQUEDOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/d4613e239db50ab.webp"
+    },
+    {
+        "id":  585,
+        "nome":  "BONECA PRIMEIRA ORACAO",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  160.00,
+        "estoque":  0,
+        "categoria":  "BRINQUEDOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/cdd8b979fb9fdec.webp"
+    },
+    {
+        "id":  586,
+        "nome":  "BONECA REBORN",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  199.00,
+        "estoque":  1,
+        "categoria":  "BRINQUEDOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a9d15bd678e60f8.webp"
+    },
+    {
+        "id":  381,
+        "nome":  "CABO CARREGADOR V8",
+        "descricao":  null,
+        "preco":  20.00,
+        "estoque":  0,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/46d7e9f12e1100d.webp"
+    },
+    {
+        "id":  486,
+        "nome":  "CABRITA",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  199.00,
+        "estoque":  1,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/be7b0ad8f6dc361.webp"
+    },
+    {
+        "id":  460,
+        "nome":  "CACHOS PERFEITOS GLAMMOUR",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!!",
+        "preco":  240.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0761ddb5ba0fc0a.webp"
+    },
+    {
+        "id":  465,
+        "nome":  "CAFETEIRA (NAO E DE CAPSULAS)",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!!",
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9f2f6ee08c14eed.webp"
+    },
+    {
+        "id":  405,
+        "nome":  "CAIXA BISCOITO DOCE COM 12",
+        "descricao":  "Caixa com 12 unidades 500g Sortidos",
+        "preco":  240.00,
+        "estoque":  0,
+        "categoria":  "ALIMENTOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/03cbf81c1e2ccc3.webp"
+    },
+    {
+        "id":  556,
+        "nome":  "CAIXA COM 50 ALFAJOR",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "ALIMENTOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0c10aa377d277a4.webp"
+    },
+    {
+        "id":  404,
+        "nome":  "CAIXA DE BISCOITO SALGADO COM 12",
+        "descricao":  "12 potes com 500g grada Variados",
+        "preco":  240.00,
+        "estoque":  0,
+        "categoria":  "ALIMENTOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/f17c9fc97bfed8e.webp"
+    },
+    {
+        "id":  548,
+        "nome":  "CAIXA DE PACOCA",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  100.00,
+        "estoque":  1,
+        "categoria":  "ALIMENTOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/6d0c6aa8fb8386d.webp"
+    },
+    {
+        "id":  533,
+        "nome":  "CAIXA DE SOM GRANDE",
+        "descricao":  null,
+        "preco":  1600.00,
+        "estoque":  0,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9827a2cc59ec4a5.webp"
+    },
+    {
+        "id":  678,
+        "nome":  "CAIXA DE SOM GRANDE PARTY VOX 2000W",
+        "descricao":  "Necessário 40% de sinal do produto!!! pago adiantado",
+        "preco":  3999.00,
+        "estoque":  1,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/edeb50b65e33092.webp"
+    },
+    {
+        "id":  529,
+        "nome":  "CAIXA DE SOM KAPBOM 200W",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  999.00,
+        "estoque":  0,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/65187c26e719bfd.webp"
+    },
+    {
+        "id":  679,
+        "nome":  "CAIXA DE SOM KTS 1180",
+        "descricao":  null,
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a848a271614d3ab.webp"
+    },
+    {
+        "id":  350,
+        "nome":  "CAIXA DE SOM KTX 1476",
+        "descricao":  null,
+        "preco":  150.00,
+        "estoque":  0,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/4066d2787899315.webp"
+    },
+    {
+        "id":  656,
+        "nome":  "CAIXA DE SOM LENOX 300W",
+        "descricao":  "ENCOMENDA!! ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊSATENÇÃO!! OS PRODUTOS ESTÃO SUJEITOS A DISPONIBILIDADE DE ESTOQUE, CASO NÃO TENHA EXATAMENTE O PRODUTO QUE VOCÊ PEDIU, ENVIAREMOS UM PRODUTO COM AS MESMAS CARACTERÍSTICAS",
+        "preco":  799.00,
+        "estoque":  0,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/84e5331c0b5390b.webp"
+    },
+    {
+        "id":  351,
+        "nome":  "CAIXA DE SOM RELOGIO KARAOKE",
+        "descricao":  null,
+        "preco":  240.00,
+        "estoque":  0,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/f1b9dfe9f80129d.webp"
+    },
+    {
+        "id":  553,
+        "nome":  "CAIXA DOCE DE MESA",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "ALIMENTOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/721403d258a3ecb.webp"
+    },
+    {
+        "id":  557,
+        "nome":  "CAIXA DOCE EM BARRA 4,8 KG TOTAL",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  250.00,
+        "estoque":  0,
+        "categoria":  "ALIMENTOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/d5d164818e56cc9.webp"
+    },
+    {
+        "id":  411,
+        "nome":  "CAIXA DOCE EM PEDACOS",
+        "descricao":  "Caixa com 16 potes 500g cada Não pegamos devolução",
+        "preco":  480.00,
+        "estoque":  2,
+        "categoria":  "ALIMENTOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/71875d6e82b0653.webp"
+    },
+    {
+        "id":  410,
+        "nome":  "CAIXA DOCE PASTOSO",
+        "descricao":  "Caixa com 16 doces 500g cada Não pegamos devolução 2 sabores de cada8 sabores",
+        "preco":  460.00,
+        "estoque":  1,
+        "categoria":  "ALIMENTOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a202d20be7f6a08.webp"
+    },
+    {
+        "id":  354,
+        "nome":  "CAMERA IP",
+        "descricao":  null,
+        "preco":  199.00,
+        "estoque":  2,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c2b265c8afea97a.webp"
+    },
+    {
+        "id":  588,
+        "nome":  "CAMINHAO BAU IVECO TECTOR CARRINHO",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  150.00,
+        "estoque":  0,
+        "categoria":  "BRINQUEDOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/412d5bed7aafc00.webp"
+    },
+    {
+        "id":  590,
+        "nome":  "CAMINHAO IVECO GRANELEIRO",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "BRINQUEDOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a0f6e94b7bbd9bd.webp"
+    },
+    {
+        "id":  589,
+        "nome":  "CAMINHAO IVECO TANQUE CARRINHO",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  165.00,
+        "estoque":  0,
+        "categoria":  "BRINQUEDOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a33a04fe424fc08.webp"
+    },
+    {
+        "id":  421,
+        "nome":  "CAMISETA MASCULINA M",
+        "descricao":  "30,00 sem comissão",
+        "preco":  30.00,
+        "estoque":  2,
+        "categoria":  "VESTUARIO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0b034afaff604d2.webp"
+    },
+    {
+        "id":  593,
+        "nome":  "CAMPAINHA COM VIDEO",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  150.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/5331dc696dcd928.webp"
+    },
+    {
+        "id":  669,
+        "nome":  "CAMPAINHA RECARREGAVEL",
+        "descricao":  null,
+        "preco":  199.00,
+        "estoque":  1,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/3c6e455b2275702.webp"
+    },
+    {
+        "id":  370,
+        "nome":  "CAMPAINHA RESIDENCIAL",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  0,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/3a42e45d6da2fb2.webp"
+    },
+    {
+        "id":  439,
+        "nome":  "CAPA DE COLCHAO IMPERMEAVEL CASAL PADRAO",
+        "descricao":  null,
+        "preco":  199.00,
+        "estoque":  2,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/28044c4b15e4f9e.webp"
+    },
+    {
+        "id":  508,
+        "nome":  "CAPA DE MAQUINA DE LAVAR 12 A 16KG",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  150.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/f1ec07a2ca0969b.webp"
+    },
+    {
+        "id":  535,
+        "nome":  "CAPA DE SOFA RETRATIL",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  299.00,
+        "estoque":  3,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/2fc27b127bc1bd5.webp"
+    },
+    {
+        "id":  383,
+        "nome":  "CARREGADOR IPHONE",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  4,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/4c0638c4ab6cd15.webp"
+    },
+    {
+        "id":  382,
+        "nome":  "CARREGADOR SIMPLES",
+        "descricao":  null,
+        "preco":  15.00,
+        "estoque":  2,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/2651a3b6082d72f.webp"
+    },
+    {
+        "id":  378,
+        "nome":  "CARREGADOR TURBO",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  0,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/64a105c37051ad9.webp"
+    },
+    {
+        "id":  631,
+        "nome":  "CENTRO DE MESA WOLFF",
+        "descricao":  "Encomenda!!Encomendas devem ser feitas até o 3o dia do mês do seu acerto!!",
+        "preco":  150.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0e45d0afd9514d7.webp"
+    },
+    {
+        "id":  551,
+        "nome":  "CESTO DE ROUPA",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  120.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c2a7430c12c6991.webp"
+    },
+    {
+        "id":  343,
+        "nome":  "CHALEIRA ELETRICA INOX",
+        "descricao":  null,
+        "preco":  165.00,
+        "estoque":  2,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/6ef468b0fd2f06b.webp"
+    },
+    {
+        "id":  534,
+        "nome":  "CHALEIRA TERMICA MALI",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/657366291472611.webp"
+    },
+    {
+        "id":  657,
+        "nome":  "CHAPA MULTIUSO",
+        "descricao":  "ENCOMENDA!!ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS!!",
+        "preco":  250.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/691c08a2d70ab1f.webp"
+    },
+    {
+        "id":  358,
+        "nome":  "CHAPINHA",
+        "descricao":  null,
+        "preco":  125.00,
+        "estoque":  0,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/271b7aa8ca551c1.webp"
+    },
+    {
+        "id":  671,
+        "nome":  "CHAPINHA ALISADORA AGRATTO PIASTRA PRANCHA",
+        "descricao":  null,
+        "preco":  199.00,
+        "estoque":  1,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/5e2f6ad6ffab1ce.webp"
+    },
+    {
+        "id":  495,
+        "nome":  "CHURRASQUEIRA ELETRICA",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  399.00,
+        "estoque":  1,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/ead62d386242753.webp"
+    },
+    {
+        "id":  601,
+        "nome":  "CLIMATIZADOR 14L ITATIAIA",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mesNecessário entrada 40%",
+        "preco":  999.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/dc819a124d4d0c6.webp"
+    },
+    {
+        "id":  600,
+        "nome":  "CLIMATIZADOR 20L",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  999.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/8fd682ef059b5c2.webp"
+    },
+    {
+        "id":  689,
+        "nome":  "COBERDOM INFANTIL ESTAMPADO",
+        "descricao":  null,
+        "preco":  360.00,
+        "estoque":  17,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a1d0b4f81a6b444.webp"
+    },
+    {
+        "id":  688,
+        "nome":  "COBERDOM SHERPA COLORIDA",
+        "descricao":  null,
+        "preco":  420.00,
+        "estoque":  18,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  ""
+    },
+    {
+        "id":  402,
+        "nome":  "COBERDOM SOLTEIRO",
+        "descricao":  null,
+        "preco":  340.00,
+        "estoque":  18,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c97db7309f9af8d.webp"
+    },
+    {
+        "id":  680,
+        "nome":  "COBERDROM LUNAX",
+        "descricao":  null,
+        "preco":  399.00,
+        "estoque":  5,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  ""
+    },
+    {
+        "id":  677,
+        "nome":  "COBRE LEITO SOLTEIRO COR LISA",
+        "descricao":  null,
+        "preco":  199.00,
+        "estoque":  3,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  ""
+    },
+    {
+        "id":  409,
+        "nome":  "COBREDOM GIGANTE 2,2 X 2,4",
+        "descricao":  null,
+        "preco":  399.00,
+        "estoque":  60,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/2a4fffdbb5ee424.webp"
+    },
+    {
+        "id":  400,
+        "nome":  "COLCHA ARTESANAL CASAL",
+        "descricao":  "Amarela Vermelha Verde Azul clara Azul escura Consulte cores disponíveis!!",
+        "preco":  199.00,
+        "estoque":  1,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/eac298a95a9d9ee.webp"
+    },
+    {
+        "id":  569,
+        "nome":  "COLCHA CHENILLE",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  260.00,
+        "estoque":  0,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/23180bcdb808cbb.webp"
+    },
+    {
+        "id":  640,
+        "nome":  "COLCHA DE CASAL FLAMENGO",
+        "descricao":  null,
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c12d3882bd4e357.webp"
+    },
+    {
+        "id":  617,
+        "nome":  "COLCHA FLANNEL CANELADA",
+        "descricao":  "Encomenda Encomendas devem ser feitas até o 3 dia do mês do seu acerto!!",
+        "preco":  360.00,
+        "estoque":  0,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0d49d06cfb926f4.webp"
+    },
+    {
+        "id":  510,
+        "nome":  "CONJUNTO 2 FRIGIDEIRAS + ESPATULA",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  120.00,
+        "estoque":  2,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/df1cbad994f859b.webp"
+    },
+    {
+        "id":  427,
+        "nome":  "CONJUNTO 2 MANTAS SOFA",
+        "descricao":  "Cinsiltew",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/e51aeac86e87903.webp"
+    },
+    {
+        "id":  539,
+        "nome":  "CONJUNTO 3 CANECOS",
+        "descricao":  "Cores:preto craqueladovermelhoaluminio naturalEncomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  150.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0fd5eda9367e1be.webp"
+    },
+    {
+        "id":  512,
+        "nome":  "CONJUNTO 3 COOLERS",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  350.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/f179df68ec16834.webp"
+    },
+    {
+        "id":  526,
+        "nome":  "CONJUNTO 3 FRIGIDEIRAS COM TAMPA",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  599.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/d464e1c81a95506.webp"
+    },
+    {
+        "id":  501,
+        "nome":  "CONJUNTO 4 ASSADEIRAS",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/8ae93d8abfacd2b.webp"
+    },
+    {
+        "id":  611,
+        "nome":  "CONJUNTO 5 FORMAS DE BOLO",
+        "descricao":  "Encomenda Encomendas devem ser feitas até o 3 dia do mês do seu acerto!!",
+        "preco":  120.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/307c2a6d9a9c7c4.webp"
+    },
+    {
+        "id":  392,
+        "nome":  "CONJUNTO 6 PRATOS",
+        "descricao":  "6 pratos transparentes lisos fundos",
+        "preco":  99.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/36576ed89a6c587.webp"
+    },
+    {
+        "id":  502,
+        "nome":  "CONJUNTO DE 3 FORMAS COM FUNDO REMOVIVEL",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  150.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/3d24938e3db88f6.webp"
+    },
+    {
+        "id":  523,
+        "nome":  "CONJUNTO DE BANHEIRO",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  299.00,
+        "estoque":  7,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/1ae5a4d88cdc43a.webp"
+    },
+    {
+        "id":  550,
+        "nome":  "CONJUNTO DE MANTIMENTOS FAZENDINHA",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  110.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/82c963b2c168f48.webp"
+    },
+    {
+        "id":  623,
+        "nome":  "CONJUNTO DE PANELA ALUMINIO BATIDA PRETA COM TAMPA",
+        "descricao":  "Encomenda!!Encomendas devem ser feitas até o 3o dia do mês do seu acerto!!",
+        "preco":  499.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/01caa190f52488a.webp"
+    },
+    {
+        "id":  524,
+        "nome":  "CONJUNTO DE PANELA DE CERAMICA",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  999.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0a266f33941f7ff.webp"
+    },
+    {
+        "id":  549,
+        "nome":  "CONJUNTO DE POTES MANTIMENTOS 2L TROPICAL",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  110.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9fc76d753d0b192.webp"
+    },
+    {
+        "id":  572,
+        "nome":  "CONJUNTO DE PUDIM",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  120.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/dca67ef12257893.webp"
+    },
+    {
+        "id":  505,
+        "nome":  "CONJUNTO FACAS 5 PECAS",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/75341654deddbfe.webp"
+    },
+    {
+        "id":  579,
+        "nome":  "CONJUNTO PANELAS 3L E 5L + PIPOQUEIRA E TAMPA DE VIDRO",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  599.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/ca8d4705c1ae3c2.webp"
+    },
+    {
+        "id":  676,
+        "nome":  "CONJUNTO PANELAS CERAMICAS 10 PECAS MIMO STYLE",
+        "descricao":  null,
+        "preco":  1599.00,
+        "estoque":  1,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/ef295f47071cf1e.webp"
+    },
+    {
+        "id":  509,
+        "nome":  "CONJUNTO SALADEIRA INOX",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/2f360ec30f731e6.webp"
+    },
+    {
+        "id":  391,
+        "nome":  "CONJUNTO SOBREMESA 7 PECAS",
+        "descricao":  "7 peças 1 principal para a sobremesa 6 potes pequenos",
+        "preco":  160.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c451e82507f2c2c.webp"
+    },
+    {
+        "id":  380,
+        "nome":  "CONTROLE TV BOX",
+        "descricao":  null,
+        "preco":  60.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/95a56aedf70e46d.webp"
+    },
+    {
+        "id":  385,
+        "nome":  "CONTROLE TV BOX",
+        "descricao":  null,
+        "preco":  20.00,
+        "estoque":  4,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/94128d397a2254a.webp"
+    },
+    {
+        "id":  520,
+        "nome":  "COOLER 20L COM MESA",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9e2c5b58bd2ba85.webp"
+    },
+    {
+        "id":  659,
+        "nome":  "COPO STANLEY 500ML",
+        "descricao":  "ENCOMENDA!!ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS!!",
+        "preco":  50.00,
+        "estoque":  1,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/30f54098ed8814e.webp"
+    },
+    {
+        "id":  662,
+        "nome":  "COPO STANLEY VIRGINIA",
+        "descricao":  "ENCOMENDA!!ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS!!",
+        "preco":  199.00,
+        "estoque":  1,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b565670ab7ece00.webp"
+    },
+    {
+        "id":  685,
+        "nome":  "COPO VIRGINIA COPA BRASIL",
+        "descricao":  null,
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/981401bb861c163.webp"
+    },
+    {
+        "id":  684,
+        "nome":  "COPO VIRGINIA STITCH",
+        "descricao":  null,
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/41eb591a43c52f7.webp"
+    },
+    {
+        "id":  609,
+        "nome":  "CORTINA CRISTAL DE PAREDE INTEIRA",
+        "descricao":  "Encomenda Encomendas devem ser feitas até o 3 dia do mês do seu acerto!!",
+        "preco":  399.00,
+        "estoque":  1,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9c697fe6d43061f.webp"
+    },
+    {
+        "id":  444,
+        "nome":  "CORTINA DE JANELA BLACKOUT",
+        "descricao":  null,
+        "preco":  250.00,
+        "estoque":  6,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c571c5652c10c23.webp"
+    },
+    {
+        "id":  565,
+        "nome":  "CORTINA DE PAREDE",
+        "descricao":  "VariascoresConsulte Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  599.00,
+        "estoque":  5,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/54bfeb22198f973.webp"
+    },
+    {
+        "id":  446,
+        "nome":  "CORTINA SEMI BLACKOUT JANELA",
+        "descricao":  null,
+        "preco":  200.00,
+        "estoque":  6,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/36a6cebde13e686.webp"
+    },
+    {
+        "id":  445,
+        "nome":  "CORTINA SEMI BLACKOUT PORTA",
+        "descricao":  null,
+        "preco":  250.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/e50c53ecb81d85d.webp"
+    },
+    {
+        "id":  346,
+        "nome":  "COZEDOR DE OVOS",
+        "descricao":  null,
+        "preco":  150.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/1b1fcac08b98daa.webp"
+    },
+    {
+        "id":  420,
+        "nome":  "CUECA BOXER DO P AO GG",
+        "descricao":  "Informe o tamanho desejado",
+        "preco":  25.00,
+        "estoque":  34,
+        "categoria":  "VESTUARIO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/2a5a88b332d5e39.webp"
+    },
+    {
+        "id":  570,
+        "nome":  "CUSCUZEIRA",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  99.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/fe9f3fdc33be672.webp"
+    },
+    {
+        "id":  655,
+        "nome":  "CUTELO",
+        "descricao":  "ENCOMENDA!! ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS",
+        "preco":  50.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/41ae6666c1334bd.webp"
+    },
+    {
+        "id":  686,
+        "nome":  "EDREDOM COM SHERPA",
+        "descricao":  null,
+        "preco":  299.00,
+        "estoque":  1,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0685631d6cd6561.webp"
+    },
+    {
+        "id":  660,
+        "nome":  "ESCOVA 5 EM 1",
+        "descricao":  "ENCOMENDA!!ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS!!",
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/2b6a838c657478f.webp"
+    },
+    {
+        "id":  355,
+        "nome":  "ESCOVA ELETRICA",
+        "descricao":  null,
+        "preco":  75.00,
+        "estoque":  0,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/79fe92683ca571d.webp"
+    },
+    {
+        "id":  349,
+        "nome":  "ESCOVA SECADORA",
+        "descricao":  null,
+        "preco":  160.00,
+        "estoque":  3,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/17f042a9b9e94fc.webp"
+    },
+    {
+        "id":  356,
+        "nome":  "ESCOVA SECADORA CADENCE 4 EM 1",
+        "descricao":  null,
+        "preco":  299.00,
+        "estoque":  1,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/6bb9c2177878817.webp"
+    },
+    {
+        "id":  367,
+        "nome":  "ESCOVA SECADORA MODELADORA 5 EM 1",
+        "descricao":  null,
+        "preco":  399.00,
+        "estoque":  1,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0025e067a9c94ee.webp"
+    },
+    {
+        "id":  361,
+        "nome":  "ESCOVA SECADORA ROTATIVA",
+        "descricao":  null,
+        "preco":  399.00,
+        "estoque":  1,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a016707b0a67c9e.webp"
+    },
+    {
+        "id":  481,
+        "nome":  "ESMERIL",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!",
+        "preco":  999.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/f33521bf8278380.webp"
+    },
+    {
+        "id":  562,
+        "nome":  "ESPELHO 100 X 40CM",
+        "descricao":  null,
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c0bd7287b4362d8.webp"
+    },
+    {
+        "id":  394,
+        "nome":  "ESPELHO 45CM",
+        "descricao":  null,
+        "preco":  199.00,
+        "estoque":  4,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9e89dcbbe2a75c1.webp"
+    },
+    {
+        "id":  564,
+        "nome":  "ESPELHO COM LED",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/13286fd52962c7f.webp"
+    },
+    {
+        "id":  563,
+        "nome":  "ESPELHO COM SUPORTE",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a7a2436a64ec517.webp"
+    },
+    {
+        "id":  395,
+        "nome":  "ESPELHO OVAL",
+        "descricao":  null,
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/e75b682f473ed7f.webp"
+    },
+    {
+        "id":  463,
+        "nome":  "ESPREMEDOR DE FRUTAS",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!!",
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b63456769c5ecf5.webp"
+    },
+    {
+        "id":  639,
+        "nome":  "FAQUEIRO ASDAS",
+        "descricao":  "ENCOMENDA!!ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS DO SEU ACERTO!",
+        "preco":  120.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/4c2405879a19264.webp"
+    },
+    {
+        "id":  478,
+        "nome":  "FERRO DE PASSAR",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!",
+        "preco":  199.00,
+        "estoque":  1,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/312c1336677cb40.webp"
+    },
+    {
+        "id":  578,
+        "nome":  "FERVEDOR TAMPA DE VIDRO N15",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  150.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/08f609ae02e1e3b.webp"
+    },
+    {
+        "id":  571,
+        "nome":  "FERVEDOURO INDERRAMEVEL",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  120.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/bb6e293556f9763.webp"
+    },
+    {
+        "id":  365,
+        "nome":  "FILTRO DE LINHA",
+        "descricao":  null,
+        "preco":  150.00,
+        "estoque":  0,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/fb93040ffeb7c1a.webp"
+    },
+    {
+        "id":  568,
+        "nome":  "FOGAO INDUCAO 2 BOCAS",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/31f57973eb42cd2.webp"
+    },
+    {
+        "id":  360,
+        "nome":  "FONE XIOAMI",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  3,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0b614d6e118e5fd.webp"
+    },
+    {
+        "id":  574,
+        "nome":  "FORMA DE FERRO FUNDIDO",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  299.00,
+        "estoque":  1,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/3495701a0520bfe.webp"
+    },
+    {
+        "id":  528,
+        "nome":  "FORNO AIR FRYER",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  999.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/3459df4083904f1.webp"
+    },
+    {
+        "id":  541,
+        "nome":  "FORNO DE BANCADA",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  899.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/31732aa732aae29.webp"
+    },
+    {
+        "id":  474,
+        "nome":  "FRIGIDEIRA 28CM 3,6L",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!!",
+        "preco":  120.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/65287419b3919c2.webp"
+    },
+    {
+        "id":  633,
+        "nome":  "FRIGIDEIRA DE VIDRO COM TAMPA PEQUENA PARA OVO",
+        "descricao":  "Encomenda!!Encomendas devem ser feitas até o 3o dia do mês do seu acerto!!",
+        "preco":  49.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/f352d9735c68b5c.webp"
+    },
+    {
+        "id":  604,
+        "nome":  "GARRAFA DE CAFE 1L",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  130.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/bfadea35fc24f3d.webp"
+    },
+    {
+        "id":  511,
+        "nome":  "GARRAFA DE CAFE COM 4 XICARAS",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  165.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/05895cc1ab87184.webp"
+    },
+    {
+        "id":  602,
+        "nome":  "GARRAFA DE CAFE DE APERTAR 1,8L",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  179.90,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9f81edb6c5426b1.webp"
+    },
+    {
+        "id":  603,
+        "nome":  "GARRAFA DE CAFE DE APERTAR 1L",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  150.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/7d39d10f5f14f18.webp"
+    },
+    {
+        "id":  498,
+        "nome":  "GARRAFA DE CAFE SIMPLES",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  50.00,
+        "estoque":  4,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/900ce63ae549989.webp"
+    },
+    {
+        "id":  606,
+        "nome":  "GARRAFA TERMICA",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  50.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0f0d9bfb125c716.webp"
+    },
+    {
+        "id":  629,
+        "nome":  "GUARDA CHUVA CABO DE MADEIRA SOMBRINHA",
+        "descricao":  "Encomenda!!Encomendas devem ser feitas até o 3o dia do mês do seu acerto!!",
+        "preco":  60.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/6551ab19e50ab3e.webp"
+    },
+    {
+        "id":  396,
+        "nome":  "JARRA DE VIDRO COM TAMPA",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/7f1d1ceb66ff383.webp"
+    },
+    {
+        "id":  625,
+        "nome":  "JOGO DE 3 BACIAS E 1 BALDE",
+        "descricao":  "Consulte cores disponíveis!!Encomenda!!Encomendas devem ser feitas até o 3o dia do mês do seu acerto!!",
+        "preco":  190.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a92c482c4cca760.webp"
+    },
+    {
+        "id":  632,
+        "nome":  "JOGO DE BOWL SOBREMESA",
+        "descricao":  "Encomenda!!Encomendas devem ser feitas até o 3o dia do mês do seu acerto!!",
+        "preco":  60.00,
+        "estoque":  1,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/3b451643f4926f5.webp"
+    },
+    {
+        "id":  398,
+        "nome":  "JOGO DE COPO 340ML",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/7add879bae27c95.webp"
+    },
+    {
+        "id":  681,
+        "nome":  "JOGO DE COPO ALEXANDRIA DIAMOND",
+        "descricao":  null,
+        "preco":  99.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/7f79700726d87a6.webp"
+    },
+    {
+        "id":  615,
+        "nome":  "JOGO DE COPO WOLFF PALMEIRA PALM THREE COPO ALTO",
+        "descricao":  "Encomenda Encomendas devem ser feitas até o 3 dia do mês do seu acerto!!",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/89229e82464d03a.webp"
+    },
+    {
+        "id":  450,
+        "nome":  "JOGO DE COZINHA IMPORTADA",
+        "descricao":  null,
+        "preco":  199.00,
+        "estoque":  2,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c3863c284a41aef.webp"
+    },
+    {
+        "id":  468,
+        "nome":  "JOGO DE FACA TRAMONTINA PLENUS",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!!",
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a2d31c90030f168.webp"
+    },
+    {
+        "id":  616,
+        "nome":  "JOGO DE FACAS COM SUPORTE HAUSKRAFT",
+        "descricao":  "Encomenda Encomendas devem ser feitas até o 3 dia do mês do seu acerto!!",
+        "preco":  250.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/e586bcad346b189.webp"
+    },
+    {
+        "id":  442,
+        "nome":  "JOGO DE LENCOL 4 PECAS BRANCO",
+        "descricao":  "1 lençol de elástico 1 lençol sem elástico 2 fronhas",
+        "preco":  240.00,
+        "estoque":  1,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/7fe745e92d6b047.webp"
+    },
+    {
+        "id":  357,
+        "nome":  "JOGO DE MANTIENTOS",
+        "descricao":  null,
+        "preco":  270.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/cb972818fdba0c7.webp"
+    },
+    {
+        "id":  488,
+        "nome":  "JOGO DE MANTIMENTOS ALUMINIO",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  220.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/64ef95c14ee543c.webp"
+    },
+    {
+        "id":  683,
+        "nome":  "JOGO DE MANTIMENTOS ALUMINIO",
+        "descricao":  null,
+        "preco":  260.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  ""
+    },
+    {
+        "id":  366,
+        "nome":  "JOGO DE PANELAS ALUMINIO COM TAMPA DE VIDRO",
+        "descricao":  "Disponível no preto ou vermelho",
+        "preco":  399.00,
+        "estoque":  4,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a7d1d7fc4741570.webp"
+    },
+    {
+        "id":  516,
+        "nome":  "JOGO DE PANELAS ANTIADERENTE COM TAMPA DE VIDRO PREMIUM",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  799.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a509070b55e2c60.webp"
+    },
+    {
+        "id":  472,
+        "nome":  "JOGO DE PANELAS TURIM 10 PECAS",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!!",
+        "preco":  699.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/45c391390b1487e.webp"
+    },
+    {
+        "id":  649,
+        "nome":  "JOGO DE POTES PEQUENOS INOX COM TAMPA",
+        "descricao":  "ENCOMENDA!! ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS",
+        "preco":  99.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/56eeaf182312a41.webp"
+    },
+    {
+        "id":  500,
+        "nome":  "JOGO DE PRATO COM TALHERES",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/609e37eb09c3f4d.webp"
+    },
+    {
+        "id":  436,
+        "nome":  "JOGO DE QUARTO",
+        "descricao":  "Diferentes estampas Consulte as disponíveis",
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a36d182c7c1da7f.webp"
+    },
+    {
+        "id":  435,
+        "nome":  "JOGO DE QUARTO HOT WHEELS",
+        "descricao":  "1 cortina 1 brinquedo 1 colcha1 fronha",
+        "preco":  199.00,
+        "estoque":  1,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/d22ed58b904c867.webp"
+    },
+    {
+        "id":  642,
+        "nome":  "JOGO DE QUARTO INFANTIL FEMININO BARBIE",
+        "descricao":  "CONSULTE ESTAMPAS DISPONÍVEIS.ENCOMENDA!!ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS DO SEU ACERTO!",
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/dd87ca6bd4b5af3.webp"
+    },
+    {
+        "id":  399,
+        "nome":  "JOGO DE TACAS C 6",
+        "descricao":  null,
+        "preco":  160.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/d4b314cf9334cc6.webp"
+    },
+    {
+        "id":  467,
+        "nome":  "JOGO DE TACAS PEQUENAS E GRANDES",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!!",
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/93565f248fe6172.webp"
+    },
+    {
+        "id":  471,
+        "nome":  "JOGO DE TALHER BUZIOS",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!!",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/cb381b563a4e4f6.webp"
+    },
+    {
+        "id":  663,
+        "nome":  "JOGO DE TALHER DOURADO",
+        "descricao":  "ENCOMENDA!!ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS!!",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9aba161514b3b8c.webp"
+    },
+    {
+        "id":  620,
+        "nome":  "JOGO DE TALHER SUNSHINE",
+        "descricao":  "Encomenda Encomendas devem ser feitas até o 3 dia do mês do seu acerto!!",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/76f8e533e0cfc87.webp"
+    },
+    {
+        "id":  482,
+        "nome":  "JOGO DE TALHER TRAMONTINA",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!",
+        "preco":  199.00,
+        "estoque":  2,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/1e8375184dd9a8d.webp"
+    },
+    {
+        "id":  466,
+        "nome":  "JOGO DE VASILHA RUBI",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!!",
+        "preco":  120.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/196de860e403993.webp"
+    },
+    {
+        "id":  672,
+        "nome":  "JOGO DE XICARAS AMBAR",
+        "descricao":  null,
+        "preco":  140.00,
+        "estoque":  1,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/4b3f9c3d1543d4e.webp"
+    },
+    {
+        "id":  393,
+        "nome":  "JOGO DE XICARAS ITALIA C 6",
+        "descricao":  null,
+        "preco":  99.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b77669c1172e5b6.webp"
+    },
+    {
+        "id":  431,
+        "nome":  "KIT 1 TOALHA DE ROSTO E 1 DE BANHO",
+        "descricao":  "Consulte cores disponíveis",
+        "preco":  110.00,
+        "estoque":  5,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/fef9c95257fdb37.webp"
+    },
+    {
+        "id":  413,
+        "nome":  "KIT 12 PARES DE CHINELO",
+        "descricao":  "Grade com 12 pares",
+        "preco":  500.00,
+        "estoque":  22,
+        "categoria":  "VESTUARIO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/8161f8982fb7edd.webp"
+    },
+    {
+        "id":  424,
+        "nome":  "KIT 12 PIJAMAS VIRGINIA BLOGUEIRINHA",
+        "descricao":  null,
+        "preco":  600.00,
+        "estoque":  24,
+        "categoria":  "VESTUARIO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/bdba6ec9a4ce29a.webp"
+    },
+    {
+        "id":  626,
+        "nome":  "KIT 3 ASSADEIRAS DE VIDRO",
+        "descricao":  "Encomenda!!Encomendas devem ser feitas até o 3o dia do mês do seu acerto!!",
+        "preco":  250.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/3aad1f99a7b9b38.webp"
+    },
+    {
+        "id":  567,
+        "nome":  "KIT 3 MASCARAS 2KG CADA",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/e197dbfb99a9b94.webp"
+    },
+    {
+        "id":  635,
+        "nome":  "KIT 5 CABIDES DE VELUDO",
+        "descricao":  "Encomenda!!Encomendas devem ser feitas até o 3o dia do mês do seu acerto!!",
+        "preco":  30.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/313efb95103a350.webp"
+    },
+    {
+        "id":  503,
+        "nome":  "KIT BOTOX SEM FORMOL",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  240.00,
+        "estoque":  2,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/d5591dae3813095.webp"
+    },
+    {
+        "id":  536,
+        "nome":  "KIT CACHOS GLAMMOUR",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  240.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/4bf6d4f85a546bc.webp"
+    },
+    {
+        "id":  537,
+        "nome":  "KIT CAFE",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  250.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/002228b02ce48f9.webp"
+    },
+    {
+        "id":  476,
+        "nome":  "KIT CAFE PRATICO",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!",
+        "preco":  99.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0b3663d3c1a0af9.webp"
+    },
+    {
+        "id":  224,
+        "nome":  "KIT CAFE SUPER PRATICO",
+        "descricao":  null,
+        "preco":  240.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a7670a16af28860.webp"
+    },
+    {
+        "id":  419,
+        "nome":  "KIT CALCINHA ATM COM 12",
+        "descricao":  null,
+        "preco":  199.00,
+        "estoque":  3,
+        "categoria":  "VESTUARIO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/bbf830878ab40ba.webp"
+    },
+    {
+        "id":  667,
+        "nome":  "KIT CAPILAR GLAMMOUR FEMININO 7 ITENS",
+        "descricao":  "ENCOMENDA!!ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS!!",
+        "preco":  150.00,
+        "estoque":  1,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/099c9a1dc060697.webp"
+    },
+    {
+        "id":  650,
+        "nome":  "KIT CAPILAR INFANTIL",
+        "descricao":  "ENCOMENDA!! ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS",
+        "preco":  80.00,
+        "estoque":  2,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/97ad3faebcb809e.webp"
+    },
+    {
+        "id":  560,
+        "nome":  "KIT CAUTERIZACAO GLAMMAIS",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  240.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/814730ea762adbb.webp"
+    },
+    {
+        "id":  504,
+        "nome":  "KIT CHURRASCO",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  50.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/687f71b3b863aa0.webp"
+    },
+    {
+        "id":  555,
+        "nome":  "KIT CHURRASCO",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  50.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c982b37481c7035.webp"
+    },
+    {
+        "id":  704,
+        "nome":  "KIT CRESCE MAIS PEQUENO 500ML",
+        "descricao":  null,
+        "preco":  140.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  ""
+    },
+    {
+        "id":  614,
+        "nome":  "KIT CRONOGRAMA GLAMMOUR",
+        "descricao":  "Encomenda Encomendas devem ser feitas até o 3 dia do mês do seu acerto!!",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/08d8198e0f9a0a2.webp"
+    },
+    {
+        "id":  651,
+        "nome":  "KIT DE BELEZA SWISS BEAUTY",
+        "descricao":  "1 esfoliante1 hidratante1 óleo 1 body splash ENCOMENDA!! ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b7202d205f7bbc0.webp"
+    },
+    {
+        "id":  654,
+        "nome":  "KIT DE CABELO LISO OBRIGATORIO",
+        "descricao":  "ENCOMENDA!! ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/5d6820b23d8264d.webp"
+    },
+    {
+        "id":  644,
+        "nome":  "KIT DE CABELO OLEO DE COCO CHAVEUX",
+        "descricao":  "ENCOMENDA!!ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS DO SEU ACERTO!",
+        "preco":  240.00,
+        "estoque":  1,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/ec7b348b5de11eb.webp"
+    },
+    {
+        "id":  438,
+        "nome":  "KIT DE COZINHA 10 PECAS",
+        "descricao":  null,
+        "preco":  199.00,
+        "estoque":  8,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c7260ef09bf4e21.webp"
+    },
+    {
+        "id":  376,
+        "nome":  "KIT DE FERRAMENTAS DE PRECISAO",
+        "descricao":  null,
+        "preco":  35.00,
+        "estoque":  1,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/ca2f41b3c1ff068.webp"
+    },
+    {
+        "id":  491,
+        "nome":  "KIT GARRAFA CAFE XICARAS E POTES EURO",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  220.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/08df7591ba9b34b.webp"
+    },
+    {
+        "id":  675,
+        "nome":  "KIT GLOSS 3 PECAS",
+        "descricao":  null,
+        "preco":  80.00,
+        "estoque":  3,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/76e180afba0027e.webp"
+    },
+    {
+        "id":  559,
+        "nome":  "KIT HIDRATACAO GLAMMAIS",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  240.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/375924efaf72c7e.webp"
+    },
+    {
+        "id":  437,
+        "nome":  "KIT INFANTIL STITCH",
+        "descricao":  null,
+        "preco":  100.00,
+        "estoque":  1,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/40c7d5bcc512e9a.webp"
+    },
+    {
+        "id":  554,
+        "nome":  "KIT LAR DOCE LAR",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/fbff031a19d07db.webp"
+    },
+    {
+        "id":  487,
+        "nome":  "KIT LINGERIE CALCINHA E SUTIA",
+        "descricao":  "Grade do p ao gg Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  599.00,
+        "estoque":  0,
+        "categoria":  "VESTUARIO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/e6c141dd5bde054.webp"
+    },
+    {
+        "id":  661,
+        "nome":  "KIT MANICURE PEDICURE CORTADOR DE UNHA ALICATE",
+        "descricao":  "ENCOMENDA!!ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS!!",
+        "preco":  70.00,
+        "estoque":  5,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/332af0f8ca712de.webp"
+    },
+    {
+        "id":  542,
+        "nome":  "KIT MAQUIAGEM 20 PECAS",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  399.00,
+        "estoque":  1,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/54a7f757d3bfab0.webp"
+    },
+    {
+        "id":  597,
+        "nome":  "KIT NUTRICAO FORTALECEDORA",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/acedbb73528d4ee.webp"
+    },
+    {
+        "id":  561,
+        "nome":  "KIT NUTRICAO GLAMMAIS",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  240.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c47fa11b3a4aba0.webp"
+    },
+    {
+        "id":  364,
+        "nome":  "KIT ORGANIZADOR HERMETICO",
+        "descricao":  "1 pote 2,3l 2 potes 1,1l",
+        "preco":  140.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c81f73aca2b2342.webp"
+    },
+    {
+        "id":  636,
+        "nome":  "KIT PAPINHA",
+        "descricao":  "Encomenda!!Encomendas devem ser feitas até o 3o dia do mês do seu acerto!!",
+        "preco":  30.00,
+        "estoque":  1,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/edaaf9fbc427e10.webp"
+    },
+    {
+        "id":  558,
+        "nome":  "KIT PARADOX",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  240.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b6d6883a8fd2bce.webp"
+    },
+    {
+        "id":  517,
+        "nome":  "KIT PARAFUSADEIRA",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  699.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0d1bd95e8dc9b9f.webp"
+    },
+    {
+        "id":  652,
+        "nome":  "KIT PENTEIA CABELO BELKIT 1 LITRO",
+        "descricao":  "ENCOMENDA!! ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS",
+        "preco":  199.00,
+        "estoque":  2,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/f16ae842d8c8099.webp"
+    },
+    {
+        "id":  653,
+        "nome":  "KIT PISTACHE GLAMMOUR",
+        "descricao":  "ENCOMENDA!! ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS",
+        "preco":  199.00,
+        "estoque":  2,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/8a5f151fddcf86d.webp"
+    },
+    {
+        "id":  566,
+        "nome":  "KIT POS QUIMICA GLAMMAIS",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  240.00,
+        "estoque":  1,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/ed2d018a805a43d.webp"
+    },
+    {
+        "id":  538,
+        "nome":  "KIT POTES COM TAMPA DE VIDRO",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  80.00,
+        "estoque":  1,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/6eb1d41a304a8ee.webp"
+    },
+    {
+        "id":  612,
+        "nome":  "KIT RHENUKS MARACUJA",
+        "descricao":  "Temos outras fragrâncias, favor consultar!Encomenda Encomendas devem ser feitas até o 3 dia do mês do seu acerto!!",
+        "preco":  99.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/61984f7c7fccbb3.webp"
+    },
+    {
+        "id":  645,
+        "nome":  "KIT RHENUKS MELANCIA",
+        "descricao":  "ENCOMENDA!!ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS!!",
+        "preco":  99.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/cde669c8bfcb6f9.webp"
+    },
+    {
+        "id":  646,
+        "nome":  "KIT RHENUKS PITAYA",
+        "descricao":  "ENCOMENDA!! ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS",
+        "preco":  99.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9a2989a173cd761.webp"
+    },
+    {
+        "id":  540,
+        "nome":  "KIT SEX SHOP",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  450.00,
+        "estoque":  0,
+        "categoria":  "SEX SHOP",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/95d43d03f14fad8.webp"
+    },
+    {
+        "id":  605,
+        "nome":  "KIT TERERE",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  120.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/6ca3e46136685dd.webp"
+    },
+    {
+        "id":  375,
+        "nome":  "KIT TESOURAS",
+        "descricao":  null,
+        "preco":  40.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/cebe72a79aaa758.webp"
+    },
+    {
+        "id":  643,
+        "nome":  "KIT UTENSILIOS 19 PECAS",
+        "descricao":  "CONSULTE CORES DISPONÍVEIS.ENCOMENDA!!ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS DO SEU ACERTO!",
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/3c5821612b87c6e.webp"
+    },
+    {
+        "id":  592,
+        "nome":  "LAMPIAO RECARREGAVEL LANTERNA",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/df7ec674e627be7.webp"
+    },
+    {
+        "id":  456,
+        "nome":  "LAVADORA DE ALTA PRESSAO MAQUINA DE LAVAR",
+        "descricao":  null,
+        "preco":  1099.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/5c841cdde5b5ed4.webp"
+    },
+    {
+        "id":  440,
+        "nome":  "LENCOL 3 PECAS BRANCO",
+        "descricao":  null,
+        "preco":  140.00,
+        "estoque":  9,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/ddb1a79dd5d3e90.webp"
+    },
+    {
+        "id":  494,
+        "nome":  "LIQUIDIFICADOR",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  399.00,
+        "estoque":  1,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b7824295a771467.webp"
+    },
+    {
+        "id":  369,
+        "nome":  "LIQUIDIFICADOR",
+        "descricao":  null,
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/7a091a48abdf8fd.webp"
+    },
+    {
+        "id":  461,
+        "nome":  "LISO PERFEITO GLAMMOUR",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!!",
+        "preco":  240.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/1b3236bb29dfa45.webp"
+    },
+    {
+        "id":  469,
+        "nome":  "LIXADEIRA",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!!",
+        "preco":  499.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/eac7315e2c39023.webp"
+    },
+    {
+        "id":  648,
+        "nome":  "LIXEIRA INOX 5L",
+        "descricao":  "ENCOMENDA!! ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS",
+        "preco":  150.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/5e6f2240097229d.webp"
+    },
+    {
+        "id":  607,
+        "nome":  "MALETA DE FERRAMENTAS 142 PECAS",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  349.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/d17cbdc2d9cc8eb.webp"
+    },
+    {
+        "id":  430,
+        "nome":  "MANTA ACONCHEGO KING",
+        "descricao":  null,
+        "preco":  120.00,
+        "estoque":  0,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/1c4c3eb5bbb562b.webp"
+    },
+    {
+        "id":  634,
+        "nome":  "MANTA BRILHA NO ESCURO FEMININA OU MASCULINA",
+        "descricao":  "Encomenda!!Encomendas devem ser feitas até o 3o dia do mês do seu acerto!!",
+        "preco":  110.00,
+        "estoque":  3,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/47ffecb4562fa50.webp"
+    },
+    {
+        "id":  434,
+        "nome":  "MANTA COM BICHO DE PELUCIA",
+        "descricao":  null,
+        "preco":  120.00,
+        "estoque":  1,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/4c6bc1515ed5b22.webp"
+    },
+    {
+        "id":  608,
+        "nome":  "MANTA POA",
+        "descricao":  null,
+        "preco":  160.00,
+        "estoque":  16,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/94d773d45784172.webp"
+    },
+    {
+        "id":  426,
+        "nome":  "MANTA SOFA/CAMA",
+        "descricao":  "Cinsulte",
+        "preco":  99.00,
+        "estoque":  0,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/3b7d55fb30eb258.webp"
+    },
+    {
+        "id":  618,
+        "nome":  "MANTINHA 1,8 X 2,0 SIMPLES ESTAMPADA",
+        "descricao":  "Encomenda Encomendas devem ser feitas até o 3 dia do mês do seu acerto!!",
+        "preco":  80.00,
+        "estoque":  0,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/af66f3c8e1e7ee9.webp"
+    },
+    {
+        "id":  489,
+        "nome":  "MANTINHA DE NENEM MASCULINA",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/f4b27dde601d12e.webp"
+    },
+    {
+        "id":  627,
+        "nome":  "MANTINHA NENEM BEBE FEMININA",
+        "descricao":  "Encomenda!!Encomendas devem ser feitas até o 3o dia do mês do seu acerto!!",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/388182f66c190cd.webp"
+    },
+    {
+        "id":  577,
+        "nome":  "MAQUINA DE CABELO MUNDIAL BARBEAR",
+        "descricao":  null,
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/96cf4c29c5894cb.webp"
+    },
+    {
+        "id":  473,
+        "nome":  "MAQUINA KEMEI",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!!",
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/2da48f5d312769b.webp"
+    },
+    {
+        "id":  397,
+        "nome":  "MARINEX 1,6L",
+        "descricao":  null,
+        "preco":  49.99,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/07544cf7d2f8bbe.webp"
+    },
+    {
+        "id":  674,
+        "nome":  "MEGA COZINHA INFANTIL",
+        "descricao":  null,
+        "preco":  499.00,
+        "estoque":  1,
+        "categoria":  "BRINQUEDOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/ae947fd875533cf.webp"
+    },
+    {
+        "id":  496,
+        "nome":  "MEGA VARAL 3 ANDARES",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  250.00,
+        "estoque":  1,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b28bed358407cef.webp"
+    },
+    {
+        "id":  581,
+        "nome":  "MESA DE SINUCA 51CM",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "BRINQUEDOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/928ab3a00200c0a.webp"
+    },
+    {
+        "id":  580,
+        "nome":  "MESA DE TOTO PEBOLIM DE MADEIRA 51CM",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "BRINQUEDOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0ac4fc1ed5fa687.webp"
+    },
+    {
+        "id":  584,
+        "nome":  "MESA INFANTIL 2 CADEIRAS",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "BRINQUEDOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/6bd23ccc1184486.webp"
+    },
+    {
+        "id":  583,
+        "nome":  "MESA INFANTIL COM 2 CADEIRAS",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "BRINQUEDOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/e0b97eac5b7194d.webp"
+    },
+    {
+        "id":  359,
+        "nome":  "MINI ASPIRADOR PORTATIL",
+        "descricao":  null,
+        "preco":  66.00,
+        "estoque":  0,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/37f471cff2a7783.webp"
+    },
+    {
+        "id":  610,
+        "nome":  "MINI CHAPA DE ACO P",
+        "descricao":  null,
+        "preco":  60.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/bd94cd7edf2629c.webp"
+    },
+    {
+        "id":  591,
+        "nome":  "MINI LANTERNA",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  30.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/17882c9934f97c3.webp"
+    },
+    {
+        "id":  480,
+        "nome":  "MIXER 3 EM 1",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!",
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/acda152fe99d3a2.webp"
+    },
+    {
+        "id":  507,
+        "nome":  "MOCHILA ADULTO",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c48ecdc561b0e4a.webp"
+    },
+    {
+        "id":  641,
+        "nome":  "MOCHILA KIPLING ROSA",
+        "descricao":  "ENCOMENDA!!ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS DO SEU ACERTO!",
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/16a107e4f6ca72f.webp"
+    },
+    {
+        "id":  637,
+        "nome":  "MOCHILA POMPOM",
+        "descricao":  "Encomenda!!Encomendas devem ser feitas até o 3o dia do mês do seu acerto!!",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/3a7a08a2735d376.webp"
+    },
+    {
+        "id":  546,
+        "nome":  "MOP",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  150.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/3e2b5115601c5b3.webp"
+    },
+    {
+        "id":  543,
+        "nome":  "MORINGA",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  165.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/657d25ba937cfa8.webp"
+    },
+    {
+        "id":  531,
+        "nome":  "MOTOSERRA",
+        "descricao":  "Sem comissão!! Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  999.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/4cc971ce58a7fdc.webp"
+    },
+    {
+        "id":  464,
+        "nome":  "MULTIPROCESSADOR 5 EM 1",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!!",
+        "preco":  899.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/982d9035349d200.webp"
+    },
+    {
+        "id":  544,
+        "nome":  "PANELA DE PRESSAO 4,5L",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  150.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/51d9c58f45a5a50.webp"
+    },
+    {
+        "id":  545,
+        "nome":  "PANELA DE PRESSAO 7L",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  220.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/e0266612c57352c.webp"
+    },
+    {
+        "id":  475,
+        "nome":  "PANELA DE PRESSAO ELETRICA",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!",
+        "preco":  899.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/d1910ebc9e74c61.webp"
+    },
+    {
+        "id":  506,
+        "nome":  "PANELA DE PRESSAO FECHAMENTO EXTERNO 4,5L",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  350.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/47234429e0a1a25.webp"
+    },
+    {
+        "id":  479,
+        "nome":  "PANELA PIPOQUEIRA",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/8ef80beabe6dd1b.webp"
+    },
+    {
+        "id":  673,
+        "nome":  "PANELA TACHO GRANDE 45 CM COM TAMPA",
+        "descricao":  null,
+        "preco":  499.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/39bca605cd8a4df.webp"
+    },
+    {
+        "id":  525,
+        "nome":  "PANELA WOK 28 COM TAMPA DE VIDRO",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  250.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/7927a7544ae9157.webp"
+    },
+    {
+        "id":  412,
+        "nome":  "PAR DE CHINELO",
+        "descricao":  "Consulte sua numeração",
+        "preco":  50.00,
+        "estoque":  22,
+        "categoria":  "VESTUARIO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/27d03ad242bcdaa.webp"
+    },
+    {
+        "id":  527,
+        "nome":  "PARAFUSADEIRA DE IMPACTO",
+        "descricao":  "",
+        "preco":  899.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/e69142321a6f8ce.webp"
+    },
+    {
+        "id":  575,
+        "nome":  "PATINS",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  499.00,
+        "estoque":  0,
+        "categoria":  "BRINQUEDOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/fbfb3645afa5fe3.webp"
+    },
+    {
+        "id":  377,
+        "nome":  "PEN DRIVE COM MUSICAS",
+        "descricao":  null,
+        "preco":  40.00,
+        "estoque":  2,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/eeade854fbf8403.webp"
+    },
+    {
+        "id":  665,
+        "nome":  "PERFUME ARABE YARA",
+        "descricao":  "ENCOMENDA!!ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS!!",
+        "preco":  280.00,
+        "estoque":  0,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b0c7c3e6ef4e539.webp"
+    },
+    {
+        "id":  423,
+        "nome":  "PIJAMA BLOGUEIRINHA VIRGINIA",
+        "descricao":  "Cinsulte",
+        "preco":  50.00,
+        "estoque":  0,
+        "categoria":  "VESTUARIO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b1ca670a4d5a56c.webp"
+    },
+    {
+        "id":  347,
+        "nome":  "PISCINA 1000L",
+        "descricao":  null,
+        "preco":  399.00,
+        "estoque":  4,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/ab981a69ea57ec8.webp"
+    },
+    {
+        "id":  483,
+        "nome":  "PISCINA DE BOLINHA",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!",
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "BRINQUEDOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/6812bbb8e996422.webp"
+    },
+    {
+        "id":  379,
+        "nome":  "PLUG CARREGADOR",
+        "descricao":  null,
+        "preco":  15.00,
+        "estoque":  2,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/960a08ac54b18da.webp"
+    },
+    {
+        "id":  490,
+        "nome":  "PORTA TEMPERO CASINHA",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "ALIMENTOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9fd9bfe6cac1d0d.webp"
+    },
+    {
+        "id":  638,
+        "nome":  "PORTA TEMPERO P",
+        "descricao":  "Encomenda!!Encomendas devem ser feitas até o 3o dia do mês do seu acerto!!",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "ALIMENTOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/8913772cfc817d6.webp"
+    },
+    {
+        "id":  628,
+        "nome":  "POTE PIPOCA E COPOS",
+        "descricao":  "Encomenda!!Encomendas devem ser feitas até o 3o dia do mês do seu acerto!!",
+        "preco":  50.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/e6572ba2e0b9beb.webp"
+    },
+    {
+        "id":  352,
+        "nome":  "PROMOCAO - POWER BANK 20.000",
+        "descricao":  "Valor promocional De 250,00Por 150,00",
+        "preco":  150.00,
+        "estoque":  2,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/bc6208df2ef2ee7.webp"
+    },
+    {
+        "id":  670,
+        "nome":  "RADIO PORTATIL KAPBOM",
+        "descricao":  null,
+        "preco":  199.00,
+        "estoque":  1,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/18c4fe26cb3e50b.webp"
+    },
+    {
+        "id":  658,
+        "nome":  "RALADOR MULTIUSO 7 EM 1",
+        "descricao":  "ENCOMENDA!!ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS!!",
+        "preco":  120.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/2bdb35c41856740.webp"
+    },
+    {
+        "id":  401,
+        "nome":  "REDE",
+        "descricao":  "Diversas cores disponíveis Vermelho Amarelo Azul Palha Consulte cores disponíveis!!",
+        "preco":  199.00,
+        "estoque":  1,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/5ee17cd607ca411.webp"
+    },
+    {
+        "id":  530,
+        "nome":  "ROCADEIRA A GASOLINA",
+        "descricao":  "Sem comissão!! Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  999.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/03d4bff9e27f035.webp"
+    },
+    {
+        "id":  599,
+        "nome":  "SANDUICHEIRA MISTEIRA GRILL",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/abf49293cebe9a1.webp"
+    },
+    {
+        "id":  363,
+        "nome":  "SAPATEIRA 10 ANDARES",
+        "descricao":  null,
+        "preco":  100.00,
+        "estoque":  1,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/05ced75c9ebf034.webp"
+    },
+    {
+        "id":  368,
+        "nome":  "SECADOR 8600W POTENTE",
+        "descricao":  null,
+        "preco":  399.00,
+        "estoque":  3,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/119662af1784906.webp"
+    },
+    {
+        "id":  595,
+        "nome":  "SEM COMISSAO - BICICLETA ARO 26",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  1499.00,
+        "estoque":  0,
+        "categoria":  "BICICLETAS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/597b0a0a59ce201.webp"
+    },
+    {
+        "id":  622,
+        "nome":  "SEM COMISSAO - FILTRO PURIFICADOR DE AGUA MIDEA",
+        "descricao":  "SEM COMISSÃO!!! ENTRADA 40% Encomenda Encomendas devem ser feitas até o 3 dia do mês do seu acerto!!",
+        "preco":  1200.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/e267877c0c4b781.webp"
+    },
+    {
+        "id":  552,
+        "nome":  "SEM COMISSAO - MICROONDAS 32L",
+        "descricao":  "AemEncomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  1200.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/52663e810dad130.webp"
+    },
+    {
+        "id":  594,
+        "nome":  "SEM COMISSAO- BICICLETA CARGO",
+        "descricao":  "Sem comissão!! Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  1999.00,
+        "estoque":  0,
+        "categoria":  "BICICLETAS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/63deed180de4555.webp"
+    },
+    {
+        "id":  470,
+        "nome":  "SERRA TICO TICO",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!!",
+        "preco":  499.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/d9203a483120d3c.webp"
+    },
+    {
+        "id":  647,
+        "nome":  "SOMBRINHA GRANDE",
+        "descricao":  "ENCOMENDA!! ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS",
+        "preco":  60.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/5cd75bdc3d9d6e2.webp"
+    },
+    {
+        "id":  390,
+        "nome":  "TABUA DE CARNE",
+        "descricao":  null,
+        "preco":  80.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/697a348d1591b18.webp"
+    },
+    {
+        "id":  668,
+        "nome":  "TABUA DE PASSAR ROUPA",
+        "descricao":  "ENCOMENDA!!ENCOMENDAS DEVEM SER FEITAS ATÉ O TERCEIRO DIA DO MÊS!!",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/f87ca3b7094c4c2.webp"
+    },
+    {
+        "id":  372,
+        "nome":  "TAISER CHOQUE",
+        "descricao":  null,
+        "preco":  150.00,
+        "estoque":  3,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/081332d46b793c4.webp"
+    },
+    {
+        "id":  485,
+        "nome":  "TANQUINHO 14KG",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  1200.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/86f77fc94b130c5.webp"
+    },
+    {
+        "id":  408,
+        "nome":  "TAPETE BEIRA CAMA",
+        "descricao":  null,
+        "preco":  120.00,
+        "estoque":  8,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/fb989c0c49a9302.webp"
+    },
+    {
+        "id":  449,
+        "nome":  "TAPETE BEM VINDO",
+        "descricao":  null,
+        "preco":  40.00,
+        "estoque":  3,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/aabd69c8c773b2a.webp"
+    },
+    {
+        "id":  447,
+        "nome":  "TAPETE BOX BANHEIRO",
+        "descricao":  "Consulte cores",
+        "preco":  40.00,
+        "estoque":  4,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b17b7eb0c08c42b.webp"
+    },
+    {
+        "id":  630,
+        "nome":  "TAPETE DE PORTA ESTAMPADO",
+        "descricao":  "Encomenda!!Encomendas devem ser feitas até o 3o dia do mês do seu acerto!!",
+        "preco":  30.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/feec387584dc91d.webp"
+    },
+    {
+        "id":  302,
+        "nome":  "TAPETE GEOMETRICO",
+        "descricao":  "Tapete de sala 200cm x 140cm Valor unitário",
+        "preco":  399.00,
+        "estoque":  2,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/f918ef5eca398ff.webp"
+    },
+    {
+        "id":  518,
+        "nome":  "TAPETE ITALIA",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c5e8e30b1cbfb84.webp"
+    },
+    {
+        "id":  451,
+        "nome":  "TAPETE ITALIA",
+        "descricao":  null,
+        "preco":  399.00,
+        "estoque":  4,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b5945a9b0126b3b.webp"
+    },
+    {
+        "id":  303,
+        "nome":  "TAPETE PELUDO",
+        "descricao":  "Tapete de sala 200cm x 140cm Valor unitário",
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/8d4a4875f9bbff8.webp"
+    },
+    {
+        "id":  448,
+        "nome":  "TAPETE PIPOQUINHA",
+        "descricao":  "Consulte cores",
+        "preco":  65.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0c758f85d152e5b.webp"
+    },
+    {
+        "id":  532,
+        "nome":  "TAPETE PIPOQUINHA PEQUENO",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!! Atenção: marcas de eletrodomésticos podem variar conforme disponibilidade em estoque, Mas sempre enviaremos um produto com a mesma função e qualidade!Itens acima de 800,00 é necessário entrada de 40% do valor!!",
+        "preco":  35.00,
+        "estoque":  -1,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/e959920d60dfb6e.webp"
+    },
+    {
+        "id":  547,
+        "nome":  "TAPETES DE SALA APOLO 2,0 X 1,5M",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a98bdaa68ea2401.webp"
+    },
+    {
+        "id":  362,
+        "nome":  "TIRANTE PARA COPO STANLEY",
+        "descricao":  "Nao",
+        "preco":  15.00,
+        "estoque":  2,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b297d71ff6221c3.webp"
+    },
+    {
+        "id":  441,
+        "nome":  "TOALHA DE BANHO BRANCA",
+        "descricao":  "Valor unitário",
+        "preco":  70.00,
+        "estoque":  16,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c22189a81a83938.webp"
+    },
+    {
+        "id":  443,
+        "nome":  "TOALHA DE ROSTO BRANCA",
+        "descricao":  null,
+        "preco":  25.00,
+        "estoque":  0,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/1fdd36050ca2912.webp"
+    },
+    {
+        "id":  624,
+        "nome":  "TRAVESSEIRO DE CORPO",
+        "descricao":  "Encomenda!!Encomendas devem ser feitas até o 3o dia do mês do seu acerto!!",
+        "preco":  120.00,
+        "estoque":  0,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/2276ea007978a55.webp"
+    },
+    {
+        "id":  621,
+        "nome":  "TRAVESSEIRO INFANTIL ESTAMPADO PERSONAGENS",
+        "descricao":  "Consulte estampas!!Encomenda Encomendas devem ser feitas até o 3 dia do mês do seu acerto!!",
+        "preco":  60.00,
+        "estoque":  5,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/91010779f111dd7.webp"
+    },
+    {
+        "id":  458,
+        "nome":  "TRICICLO INFANTIL",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!!",
+        "preco":  299.00,
+        "estoque":  0,
+        "categoria":  "BRINQUEDOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/3f178e7fb1d3ccf.webp"
+    },
+    {
+        "id":  459,
+        "nome":  "TRICICLO ZIPPY",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!!",
+        "preco":  599.00,
+        "estoque":  0,
+        "categoria":  "BRINQUEDOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/1689476f68ab69d.webp"
+    },
+    {
+        "id":  573,
+        "nome":  "VAPORELLA 4 PECAS",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  199.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/b732110a9616b74.webp"
+    },
+    {
+        "id":  345,
+        "nome":  "VASILHA DIAMANTE",
+        "descricao":  "Valor de cada conjunto",
+        "preco":  100.00,
+        "estoque":  1,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/bf9f0093a2a3981.webp"
+    },
+    {
+        "id":  344,
+        "nome":  "VASILHA ESMERALDA",
+        "descricao":  null,
+        "preco":  100.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a62ea1ee22d50b9.webp"
+    },
+    {
+        "id":  457,
+        "nome":  "VENTILADOR DE MESA 40CM",
+        "descricao":  "Atenção!! Produto de encomenda!! Tem que pedir antes do 5o dia útil!!",
+        "preco":  399.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/7dd8650491c95c1.webp"
+    },
+    {
+        "id":  576,
+        "nome":  "PATINS",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  499.00,
+        "estoque":  0,
+        "categoria":  "BRINQUEDOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9b37306ee0418ed.webp"
+    },
+    {
+        "id":  342,
+        "nome":  "?? BOIA BALEIA 80CM",
+        "descricao":  null,
+        "preco":  99.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/e9e5d3db140c818.webp"
+    },
+    {
+        "id":  598,
+        "nome":  "SEM COMISSAO  - AIR FRYER DIGITAL 12L",
+        "descricao":  "Encomenda!! Deve ser feita até o 3o dia do mes",
+        "preco":  999.00,
+        "estoque":  0,
+        "categoria":  "ELETRODOMESTICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/74e429954e496ce.webp"
+    },
+    {
+        "id":  695,
+        "nome":  "SEX SHOP - PLUG",
+        "descricao":  null,
+        "preco":  45.00,
+        "estoque":  0,
+        "categoria":  "SEX SHOP",
+        "imagem":  ""
+    },
+    {
+        "id":  332,
+        "nome":  "SEX SHOP ALGEMA",
+        "descricao":  null,
+        "preco":  45.00,
+        "estoque":  0,
+        "categoria":  "SEX SHOP",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/08ec5dfd4b58b31.webp"
+    },
+    {
+        "id":  329,
+        "nome":  "SEX SHOP ANEL PENIANO",
+        "descricao":  null,
+        "preco":  45.00,
+        "estoque":  1,
+        "categoria":  "SEX SHOP",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/85076704d03ae40.webp"
+    },
+    {
+        "id":  328,
+        "nome":  "SEX SHOP ANEL PENIANO",
+        "descricao":  null,
+        "preco":  35.00,
+        "estoque":  -1,
+        "categoria":  "SEX SHOP",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0eee3eff8ea464f.webp"
+    },
+    {
+        "id":  334,
+        "nome":  "SEX SHOP BOLINHA",
+        "descricao":  "Kit com 2 bolinhas",
+        "preco":  20.00,
+        "estoque":  0,
+        "categoria":  "SEX SHOP",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/614610ca29c425f.webp"
+    },
+    {
+        "id":  320,
+        "nome":  "SEX SHOP BULLET (VIBRADOR)",
+        "descricao":  null,
+        "preco":  45.00,
+        "estoque":  0,
+        "categoria":  "SEX SHOP",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/5660038fc8cfc76.webp"
+    },
+    {
+        "id":  325,
+        "nome":  "SEX SHOP DADO EROTICO",
+        "descricao":  null,
+        "preco":  20.00,
+        "estoque":  0,
+        "categoria":  "SEX SHOP",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/8543bd4b0b7e983.webp"
+    },
+    {
+        "id":  331,
+        "nome":  "SEX SHOP EGG",
+        "descricao":  null,
+        "preco":  35.00,
+        "estoque":  0,
+        "categoria":  "SEX SHOP",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/8175228347ed980.webp"
+    },
+    {
+        "id":  323,
+        "nome":  "SEX SHOP GEL DE MASSAGEM CORPORAL",
+        "descricao":  "Valor unitário",
+        "preco":  15.00,
+        "estoque":  0,
+        "categoria":  "SEX SHOP",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/24516a962697b94.webp"
+    },
+    {
+        "id":  333,
+        "nome":  "SEX SHOP GEL MARCA TOTAL PRAZER",
+        "descricao":  null,
+        "preco":  25.00,
+        "estoque":  0,
+        "categoria":  "SEX SHOP",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/e27e192b9442404.webp"
+    },
+    {
+        "id":  324,
+        "nome":  "SEX SHOP GEL VARIADO MARCA SEGRET LOVE",
+        "descricao":  "Valor unitário de cada gel",
+        "preco":  15.00,
+        "estoque":  0,
+        "categoria":  "SEX SHOP",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/e6f09cac358049d.webp"
+    },
+    {
+        "id":  322,
+        "nome":  "SEX SHOP PROTESE COM VIBRADOR",
+        "descricao":  null,
+        "preco":  69.99,
+        "estoque":  0,
+        "categoria":  "SEX SHOP",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/3dbece1c48f003a.webp"
+    },
+    {
+        "id":  321,
+        "nome":  "SEX SHOP PROTESE COMUM",
+        "descricao":  "Nao",
+        "preco":  49.00,
+        "estoque":  -1,
+        "categoria":  "SEX SHOP",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/00fcc20af954841.webp"
+    },
+    {
+        "id":  326,
+        "nome":  "SEX SHOP SABONETE INTIMO",
+        "descricao":  null,
+        "preco":  25.00,
+        "estoque":  0,
+        "categoria":  "SEX SHOP",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/491573144095915.webp"
+    },
+    {
+        "id":  330,
+        "nome":  "SEX SHOP TONICO TESAO DE EGUA / TOURO",
+        "descricao":  null,
+        "preco":  15.00,
+        "estoque":  -1,
+        "categoria":  "SEX SHOP",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/dd7beb6146fb609.webp"
+    },
+    {
+        "id":  319,
+        "nome":  "SEX SHOP VIBRADOR GOLFINHO",
+        "descricao":  null,
+        "preco":  45.00,
+        "estoque":  0,
+        "categoria":  "SEX SHOP",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0acebff2cba0b27.webp"
+    },
+    {
+        "id":  327,
+        "nome":  "SEX SHOP YUMMY",
+        "descricao":  "Valor unitário",
+        "preco":  20.00,
+        "estoque":  -2,
+        "categoria":  "SEX SHOP",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/613397463834dfa.webp"
+    },
+    {
+        "id":  191,
+        "nome":  "SOMBRINHA - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  60.00,
+        "estoque":  0,
+        "categoria":  "VARIEDADES",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c5d5fdbcce24607.webp"
+    },
+    {
+        "id":  291,
+        "nome":  "SPRAY BEM COMPORTADINHO",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  8,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/cd2bdb5d048aeb7.webp"
+    },
+    {
+        "id":  281,
+        "nome":  "SPRAY CACHOS PERFEITOS",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  24,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/53fc3e0bfaca0d3.webp"
+    },
+    {
+        "id":  287,
+        "nome":  "SPRAY LISO IMEDIATO",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  36,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c105672e299d54d.webp"
+    },
+    {
+        "id":  294,
+        "nome":  "SPRAY PENTEIA CABELO",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  16,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/0ba1bd1c07d5c11.webp"
+    },
+    {
+        "id":  290,
+        "nome":  "SPRAY PH CONTROL",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  3,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a5679b3f848f37c.webp"
+    },
+    {
+        "id":  703,
+        "nome":  "SPRAY TOP 10",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  1,
+        "categoria":  "COSMETICOS",
+        "imagem":  ""
+    },
+    {
+        "id":  293,
+        "nome":  "SPRAY TRATAMENTO UNICO",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  12,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/ffd57b5d3a28612.webp"
+    },
+    {
+        "id":  335,
+        "nome":  "SPRAY VINAGRE DE MACA",
+        "descricao":  null,
+        "preco":  48.00,
+        "estoque":  1,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/ab5ce9389ae53d3.webp"
+    },
+    {
+        "id":  218,
+        "nome":  "TAPETE BEM VINDO",
+        "descricao":  null,
+        "preco":  40.00,
+        "estoque":  0,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a4a8b765d5a953c.webp"
+    },
+    {
+        "id":  403,
+        "nome":  "TAPETE ZEBRINHA",
+        "descricao":  "Diversas cores disponíveis!! É enviado conforme disponibilidade em estoque",
+        "preco":  25.00,
+        "estoque":  90,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/f20820e0b6c3b8d.webp"
+    },
+    {
+        "id":  233,
+        "nome":  "TOALHA DE BANHO",
+        "descricao":  null,
+        "preco":  70.00,
+        "estoque":  64,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/ced43e99c7ab097.webp"
+    },
+    {
+        "id":  216,
+        "nome":  "TOALHA DE MESA DE RENDA",
+        "descricao":  null,
+        "preco":  99.00,
+        "estoque":  2,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/43d627cc358c9a5.webp"
+    },
+    {
+        "id":  454,
+        "nome":  "TOALHA DE MESA OXFORD 4 CADEIRAS",
+        "descricao":  null,
+        "preco":  45.00,
+        "estoque":  6,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/14294175db3e15d.webp"
+    },
+    {
+        "id":  455,
+        "nome":  "TOALHA DE MESA OXFORD 6 CADEIRAS",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  6,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/36ca3abcd9c761b.webp"
+    },
+    {
+        "id":  452,
+        "nome":  "TOALHA DE MESA TERMICA 4 CADEIRAS",
+        "descricao":  null,
+        "preco":  45.00,
+        "estoque":  12,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/a317360887edf62.webp"
+    },
+    {
+        "id":  453,
+        "nome":  "TOALHA DE MESA TERMICA 6 CADEIRAS",
+        "descricao":  null,
+        "preco":  50.00,
+        "estoque":  5,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/238357ae6ea72bb.webp"
+    },
+    {
+        "id":  432,
+        "nome":  "TOALHA INFANTIL MICROFIBRA FOFINHA BORDADA",
+        "descricao":  "Valor unitário",
+        "preco":  70.00,
+        "estoque":  10,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/3985f15225dccb3.webp"
+    },
+    {
+        "id":  425,
+        "nome":  "TOALHAS DE ROSTO (UNIDADE)",
+        "descricao":  null,
+        "preco":  25.00,
+        "estoque":  27,
+        "categoria":  "CAMA MESA E BANHO",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/c4721413acc32d4.webp"
+    },
+    {
+        "id":  250,
+        "nome":  "TONICO MINOXI",
+        "descricao":  null,
+        "preco":  40.00,
+        "estoque":  10,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/4866fdfd56853fc.webp"
+    },
+    {
+        "id":  181,
+        "nome":  "TONICO NH",
+        "descricao":  null,
+        "preco":  60.00,
+        "estoque":  12,
+        "categoria":  "COSMETICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/9300b661bcfbd1d.webp"
+    },
+    {
+        "id":  240,
+        "nome":  "TRAVESSEIRO - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  80.00,
+        "estoque":  65,
+        "categoria":  "UTILIDADES DO LAR",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/32dd7ae9bbdf4e5.webp"
+    },
+    {
+        "id":  230,
+        "nome":  "TV BOX - SEM DEVOLUCAO",
+        "descricao":  null,
+        "preco":  360.00,
+        "estoque":  0,
+        "categoria":  "ELETRONICOS",
+        "imagem":  "https://thsmdistribuidora.minharota.net/controller/fotos/841085a59cce836.webp"
+    }
+]
