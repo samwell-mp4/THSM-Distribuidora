@@ -30,13 +30,15 @@ function setLS(key, data) {
   localStorage.setItem(key, JSON.stringify(data))
 }
 
-export default function UserDashboard({ onVoltar }) {
+export default function UserDashboard({ produtos = [], onVoltar }) {
   const [tab, setTab] = useState('pedidos')
   const [finFilter, setFinFilter] = useState('todas')
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [showPayment, setShowPayment] = useState(null)
   const [paymentStep, setPaymentStep] = useState('review')
   const [processing, setProcessing] = useState(false)
+  const [prodSearch, setProdSearch] = useState('')
+  const [prodCategoria, setProdCategoria] = useState('TODOS')
 
   const currentUser = useMemo(() => {
     try { const d = localStorage.getItem(LS_SESSAO); return d ? JSON.parse(d) : null } catch { return null }
@@ -195,6 +197,9 @@ export default function UserDashboard({ onVoltar }) {
           </div>
         </div>
         <nav className="admin-nav">
+          <button className={`admin-nav-item ${tab === 'produtos' ? 'active' : ''}`} onClick={() => setTab('produtos')}>
+            <i className="fa-solid fa-box"></i> Produtos
+          </button>
           <button className={`admin-nav-item ${tab === 'pedidos' ? 'active' : ''}`} onClick={() => setTab('pedidos')}>
             <i className="fa-solid fa-clipboard-list"></i> Meus Pedidos
           </button>
@@ -220,6 +225,67 @@ export default function UserDashboard({ onVoltar }) {
       </aside>
 
       <main className="admin-content">
+        {tab === 'produtos' && (
+          <div className="admin-section">
+            <div className="admin-header-row">
+              <div>
+                <h1>Produtos</h1>
+                <p className="admin-subtitle">Catálogo de produtos</p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+              <div className="search-box" style={{ flex: 1, minWidth: 200 }}>
+                <i className="fa-solid fa-magnifying-glass"></i>
+                <input type="text" placeholder="Buscar produto..." value={prodSearch} onChange={e => setProdSearch(e.target.value)} />
+                {prodSearch && <button className="search-clear" onClick={() => setProdSearch('')}><i className="fa-solid fa-xmark"></i></button>}
+              </div>
+              <select value={prodCategoria} onChange={e => setProdCategoria(e.target.value)} style={{ padding: '0.4rem 0.6rem', borderRadius: 6, border: '1px solid var(--admin-border)', fontSize: '0.82rem', background: 'white' }}>
+                <option value="TODOS">Todas as categorias</option>
+                {[...new Set(produtos.filter(p => p.categoria).map(p => p.categoria))].sort().map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+            {(() => {
+              const filtered = produtos.filter(p => {
+                if (prodCategoria !== 'TODOS' && p.categoria !== prodCategoria) return false
+                if (prodSearch) {
+                  const q = prodSearch.toLowerCase()
+                  return p.nome?.toLowerCase().includes(q) || p.categoria?.toLowerCase().includes(q)
+                }
+                return true
+              })
+              return filtered.length === 0 ? (
+                <div className="empty">
+                  <i className="fa-solid fa-box-open"></i>
+                  <h3>Nenhum produto encontrado</h3>
+                </div>
+              ) : (
+                <div className="admin-table-wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Produto</th>
+                        <th>Categoria</th>
+                        <th>Preço</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((p, idx) => (
+                        <tr key={p.id || idx}>
+                          <td className="td-prod-name">{p.nome}</td>
+                          <td>{p.categoria || '-'}</td>
+                          <td className="td-price">{formatPreco(p.preco)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            })()}
+          </div>
+        )}
+
         {tab === 'pedidos' && (
           <div className="admin-section">
             <div className="admin-header-row">
