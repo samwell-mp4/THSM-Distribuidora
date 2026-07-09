@@ -216,11 +216,16 @@ function App() {
     setCart({})
     setCheckout(null)
     showToast('Pedido enviado com sucesso!')
+    const msgItems = order.items.map(i => `  • ${i.nome} (${i.qty}x) — R$ ${i.preco.toFixed(2)}`).join('\n')
+    const msgPagamento = order.pagamento === 'avista' ? 'À Vista' : order.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'
+    const whatsappMessage = `🆕 *NOVO PEDIDO* 🆕\n━━━━━━━━━━━━━━━━━━\n📋 Pedido: #${order.id.toString().slice(-6)}\n📅 Data: ${order.date}\n👤 Cliente: ${customer.nome}\n📞 Telefone: ${customer.telefone || '-'}\n📍 Endereço: ${customer.endereco?.rua || '-'}, ${customer.endereco?.numero || '-'} - ${customer.endereco?.bairro || '-'}, ${customer.endereco?.cidade || '-'}/${customer.endereco?.estado || '-'}\n━━━━━━━━━━━━━━━━━━\n💳 Pagamento: ${msgPagamento}\n💰 Total: R$ ${(totalAvista + totalAprazo).toFixed(2)}${totalAprazo > 0 ? `\n📋 A Prazo: R$ ${totalAprazo.toFixed(2)}` : ''}\n━━━━━━━━━━━━━━━━━━\n📦 *ITENS:*\n${msgItems}\n━━━━━━━━━━━━━━━━━━\n📌 Status: ${order.status === 'pendente' ? '✅ Aguardando confirmação' : order.status === 'pre-pedido' ? '⏳ Pré-pedido aguardando aprovação' : order.status}\n🔗 Acesse o painel: https://thsmdistribuidora.minharota.net`
+
     fetch(WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         event: 'novo-pedido',
+        whatsappMessage,
         order: {
           id: order.id,
           date: order.date,

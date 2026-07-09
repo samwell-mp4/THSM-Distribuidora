@@ -127,11 +127,16 @@ export default function Admin({ produtos, onVoltar }) {
 
     showToast('Pedido adicionado com sucesso!')
     setShowAddOrder(false)
+    const msgItems = order.items.map(i => `  • ${i.nome} (${i.qty}x) — R$ ${i.preco.toFixed(2)}`).join('\n')
+    const msgPagamento = order.pagamento === 'avista' ? 'À Vista' : order.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'
+    const whatsappMessage = `🆕 *NOVO PEDIDO* 🆕\n━━━━━━━━━━━━━━━━━━\n📋 Pedido: #${order.id.toString().slice(-6)}\n📅 Data: ${order.date}\n👤 Cliente: ${data.nome}\n📞 Telefone: ${data.telefone || '-'}\n📍 Endereço: ${data.endereco?.rua || '-'}, ${data.endereco?.numero || '-'} - ${data.endereco?.bairro || '-'}, ${data.endereco?.cidade || '-'}/${data.endereco?.estado || '-'}\n━━━━━━━━━━━━━━━━━━\n💳 Pagamento: ${msgPagamento}\n💰 Total: R$ ${(totalAvista + totalAprazo).toFixed(2)}${totalAprazo > 0 ? `\n📋 A Prazo: R$ ${totalAprazo.toFixed(2)}` : ''}\n━━━━━━━━━━━━━━━━━━\n📦 *ITENS:*\n${msgItems}\n━━━━━━━━━━━━━━━━━━\n📌 Status: ✅ Aguardando confirmação\n🔗 Acesse o painel: https://thsmdistribuidora.minharota.net`
+
     fetch(WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         event: 'novo-pedido',
+        whatsappMessage,
         order: {
           id: order.id,
           date: order.date,
