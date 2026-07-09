@@ -1428,7 +1428,7 @@ input, select { font-family: inherit; }
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 200;
+  z-index: 210;
   background: white;
   border-top: 1px solid var(--border);
   padding: 0.6rem 1rem;
@@ -1436,6 +1436,10 @@ input, select { font-family: inherit; }
   justify-content: space-between;
   box-shadow: 0 -4px 16px rgba(0,0,0,0.1);
   animation: slideUp 0.25s;
+}
+
+.mobile-user-nav + .mobile-cart-bar {
+  bottom: 3.2rem;
 }
 
 .mobile-cart-info {
@@ -1511,7 +1515,7 @@ input, select { font-family: inherit; }
   .quick-cats::-webkit-scrollbar { display: none; }
   .quick-cats button { flex-shrink: 0; font-size: 0.72rem; }
 
-  .main { padding: 0.75rem; padding-bottom: 5rem; }
+  .main { padding: 0.75rem; padding-bottom: 7rem; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 0.6rem; }
 
   .card-img { height: 140px; }

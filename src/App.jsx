@@ -784,14 +784,14 @@ function App() {
         </div>
       )}
 
-      {/* Mobile user bottom nav */}
-      {currentUser && cartCount === 0 && (
+      {/* Mobile user bottom nav (always on when logged in) */}
+      {currentUser && (
         <div className="mobile-user-nav">
           <button className="mobile-user-item" onClick={() => setShowUserDash(true)}>
             <i className="fa-solid fa-clipboard-list"></i>
             <span>Pedidos</span>
           </button>
-          <button className="mobile-user-item" onClick={() => { setShowUserDash(true); /* will default to financeiro if we pass tab */ }}>
+          <button className="mobile-user-item" onClick={() => setShowUserDash(true)}>
             <i className="fa-solid fa-coins"></i>
             <span>Financeiro</span>
           </button>
@@ -802,7 +802,7 @@ function App() {
         </div>
       )}
 
-      {/* Mobile cart sticky footer */}
+      {/* Mobile cart sticky footer (above user nav when both visible) */}
       {cartCount > 0 && (
         <div className="mobile-cart-bar">
           <div className="mobile-cart-info">
