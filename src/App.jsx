@@ -9,7 +9,7 @@ const LS_USUARIOS = 'thsm_usuarios'
 const LS_SESSAO = 'thsm_sessao'
 const LS_ORDERS = 'thsm_admin_orders'
 const LS_ADMIN = 'thsm_admin_auth'
-const WEBHOOK_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook-test/novo-pedido'
+const WEBHOOK_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/novo-pedido'
 const ADMIN_USER = 'thsmadmin'
 const ADMIN_PASS = 'th2026smdistribuidora!'
 
