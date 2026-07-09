@@ -271,7 +271,7 @@ function App() {
       <header className="header">
         <div className="header-inner">
           <div className="header-brand">
-            <div className="brand-icon"><i className="fa-solid fa-cubes"></i></div>
+            <div className="brand-icon" onDoubleClick={() => setShowAdmin(true)} title="Clique duas vezes para admin"><i className="fa-solid fa-cubes"></i></div>
             <div>
               <h1>THSM Distribuidora</h1>
               <span className="header-sub">Catálogo de Produtos</span>
@@ -294,9 +294,6 @@ function App() {
                 <span className="user-name">Entrar</span>
               </button>
             )}
-            <button className="admin-link-btn" onClick={() => setShowAdmin(true)} title="Painel Admin">
-              <i className="fa-solid fa-crown"></i>
-            </button>
             <button className="cart-btn" onClick={() => setCartOpen(true)}>
               <i className="fa-solid fa-bag-shopping"></i>
               {cartCount > 0 && <span className="cart-badge">{cartCount}</span>}
