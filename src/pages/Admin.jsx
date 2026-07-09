@@ -4,6 +4,7 @@ import './Admin.css'
 const STORAGE_ORDERS = 'thsm_admin_orders'
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
 const STORAGE_FINANCIAL = 'thsm_admin_financeiro'
+const WEBHOOK_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook-test/novo-pedido'
 
 const LS = {
   get(key, def) {
@@ -126,6 +127,24 @@ export default function Admin({ produtos, onVoltar }) {
 
     showToast('Pedido adicionado com sucesso!')
     setShowAddOrder(false)
+    fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event: 'novo-pedido',
+        order: {
+          id: order.id,
+          date: order.date,
+          status: order.status,
+          pagamento: order.pagamento,
+          total: order.total,
+          totalAvista: order.totalAvista,
+          totalAprazo: order.totalAprazo,
+          customer: order.customer,
+          items: order.items.map(i => ({ nome: i.nome, qty: i.qty, preco: i.preco, tipo: i.tipo }))
+        }
+      })
+    }).catch(() => {})
   }
 
   const updateOrderStatus = (id, status) => {

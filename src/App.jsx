@@ -8,6 +8,7 @@ import './App.css'
 const LS_USUARIOS = 'thsm_usuarios'
 const LS_SESSAO = 'thsm_sessao'
 const LS_ORDERS = 'thsm_admin_orders'
+const WEBHOOK_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook-test/novo-pedido'
 
 function App() {
   const [showAdmin, setShowAdmin] = useState(false)
@@ -215,6 +216,30 @@ function App() {
     setCart({})
     setCheckout(null)
     showToast('Pedido enviado com sucesso!')
+    fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event: 'novo-pedido',
+        order: {
+          id: order.id,
+          date: order.date,
+          status: order.status,
+          pagamento: order.pagamento,
+          total: order.total,
+          totalAvista: order.totalAvista,
+          totalAprazo: order.totalAprazo,
+          customer: order.customer,
+          items: order.items.map(i => ({
+            nome: i.nome,
+            qty: i.qty,
+            preco: i.preco,
+            tipo: i.tipo,
+            foto: i.foto
+          }))
+        }
+      })
+    }).catch(() => {})
   }
 
   const formatPhone = (v) => {
