@@ -1438,9 +1438,7 @@ input, select { font-family: inherit; }
   animation: slideUp 0.25s;
 }
 
-.mobile-user-nav + .mobile-cart-bar {
-  bottom: 3.2rem;
-}
+
 
 .mobile-cart-info {
   display: flex;
