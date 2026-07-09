@@ -599,7 +599,7 @@ function App() {
                 </div>
                 <div className="form-group">
                   <label>Email * <small>(usado para identificar sua conta)</small></label>
-                  <input type="email" placeholder="seu@email.com" value={customer.email} onChange={e => setCustomer({ ...customer, email: e.target.value })} disabled={!!currentUser} />
+                  <input type="text" inputMode="email" placeholder="seu@email.com" value={customer.email} onChange={e => setCustomer({ ...customer, email: e.target.value })} disabled={!!currentUser} />
                 </div>
                 <div className="form-group">
                   <label>Telefone / WhatsApp *</label>
@@ -759,7 +759,7 @@ function App() {
               </p>
               <div className="form-group">
                 <label>Email</label>
-                <input type="email" placeholder="seu@email.com" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} />
+                <input type="text" inputMode="email" placeholder="seu@email.com" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} />
               </div>
               <div className="form-group">
                 <label>Senha <small>(telefone sem 55)</small></label>
