@@ -187,45 +187,24 @@ export default function UserDashboard({ produtos = [], onVoltar }) {
     )
   }
 
-  const tabLabel = tab === 'produtos' ? 'Produtos' : tab === 'pedidos' ? 'Meus Pedidos' : tab === 'financeiro' ? 'Financeiro' : ''
-
   return (
     <div className="admin">
-      {/* Mobile header */}
-      <div className="admin-mobile-top">
-        <button className="admin-hamburger" onClick={() => setSidebarOpen(true)}>
-          <i className="fa-solid fa-bars"></i>
-        </button>
-        <span className="admin-mobile-title">{tabLabel}</span>
-        <button className="admin-hamburger" onClick={onVoltar} style={{ fontSize: '0.9rem' }}>
-          <i className="fa-solid fa-arrow-left"></i>
-        </button>
-      </div>
-
-      {/* Sidebar overlay on mobile */}
-      {sidebarOpen && <div className="admin-overlay" onClick={() => setSidebarOpen(false)} />}
-
-      <aside className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}>
-        <div className="admin-sidebar-header">
-          <div className="admin-logo">
-            <i className="fa-solid fa-cubes"></i>
-            <div>
-              <strong>THSM Distribuidora</strong>
-              <span>Cliente</span>
-            </div>
+      <aside className="admin-sidebar">
+        <div className="admin-logo">
+          <i className="fa-solid fa-cubes"></i>
+          <div>
+            <strong>THSM Distribuidora</strong>
+            <span>Cliente</span>
           </div>
-          <button className="admin-hamburger close" onClick={() => setSidebarOpen(false)} style={{ display: 'none' }}>
-            <i className="fa-solid fa-times"></i>
-          </button>
         </div>
         <nav className="admin-nav">
-          <button className={`admin-nav-item ${tab === 'produtos' ? 'active' : ''}`} onClick={() => { setTab('produtos'); setSidebarOpen(false) }}>
+          <button className={`admin-nav-item ${tab === 'produtos' ? 'active' : ''}`} onClick={() => setTab('produtos')}>
             <i className="fa-solid fa-box"></i> <span>Produtos</span>
           </button>
-          <button className={`admin-nav-item ${tab === 'pedidos' ? 'active' : ''}`} onClick={() => { setTab('pedidos'); setSidebarOpen(false) }}>
+          <button className={`admin-nav-item ${tab === 'pedidos' ? 'active' : ''}`} onClick={() => setTab('pedidos')}>
             <i className="fa-solid fa-clipboard-list"></i> <span>Meus Pedidos</span>
           </button>
-          <button className={`admin-nav-item ${tab === 'financeiro' ? 'active' : ''}`} onClick={() => { setTab('financeiro'); setSidebarOpen(false) }}>
+          <button className={`admin-nav-item ${tab === 'financeiro' ? 'active' : ''}`} onClick={() => setTab('financeiro')}>
             <i className="fa-solid fa-coins"></i> <span>Financeiro</span>
             {pendentes.length > 0 && <span className="admin-badge">{pendentes.length}</span>}
           </button>
@@ -502,7 +481,7 @@ export default function UserDashboard({ produtos = [], onVoltar }) {
 
       {/* Sticky bottom nav for mobile */}
       <nav className="admin-bottom-nav">
-        <button className={`admin-bottom-item ${tab === 'produtos' ? 'active' : ''}`} onClick={() => setTab('produtos')}>
+        <button className="admin-bottom-item" onClick={onVoltar}>
           <i className="fa-solid fa-box"></i>
           <span>Produtos</span>
         </button>
