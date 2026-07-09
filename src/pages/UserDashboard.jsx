@@ -112,7 +112,7 @@ export default function UserDashboard({ produtos = [], onVoltar }) {
         <header className="header">
           <div className="header-inner">
             <div className="header-brand">
-              <div className="brand-icon"><i className="fa-solid fa-cubes"></i></div>
+              <div className="brand-icon"><img src="/thsmdistribuidora.webp" alt="THSM" style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '6px' }} /></div>
               <div>
                 <h1>THSM Distribuidora</h1>
                 <span className="header-sub">Detalhes do Pedido</span>
@@ -191,7 +191,7 @@ export default function UserDashboard({ produtos = [], onVoltar }) {
     <div className="admin">
       <aside className="admin-sidebar">
         <div className="admin-logo">
-          <i className="fa-solid fa-cubes"></i>
+          <img src="/thsmdistribuidora.webp" alt="THSM" style={{ width: '28px', height: '28px', objectFit: 'contain', borderRadius: '4px' }} />
           <div>
             <strong>THSM Distribuidora</strong>
             <span>Cliente</span>

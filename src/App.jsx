@@ -295,7 +295,7 @@ function App() {
       <header className="header">
         <div className="header-inner">
           <div className="header-brand">
-            <div className="brand-icon" onDoubleClick={() => setShowAdminLogin(true)} title="Admin"><i className="fa-solid fa-cubes"></i></div>
+            <div className="brand-icon" onDoubleClick={() => setShowAdminLogin(true)} title="Admin"><img src="/thsmdistribuidora.webp" alt="THSM" style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '6px' }} /></div>
             <div>
               <h1>THSM Distribuidora</h1>
               <span className="header-sub">Catálogo de Produtos</span>

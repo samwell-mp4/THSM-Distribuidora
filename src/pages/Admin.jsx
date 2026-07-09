@@ -520,7 +520,7 @@ export default function Admin({ produtos, onVoltar }) {
       {/* SIDEBAR */}
       <aside className="admin-sidebar">
         <div className="admin-logo">
-          <i className="fa-solid fa-crown"></i>
+          <img src="/thsmdistribuidora.webp" alt="THSM" style={{ width: '28px', height: '28px', objectFit: 'contain', borderRadius: '4px' }} />
           <div>
             <strong>THSM Admin</strong>
             <span>Painel de Controle</span>
