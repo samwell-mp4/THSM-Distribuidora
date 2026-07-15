@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import './Admin.css'
-import { supabase, syncAllForAdmin, upsertOrders, upsertFinancial, upsertOrder, deleteOrder as supabaseDeleteOrder, syncContatosToUsuarios } from '../lib/supabase'
+import { supabase, syncAllForAdmin, upsertOrders, upsertFinancial, upsertOrder, upsertUser, deleteOrder as supabaseDeleteOrder, syncContatosToUsuarios } from '../lib/supabase'
 
 const STORAGE_ORDERS = 'thsm_admin_orders'
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
@@ -241,7 +241,7 @@ export default function Admin({ produtos, onVoltar }) {
   // =============================================
   // ORDERS
   // =============================================
-  const addOrder = (data) => {
+  const addOrder = async (data) => {
     const items = data.items
     const totalAvista = items.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
     const totalAprazo = items.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
@@ -258,6 +258,26 @@ export default function Admin({ produtos, onVoltar }) {
       createdAt: Date.now()
     }
     setOrders(prev => [order, ...prev])
+
+    // Upsert user to Supabase and update local list
+    const savedUser = await upsertUser({
+      telefone: data.telefone,
+      nome: data.nome,
+      email: data.email || '',
+      endereco: data.endereco || {}
+    })
+    if (savedUser) {
+      order.user_id = savedUser.id
+      setUsuarios(prev => {
+        const idx = prev.findIndex(u => u.telefone === savedUser.telefone)
+        if (idx >= 0) {
+          const updated = [...prev]
+          updated[idx] = savedUser
+          return updated
+        }
+        return [savedUser, ...prev]
+      })
+    }
 
     // Create financial records for "a prazo" items
     const finRecords = items.filter(i => i.tipo === 'aprazo').map(i => {
@@ -1739,6 +1759,7 @@ export default function Admin({ produtos, onVoltar }) {
       {showAddOrder && (
         <AddOrderModal
           produtos={produtosAtuais}
+          usuarios={usuarios}
           onSave={addOrder}
           onClose={() => setShowAddOrder(false)}
         />
@@ -1935,8 +1956,11 @@ export default function Admin({ produtos, onVoltar }) {
 // =============================================
 // MODAL: ADD ORDER
 // =============================================
-function AddOrderModal({ produtos, onSave, onClose }) {
+function AddOrderModal({ produtos, usuarios, onSave, onClose }) {
   const [step, setStep] = useState(1)
+  const [showNewForm, setShowNewForm] = useState(false)
+  const [userSearch, setUserSearch] = useState('')
+  const [selectedUser, setSelectedUser] = useState(null)
   const [nome, setNome] = useState('')
   const [telefone, setTelefone] = useState('')
   const [endereco, setEndereco] = useState({ cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
@@ -1945,6 +1969,34 @@ function AddOrderModal({ produtos, onSave, onClose }) {
   const [cart, setCart] = useState({})
   const [search, setSearch] = useState('')
   const [prodPage, setProdPage] = useState(1)
+
+  const filteredUsers = useMemo(() => {
+    const t = userSearch.toLowerCase().trim()
+    if (!t) return []
+    return usuarios.filter(u =>
+      u.nome?.toLowerCase().includes(t) ||
+      u.telefone?.includes(t) ||
+      (u.email || '').toLowerCase().includes(t)
+    ).slice(0, 20)
+  }, [usuarios, userSearch])
+
+  const pickUser = (u) => {
+    setSelectedUser(u)
+    setNome(u.nome || '')
+    setTelefone(u.telefone || '')
+    setEndereco(u.endereco || { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
+    setUserSearch('')
+    setShowNewForm(false)
+  }
+
+  const resetForm = () => {
+    setSelectedUser(null)
+    setNome('')
+    setTelefone('')
+    setEndereco({ cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
+    setShowNewForm(true)
+    setUserSearch('')
+  }
 
   const filteredProds = useMemo(() => {
     const t = search.toLowerCase().trim()
@@ -1980,11 +2032,23 @@ function AddOrderModal({ produtos, onSave, onClose }) {
     setCart(prev => prev[id] ? { ...prev, [id]: { ...prev[id], tipo } } : prev)
   }
 
+  const formatPhone = (v) => {
+    const nums = v.replace(/\D/g, '').slice(0, 11)
+    if (nums.length <= 2) return `(${nums}`
+    if (nums.length <= 7) return `(${nums.slice(0, 2)}) ${nums.slice(2)}`
+    return `(${nums.slice(0, 2)}) ${nums.slice(2, 7)}-${nums.slice(7)}`
+  }
+
+  const normalizePhone = (v) => {
+    const nums = v.replace(/\D/g, '')
+    return nums.startsWith('55') ? nums : '55' + nums
+  }
+
   const handleSave = () => {
     if (cartItems.length === 0 || !nome.trim() || !telefone.trim()) return
     onSave({
       nome: nome.trim(),
-      telefone: telefone.trim(),
+      telefone: normalizePhone(telefone),
       endereco,
       pagamento: pagamento === 'misto' ? 'misto' : (pagamento === 'aprazo' ? 'aprazo' : 'avista'),
       items: cartItems.map(i => ({ ...i, tipo: pagamento === 'aprazo' ? 'aprazo' : (pagamento === 'avista' ? 'avista' : i.tipo) })),
@@ -2009,19 +2073,86 @@ function AddOrderModal({ produtos, onSave, onClose }) {
         <div className="admin-modal-body">
           {step === 1 && (
             <div className="modal-form">
-              <div className="form-group">
-                <label>Nome do cliente *</label>
-                <input type="text" placeholder="Nome completo" value={nome} onChange={e => setNome(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label>Telefone / WhatsApp *</label>
-                <input type="text" placeholder="(31) 99999-9999" value={telefone} onChange={e => setTelefone(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label>Endereço</label>
-                <AddressForm value={endereco} onChange={(a) => setEndereco(a)} />
-              </div>
-              <button className="admin-btn admin-btn-primary" disabled={!nome.trim() || !telefone.trim()} onClick={() => setStep(2)}>
+              {!showNewForm && !selectedUser && (
+                <>
+                  <div className="form-group">
+                    <label>Buscar cliente existente</label>
+                    <div className="admin-search-prod">
+                      <i className="fa-solid fa-search"></i>
+                      <input type="text" placeholder="Digite nome, telefone ou email..." value={userSearch} onChange={e => setUserSearch(e.target.value)} style={{ width: '100%' }} />
+                    </div>
+                    {filteredUsers.length > 0 && (
+                      <div style={{ maxHeight: '240px', overflowY: 'auto', border: '1px solid var(--admin-border)', borderRadius: '8px', marginTop: '0.4rem' }}>
+                        {filteredUsers.map(u => (
+                          <div key={u.id} className="add-prod-row" style={{ cursor: 'pointer', padding: '0.5rem 0.7rem' }} onClick={() => pickUser(u)}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{u.nome}</div>
+                              <div style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>{u.telefone} {u.email ? `· ${u.email}` : ''} {u.endereco?.cidade ? `· ${u.endereco.cidade}` : ''}</div>
+                            </div>
+                            <i className="fa-solid fa-chevron-right" style={{ color: 'var(--admin-text-sec)', fontSize: '0.75rem' }}></i>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {userSearch && filteredUsers.length === 0 && (
+                      <p style={{ fontSize: '0.82rem', color: 'var(--admin-text-sec)', marginTop: '0.4rem' }}>
+                        Nenhum cliente encontrado. <button className="admin-btn" style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem', marginLeft: '0.3rem' }} onClick={resetForm}><i className="fa-solid fa-plus"></i> Adicionar Novo</button>
+                      </p>
+                    )}
+                    {!userSearch && (
+                      <p style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)', marginTop: '0.5rem' }}>
+                        Ou <button className="admin-btn" style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem' }} onClick={resetForm}><i className="fa-solid fa-plus"></i> Adicionar Novo Cliente</button>
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {(selectedUser || showNewForm) && (
+                <>
+                  {selectedUser && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.7rem', background: 'var(--accent-bg)', borderRadius: '8px', marginBottom: '0.75rem' }}>
+                      <i className="fa-solid fa-user-check" style={{ color: 'var(--accent)' }}></i>
+                      <span style={{ flex: 1, fontSize: '0.85rem', fontWeight: 500 }}>{selectedUser.nome} — {selectedUser.telefone}</span>
+                      <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }} onClick={() => { setSelectedUser(null); setShowNewForm(false); setNome(''); setTelefone(''); setEndereco({ cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' }) }}>
+                        <i className="fa-solid fa-xmark"></i> Trocar
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="form-group">
+                    <label>Nome do cliente *</label>
+                    <input type="text" placeholder="Nome completo" value={nome} onChange={e => setNome(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>Telefone / WhatsApp *</label>
+                    <input type="text" placeholder="(31) 99999-9999" value={formatPhone(telefone)} onChange={e => setTelefone(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>Endereço</label>
+                    <AddressForm value={endereco} onChange={(a) => setEndereco(a)} />
+                  </div>
+                </>
+              )}
+
+              {showNewForm && !selectedUser && (
+                <div className="form-group">
+                  <div className="form-group">
+                    <label>Nome do cliente *</label>
+                    <input type="text" placeholder="Nome completo" value={nome} onChange={e => setNome(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>Telefone / WhatsApp *</label>
+                    <input type="text" placeholder="(31) 99999-9999" value={formatPhone(telefone)} onChange={e => setTelefone(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>Endereço</label>
+                    <AddressForm value={endereco} onChange={(a) => setEndereco(a)} />
+                  </div>
+                </div>
+              )}
+
+              <button className="admin-btn admin-btn-primary" disabled={!nome.trim() || !telefone.trim()} onClick={() => setStep(2)} style={{ marginTop: '0.75rem' }}>
                 Próximo <i className="fa-solid fa-arrow-right"></i>
               </button>
             </div>
