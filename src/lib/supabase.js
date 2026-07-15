@@ -147,7 +147,32 @@ export async function syncContatosToUsuarios(contatos) {
   return updated
 }
 
-// ---- SYNC ALL FROM SUPABASE ----
+function makeToken() {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 6)
+}
+
+// ---- LOGIN TOKENS ----
+export async function generateLoginToken(telefone) {
+  const token = makeToken()
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+  const { error } = await supabase.from('login_tokens').insert({
+    telefone,
+    token,
+    expires_at: expiresAt
+  })
+  if (error) { console.error('Erro generateLoginToken:', error); return null }
+  return token
+}
+
+export async function consumeLoginToken(token) {
+  if (!token) return null
+  const { data, error } = await supabase.from('login_tokens').select('*').eq('token', token).maybeSingle()
+  if (error || !data) return null
+  if (data.used) return null
+  if (new Date(data.expires_at) < new Date()) return null
+  await supabase.from('login_tokens').update({ used: true }).eq('token', token)
+  return data.telefone
+}
 export async function syncAllForAdmin() {
   const [orders, financial, users, rotas] = await Promise.all([
     getAllOrders(),

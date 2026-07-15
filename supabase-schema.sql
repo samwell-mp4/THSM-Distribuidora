@@ -57,6 +57,19 @@ CREATE TABLE IF NOT EXISTS produtos (
   updated_at timestamptz DEFAULT now()
 );
 
+-- 6. LOGIN TOKENS (for auto-login links)
+CREATE TABLE IF NOT EXISTS login_tokens (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  telefone text NOT NULL,
+  token text UNIQUE NOT NULL,
+  expires_at timestamptz NOT NULL,
+  used boolean DEFAULT false,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_login_tokens_token ON login_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_login_tokens_expires ON login_tokens(expires_at);
+
 -- =============================================
 -- ROW LEVEL SECURITY
 -- =============================================

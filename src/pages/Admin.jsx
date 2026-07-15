@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import './Admin.css'
-import { supabase, syncAllForAdmin, upsertOrders, upsertFinancial, upsertOrder, upsertUser, deleteOrder as supabaseDeleteOrder, syncContatosToUsuarios } from '../lib/supabase'
+import { supabase, syncAllForAdmin, upsertOrders, upsertFinancial, upsertOrder, upsertUser, deleteOrder as supabaseDeleteOrder, syncContatosToUsuarios, generateLoginToken } from '../lib/supabase'
 
 const STORAGE_ORDERS = 'thsm_admin_orders'
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
@@ -154,16 +154,26 @@ function sendStatusWebhook(order, newStatus, extra = {}) {
   }).catch(() => {})
 }
 
-function sendAlertRota(tipo, contatos, customText = '') {
-  const payload = {
-    event: tipo === 'alerta' ? 'alertar-rotas' : tipo === 'atualizacao' ? 'atualizacao-pedidos' : 'personalizado',
-    contacts: contatos.map(c => ({
+async function sendAlertRota(tipo, contatos, customText = '') {
+  const contacts = await Promise.all(contatos.map(async (c) => {
+    const telefone = c.remoteJid?.replace(/@.*/, '').replace(/\D/g, '') || ''
+    let loginLink = ''
+    if (telefone) {
+      const token = await generateLoginToken(telefone.startsWith('55') ? telefone : '55' + telefone)
+      if (token) loginLink = `${window.location.origin}${window.location.pathname}?login=${token}`
+    }
+    return {
       remoteJid: c.remoteJid,
       pushName: c.pushName || c.nome || '',
       cidade: c.cidade || '',
       rota: c.rota || '',
-      telefone: c.remoteJid?.replace(/@.*/, '').replace(/\D/g, '') || ''
-    })),
+      telefone,
+      loginLink
+    }
+  }))
+  const payload = {
+    event: tipo === 'alerta' ? 'alertar-rotas' : tipo === 'atualizacao' ? 'atualizacao-pedidos' : 'personalizado',
+    contacts,
     ...(customText ? { message: customText } : {})
   }
   fetch(ALERTAR_ROTAS_URL, {

@@ -3,7 +3,7 @@ import produtos from './data/produtos.json'
 import Admin from './pages/Admin'
 import AddressForm from './components/AddressForm'
 import UserDashboard from './pages/UserDashboard'
-import { supabase, upsertOrder, upsertUser } from './lib/supabase'
+import { supabase, upsertOrder, upsertUser, consumeLoginToken } from './lib/supabase'
 import './App.css'
 
 const LS_USUARIOS = 'thsm_usuarios'
@@ -51,6 +51,7 @@ function App() {
 
   const getRouteFromHash = useCallback(() => {
     if (new URLSearchParams(window.location.search).has('pedido')) return 'userdash'
+    if (new URLSearchParams(window.location.search).has('login')) return 'userdash'
     const hash = window.location.hash.replace(/^#/, '') || '/'
     const path = hash.replace(/\/+$/, '') || '/'
     if (path.startsWith('/admin')) return 'admin'
@@ -74,7 +75,23 @@ function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const pid = params.get('pedido')
-    if (pid) {
+    const loginToken = params.get('login')
+    if (loginToken) {
+      ;(async () => {
+        const telefone = await consumeLoginToken(loginToken)
+        if (telefone) {
+          const user = usuarios.find(u => u.telefone === telefone)
+          if (user) {
+            setCurrentUser(user)
+            showToast(`Bem-vindo, ${user.nome}!`)
+          }
+        }
+        const url = new URL(window.location)
+        url.searchParams.delete('login')
+        window.history.replaceState({}, '', url)
+        if (route !== 'userdash') navigate('/minha-conta')
+      })()
+    } else if (pid) {
       setInitialOrderId(Number(pid))
       const url = new URL(window.location)
       url.searchParams.delete('pedido')
