@@ -114,37 +114,37 @@ export async function getRotasContatos() {
   return data || []
 }
 
-// ---- SYNC CONTATOS -> USUARIOS (import only new) ----
+// ---- SYNC CONTATOS -> USUARIOS (upsert all: insert new + update existing nome/cidade/rota) ----
 export async function syncContatosToUsuarios(contatos) {
   if (!contatos || contatos.length === 0) return 0
 
-  // Get existing phones
-  const { data: existing } = await supabase.from('usuarios').select('telefone')
-  const existingPhones = new Set((existing || []).map(u => u.telefone))
-
-  // Extract phone from remoteJid (remove @s.whatsapp.net, keep digits)
-  const toInsert = []
+  // Batch: upsert with merge via raw SQL approach
+  let updated = 0
   for (const ct of contatos) {
     const phone = ct.remoteJid?.replace(/@.*/, '').replace(/\D/g, '')
     if (!phone || phone.length < 10) continue
-    if (existingPhones.has(phone)) continue
-    // Normalize to 55XXXXXXXXXXX format
     const normalized = phone.startsWith('55') ? phone : `55${phone}`
-    toInsert.push({
+
+    // Get existing endereco to merge
+    const { data: existing } = await supabase.from('usuarios').select('endereco').eq('telefone', normalized).maybeSingle()
+    const mergedEndereco = { ...(existing?.endereco || {}) }
+    if (ct.cidade) mergedEndereco.cidade = ct.cidade
+    if (ct.rota) mergedEndereco.rota = ct.rota
+
+    const { error } = await supabase.from('usuarios').upsert({
       telefone: normalized,
       nome: ct.pushName || 'Contato',
-      created_at: new Date().toISOString()
-    })
+      endereco: mergedEndereco
+    }, { onConflict: 'telefone' })
+
+    if (error) {
+      console.error('Erro syncContatosToUsuarios:', error, ct)
+    } else {
+      updated++
+    }
   }
 
-  if (toInsert.length === 0) return 0
-
-  const { error } = await supabase.from('usuarios').insert(toInsert)
-  if (error) {
-    console.error('Erro syncContatosToUsuarios:', error)
-    return 0
-  }
-  return toInsert.length
+  return updated
 }
 
 // ---- SYNC ALL FROM SUPABASE ----

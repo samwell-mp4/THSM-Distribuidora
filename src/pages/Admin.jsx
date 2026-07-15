@@ -422,15 +422,31 @@ export default function Admin({ produtos, onVoltar }) {
     setRotasLoading(true)
     setRotasError(null)
     try {
-      const res = await fetch(LISTA_CONTATOS_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{}'
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      const arr = Array.isArray(data) ? data : (data.code === 0 ? [] : [data])
-      setRotas(arr)
+      let allContacts = []
+      let offset = 0
+      const PAGE_SIZE = 1000
+      let hasMore = true
+
+      while (hasMore) {
+        const res = await fetch(LISTA_CONTATOS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ offset, limit: PAGE_SIZE })
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        const arr = Array.isArray(data) ? data : (data.code === 0 ? [] : [data])
+        if (arr.length === 0) {
+          hasMore = false
+        } else {
+          allContacts = allContacts.concat(arr)
+          offset += arr.length
+          // Safety: stop if we got fewer than requested (last page)
+          if (arr.length < PAGE_SIZE) hasMore = false
+        }
+      }
+
+      setRotas(allContacts)
     } catch (e) {
       setRotasError(e.message)
     } finally {
