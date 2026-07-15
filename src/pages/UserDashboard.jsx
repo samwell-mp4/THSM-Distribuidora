@@ -40,6 +40,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
   const [paymentStep, setPaymentStep] = useState('review')
   const [processing, setProcessing] = useState(false)
   const [prodSearch, setProdSearch] = useState('')
+  const [showComanda, setShowComanda] = useState(null)
   const [prodCategoria, setProdCategoria] = useState('TODOS')
   const [orderSearch, setOrderSearch] = useState('')
   const [orderDateStart, setOrderDateStart] = useState('')
@@ -718,6 +719,12 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
                     <i className="fa-solid fa-pen"></i> Editar Comanda
                   </button>
                 )}
+                {(selectedOrder.status === 'em-andamento' || selectedOrder.status === 'confirmado') && (
+                  <button className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }}
+                    onClick={() => setShowComanda(selectedOrder)}>
+                    <i className="fa-solid fa-receipt"></i> Visualizar Comanda
+                  </button>
+                )}
                 {selectedOrder.status === 'em-rota' && (
                   <button className="admin-btn" style={{ background: 'var(--accent)', color: 'white', borderColor: 'var(--accent)' }}
                     onClick={() => { setShowUserDelivery(selectedOrder); setUserReturnQtys({}); setUserPayQtys({}); setIdentityPreview(''); setAddressPreview('') }}>
@@ -1064,6 +1071,64 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* COMANDA MODAL */}
+      {showComanda && (
+        <div className="admin-overlay" onClick={() => setShowComanda(null)}>
+          <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="admin-modal-header" style={{ background: 'var(--accent)', color: 'white' }}>
+              <h3 style={{ color: 'white' }}><i className="fa-solid fa-receipt"></i> Comanda #{showComanda.id.toString().slice(-6)}</h3>
+              <button className="admin-modal-close" onClick={() => setShowComanda(null)} style={{ color: 'white' }}><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <div className="admin-modal-body" style={{ maxHeight: '75vh', overflowY: 'auto' }}>
+              <div style={{ padding: '0.5rem 0', borderBottom: '2px dashed var(--admin-border)', marginBottom: '1rem', textAlign: 'center' }}>
+                <strong style={{ fontSize: '0.9rem' }}>{showComanda.customer?.nome || 'Cliente'}</strong>
+                <p style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>
+                  {formatDate(showComanda.date)} &middot; <span className={`status-tag status-${showComanda.status}`} style={{ fontSize: '0.7rem' }}>{showComanda.status}</span>
+                </p>
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 600, color: 'var(--admin-text-sec)', padding: '0.35rem 0', borderBottom: '1px solid var(--admin-border)' }}>
+                  <span>Item</span>
+                  <span style={{ textAlign: 'center', width: '50px' }}>Qtd</span>
+                  <span style={{ textAlign: 'right', width: '80px' }}>Valor</span>
+                </div>
+                {showComanda.items.map((i, idx) => (
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0', borderBottom: '1px solid #f0f0f0', fontSize: '0.82rem' }}>
+                    <span style={{ flex: 1 }}>{i.nome}</span>
+                    <span style={{ textAlign: 'center', width: '50px', fontWeight: 600 }}>{i.qty}x</span>
+                    <span style={{ textAlign: 'right', width: '80px', fontWeight: 600 }}>{formatPreco(i.preco * i.qty)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ borderTop: '2px solid var(--admin-border)', paddingTop: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', fontSize: '0.82rem' }}>
+                  <span>Total à vista</span>
+                  <span style={{ fontWeight: 600 }}>{formatPreco(showComanda.totalAvista || 0)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', fontSize: '0.82rem' }}>
+                  <span>Total a prazo</span>
+                  <span style={{ fontWeight: 600, color: 'var(--warning)' }}>{formatPreco(showComanda.totalAprazo || 0)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem', borderTop: '1px solid var(--admin-border)', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
+                  <span style={{ fontWeight: 700 }}>Total Geral</span>
+                  <span style={{ fontWeight: 800, color: 'var(--accent)' }}>{formatPreco(showComanda.total)}</span>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '0.75rem', padding: '0.5rem', background: '#f9fafb', borderRadius: '8px', fontSize: '0.78rem', color: 'var(--admin-text-sec)', textAlign: 'center' }}>
+                {showComanda.pagamento === 'aprazo' ? 'Pagamento: A Prazo' : showComanda.pagamento === 'avista' ? 'Pagamento: À Vista' : 'Pagamento: Misto'}
+              </div>
+            </div>
+
+            <div className="admin-modal-footer" style={{ padding: '0.75rem 1.25rem', borderTop: '1px solid var(--admin-border)', display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="admin-btn admin-btn-sec" onClick={() => setShowComanda(null)}>Fechar</button>
             </div>
           </div>
         </div>
