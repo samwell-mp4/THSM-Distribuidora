@@ -35,11 +35,20 @@ function App() {
   const [loginEmail, setLoginEmail] = useState('')
   const [loginSenha, setLoginSenha] = useState('')
   const [isRegistering, setIsRegistering] = useState(false)
-  const [showUserDash, setShowUserDash] = useState(false)
   const [showAdminLogin, setShowAdminLogin] = useState(false)
   const [adminUser, setAdminUser] = useState('')
   const [adminPass, setAdminPass] = useState('')
   const [initialOrderId, setInitialOrderId] = useState(null)
+  const [adminAuth, setAdminAuth] = useState(() => {
+    try { const d = localStorage.getItem(LS_ADMIN); return d ? JSON.parse(d) : null } catch { return null }
+  })
+  const [usuarios, setUsuarios] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(LS_USUARIOS)) || [] } catch { return [] }
+  })
+  const [currentUser, setCurrentUser] = useState(() => {
+    try { const d = localStorage.getItem(LS_SESSAO); return d ? JSON.parse(d) : null } catch { return null }
+  })
+  const ITEMS_PER_PAGE = 12
 
   const getRouteFromHash = useCallback(() => {
     if (new URLSearchParams(window.location.search).has('pedido')) return 'userdash'
@@ -68,18 +77,13 @@ function App() {
     const pid = params.get('pedido')
     if (pid) {
       setInitialOrderId(Number(pid))
-      // Clean ?pedido from URL
       const url = new URL(window.location)
       url.searchParams.delete('pedido')
       window.history.replaceState({}, '', url)
-      // Only navigate if not already on userdash
       if (route !== 'userdash') navigate('/minha-conta')
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-  const [adminAuth, setAdminAuth] = useState(() => {
-    try { const d = localStorage.getItem(LS_ADMIN); return d ? JSON.parse(d) : null } catch { return null }
-  })
-  const ITEMS_PER_PAGE = 12
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const loginAdmin = () => {
     if (adminUser === ADMIN_USER && adminPass === ADMIN_PASS) {
@@ -96,12 +100,6 @@ function App() {
   }
 
   // Auth
-  const [usuarios, setUsuarios] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(LS_USUARIOS)) || [] } catch { return [] }
-  })
-  const [currentUser, setCurrentUser] = useState(() => {
-    try { const d = localStorage.getItem(LS_SESSAO); return d ? JSON.parse(d) : null } catch { return null }
-  })
 
   useEffect(() => { localStorage.setItem(LS_USUARIOS, JSON.stringify(usuarios)) }, [usuarios])
   useEffect(() => { if (currentUser) localStorage.setItem(LS_SESSAO, JSON.stringify(currentUser)); else localStorage.removeItem(LS_SESSAO) }, [currentUser])
