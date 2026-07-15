@@ -102,6 +102,39 @@ export async function getRotasContatos() {
   return data || []
 }
 
+// ---- SYNC CONTATOS -> USUARIOS (import only new) ----
+export async function syncContatosToUsuarios(contatos) {
+  if (!contatos || contatos.length === 0) return 0
+
+  // Get existing phones
+  const { data: existing } = await supabase.from('usuarios').select('telefone')
+  const existingPhones = new Set((existing || []).map(u => u.telefone))
+
+  // Extract phone from remoteJid (remove @s.whatsapp.net, keep digits)
+  const toInsert = []
+  for (const ct of contatos) {
+    const phone = ct.remoteJid?.replace(/@.*/, '').replace(/\D/g, '')
+    if (!phone || phone.length < 10) continue
+    if (existingPhones.has(phone)) continue
+    // Normalize to 55XXXXXXXXXXX format
+    const normalized = phone.startsWith('55') ? phone : `55${phone}`
+    toInsert.push({
+      telefone: normalized,
+      nome: ct.pushName || 'Contato',
+      created_at: new Date().toISOString()
+    })
+  }
+
+  if (toInsert.length === 0) return 0
+
+  const { error } = await supabase.from('usuarios').insert(toInsert)
+  if (error) {
+    console.error('Erro syncContatosToUsuarios:', error)
+    return 0
+  }
+  return toInsert.length
+}
+
 // ---- SYNC ALL FROM SUPABASE ----
 export async function syncAllForAdmin() {
   const [orders, financial, users, rotas] = await Promise.all([

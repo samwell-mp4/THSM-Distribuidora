@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import './Admin.css'
-import { supabase, syncAllForAdmin, upsertOrders, upsertFinancial, upsertOrder, deleteOrder as supabaseDeleteOrder } from '../lib/supabase'
+import { supabase, syncAllForAdmin, upsertOrders, upsertFinancial, upsertOrder, deleteOrder as supabaseDeleteOrder, syncContatosToUsuarios } from '../lib/supabase'
 
 const STORAGE_ORDERS = 'thsm_admin_orders'
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
@@ -1160,10 +1160,27 @@ export default function Admin({ produtos, onVoltar }) {
                 </h1>
                 <p className="admin-subtitle">Mapa de rotas e contatos de WhatsApp</p>
               </div>
-              <button className="admin-btn admin-btn-primary" onClick={fetchRotas} disabled={rotasLoading}>
-                <i className={`fa-solid ${rotasLoading ? 'fa-spinner fa-spin' : 'fa-rotate'}`}></i>
-                {rotasLoading ? 'Buscando...' : 'Atualizar'}
-              </button>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button className="admin-btn admin-btn-primary" onClick={fetchRotas} disabled={rotasLoading}>
+                  <i className={`fa-solid ${rotasLoading ? 'fa-spinner fa-spin' : 'fa-rotate'}`}></i>
+                  {rotasLoading ? 'Buscando...' : 'Atualizar'}
+                </button>
+                <button className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }}
+                  disabled={rotas.length === 0}
+                  onClick={async () => {
+                    const added = await syncContatosToUsuarios(rotas)
+                    if (added > 0) {
+                      showToast(`${added} novo(s) usuário(s) importado(s)!`)
+                      // Refresh usuarios
+                      const { data: u } = await supabase.from('usuarios').select('*').order('nome')
+                      if (u) { setUsuarios(u); LS.set('thsm_usuarios', u) }
+                    } else {
+                      showToast('Nenhum novo contato para importar', 'warning')
+                    }
+                  }}>
+                  <i className="fa-solid fa-users"></i> Importar para Usuários
+                </button>
+              </div>
             </div>
 
             {rotasError && (
