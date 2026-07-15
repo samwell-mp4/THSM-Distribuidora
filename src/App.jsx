@@ -77,6 +77,7 @@ function App() {
     const pid = params.get('pedido')
     const loginToken = params.get('login')
     if (loginToken) {
+      sessionStorage.setItem('thsm_user_tab', 'pedidos')
       try {
         const telefone = atob(loginToken)
         const user = usuarios.find(u => u.telefone === telefone)
