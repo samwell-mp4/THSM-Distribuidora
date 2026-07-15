@@ -105,7 +105,10 @@ Pelo link abaixo você pode informar o que deseja pagar e o que vai devolver.
 👤 Cliente: ${nome}
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pedido foi finalizado!
-📦 Itens devolvidos: ${extra.returnedItems.map(i => `${i.nome} (${i.returnedQty}x)`).join(', ')}
+📦 Itens entregues:
+${order.items.map(i => `  • ${i.nome} (${i.qty}x) — R$ ${(i.preco * i.qty).toFixed(2)}`).join('\n')}
+📦 Itens devolvidos:
+${extra.returnedItems.map(i => `  • ${i.nome} (${i.returnedQty}x) — R$ ${(i.preco * (i.returnedQty || 0)).toFixed(2)}`).join('\n')}
 💰 Total cobrado: R$ ${order.total.toFixed(2)}
 ━━━━━━━━━━━━━━━━━━
 Obrigado pela preferência! 🎉`
@@ -115,6 +118,7 @@ Obrigado pela preferência! 🎉`
 👤 Cliente: ${nome}
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pedido foi entregue com sucesso! 🎉
+${order.items.length > 0 ? `📦 Itens:\n${order.items.map(i => `  • ${i.nome} (${i.qty}x) — R$ ${(i.preco * i.qty).toFixed(2)}`).join('\n')}\n` : ''}
 Obrigado pela preferência!
 ━━━━━━━━━━━━━━━━━━
 🔗 Acompanhe: ${link}`,
@@ -134,6 +138,7 @@ Em caso de dúvidas, entre em contato conosco.
 
 function sendStatusWebhook(order, newStatus, extra = {}) {
   const whatsappMessage = buildStatusWhatsApp(order, newStatus, extra)
+  const returnedItems = extra.returnedItems || order.returnedItems || []
   fetch(WEBHOOK_STATUS_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -149,7 +154,8 @@ function sendStatusWebhook(order, newStatus, extra = {}) {
         totalAvista: order.totalAvista,
         totalAprazo: order.totalAprazo,
         customer: order.customer,
-        items: order.items.map(i => ({ nome: i.nome, qty: i.qty, preco: i.preco, tipo: i.tipo }))
+        items: order.items.map(i => ({ nome: i.nome, qty: i.qty, preco: i.preco, tipo: i.tipo })),
+        ...(returnedItems.length > 0 ? { returnedItems: returnedItems.map(i => ({ nome: i.nome, returnedQty: i.returnedQty || i.qty, preco: i.preco })) } : {})
       }
     })
   }).catch(() => {})
@@ -734,6 +740,10 @@ export default function Admin({ produtos, onVoltar }) {
     msg += `─────────────────────\n`
     msg += `💰 *Total geral: ${formatPreco(o.total)}*\n`
     msg += `💳 *Pagamento:* ${o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}`
+    if (o.returnedItems?.length > 0) {
+      msg += `\n\n📦 *ITENS DEVOLVIDOS:*\n`
+      o.returnedItems.forEach(i => msg += `• ${i.nome} (${i.returnedQty}x) = ${formatPreco(i.preco * (i.returnedQty || 0))}\n`)
+    }
     window.open(`https://wa.me/5531998461300?text=${encodeURIComponent(msg)}`, '_blank')
   }
 
