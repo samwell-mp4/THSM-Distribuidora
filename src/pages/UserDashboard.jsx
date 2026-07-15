@@ -794,19 +794,19 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
           <div className="conta-form">
             <div className="form-group">
               <label>Nome</label>
-              <input type="text" value={editNome} onChange={e => setEditNome(e.target.value)} placeholder="Seu nome" />
+              <input type="text" value={editNome} onChange={e => setEditNome(e.target.value)} placeholder={currentUser?.nome || 'Seu nome'} />
             </div>
             <div className="form-group">
               <label>Email</label>
-              <input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="seu@email.com" />
+              <input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder={currentUser?.email || 'seu@email.com'} />
             </div>
             <div className="form-group">
               <label>Telefone / WhatsApp</label>
-              <input type="text" value={editTelefone} onChange={e => setEditTelefone(e.target.value)} placeholder="(31) 99999-9999" />
+              <input type="text" value={editTelefone} onChange={e => setEditTelefone(e.target.value)} placeholder={currentUser?.telefone || '(31) 99999-9999'} />
             </div>
             <div className="form-group">
               <label>Senha</label>
-              <input type="password" value={editSenha} onChange={e => setEditSenha(e.target.value)} placeholder="Nova senha" />
+              <input type="password" value={editSenha} onChange={e => setEditSenha(e.target.value)} placeholder="••••••" />
             </div>
             <div className="form-group">
               <label>Endereço</label>
