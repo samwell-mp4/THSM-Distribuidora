@@ -425,9 +425,10 @@ export default function Admin({ produtos, onVoltar }) {
       let allContacts = []
       let offset = 0
       const PAGE_SIZE = 1000
-      let hasMore = true
+      const MAX_PAGES = 10
+      const seen = new Set()
 
-      while (hasMore) {
+      for (let page = 0; page < MAX_PAGES; page++) {
         const res = await fetch(LISTA_CONTATOS_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -436,14 +437,23 @@ export default function Admin({ produtos, onVoltar }) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         const arr = Array.isArray(data) ? data : (data.code === 0 ? [] : [data])
-        if (arr.length === 0) {
-          hasMore = false
-        } else {
-          allContacts = allContacts.concat(arr)
-          offset += arr.length
-          // Safety: stop if we got fewer than requested (last page)
-          if (arr.length < PAGE_SIZE) hasMore = false
-        }
+        if (arr.length === 0) break
+
+        // Deduplicate by remoteJid
+        const newContacts = arr.filter(c => {
+          const key = c.remoteJid || c.pushName || Math.random()
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+
+        if (newContacts.length === 0) break // all duplicates = reached end
+
+        allContacts = allContacts.concat(newContacts)
+        offset += arr.length
+
+        // If fewer items than requested, this was the last page
+        if (arr.length < PAGE_SIZE) break
       }
 
       setRotas(allContacts)
