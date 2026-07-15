@@ -791,7 +791,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
               <p className="admin-subtitle">Edite suas informações pessoais</p>
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: 500, marginTop: '1rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%', maxWidth: 500, marginTop: '1rem' }}>
             <div className="form-group">
               <label>Nome</label>
               <input type="text" value={editNome} onChange={e => setEditNome(e.target.value)} placeholder="Seu nome" />
@@ -812,7 +812,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
               <label>Endereço</label>
               <AddressForm value={editEndereco} onChange={(addr) => setEditEndereco(addr)} />
             </div>
-            <button className="btn-next" style={{ alignSelf: 'flex-start' }} disabled={savingProfile} onClick={saveProfile}>
+            <button className="btn-next conta-save-btn" disabled={savingProfile} onClick={saveProfile}>
               {savingProfile ? <span><i className="fa-solid fa-spinner fa-spin"></i> Salvando...</span> : <span><i className="fa-solid fa-check"></i> Salvar Alterações</span>}
             </button>
           </div>

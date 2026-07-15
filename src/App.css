@@ -1568,6 +1568,8 @@ input, select { font-family: inherit; }
 
   .mobile-user-nav { display: flex; }
   .mobile-cart-bar { display: flex; }
+
+  .address-form .form-row { flex-direction: column; gap: 0.5rem; }
 }
 
 @media (max-width: 480px) {

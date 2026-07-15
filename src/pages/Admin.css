@@ -1200,8 +1200,16 @@
   .admin-nav-item span { display: inline; }
   .admin-nav-item i { font-size: 0.78rem; width: 18px; }
 
-  .admin-sidebar-footer { display: none; }
+  .admin-sidebar-footer { display: flex; }
   .admin-sidebar-header { display: none; }
+
+  .admin-nav { display: none; }
+
+  .admin-sidebar-footer .admin-user-card { gap: 0.35rem; }
+  .admin-sidebar-footer .admin-user-avatar { width: 28px; height: 28px; font-size: 0.7rem; }
+  .admin-sidebar-footer .admin-user-name { font-size: 0.72rem; }
+  .admin-sidebar-footer .admin-user-email { display: none; }
+  .admin-sidebar-footer .admin-user-back { width: 30px; height: 30px; font-size: 0.7rem; margin-left: auto; }
 
   /* Content */
   .admin-content {
@@ -1298,6 +1306,7 @@
   .admin-modal-header { padding: 0.65rem 0.75rem; }
   .admin-modal-header h3 { font-size: 0.82rem; }
   .admin-modal-body { padding: 0.75rem; }
+  .conta-save-btn { width: 100%; justify-content: center; }
 
   .admin-bottom-item { font-size: 0.55rem; min-width: 44px; }
   .admin-bottom-item i { font-size: 0.85rem; }
