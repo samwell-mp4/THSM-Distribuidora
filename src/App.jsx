@@ -3,6 +3,7 @@ import produtos from './data/produtos.json'
 import Admin from './pages/Admin'
 import AddressForm from './components/AddressForm'
 import UserDashboard from './pages/UserDashboard'
+import { supabase, upsertOrder, upsertUser } from './lib/supabase'
 import './App.css'
 
 const LS_USUARIOS = 'thsm_usuarios'
@@ -39,6 +40,19 @@ function App() {
   const [showAdminLogin, setShowAdminLogin] = useState(false)
   const [adminUser, setAdminUser] = useState('')
   const [adminPass, setAdminPass] = useState('')
+  const [initialOrderId, setInitialOrderId] = useState(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const pid = params.get('pedido')
+    if (pid) {
+      setInitialOrderId(Number(pid))
+      setShowUserDash(true)
+      const url = new URL(window.location)
+      url.searchParams.delete('pedido')
+      window.history.replaceState({}, '', url)
+    }
+  }, [])
   const [adminAuth, setAdminAuth] = useState(() => {
     try { const d = localStorage.getItem(LS_ADMIN); return d ? JSON.parse(d) : null } catch { return null }
   })
@@ -68,6 +82,20 @@ function App() {
 
   useEffect(() => { localStorage.setItem(LS_USUARIOS, JSON.stringify(usuarios)) }, [usuarios])
   useEffect(() => { if (currentUser) localStorage.setItem(LS_SESSAO, JSON.stringify(currentUser)); else localStorage.removeItem(LS_SESSAO) }, [currentUser])
+  useEffect(() => {
+    supabase.from('usuarios').select('*').then(({ data }) => {
+      if (data?.length) {
+        localStorage.setItem(LS_USUARIOS, JSON.stringify(data))
+        setUsuarios(data)
+        const session = localStorage.getItem(LS_SESSAO)
+        if (session) {
+          const cur = JSON.parse(session)
+          const fresh = data.find(u => u.telefone === cur.telefone)
+          if (fresh) setCurrentUser(fresh)
+        }
+      }
+    }).catch(() => {})
+  }, [])
 
   const showToast = useCallback((msg, type = 'success') => {
     setToast({ msg, type })
@@ -113,11 +141,11 @@ function App() {
   }, [])
 
   // --- Auth ---
-  const fazerLogin = () => {
-    const user = usuarios.find(u => u.email === loginEmail.trim().toLowerCase())
-    if (!user) { showToast('Email não cadastrado', 'error'); return }
-    const senhaEsperada = user.telefone.replace(/\D/g, '').replace(/^55/, '')
-    if (loginSenha !== senhaEsperada) { showToast('Senha incorreta', 'error'); return }
+  const fazerLogin = async () => {
+    const raw = loginEmail.replace(/\D/g, '')
+    const telefone = raw.startsWith('55') ? raw : '55' + raw
+    const user = usuarios.find(u => u.telefone === telefone)
+    if (!user) { showToast('Telefone não cadastrado', 'error'); return }
     setCurrentUser(user)
     setShowLogin(false)
     setLoginEmail('')
@@ -125,21 +153,20 @@ function App() {
     showToast(`Bem-vindo, ${user.nome}!`)
   }
 
-  const fazerRegistro = () => {
-    const email = loginEmail.trim().toLowerCase()
-    if (!email || !loginSenha) { showToast('Preencha email e senha', 'error'); return }
-    if (usuarios.find(u => u.email === email)) { showToast('Email já cadastrado', 'error'); return }
-    const user = {
-      id: Date.now(),
+  const fazerRegistro = async () => {
+    const raw = loginEmail.replace(/\D/g, '')
+    const telefone = raw.startsWith('55') ? raw : '55' + raw
+    if (!telefone) { showToast('Informe o telefone', 'error'); return }
+    if (usuarios.find(u => u.telefone === telefone)) { showToast('Telefone já cadastrado', 'error'); return }
+    const { data, error } = await supabase.from('usuarios').insert({
+      telefone,
       nome: customer.nome || 'Usuário',
-      email,
-      telefone: customer.telefone || '55' + loginSenha,
-      senha: loginSenha,
-      endereco: customer.endereco,
-      createdAt: Date.now()
-    }
-    setUsuarios(prev => [...prev, user])
-    setCurrentUser(user)
+      email: '',
+      endereco: customer.endereco || {}
+    }).select().single()
+    if (error) { showToast('Erro ao cadastrar', 'error'); return }
+    setUsuarios(prev => [...prev, data])
+    setCurrentUser(data)
     setShowLogin(false)
     setLoginEmail('')
     setLoginSenha('')
@@ -152,27 +179,24 @@ function App() {
     showToast('Você saiu da sua conta')
   }
 
-  const autoLoginOuRegistro = () => {
-    const email = customer.email.trim().toLowerCase()
-    if (!email) { showToast('Informe seu email', 'error'); return false }
-    const existente = usuarios.find(u => u.email === email)
+  const autoLoginOuRegistro = async () => {
+    const raw = customer.telefone.replace(/\D/g, '')
+    const telefone = raw.startsWith('55') ? raw : '55' + raw
+    if (!telefone) { showToast('Informe seu telefone', 'error'); return false }
+    const existente = usuarios.find(u => u.telefone === telefone)
     if (existente) {
       setCurrentUser(existente)
       return true
     }
-    const senha = customer.telefone.replace(/\D/g, '').replace(/^55/, '')
-    if (!senha) return false
-    const novo = {
-      id: Date.now(),
+    const { data, error } = await supabase.from('usuarios').insert({
+      telefone,
       nome: customer.nome,
-      email,
-      telefone: customer.telefone,
-      senha,
-      endereco: customer.endereco,
-      createdAt: Date.now()
-    }
-    setUsuarios(prev => [...prev, novo])
-    setCurrentUser(novo)
+      email: customer.email,
+      endereco: customer.endereco || {}
+    }).select().single()
+    if (error) { showToast('Erro ao criar cadastro', 'error'); return false }
+    setUsuarios(prev => [...prev, data])
+    setCurrentUser(data)
     return true
   }
 
@@ -215,41 +239,25 @@ function App() {
     setCartOpen(false)
   }
 
-  const finalizarCheckout = () => {
-    if (!autoLoginOuRegistro()) { showToast('Erro ao identificar usuário', 'error'); return }
-    const items = cartItems.map(i => ({ ...i, tipo: pagamento === 'aprazo' ? 'aprazo' : (pagamento === 'avista' ? 'avista' : (splitItems[i.id] || 'avista')) }))
-    const totalAvista = items.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
-    const totalAprazo = items.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
-    const order = {
-      id: Date.now(),
-      userId: currentUser?.id || Date.now(),
-      date: new Date().toISOString().split('T')[0],
-      customer: { nome: customer.nome, email: customer.email, telefone: customer.telefone, endereco: customer.endereco },
-      items,
-      pagamento,
-      totalAvista,
-      totalAprazo,
-      total: totalAvista + totalAprazo,
-      status: pagamento === 'aprazo' || totalAprazo > 0 ? 'pre-pedido' : 'pendente',
-      preApprovedAt: null,
-      createdAt: Date.now()
-    }
-    const existing = JSON.parse(localStorage.getItem(LS_ORDERS) || '[]')
-    localStorage.setItem(LS_ORDERS, JSON.stringify([order, ...existing]))
-    setCart({})
-    setCheckout(null)
-    showToast('Pedido enviado com sucesso!')
-    setShowUserDash(true)
+  const buildOrderLink = (orderId) => `${window.location.origin}${window.location.pathname}?pedido=${orderId}`
+
+  const buildWhatsAppMsg = (order) => {
+    const link = buildOrderLink(order.id)
+    const nome = order.customer?.nome || 'Cliente'
+    const id = `#${order.id.toString().slice(-6)}`
     const msgItems = order.items.map(i => `  • ${i.nome} (${i.qty}x) — R$ ${i.preco.toFixed(2)}`).join('\n')
     const msgPagamento = order.pagamento === 'avista' ? 'À Vista' : order.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'
-    const whatsappMessage = `🆕 *NOVO PEDIDO* 🆕\n━━━━━━━━━━━━━━━━━━\n📋 Pedido: #${order.id.toString().slice(-6)}\n📅 Data: ${order.date}\n👤 Cliente: ${customer.nome}\n📞 Telefone: ${customer.telefone || '-'}\n📍 Endereço: ${customer.endereco?.rua || '-'}, ${customer.endereco?.numero || '-'} - ${customer.endereco?.bairro || '-'}, ${customer.endereco?.cidade || '-'}/${customer.endereco?.estado || '-'}\n━━━━━━━━━━━━━━━━━━\n💳 Pagamento: ${msgPagamento}\n💰 Total: R$ ${(totalAvista + totalAprazo).toFixed(2)}${totalAprazo > 0 ? `\n📋 A Prazo: R$ ${totalAprazo.toFixed(2)}` : ''}\n━━━━━━━━━━━━━━━━━━\n📦 *ITENS:*\n${msgItems}\n━━━━━━━━━━━━━━━━━━\n📌 Status: ${order.status === 'pendente' ? '✅ Aguardando confirmação' : order.status === 'pre-pedido' ? '⏳ Pré-pedido aguardando aprovação' : order.status}\n🔗 Acesse o painel: https://thsmdistribuidora.minharota.net`
+    const msgStatus = order.status === 'pendente' ? '✅ Aguardando confirmação' : order.status === 'pre-pedido' ? '⏳ Pré-pedido aguardando aprovação' : order.status
+    return `🆕 *NOVO PEDIDO* 🆕\n━━━━━━━━━━━━━━━━━━\n📋 Pedido: ${id}\n📅 Data: ${order.date}\n👤 Cliente: ${nome}\n📞 Telefone: ${order.customer?.telefone || '-'}\n📍 Endereço: ${order.customer?.endereco?.rua || '-'}, ${order.customer?.endereco?.numero || '-'} - ${order.customer?.endereco?.bairro || '-'}, ${order.customer?.endereco?.cidade || '-'}/${order.customer?.endereco?.estado || '-'}\n━━━━━━━━━━━━━━━━━━\n💳 Pagamento: ${msgPagamento}\n💰 Total: R$ ${order.total.toFixed(2)}${order.totalAprazo > 0 ? `\n📋 A Prazo: R$ ${order.totalAprazo.toFixed(2)}` : ''}\n━━━━━━━━━━━━━━━━━━\n📦 *ITENS:*\n${msgItems}\n━━━━━━━━━━━━━━━━━━\n📌 Status: ${msgStatus}\n🔗 Acesse o pedido: ${link}`
+  }
 
+  const sendOrderWebhook = (order) => {
     fetch(WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        event: 'novo-pedido',
-        whatsappMessage,
+        event: 'atualizacao-pedido',
+        whatsappMessage: buildWhatsAppMsg(order),
         order: {
           id: order.id,
           date: order.date,
@@ -259,16 +267,39 @@ function App() {
           totalAvista: order.totalAvista,
           totalAprazo: order.totalAprazo,
           customer: order.customer,
-          items: order.items.map(i => ({
-            nome: i.nome,
-            qty: i.qty,
-            preco: i.preco,
-            tipo: i.tipo,
-            foto: i.foto
-          }))
+          items: order.items.map(i => ({ nome: i.nome, qty: i.qty, preco: i.preco, tipo: i.tipo, foto: i.foto }))
         }
       })
     }).catch(() => {})
+  }
+
+  const finalizarCheckout = () => {
+    if (!autoLoginOuRegistro()) { showToast('Erro ao identificar usuário', 'error'); return }
+    const items = cartItems.map(i => ({ ...i, tipo: pagamento === 'aprazo' ? 'aprazo' : (pagamento === 'avista' ? 'avista' : (splitItems[i.id] || 'avista')) }))
+    const totalAvista = items.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
+    const totalAprazo = items.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
+    const order = {
+      id: Date.now(),
+      user_id: currentUser?.id || null,
+      date: new Date().toISOString().split('T')[0],
+      customer: { nome: customer.nome, email: customer.email, telefone: customer.telefone, endereco: customer.endereco },
+      items,
+      pagamento,
+      total_avista: totalAvista,
+      total_aprazo: totalAprazo,
+      total: totalAvista + totalAprazo,
+      status: pagamento === 'aprazo' || totalAprazo > 0 ? 'pre-pedido' : 'pendente',
+      pre_approved_at: null,
+      created_at: new Date().toISOString()
+    }
+    const existing = JSON.parse(localStorage.getItem(LS_ORDERS) || '[]')
+    localStorage.setItem(LS_ORDERS, JSON.stringify([order, ...existing]))
+    upsertOrder({ ...order, user_id: currentUser?.id || order.user_id })
+    setCart({})
+    setCheckout(null)
+    showToast('Pedido enviado com sucesso!')
+    setShowUserDash(true)
+    sendOrderWebhook(order)
   }
 
   const formatPhone = (v) => {
@@ -280,7 +311,7 @@ function App() {
 
   // Admin & UserDash views
   if (showAdmin && adminAuth?.loggedIn) return <Admin produtos={produtos} onVoltar={() => { setShowAdmin(false); localStorage.removeItem(LS_ADMIN); setAdminAuth(null) }} />
-  if (showUserDash) return <UserDashboard produtos={produtos} onVoltar={() => setShowUserDash(false)} />
+  if (showUserDash) return <UserDashboard produtos={produtos} onVoltar={() => setShowUserDash(false)} initialOrderId={initialOrderId} />
 
   return (
     <div className="app">

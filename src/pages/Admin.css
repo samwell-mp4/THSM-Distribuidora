@@ -1301,3 +1301,654 @@
   .admin-bottom-item { font-size: 0.55rem; min-width: 44px; }
   .admin-bottom-item i { font-size: 0.85rem; }
 }
+
+/* ==========================================
+   ROTAS — Modern Dashboard
+   ========================================== */
+
+/* Title icon */
+.rota-title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  color: white;
+  font-size: 1rem;
+}
+
+/* Error card */
+.rota-error-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  background: linear-gradient(135deg, #fef2f2, #fee2e2);
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  padding: 1rem 1.15rem;
+  margin-bottom: 1rem;
+}
+.rota-error-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #dc2626;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.rota-error-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: #991b1b;
+}
+.rota-error-body strong {
+  font-size: 0.88rem;
+}
+.rota-error-body button {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+/* Loading state */
+.rota-loading {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+  border: 1px solid #c7d2fe;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1rem;
+}
+.rota-loading-spinner {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+.rota-loading-text strong {
+  display: block;
+  font-size: 0.92rem;
+  color: var(--accent-dark);
+}
+.rota-loading-text span {
+  font-size: 0.78rem;
+  color: var(--admin-text-sec);
+}
+
+/* Stats cards */
+.rota-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+.rota-stat-card {
+  background: white;
+  border-radius: 14px;
+  padding: 1.1rem 1.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  border: 1px solid var(--admin-border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  transition: all 0.2s;
+}
+.rota-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+.rota-stat-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+.stat-purple .rota-stat-icon { background: linear-gradient(135deg, #ede9fe, #ddd6fe); color: #7c3aed; }
+.stat-blue .rota-stat-icon { background: linear-gradient(135deg, #dbeafe, #bfdbfe); color: #2563eb; }
+.stat-green .rota-stat-icon { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #059669; }
+.rota-stat-info strong {
+  display: block;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--admin-text);
+}
+.rota-stat-info span {
+  font-size: 0.75rem;
+  color: var(--admin-text-sec);
+}
+
+/* Filters bar */
+.rota-filters {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 1.15rem;
+  flex-wrap: wrap;
+}
+.rota-select-wrap {
+  position: relative;
+  min-width: 200px;
+}
+.rota-select-wrap i {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--admin-text-sec);
+  font-size: 0.78rem;
+  pointer-events: none;
+  z-index: 1;
+}
+.rota-select-wrap select {
+  width: 100%;
+  padding: 0.5rem 0.75rem 0.5rem 2.1rem;
+  border: 1.5px solid var(--admin-border);
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--admin-text);
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: all 0.2s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px;
+}
+.rota-select-wrap select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+}
+.rota-select-wrap select:hover {
+  border-color: var(--accent-light);
+}
+.rota-search-box {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+}
+.rota-search-box i {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--admin-text-sec);
+  font-size: 0.78rem;
+  pointer-events: none;
+}
+.rota-search-box input {
+  width: 100%;
+  padding: 0.5rem 0.75rem 0.5rem 2rem;
+  border: 1.5px solid var(--admin-border);
+  border-radius: 10px;
+  font-size: 0.82rem;
+  background: white;
+  transition: all 0.2s;
+}
+.rota-search-box input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.08);
+}
+.rota-search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--admin-text-sec);
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+}
+.rota-search-clear:hover {
+  background: #f3f4f6;
+  color: var(--admin-text);
+}
+
+/* Empty state */
+.rota-empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--admin-text-sec);
+}
+.rota-empty i {
+  font-size: 2.5rem;
+  opacity: 0.25;
+  margin-bottom: 0.75rem;
+  display: block;
+}
+.rota-empty h3 {
+  font-size: 1.05rem;
+  color: var(--admin-text);
+  margin-bottom: 0.25rem;
+}
+.rota-empty p {
+  font-size: 0.82rem;
+}
+.rota-empty-state {
+  text-align: center;
+  padding: 4rem 1rem;
+}
+.rota-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ede9fe, #ddd6fe);
+  color: #7c3aed;
+  font-size: 1.4rem;
+  margin-bottom: 1rem;
+}
+.rota-empty-state h3 {
+  font-size: 1.1rem;
+  margin-bottom: 0.35rem;
+}
+.rota-empty-state p {
+  font-size: 0.85rem;
+  color: var(--admin-text-sec);
+  margin-bottom: 1.25rem;
+}
+
+/* Route cards grid */
+.rota-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.rota-card {
+  background: white;
+  border-radius: 14px;
+  border: 1px solid var(--admin-border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  overflow: hidden;
+  transition: all 0.25s;
+}
+.rota-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+}
+.rota-card.expanded {
+  border-color: var(--accent-light);
+  box-shadow: 0 4px 16px rgba(37,99,235,0.08);
+}
+
+.rota-card-main {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 1.15rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.rota-card-main:hover {
+  background: #fafbfc;
+}
+
+.rota-card-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.rota-card-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f0f0f5, #e5e5eb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--admin-text-sec);
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.rota-card-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.rota-card-meta {
+  flex: 1;
+  min-width: 0;
+}
+.rota-card-title {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--admin-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rota-card-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--admin-text-sec);
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+.rota-card-subtitle i {
+  font-size: 0.65rem;
+}
+.rota-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #d4d4d8;
+  display: inline-block;
+}
+
+.rota-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.rota-map-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 50px;
+  border: 1px solid #fca5a5;
+  background: linear-gradient(135deg, #fef2f2, #fee2e2);
+  color: #dc2626;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.rota-map-btn:hover {
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  border-color: #f87171;
+  box-shadow: 0 2px 8px rgba(220,38,38,0.12);
+}
+.rota-map-btn i {
+  font-size: 0.8rem;
+}
+
+.rota-expand-icon {
+  color: var(--admin-text-sec);
+  font-size: 0.75rem;
+  padding: 0.25rem;
+  transition: transform 0.2s;
+}
+
+/* Subcategory badges */
+.rota-subcats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.35rem 1.15rem 0.75rem;
+}
+.rota-subcat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 50px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+  color: var(--accent);
+  border: 1px solid #c7d2fe;
+  transition: all 0.15s;
+}
+.rota-subcat-badge i {
+  font-size: 0.65rem;
+}
+.rota-subcat-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 50px;
+  background: var(--accent);
+  color: white;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0 0.3rem;
+}
+
+/* Contacts section (expanded) */
+.rota-contacts {
+  border-top: 1px solid var(--admin-border);
+}
+.rota-subcat-group + .rota-subcat-group {
+  border-top: 1px solid #e5e7eb;
+}
+.rota-contacts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1.15rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--admin-text-sec);
+  background: #f1f3f7;
+}
+.rota-contacts-header i {
+  margin-right: 0.3rem;
+  color: var(--accent);
+}
+.rota-contacts-count {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--admin-text-sec);
+}
+.rota-contacts-body {
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.rota-contact-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.5rem 1.15rem;
+  transition: background 0.12s;
+  border-bottom: 1px solid #f3f4f6;
+}
+.rota-contact-row:last-child {
+  border-bottom: none;
+}
+.rota-contact-row:hover {
+  background: white;
+}
+
+.rota-contact-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--admin-text-sec);
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+.rota-contact-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.rota-contact-info {
+  flex: 1;
+  min-width: 0;
+}
+.rota-contact-name {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--admin-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rota-contact-phone {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--admin-text-sec);
+}
+
+.rota-whatsapp-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #25d366, #1da851);
+  color: white;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  opacity: 0;
+  transform: scale(0.85);
+}
+.rota-contact-row:hover .rota-whatsapp-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+.rota-whatsapp-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 3px 10px rgba(37,211,102,0.3);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .rota-stats {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+  }
+  .rota-stat-card {
+    padding: 0.7rem 0.65rem;
+    flex-direction: column;
+    text-align: center;
+    gap: 0.35rem;
+  }
+  .rota-stat-icon {
+    width: 34px;
+    height: 34px;
+    font-size: 0.9rem;
+  }
+  .rota-stat-info strong {
+    font-size: 1rem;
+  }
+  .rota-stat-info span {
+    font-size: 0.65rem;
+  }
+  .rota-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .rota-select-wrap {
+    min-width: 100%;
+  }
+  .rota-search-box {
+    min-width: 100%;
+  }
+  .rota-subcats {
+    padding: 0.25rem 0.85rem 0.6rem;
+    gap: 0.3rem;
+  }
+  .rota-subcat-badge {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.5rem;
+  }
+  .rota-card-main {
+    padding: 0.65rem 0.85rem;
+  }
+  .rota-card-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 0.9rem;
+  }
+  .rota-card-title {
+    font-size: 0.82rem;
+  }
+  .rota-map-btn {
+    font-size: 0.65rem;
+    padding: 0.25rem 0.55rem;
+  }
+  .rota-map-btn span {
+    display: none;
+  }
+  .rota-contacts-header {
+    padding: 0.4rem 0.85rem;
+    font-size: 0.68rem;
+  }
+  .rota-contact-row {
+    padding: 0.4rem 0.85rem;
+  }
+  .rota-whatsapp-btn {
+    opacity: 1;
+    transform: none;
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .rota-stats {
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.35rem;
+  }
+  .rota-stat-card {
+    padding: 0.5rem 0.4rem;
+    border-radius: 10px;
+  }
+  .rota-stat-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
+    border-radius: 8px;
+  }
+  .rota-stat-info strong {
+    font-size: 0.85rem;
+  }
+}

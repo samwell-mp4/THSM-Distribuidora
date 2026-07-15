@@ -1,10 +1,12 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import './Admin.css'
+import { supabase, syncAllForAdmin, upsertOrders, upsertFinancial, upsertOrder, deleteOrder as supabaseDeleteOrder } from '../lib/supabase'
 
 const STORAGE_ORDERS = 'thsm_admin_orders'
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
 const STORAGE_FINANCIAL = 'thsm_admin_financeiro'
 const WEBHOOK_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/novo-pedido'
+const LISTA_CONTATOS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/lista-contatos'
 
 const LS = {
   get(key, def) {
@@ -31,6 +33,126 @@ function diffDays(a, b) {
   return Math.floor((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / (1000 * 60 * 60 * 24))
 }
 
+const WEBHOOK_STATUS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/novo-pedido'
+
+function buildOrderLink(orderId) {
+  return `${window.location.origin}${window.location.pathname}?pedido=${orderId}`
+}
+
+function buildStatusWhatsApp(order, newStatus, extra = {}) {
+  const link = buildOrderLink(order.id)
+  const nome = order.customer?.nome || 'Cliente'
+  const id = `#${order.id.toString().slice(-6)}`
+  const msgItems = order.items.map(i => `  • ${i.nome} (${i.qty}x) — R$ ${i.preco.toFixed(2)}`).join('\n')
+  const msgPagamento = order.pagamento === 'avista' ? 'À Vista' : order.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'
+
+  const templates = {
+    'pre-pedido': `⏳ *PRÉ-PEDIDO EM ANÁLISE* ⏳
+━━━━━━━━━━━━━━━━━━
+📋 Pedido: ${id}
+👤 Cliente: ${nome}
+━━━━━━━━━━━━━━━━━━
+Olá ${nome}, seu pré-pedido foi recebido e está em análise pela nossa equipe.
+Em breve você receberá a confirmação.
+━━━━━━━━━━━━━━━━━━
+🔗 Acompanhe seu pedido: ${link}`,
+
+    'pendente': `🆕 *PEDIDO RECEBIDO* 🆕
+━━━━━━━━━━━━━━━━━━
+📋 Pedido: ${id}
+👤 Cliente: ${nome}
+━━━━━━━━━━━━━━━━━━
+Olá ${nome}, seu pedido foi recebido com sucesso!
+Em breve confirmaremos seu pedido.
+━━━━━━━━━━━━━━━━━━
+🔗 Acompanhe seu pedido: ${link}`,
+
+    'confirmado': `✅ *PEDIDO CONFIRMADO* ✅
+━━━━━━━━━━━━━━━━━━
+📋 Pedido: ${id}
+👤 Cliente: ${nome}
+━━━━━━━━━━━━━━━━━━
+Olá ${nome}, seu pedido foi confirmado!
+Em breve entraremos em contato para combinar a entrega.
+━━━━━━━━━━━━━━━━━━
+🔗 Acompanhe seu pedido: ${link}`,
+
+    'em-andamento': `📋 *PEDIDO EM ANDAMENTO* 📋
+━━━━━━━━━━━━━━━━━━
+📋 Pedido: ${id}
+👤 Cliente: ${nome}
+━━━━━━━━━━━━━━━━━━
+Olá ${nome}, seu pedido está em andamento e sendo preparado para entrega.
+━━━━━━━━━━━━━━━━━━
+🔗 Acompanhe seu pedido: ${link}`,
+
+    'em-rota': `🚚 *PEDIDO EM ROTA* 🚚
+━━━━━━━━━━━━━━━━━━
+📋 Pedido: ${id}
+👤 Cliente: ${nome}
+━━━━━━━━━━━━━━━━━━
+Olá ${nome}, seu pedido saiu para entrega!
+Pelo link abaixo você pode informar o que deseja pagar e o que vai devolver.
+━━━━━━━━━━━━━━━━━━
+🔗 Acesse seu pedido: ${link}`,
+
+    'entregue': extra.returnedItems?.length > 0
+      ? `✅ *PEDIDO FINALIZADO* ✅
+━━━━━━━━━━━━━━━━━━
+📋 Pedido: ${id}
+👤 Cliente: ${nome}
+━━━━━━━━━━━━━━━━━━
+Olá ${nome}, seu pedido foi finalizado!
+📦 Itens devolvidos: ${extra.returnedItems.map(i => `${i.nome} (${i.returnedQty}x)`).join(', ')}
+💰 Total cobrado: R$ ${order.total.toFixed(2)}
+━━━━━━━━━━━━━━━━━━
+Obrigado pela preferência! 🎉`
+      : `✅ *PEDIDO ENTREGUE* ✅
+━━━━━━━━━━━━━━━━━━
+📋 Pedido: ${id}
+👤 Cliente: ${nome}
+━━━━━━━━━━━━━━━━━━
+Olá ${nome}, seu pedido foi entregue com sucesso! 🎉
+Obrigado pela preferência!
+━━━━━━━━━━━━━━━━━━
+🔗 Acompanhe: ${link}`,
+
+    'cancelado': `❌ *PEDIDO CANCELADO* ❌
+━━━━━━━━━━━━━━━━━━
+📋 Pedido: ${id}
+👤 Cliente: ${nome}
+━━━━━━━━━━━━━━━━━━
+Olá ${nome}, seu pedido foi cancelado.
+Em caso de dúvidas, entre em contato conosco.
+━━━━━━━━━━━━━━━━━━`
+  }
+
+  return templates[newStatus] || `📋 *Atualização do Pedido ${id}* 📋\n━━━━━━━━━━━━━━━━━━\nStatus: ${newStatus}\n🔗 ${link}`
+}
+
+function sendStatusWebhook(order, newStatus, extra = {}) {
+  const whatsappMessage = buildStatusWhatsApp(order, newStatus, extra)
+  fetch(WEBHOOK_STATUS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      event: 'atualizacao-pedido',
+      whatsappMessage,
+      order: {
+        id: order.id,
+        date: order.date,
+        status: newStatus,
+        pagamento: order.pagamento,
+        total: order.total,
+        totalAvista: order.totalAvista,
+        totalAprazo: order.totalAprazo,
+        customer: order.customer,
+        items: order.items.map(i => ({ nome: i.nome, qty: i.qty, preco: i.preco, tipo: i.tipo }))
+      }
+    })
+  }).catch(() => {})
+}
+
 import AddressForm from '../components/AddressForm'
 
 export default function Admin({ produtos, onVoltar }) {
@@ -47,6 +169,9 @@ export default function Admin({ produtos, onVoltar }) {
   const [showOrderDetail, setShowOrderDetail] = useState(null)
   const [showDeliveryModal, setShowDeliveryModal] = useState(null)
   const [returnQuantities, setReturnQuantities] = useState({})
+  const [payQuantities, setPayQuantities] = useState({})
+  const [identityPreview, setIdentityPreview] = useState('')
+  const [addressPreview, setAddressPreview] = useState('')
   const [finFilter, setFinFilter] = useState('todos')
   const [finEdit, setFinEdit] = useState(null)
   const [usuarios, setUsuarios] = useState(() => LS.get('thsm_usuarios', []))
@@ -64,6 +189,13 @@ export default function Admin({ produtos, onVoltar }) {
   const [orderDateStart, setOrderDateStart] = useState('')
   const [orderDateEnd, setOrderDateEnd] = useState('')
   const [orderCityFilter, setOrderCityFilter] = useState('TODAS')
+  const [rotas, setRotas] = useState([])
+  const [rotasLoading, setRotasLoading] = useState(false)
+  const [rotasError, setRotasError] = useState(null)
+  const [expandedRota, setExpandedRota] = useState(null)
+  const [filterCidade, setFilterCidade] = useState('TODAS')
+  const [filterRota, setFilterRota] = useState('TODAS')
+  const [filterRotaSearch, setFilterRotaSearch] = useState('')
   const PROD_PER_PAGE = 20
 
   const showToast = (msg, type = 'success') => {
@@ -72,9 +204,23 @@ export default function Admin({ produtos, onVoltar }) {
   }
 
   // Persist
-  useEffect(() => { LS.set(STORAGE_ORDERS, orders) }, [orders])
+  useEffect(() => {
+    LS.set(STORAGE_ORDERS, orders)
+    if (orders.length > 0) upsertOrders(orders)
+  }, [orders])
   useEffect(() => { LS.set(STORAGE_PRODUCTS, prodChanges) }, [prodChanges])
-  useEffect(() => { LS.set(STORAGE_FINANCIAL, financial) }, [financial])
+  useEffect(() => {
+    LS.set(STORAGE_FINANCIAL, financial)
+    if (financial.length > 0) upsertFinancial(financial)
+  }, [financial])
+  useEffect(() => {
+    syncAllForAdmin().then(({ orders: o, financial: f, users: u, rotas: r }) => {
+      if (o.length) { LS.set(STORAGE_ORDERS, o); setOrders(o) }
+      if (f.length) { LS.set(STORAGE_FINANCIAL, f); setFinancial(f) }
+      if (u.length) { LS.set('thsm_usuarios', u); setUsuarios(u) }
+      if (r.length) setRotas(r)
+    }).catch(() => {})
+  }, [])
 
   const produtosAtuais = useMemo(() => {
     return produtos.map(p => ({
@@ -127,29 +273,7 @@ export default function Admin({ produtos, onVoltar }) {
 
     showToast('Pedido adicionado com sucesso!')
     setShowAddOrder(false)
-    const msgItems = order.items.map(i => `  • ${i.nome} (${i.qty}x) — R$ ${i.preco.toFixed(2)}`).join('\n')
-    const msgPagamento = order.pagamento === 'avista' ? 'À Vista' : order.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'
-    const whatsappMessage = `🆕 *NOVO PEDIDO* 🆕\n━━━━━━━━━━━━━━━━━━\n📋 Pedido: #${order.id.toString().slice(-6)}\n📅 Data: ${order.date}\n👤 Cliente: ${data.nome}\n📞 Telefone: ${data.telefone || '-'}\n📍 Endereço: ${data.endereco?.rua || '-'}, ${data.endereco?.numero || '-'} - ${data.endereco?.bairro || '-'}, ${data.endereco?.cidade || '-'}/${data.endereco?.estado || '-'}\n━━━━━━━━━━━━━━━━━━\n💳 Pagamento: ${msgPagamento}\n💰 Total: R$ ${(totalAvista + totalAprazo).toFixed(2)}${totalAprazo > 0 ? `\n📋 A Prazo: R$ ${totalAprazo.toFixed(2)}` : ''}\n━━━━━━━━━━━━━━━━━━\n📦 *ITENS:*\n${msgItems}\n━━━━━━━━━━━━━━━━━━\n📌 Status: ✅ Aguardando confirmação\n🔗 Acesse o painel: https://thsmdistribuidora.minharota.net`
-
-    fetch(WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        event: 'novo-pedido',
-        whatsappMessage,
-        order: {
-          id: order.id,
-          date: order.date,
-          status: order.status,
-          pagamento: order.pagamento,
-          total: order.total,
-          totalAvista: order.totalAvista,
-          totalAprazo: order.totalAprazo,
-          customer: order.customer,
-          items: order.items.map(i => ({ nome: i.nome, qty: i.qty, preco: i.preco, tipo: i.tipo }))
-        }
-      })
-    }).catch(() => {})
+    sendStatusWebhook(order, order.status)
   }
 
   const updateOrderStatus = (id, status) => {
@@ -158,12 +282,18 @@ export default function Admin({ produtos, onVoltar }) {
       setFinancial(prev => prev.map(f => f.orderId === id && f.status !== 'pago' ? { ...f, status: 'pago', paidDate: hoje() } : f))
     }
     showToast(`Pedido #${id} atualizado para "${status}"`)
+    const order = orders.find(o => o.id === id)
+    if (order) sendStatusWebhook(order, status)
   }
 
   const preApprovarPedido = (orderId, rejectedItemIds, replacements = []) => {
     const order = orders.find(o => o.id === orderId)
     if (!order) return
     const rejected = new Set(rejectedItemIds)
+    setTimeout(() => {
+      const updated = orders.find(o => o.id === orderId)
+      if (updated && updated.status === 'em-andamento') sendStatusWebhook(updated, 'em-andamento')
+    }, 100)
     let remainingItems = order.items.filter((_, idx) => !rejected.has(idx))
     if (replacements.length > 0) {
       remainingItems = [...remainingItems, ...replacements]
@@ -204,6 +334,17 @@ export default function Admin({ produtos, onVoltar }) {
     setShowOrderDetail(null)
   }
 
+  const handleDeliveryFile = (e, type) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      if (type === 'identity') setIdentityPreview(ev.target.result)
+      else setAddressPreview(ev.target.result)
+    }
+    reader.readAsDataURL(file)
+  }
+
   const finalizarComDevolucao = (orderId) => {
     const order = orders.find(o => o.id === orderId)
     if (!order) return
@@ -222,36 +363,42 @@ export default function Admin({ produtos, onVoltar }) {
     }))
     const totalAvista = adjustedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
     const totalAprazo = adjustedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
-    setOrders(prev => prev.map(o => o.id === orderId ? {
-      ...o,
+    const updatedOrder = {
+      ...order,
       items: adjustedItems,
       totalAvista,
       totalAprazo,
       total: totalAvista + totalAprazo,
       status: 'entregue',
-      returnedItems
-    } : o))
-    // Update financial: delivered items marked paid, returned items removed
+      returnedItems,
+      identityPhoto: identityPreview || order.identityPhoto || '',
+      addressProof: addressPreview || order.addressProof || '',
+      deliveredAt: Date.now()
+    }
+    setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o))
     setFinancial(prev => prev.map(f => {
       if (f.orderId !== orderId) return f
       const item = order.items.find(i => f.id === orderId + '-' + i.id)
       if (!item) return f
       const returnedQty = returnQuantities[item.id] || 0
-      if (returnedQty >= item.qty) {
-        return { ...f, status: 'cancelado', paidDate: hoje() }
-      }
+      if (returnedQty >= item.qty) return { ...f, status: 'cancelado', paidDate: hoje() }
       const remainingQty = item.qty - returnedQty
       return { ...f, qty: remainingQty, value: item.preco * remainingQty, status: 'pago', paidDate: hoje() }
     }))
     showToast(`Pedido #${orderId} finalizado com devolução`)
+    sendStatusWebhook(updatedOrder, 'entregue', { returnedItems })
     setShowDeliveryModal(null)
     setReturnQuantities({})
+    setPayQuantities({})
+    setIdentityPreview('')
+    setAddressPreview('')
   }
 
   const deleteOrder = (id) => {
     if (!confirm('Excluir este pedido?')) return
     setOrders(prev => prev.filter(o => o.id !== id))
     setFinancial(prev => prev.filter(f => f.orderId !== id))
+    supabaseDeleteOrder(id)
     showToast('Pedido excluído')
   }
 
@@ -261,6 +408,26 @@ export default function Admin({ produtos, onVoltar }) {
     if (nums.length <= 7) return `(${nums.slice(0, 2)}) ${nums.slice(2)}`
     return `(${nums.slice(0, 2)}) ${nums.slice(2, 7)}-${nums.slice(7)}`
   }
+
+  const fetchRotas = useCallback(async () => {
+    setRotasLoading(true)
+    setRotasError(null)
+    try {
+      const res = await fetch(LISTA_CONTATOS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      const arr = Array.isArray(data) ? data : (data.code === 0 ? [] : [data])
+      setRotas(arr)
+    } catch (e) {
+      setRotasError(e.message)
+    } finally {
+      setRotasLoading(false)
+    }
+  }, [])
 
   const cidadesOrders = useMemo(() => {
     const cidades = [...new Set(orders.map(o => o.customer?.endereco?.cidade).filter(Boolean))]
@@ -500,10 +667,57 @@ export default function Admin({ produtos, onVoltar }) {
   // =============================================
   // SIDEBAR
   // =============================================
+  const rotasAgrupadas = useMemo(() => {
+    const groups = {}
+    rotas.forEach(r => {
+      const rotaKey = r.rota || 'Sem rota'
+      if (!groups[rotaKey]) groups[rotaKey] = { rota: rotaKey, cidades: {}, total: 0 }
+      const cidadeKey = r.cidade || 'Sem cidade'
+      if (!groups[rotaKey].cidades[cidadeKey]) groups[rotaKey].cidades[cidadeKey] = { cidade: cidadeKey, contatos: [] }
+      groups[rotaKey].cidades[cidadeKey].contatos.push(r)
+      groups[rotaKey].total++
+    })
+    return Object.values(groups).map(g => ({
+      ...g,
+      cidades: Object.values(g.cidades).sort((a, b) => a.cidade.localeCompare(b.cidade, 'pt-BR'))
+    }))
+  }, [rotas])
+
+  const cidadesRotas = useMemo(() => {
+    const cidades = [...new Set(rotas.map(r => r.cidade).filter(Boolean))]
+    return ['TODAS', ...cidades.sort((a, b) => a.localeCompare(b, 'pt-BR'))]
+  }, [rotas])
+
+  const rotasUnicas = useMemo(() => {
+    const rotasList = [...new Set(rotas.map(r => r.rota).filter(Boolean))]
+    return ['TODAS', ...rotasList.sort((a, b) => a.localeCompare(b, 'pt-BR'))]
+  }, [rotas])
+
+  const rotasFiltradas = useMemo(() => {
+    let result = rotasAgrupadas
+    if (filterCidade !== 'TODAS') result = result.filter(g => Object.values(g.cidades).some(c => c.cidade === filterCidade))
+    if (filterRota !== 'TODAS') result = result.filter(g => g.rota === filterRota)
+    const t = filterRotaSearch.toLowerCase().trim()
+    if (t) result = result.filter(g =>
+      g.rota.toLowerCase().includes(t) ||
+      Object.values(g.cidades).some(c => c.cidade.toLowerCase().includes(t)) ||
+      Object.values(g.cidades).some(c => c.contatos.some(ct => ct.pushName?.toLowerCase().includes(t)))
+    )
+    return result
+  }, [rotasAgrupadas, filterCidade, filterRota, filterRotaSearch])
+
+  const rotaStats = useMemo(() => {
+    const totalContatos = rotas.length
+    const totalRotas = rotasAgrupadas.length
+    const totalCidades = cidadesRotas.length - 1
+    return { totalContatos, totalRotas, totalCidades }
+  }, [rotas, rotasAgrupadas, cidadesRotas])
+
   const sidebar = [
     { id: 'dashboard', icon: 'fa-chart-pie', label: 'Dashboard' },
     { id: 'pedidos', icon: 'fa-clipboard-list', label: 'Pedidos', count: stats.prePedidos + stats.pendentes },
     { id: 'produtos', icon: 'fa-boxes', label: 'Produtos' },
+    { id: 'rotas', icon: 'fa-route', label: 'Rotas', count: rotaStats.totalRotas },
     { id: 'financeiro', icon: 'fa-coins', label: 'Financeiro', count: financial.filter(f => f.status === 'pendente').length },
     { id: 'usuarios', icon: 'fa-users', label: 'Usuários', count: usuarios.length },
   ]
@@ -740,12 +954,9 @@ export default function Admin({ produtos, onVoltar }) {
                           {o.status === 'pre-pedido' && <button className="action-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }} title="Revisar e pré-aprovar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-clipboard-check"></i></button>}
                           {o.status === 'pendente' && <button className="action-btn action-confirm" title="Editar/Confirmar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-pen"></i></button>}
                           {o.status === 'confirmado' && <button className="action-btn action-deliver" title="Em Rota" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-truck"></i></button>}
-                          {o.status === 'em-rota' && <button className="action-btn action-confirm" title="Entregue" onClick={() => updateOrderStatus(o.id, 'entregue')}><i className="fa-solid fa-check"></i></button>}
+                          {o.status === 'em-rota' && <button className="action-btn action-confirm" title="Finalizar Entrega" onClick={() => { setShowDeliveryModal(o); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview('') }}><i className="fa-solid fa-check"></i></button>}
                           {o.status === 'em-andamento' && (
                             <button className="action-btn action-deliver" title="Em Rota" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-truck"></i></button>
-                          )}
-                          {o.status === 'em-rota' && (
-                            <button className="action-btn" title="Finalizar com devolução" onClick={() => { setShowDeliveryModal(o); setReturnQuantities({}) }}><i className="fa-solid fa-rotate-left"></i></button>
                           )}
                           <button className="action-btn action-delete" title="Excluir" onClick={() => deleteOrder(o.id)}><i className="fa-solid fa-trash"></i></button>
                         </div>
@@ -938,6 +1149,213 @@ export default function Admin({ produtos, onVoltar }) {
           </div>
         )}
 
+        {/* ROTAS */}
+        {tab === 'rotas' && (
+          <div className="admin-section">
+            <div className="admin-header-row">
+              <div>
+                <h1 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span className="rota-title-icon"><i className="fa-solid fa-route"></i></span>
+                  Rotas
+                </h1>
+                <p className="admin-subtitle">Mapa de rotas e contatos de WhatsApp</p>
+              </div>
+              <button className="admin-btn admin-btn-primary" onClick={fetchRotas} disabled={rotasLoading}>
+                <i className={`fa-solid ${rotasLoading ? 'fa-spinner fa-spin' : 'fa-rotate'}`}></i>
+                {rotasLoading ? 'Buscando...' : 'Atualizar'}
+              </button>
+            </div>
+
+            {rotasError && (
+              <div className="rota-error-card">
+                <div className="rota-error-icon"><i className="fa-solid fa-exclamation-triangle"></i></div>
+                <div className="rota-error-body">
+                  <strong>Erro ao carregar</strong>
+                  <span>{rotasError}</span>
+                  <button className="admin-btn" style={{ fontSize: '0.78rem', padding: '0.3rem 0.7rem' }} onClick={fetchRotas}>
+                    <i className="fa-solid fa-rotate"></i> Tentar novamente
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {rotasLoading && (
+              <div className="rota-loading">
+                <div className="rota-loading-spinner"><i className="fa-solid fa-spinner fa-spin"></i></div>
+                <div className="rota-loading-text">
+                  <strong>Sincronizando rotas...</strong>
+                  <span>Aguarde enquanto buscamos os dados do WhatsApp</span>
+                </div>
+              </div>
+            )}
+
+            {rotas.length > 0 && !rotasLoading && (
+              <>
+                {/* STATS CARDS */}
+                <div className="rota-stats">
+                  <div className="rota-stat-card stat-purple">
+                    <div className="rota-stat-icon"><i className="fa-solid fa-route"></i></div>
+                    <div className="rota-stat-info">
+                      <strong>{rotaStats.totalRotas}</strong>
+                      <span>Rotas</span>
+                    </div>
+                  </div>
+                  <div className="rota-stat-card stat-blue">
+                    <div className="rota-stat-icon"><i className="fa-solid fa-city"></i></div>
+                    <div className="rota-stat-info">
+                      <strong>{rotaStats.totalCidades}</strong>
+                      <span>Cidades</span>
+                    </div>
+                  </div>
+                  <div className="rota-stat-card stat-green">
+                    <div className="rota-stat-icon"><i className="fa-solid fa-users"></i></div>
+                    <div className="rota-stat-info">
+                      <strong>{rotaStats.totalContatos}</strong>
+                      <span>Contatos</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* FILTERS */}
+                <div className="rota-filters">
+                  <div className="rota-select-wrap">
+                    <i className="fa-solid fa-city"></i>
+                    <select value={filterCidade} onChange={e => setFilterCidade(e.target.value)}>
+                      <option value="TODAS">Todas as cidades</option>
+                      {cidadesRotas.filter(c => c !== 'TODAS').map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div className="rota-select-wrap">
+                    <i className="fa-solid fa-route"></i>
+                    <select value={filterRota} onChange={e => setFilterRota(e.target.value)}>
+                      <option value="TODAS">Todas as rotas</option>
+                      {rotasUnicas.filter(r => r !== 'TODAS').map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </div>
+                  <div className="rota-search-box">
+                    <i className="fa-solid fa-search"></i>
+                    <input type="text" placeholder="Buscar rota, cidade ou contato..." value={filterRotaSearch} onChange={e => setFilterRotaSearch(e.target.value)} />
+                    {filterRotaSearch && <button className="rota-search-clear" onClick={() => setFilterRotaSearch('')}><i className="fa-solid fa-xmark"></i></button>}
+                  </div>
+                </div>
+
+                {/* ROUTE GRID */}
+                {rotasFiltradas.length === 0 ? (
+                  <div className="rota-empty">
+                    <i className="fa-solid fa-map-location-dot"></i>
+                    <h3>Nenhuma rota encontrada</h3>
+                    <p>Tente alterar os filtros</p>
+                  </div>
+                ) : (
+                  <div className="rota-grid">
+                    {rotasFiltradas.map((grupo) => {
+                      const isExpanded = expandedRota === grupo.rota
+                      const cidadesVisiveis = filterCidade === 'TODAS'
+                        ? grupo.cidades
+                        : grupo.cidades.filter(c => c.cidade === filterCidade)
+                      const totalVisivel = cidadesVisiveis.reduce((s, c) => s + c.contatos.length, 0)
+                      const allContatos = cidadesVisiveis.flatMap(c => c.contatos)
+                      return (
+                        <div key={grupo.rota} className={`rota-card ${isExpanded ? 'expanded' : ''}`}>
+                          <div className="rota-card-main" onClick={() => setExpandedRota(isExpanded ? null : grupo.rota)}>
+                            <div className="rota-card-preview">
+                              <div className="rota-card-avatar">
+                                {allContatos[0]?.profilePicture ? (
+                                  <img src={allContatos[0].profilePicture} alt="" onError={e => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = '<i class=\"fa-solid fa-route\"></i>' }} />
+                                ) : (
+                                  <i className="fa-solid fa-route"></i>
+                                )}
+                              </div>
+                              <div className="rota-card-meta">
+                                <strong className="rota-card-title">{grupo.rota}</strong>
+                                <span className="rota-card-subtitle">
+                                  <i className="fa-solid fa-users"></i> {totalVisivel} contatos
+                                  <span className="rota-dot"></span>
+                                  <i className="fa-solid fa-city"></i> {cidadesVisiveis.length} {cidadesVisiveis.length === 1 ? 'cidade' : 'cidades'}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="rota-card-actions">
+                              <button className="rota-map-btn" title="Ver no Google Maps" onClick={e => { e.stopPropagation(); window.open(`https://www.google.com/maps/search/${encodeURIComponent(grupo.rota)}`, '_blank') }}>
+                                <i className="fa-solid fa-map-location-dot"></i>
+                                <span>Mapa</span>
+                              </button>
+                              <span className="rota-expand-icon">
+                                <i className={`fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Subcategory badges */}
+                          <div className="rota-subcats">
+                            {cidadesVisiveis.map(c => (
+                              <span key={c.cidade} className="rota-subcat-badge">
+                                <i className="fa-solid fa-city"></i> {c.cidade}
+                                <span className="rota-subcat-count">{c.contatos.length}</span>
+                              </span>
+                            ))}
+                          </div>
+
+                          {isExpanded && (
+                            <div className="rota-contacts">
+                              {cidadesVisiveis.map(c => (
+                                <div key={c.cidade} className="rota-subcat-group">
+                                  <div className="rota-contacts-header">
+                                    <span><i className="fa-solid fa-city"></i> {c.cidade}</span>
+                                    <span className="rota-contacts-count">{c.contatos.length} {c.contatos.length === 1 ? 'contato' : 'contatos'}</span>
+                                  </div>
+                                  <div className="rota-contacts-body">
+                                    {c.contatos.map((ct, ci) => (
+                                      <div key={ci} className="rota-contact-row">
+                                        <div className="rota-contact-avatar">
+                                          {ct.profilePicture ? (
+                                            <img src={ct.profilePicture} alt={ct.pushName} onError={e => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = '<i class=\"fa-solid fa-user\"></i>' }} />
+                                          ) : (
+                                            <i className="fa-solid fa-user"></i>
+                                          )}
+                                        </div>
+                                        <div className="rota-contact-info">
+                                          <span className="rota-contact-name">{ct.pushName || 'Sem nome'}</span>
+                                          <span className="rota-contact-phone">{ct.remoteJid?.replace(/@.*/, '')}</span>
+                                        </div>
+                                        <button
+                                          className="rota-whatsapp-btn"
+                                          title="Conversar no WhatsApp"
+                                          onClick={() => {
+                                            const phone = ct.remoteJid?.replace(/@.*/, '').replace(/\D/g, '')
+                                            if (phone) window.open(`https://wa.me/${phone}`, '_blank')
+                                          }}
+                                        >
+                                          <i className="fa-brands fa-whatsapp"></i>
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+
+            {rotas.length === 0 && !rotasLoading && !rotasError && (
+              <div className="rota-empty-state">
+                <div className="rota-empty-icon"><i className="fa-solid fa-route"></i></div>
+                <h3>Nenhuma rota carregada</h3>
+                <p>Clique em "Atualizar" para buscar as rotas do WhatsApp</p>
+                <button className="admin-btn admin-btn-primary" onClick={fetchRotas}>
+                  <i className="fa-solid fa-rotate"></i> Atualizar Rotas
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {tab === 'financeiro' && (
           <div className="admin-section">
             <h1>Financeiro</h1>
@@ -1067,6 +1485,7 @@ export default function Admin({ produtos, onVoltar }) {
           onClose={() => setShowOrderDetail(null)}
           onStatusChange={(s) => { updateOrderStatus(showOrderDetail.id, s); setShowOrderDetail(null) }}
           onPreApprovar={(rejectedIds, replacements) => preApprovarPedido(showOrderDetail.id, rejectedIds, replacements)}
+          onOpenDelivery={(order) => { setShowDeliveryModal(order); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview('') }}
           onEditAndConfirm={(editedItems) => {
             const totalAvista = editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
             const totalAprazo = editedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
@@ -1084,40 +1503,90 @@ export default function Admin({ produtos, onVoltar }) {
         />
       )}
 
-      {/* MODAL DELIVERY (RETURN RECORDING) */}
+      {/* MODAL DELIVERY (UNIFIED FINALIZATION) */}
       {showDeliveryModal && (
         <div className="admin-overlay" onClick={() => setShowDeliveryModal(null)}>
-          <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+          <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '540px' }}>
             <div className="admin-modal-header">
-              <h3><i className="fa-solid fa-rotate-left"></i> Registrar Devolução</h3>
+              <h3><i className="fa-solid fa-check-circle"></i> Finalizar Pedido</h3>
               <button className="admin-modal-close" onClick={() => setShowDeliveryModal(null)}><i className="fa-solid fa-xmark"></i></button>
             </div>
             <div className="admin-modal-body">
-              <p style={{ fontSize: '0.85rem', color: 'var(--admin-text-sec)', marginBottom: '1rem' }}>
+              <p style={{ fontSize: '0.85rem', color: 'var(--admin-text-sec)', marginBottom: '0.75rem' }}>
                 Informe a quantidade de itens <strong>devolvidos</strong> (não vendidos). Apenas os itens vendidos serão cobrados.
               </p>
-              {showDeliveryModal.items.map((i, idx) => (
-                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0', borderBottom: '1px solid var(--admin-border)' }}>
-                  <div style={{ flex: 1 }}>
-                    <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500 }}>{i.nome}</span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>
-                      {i.qty}x {formatPreco(i.preco)} — tipo: {i.tipo === 'avista' ? 'À Vista' : 'A Prazo'}
-                    </span>
+
+              {showDeliveryModal.items.map((i, idx) => {
+                const maxQty = i.qty
+                return (
+                  <div key={idx} style={{ padding: '0.6rem 0', borderBottom: '1px solid var(--admin-border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>{i.nome} ({i.qty}x)</span>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{formatPreco(i.preco * i.qty)}</span>
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)', marginBottom: '0.35rem' }}>
+                      {i.preco.toFixed(2).replace('.', ',')} /un — {i.tipo === 'avista' ? 'À Vista' : 'A Prazo'}
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.82rem' }}>
+                        <span style={{ color: 'var(--admin-text-sec)' }}>Devolver:</span>
+                        <input type="number" min="0" max={maxQty} step="1" value={returnQuantities[i.id] || ''}
+                          placeholder="0"
+                          onChange={e => {
+                            const val = e.target.value === '' ? '' : Math.min(Number(e.target.value), maxQty)
+                            setReturnQuantities(prev => ({ ...prev, [i.id]: val }))
+                          }}
+                          style={{ width: '50px', padding: '0.25rem 0.35rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', textAlign: 'center' }}
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.82rem' }}>
-                    <span style={{ color: 'var(--admin-text-sec)' }}>Devolver:</span>
-                    <input type="number" min="0" max={i.qty} step="1" value={returnQuantities[i.id] || ''}
-                      placeholder="0"
-                      onChange={e => setReturnQuantities(prev => {
-                        const val = e.target.value === '' ? '' : Math.min(Number(e.target.value), i.qty)
-                        return { ...prev, [i.id]: val }
-                      })}
-                      style={{ width: '55px', padding: '0.3rem 0.4rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', textAlign: 'center' }}
-                    />
+                )
+              })}
+
+              {/* Auto-calc summary */}
+              {(() => {
+                const totalOriginal = showDeliveryModal.items.reduce((s, i) => s + i.preco * i.qty, 0)
+                const totalDevolvido = showDeliveryModal.items.reduce((s, i) => s + i.preco * (returnQuantities[i.id] || 0), 0)
+                const totalCobrar = totalOriginal - totalDevolvido
+                return (
+                  <div style={{ background: '#f9fafb', borderRadius: '10px', padding: '0.75rem 1rem', marginBottom: '1rem', marginTop: '0.75rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.25rem' }}>
+                      <span>Total original</span>
+                      <span>{formatPreco(totalOriginal)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.25rem', color: 'var(--danger)' }}>
+                      <span><i className="fa-solid fa-rotate-left"></i> Total devolvido</span>
+                      <span style={{ fontWeight: 700 }}>{formatPreco(totalDevolvido)}</span>
+                    </div>
+                    <div style={{ borderTop: '1px solid var(--admin-border)', marginTop: '0.35rem', paddingTop: '0.35rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
+                      <span style={{ fontWeight: 700 }}>Total a cobrar</span>
+                      <span style={{ fontWeight: 800, color: totalCobrar > 0 ? 'var(--accent)' : 'var(--success)' }}>{formatPreco(totalCobrar)}</span>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Document upload (optional) */}
+              <div style={{ marginBottom: '1rem' }}>
+                <p style={{ fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.5rem' }}>
+                  <i className="fa-solid fa-file"></i> Documentos <span style={{ fontWeight: 400, fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>(opcional)</span>
+                </p>
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: '140px' }}>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--admin-text-sec)' }}>Foto de Identidade</label>
+                    <input type="file" accept="image/*" onChange={e => handleDeliveryFile(e, 'identity')} style={{ fontSize: '0.75rem', width: '100%' }} />
+                    {identityPreview && <img src={identityPreview} alt="Preview" style={{ maxWidth: '100%', maxHeight: '50px', marginTop: '0.25rem', borderRadius: '4px' }} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: '140px' }}>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--admin-text-sec)' }}>Comprovante de Endereço</label>
+                    <input type="file" accept="image/*" onChange={e => handleDeliveryFile(e, 'address')} style={{ fontSize: '0.75rem', width: '100%' }} />
+                    {addressPreview && <img src={addressPreview} alt="Preview" style={{ maxWidth: '100%', maxHeight: '50px', marginTop: '0.25rem', borderRadius: '4px' }} />}
                   </div>
                 </div>
-              ))}
-              <div className="modal-actions" style={{ marginTop: '1rem' }}>
+              </div>
+
+              <div className="modal-actions">
                 <button className="admin-btn admin-btn-sec" onClick={() => setShowDeliveryModal(null)}>Cancelar</button>
                 <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }}
                   onClick={() => finalizarComDevolucao(showDeliveryModal.id)}>
@@ -1404,7 +1873,7 @@ function AddOrderModal({ produtos, onSave, onClose }) {
 // =============================================
 // MODAL: ORDER DETAIL (with pre-pedido review + pendente edit)
 // =============================================
-function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange, onPreApprovar, onEditAndConfirm }) {
+function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange, onPreApprovar, onEditAndConfirm, onOpenDelivery }) {
   const [rejectedItems, setRejectedItems] = useState(new Set())
   const [editMode, setEditMode] = useState(false)
   const [editedItems, setEditedItems] = useState(order.items.map(i => ({ ...i })))
@@ -1793,19 +2262,44 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
                 <i className="fa-solid fa-truck"></i> Em Rota
               </button>
             )}
+            {order.returnedItems?.length > 0 && (
+            <div className="detail-section">
+              <h4 style={{ color: 'var(--danger)' }}><i className="fa-solid fa-rotate-left"></i> Itens Devolvidos</h4>
+              {order.returnedItems.map((i, idx) => (
+                <div key={idx} className="detail-item">
+                  <span className="detail-item-name">{i.nome}</span>
+                  <span className="detail-item-qty">{i.returnedQty}x devolvido</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {(order.identityPhoto || order.addressProof) && (
+            <div className="detail-section">
+              <h4><i className="fa-solid fa-file"></i> Documentos</h4>
+              {order.identityPhoto && (
+                <div style={{ marginBottom: '0.5rem' }}>
+                  <p style={{ fontSize: '0.78rem', fontWeight: 600, marginBottom: '0.25rem' }}>Identidade</p>
+                  <img src={order.identityPhoto} alt="Identidade" style={{ maxWidth: '200px', borderRadius: '6px', border: '1px solid var(--admin-border)', cursor: 'pointer' }} onClick={() => window.open(order.identityPhoto, '_blank')} />
+                </div>
+              )}
+              {order.addressProof && (
+                <div>
+                  <p style={{ fontSize: '0.78rem', fontWeight: 600, marginBottom: '0.25rem' }}>Comprovante de Endereço</p>
+                  <img src={order.addressProof} alt="Comprovante" style={{ maxWidth: '200px', borderRadius: '6px', border: '1px solid var(--admin-border)', cursor: 'pointer' }} onClick={() => window.open(order.addressProof, '_blank')} />
+                </div>
+              )}
+            </div>
+          )}
+
             {order.status === 'em-rota' && (
-              <button className="admin-btn admin-btn-primary" onClick={() => onStatusChange('entregue')}>
-                <i className="fa-solid fa-check"></i> Marcar como Entregue
+              <button className="admin-btn admin-btn-primary" onClick={() => { onClose(); setTimeout(() => onOpenDelivery?.(order), 100) }}>
+                <i className="fa-solid fa-check"></i> Finalizar Pedido
               </button>
             )}
             {order.status === 'em-andamento' && podeFinalizar && (
               <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => onStatusChange('em-rota')}>
                 <i className="fa-solid fa-truck"></i> Em Rota
-              </button>
-            )}
-            {order.status === 'em-rota' && (
-              <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} onClick={onClose}>
-                <i className="fa-solid fa-rotate-left"></i> Registrar Devolução
               </button>
             )}
             <button className="admin-btn admin-btn-sec" onClick={onClose}>Fechar</button>

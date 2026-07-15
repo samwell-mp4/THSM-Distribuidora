@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { supabase, upsertOrder, upsertFinancial, deleteOrder as supabaseDeleteOrder } from '../lib/supabase'
 
 const LS_ORDERS = 'thsm_admin_orders'
 const LS_FINANCIAL = 'thsm_admin_financeiro'
@@ -30,7 +31,7 @@ function setLS(key, data) {
   localStorage.setItem(key, JSON.stringify(data))
 }
 
-export default function UserDashboard({ produtos = [], onVoltar }) {
+export default function UserDashboard({ produtos = [], onVoltar, initialOrderId }) {
   const [tab, setTab] = useState('pedidos')
   const [finFilter, setFinFilter] = useState('todas')
   const [selectedOrder, setSelectedOrder] = useState(null)
@@ -39,7 +40,29 @@ export default function UserDashboard({ produtos = [], onVoltar }) {
   const [processing, setProcessing] = useState(false)
   const [prodSearch, setProdSearch] = useState('')
   const [prodCategoria, setProdCategoria] = useState('TODOS')
+  const [orderSearch, setOrderSearch] = useState('')
+  const [orderDateStart, setOrderDateStart] = useState('')
+  const [orderDateEnd, setOrderDateEnd] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [editPreOrder, setEditPreOrder] = useState(false)
+  const [editedPreItems, setEditedPreItems] = useState([])
+  const [preAddSearch, setPreAddSearch] = useState('')
+  const [preAddCart, setPreAddCart] = useState({})
+  const [showUserDelivery, setShowUserDelivery] = useState(null)
+  const [userReturnQtys, setUserReturnQtys] = useState({})
+  const [userPayQtys, setUserPayQtys] = useState({})
+  const [identityPreview, setIdentityPreview] = useState('')
+  const [addressPreview, setAddressPreview] = useState('')
+  const [finalizing, setFinalizing] = useState(false)
+
+  useEffect(() => {
+    if (initialOrderId) {
+      const order = allOrders.find(o => o.id === initialOrderId)
+      if (order && currentUser && (order.userId === currentUser.id || order.customer?.email === currentUser.email || order.customer?.telefone === currentUser.telefone)) {
+        setSelectedOrder(order)
+      }
+    }
+  }, [initialOrderId])
 
   const currentUser = useMemo(() => {
     try { const d = localStorage.getItem(LS_SESSAO); return d ? JSON.parse(d) : null } catch { return null }
@@ -47,6 +70,20 @@ export default function UserDashboard({ produtos = [], onVoltar }) {
 
   const [allOrders, setAllOrders] = useState(() => getLS(LS_ORDERS))
   const [financial, setFinancial] = useState(() => getLS(LS_FINANCIAL))
+
+  useEffect(() => {
+    if (!currentUser?.telefone) return
+    supabase.from('usuarios').select('id').eq('telefone', currentUser.telefone).single().then(({ data: user }) => {
+      if (!user) return
+      supabase.from('pedidos').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).then(({ data }) => {
+        if (data?.length) {
+          const orders = data.map(r => r.data || r)
+          setAllOrders(orders)
+          setLS(LS_ORDERS, orders)
+        }
+      })
+    }).catch(() => {})
+  }, [currentUser?.telefone])
 
   const userOrders = useMemo(() => {
     if (!currentUser) return []
@@ -71,6 +108,7 @@ export default function UserDashboard({ produtos = [], onVoltar }) {
     const updated = allOrders.filter(o => o.id !== id)
     setAllOrders(updated)
     setLS(LS_ORDERS, updated)
+    supabaseDeleteOrder(id)
   }
 
   const openPayment = (f) => {
@@ -94,6 +132,128 @@ export default function UserDashboard({ produtos = [], onVoltar }) {
     setPaymentStep('review')
   }
 
+  const savePrePedidoEdits = (editedItems) => {
+    if (!selectedOrder) return
+    const totalAvista = editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
+    const totalAprazo = editedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
+    const updated = allOrders.map(o => o.id === selectedOrder.id ? {
+      ...o,
+      items: editedItems,
+      totalAvista,
+      totalAprazo,
+      total: totalAvista + totalAprazo,
+    } : o)
+    setAllOrders(updated)
+    setLS(LS_ORDERS, updated)
+    setSelectedOrder(prev => ({ ...prev, items: editedItems, totalAvista, totalAprazo, total: totalAvista + totalAprazo }))
+    upsertOrder({ ...selectedOrder, items: editedItems, totalAvista, totalAprazo, total: totalAvista + totalAprazo })
+    setEditPreOrder(false)
+  }
+
+  const finalizarUserEntrega = () => {
+    if (!showUserDelivery) return
+    setFinalizing(true)
+    const order = showUserDelivery
+    const returnedItems = []
+    const remainingItems = order.items.filter(i => {
+      const qty = userReturnQtys[i.id] || 0
+      if (qty > 0) returnedItems.push({ ...i, returnedQty: Math.min(qty, i.qty) })
+      return (i.qty - qty) > 0
+    })
+    const adjustedItems = remainingItems.map(i => {
+      const qty = userReturnQtys[i.id] || 0
+      return { ...i, qty: i.qty - qty }
+    })
+    const totalAvista = adjustedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
+    const totalAprazo = adjustedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
+    const updatedOrders = allOrders.map(o => o.id === order.id ? {
+      ...o,
+      items: adjustedItems,
+      totalAvista,
+      totalAprazo,
+      total: totalAvista + totalAprazo,
+      status: 'entregue',
+      returnedItems,
+      identityPhoto: identityPreview || o.identityPhoto || '',
+      addressProof: addressPreview || o.addressProof || '',
+      deliveredAt: Date.now()
+    } : o)
+    const updatedFinancial = financial.map(f => {
+      if (f.orderId !== order.id) return f
+      const item = order.items.find(i => f.id === order.id + '-' + i.id)
+      if (!item) return f
+      const returnedQty = userReturnQtys[item.id] || 0
+      if (returnedQty >= item.qty) return { ...f, status: 'cancelado', paidDate: hoje() }
+      const remainingQty = item.qty - returnedQty
+      return { ...f, qty: remainingQty, value: item.preco * remainingQty, status: 'pago', paidDate: hoje() }
+    })
+    setAllOrders(updatedOrders)
+    setLS(LS_ORDERS, updatedOrders)
+    setFinancial(updatedFinancial)
+    setLS(LS_FINANCIAL, updatedFinancial)
+    upsertOrder(updatedOrders.find(o => o.id === showUserDelivery.id))
+    upsertFinancial(updatedFinancial)
+    setTimeout(() => {
+      setFinalizing(false)
+      setShowUserDelivery(null)
+      setUserReturnQtys({})
+      setUserPayQtys({})
+      setIdentityPreview('')
+      setAddressPreview('')
+      setSelectedOrder(null)
+    }, 1500)
+  }
+
+  const handleFile = (e, type) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      if (type === 'identity') setIdentityPreview(ev.target.result)
+      else setAddressPreview(ev.target.result)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const filteredPreAddProds = useMemo(() => {
+    const t = preAddSearch.toLowerCase().trim()
+    if (!t) return []
+    return produtos.filter(p => p.nome?.toLowerCase().includes(t)).slice(0, 10)
+  }, [produtos, preAddSearch])
+
+  const addToPreCart = (p) => {
+    setPreAddCart(prev => ({
+      ...prev,
+      [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, tipo: 'avista', qty: (prev[p.id]?.qty || 0) + 1 }
+    }))
+  }
+
+  const removeFromPreCart = (id) => {
+    setPreAddCart(prev => {
+      if (!prev[id] || prev[id].qty <= 1) {
+        const { [id]: _, ...rest } = prev
+        return rest
+      }
+      return { ...prev, [id]: { ...prev[id], qty: prev[id].qty - 1 } }
+    })
+  }
+
+  const confirmPreAdd = () => {
+    const newItems = Object.values(preAddCart).filter(i => i.qty > 0)
+    if (newItems.length === 0) return
+    setEditedPreItems(prev => [...prev, ...newItems])
+    setPreAddCart({})
+    setPreAddSearch('')
+  }
+
+  const changeQty = (idx, delta) => {
+    setEditedPreItems(prev => prev.map((item, i) => i === idx ? { ...item, qty: Math.max(0, item.qty + delta) } : item))
+  }
+
+  const removeEditedItem = (idx) => {
+    setEditedPreItems(prev => prev.filter((_, i) => i !== idx))
+  }
+
   function generatePixCode() {
     const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
     let code = '00020126580014BR.GOV.BCB.PIX0136'
@@ -102,89 +262,6 @@ export default function UserDashboard({ produtos = [], onVoltar }) {
     code += String(showPayment?.value?.toFixed(2).replace('.', '') || '000').padStart(10, '0')
     code += '5802BR5925THSM Distribuidora6009SAO PAULO62070503***6304FFFF'
     return code
-  }
-
-  if (selectedOrder) {
-    const order = selectedOrder
-    const orderFin = userFinancial.filter(f => f.orderId === order.id)
-    return (
-      <div className="app">
-        <header className="header">
-          <div className="header-inner">
-            <div className="header-brand">
-              <div className="brand-icon"><img src="/thsmdistribuidora.webp" alt="THSM" style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '6px' }} /></div>
-              <div>
-                <h1>THSM Distribuidora</h1>
-                <span className="header-sub">Detalhes do Pedido</span>
-              </div>
-            </div>
-          </div>
-        </header>
-        <main className="main" style={{ maxWidth: '700px' }}>
-          <button onClick={() => setSelectedOrder(null)} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <i className="fa-solid fa-arrow-left"></i> Voltar aos meus pedidos
-          </button>
-          <div className="review-section">
-            <h4><i className="fa-solid fa-receipt"></i> Pedido #{order.id.toString().slice(-6)}</h4>
-            <p><strong>Data:</strong> {formatDate(order.date)}</p>
-            <p><strong>Status:</strong> <span className={`status-tag status-${order.status}`}>{order.status}</span></p>
-          </div>
-          <div className="review-section">
-            <h4><i className="fa-solid fa-box"></i> Itens</h4>
-            {order.items.map((i, idx) => (
-              <div key={idx} className="review-item">
-                <span className="review-item-name">{i.nome} <span className="review-item-qty">({i.qty}x)</span></span>
-                <div className="review-item-right">
-                  <span className="review-item-price">{formatPreco(i.preco * i.qty)}</span>
-                  <span className={`review-item-tag ${i.tipo}`}>{i.tipo === 'avista' ? 'À Vista' : 'A Prazo'}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="review-section">
-            <h4><i className="fa-solid fa-credit-card"></i> Pagamento</h4>
-            <p>{order.pagamento === 'avista' ? 'À Vista' : order.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}</p>
-            {order.pagamento !== 'avista' && (
-              <div style={{ marginTop: '0.5rem' }}>
-                <p><strong>Total à vista:</strong> {formatPreco(order.totalAvista || 0)}</p>
-                <p><strong>Total a prazo:</strong> {formatPreco(order.totalAprazo || 0)}</p>
-              </div>
-            )}
-          </div>
-          {orderFin.length > 0 && (
-            <div className="review-section">
-              <h4><i className="fa-solid fa-calendar"></i> Contas a Prazo</h4>
-              {orderFin.map(f => {
-                const diff = diffDays(hoje(), f.dueDate)
-                const overdue = f.status === 'pendente' && diff > 0
-                return (
-                  <div key={f.id} className="detail-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                      <span className="detail-item-name">{f.itemName} ({f.qty}x)</span>
-                      <span className="detail-item-qty"><strong>{formatPreco(f.value)}</strong></span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '0.78rem' }}>
-                      <span style={{ color: overdue ? 'var(--danger)' : 'var(--text-muted)' }}>
-                        Vence: {formatDate(f.dueDate)}
-                        {overdue && <span style={{ color: 'var(--danger)', fontWeight: 700 }}> ({diff} dias atrasado)</span>}
-                        {f.status === 'pendente' && !overdue && diff <= 0 && <span style={{ color: 'var(--text-muted)' }}> (faltam {Math.abs(diff)} dias)</span>}
-                      </span>
-                      <span className={`status-tag ${f.status === 'pago' ? 'status-pago' : overdue ? 'status-atrasado' : 'status-pendente'}`}>
-                        {f.status === 'pago' ? 'Pago' : overdue ? 'Atrasado' : 'Pendente'}
-                      </span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-          <div className="review-total" style={{ marginTop: '0.75rem' }}>
-            <span>Total do Pedido</span>
-            <span className="review-total-price">{formatPreco(order.total)}</span>
-          </div>
-        </main>
-      </div>
-    )
   }
 
   return (
@@ -316,51 +393,87 @@ export default function UserDashboard({ produtos = [], onVoltar }) {
                 </div>
               </div>
             </div>
-            {userOrders.length === 0 ? (
-              <div className="empty">
-                <i className="fa-solid fa-box-open"></i>
-                <h3>Nenhum pedido encontrado</h3>
-                <p>Você ainda não realizou nenhum pedido.</p>
+            {/* Filters */}
+            <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '0.85rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div className="admin-search-prod" style={{ flex: 1, minWidth: '160px' }}>
+                <i className="fa-solid fa-search"></i>
+                <input type="text" placeholder="Buscar por produto ou item..." value={orderSearch} onChange={e => setOrderSearch(e.target.value)} style={{ width: '100%' }} />
               </div>
-            ) : (
-              <div className="admin-table-wrap">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Data</th>
-                      <th>Itens</th>
-                      <th>Total</th>
-                      <th>Pagamento</th>
-                      <th>Status</th>
-                      <th>Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {userOrders.map(o => (
-                      <tr key={o.id}>
-                        <td data-label="Pedido">#{o.id.toString().slice(-6)}</td>
-                        <td data-label="Data">{formatDate(o.date)}</td>
-                        <td data-label="Itens">{o.items.reduce((s, i) => s + i.qty, 0)} itens</td>
-                        <td className="td-price" data-label="Total">{formatPreco(o.total)}</td>
-                        <td data-label="Pagamento">{o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}</td>
-                        <td data-label="Status"><span className={`status-tag status-${o.status}`}>{o.status}</span></td>
-                        <td data-label="Ações">
-                          <div className="td-actions">
-                            <button className="action-btn" title="Ver detalhes" onClick={() => setSelectedOrder(o)}>
-                              <i className="fa-solid fa-eye"></i>
-                            </button>
-                            <button className="action-btn action-delete" title="Excluir" onClick={() => deleteOrder(o.id)}>
-                              <i className="fa-solid fa-trash"></i>
-                            </button>
-                          </div>
-                        </td>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>
+                <span>Data:</span>
+                <input type="date" value={orderDateStart} onChange={e => setOrderDateStart(e.target.value)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', maxWidth: '120px' }} />
+                <span>—</span>
+                <input type="date" value={orderDateEnd} onChange={e => setOrderDateEnd(e.target.value)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', maxWidth: '120px' }} />
+              </div>
+              {(orderSearch || orderDateStart || orderDateEnd) && (
+                <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem' }} onClick={() => { setOrderSearch(''); setOrderDateStart(''); setOrderDateEnd('') }}>
+                  <i className="fa-solid fa-xmark"></i> Limpar
+                </button>
+              )}
+            </div>
+
+            {(() => {
+              const filtered = userOrders.filter(o => {
+                if (orderDateStart && o.date < orderDateStart) return false
+                if (orderDateEnd && o.date > orderDateEnd) return false
+                if (orderSearch) {
+                  const q = orderSearch.toLowerCase()
+                  const matchItem = o.items.some(i => i.nome?.toLowerCase().includes(q))
+                  if (!matchItem) return false
+                }
+                return true
+              })
+              return filtered.length === 0 ? (
+                <div className="empty">
+                  <i className="fa-solid fa-box-open"></i>
+                  <h3>{userOrders.length === 0 ? 'Nenhum pedido encontrado' : 'Nenhum pedido com esses filtros'}</h3>
+                  <p>{userOrders.length === 0 ? 'Você ainda não realizou nenhum pedido.' : 'Tente limpar os filtros para ver mais resultados.'}</p>
+                </div>
+              ) : (
+                <div className="admin-table-wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Data</th>
+                        <th>Itens</th>
+                        <th>Total</th>
+                        <th>Pagamento</th>
+                        <th>Status</th>
+                        <th>Ações</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                    </thead>
+                    <tbody>
+                      {filtered.map(o => (
+                        <tr key={o.id}>
+                          <td data-label="Pedido">#{o.id.toString().slice(-6)}</td>
+                          <td data-label="Data">{formatDate(o.date)}</td>
+                          <td data-label="Itens">{o.items.reduce((s, i) => s + i.qty, 0)} itens</td>
+                          <td className="td-price" data-label="Total">{formatPreco(o.total)}</td>
+                          <td data-label="Pagamento">{o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}</td>
+                          <td data-label="Status"><span className={`status-tag status-${o.status}`}>{o.status}</span></td>
+                          <td data-label="Ações">
+                            <div className="td-actions">
+                              {o.status === 'pre-pedido' && (
+                                <button className="action-btn action-confirm" title="Editar Comanda" onClick={() => { setSelectedOrder(o); setEditedPreItems(o.items.map(i => ({ ...i }))); setEditPreOrder(true) }}>
+                                  <i className="fa-solid fa-pen"></i>
+                                </button>
+                              )}
+                              <button className="action-btn" title="Ver detalhes" onClick={() => setSelectedOrder(o)}>
+                                <i className="fa-solid fa-eye"></i>
+                              </button>
+                              <button className="action-btn action-delete" title="Excluir" onClick={() => deleteOrder(o.id)}>
+                                <i className="fa-solid fa-trash"></i>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            })()}
           </div>
         )}
 
@@ -478,6 +591,144 @@ export default function UserDashboard({ produtos = [], onVoltar }) {
           </div>
         )}
       </main>
+
+      {/* ORDER DETAIL MODAL */}
+      {selectedOrder && (
+        <div className="admin-overlay" onClick={() => setSelectedOrder(null)}>
+          <div className="admin-modal admin-modal-lg" onClick={e => e.stopPropagation()} style={{ maxWidth: '650px' }}>
+            <div className="admin-modal-header">
+              <h3><i className="fa-solid fa-receipt"></i> Pedido #{selectedOrder.id.toString().slice(-6)}</h3>
+              <button className="admin-modal-close" onClick={() => setSelectedOrder(null)}><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <div className="admin-modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              {(() => {
+                const order = selectedOrder
+                const orderFin = userFinancial.filter(f => f.orderId === order.id)
+                return (
+                  <>
+                    <div className="detail-section">
+                      <h4>Informações</h4>
+                      <p><strong>Data:</strong> {formatDate(order.date)}</p>
+                      <p><strong>Status:</strong> <span className={`status-tag status-${order.status}`}>{order.status}</span></p>
+                      {order.customer?.endereco?.cidade && (
+                        <p><strong>Cidade:</strong> {order.customer.endereco.cidade} / {order.customer.endereco.estado}</p>
+                      )}
+                    </div>
+
+                    <div className="detail-section">
+                      <h4><i className="fa-solid fa-box"></i> Itens</h4>
+                      {order.items.map((i, idx) => (
+                        <div key={idx} className="review-item">
+                          <span className="review-item-name">{i.nome} <span className="review-item-qty">({i.qty}x)</span></span>
+                          <div className="review-item-right">
+                            <span className="review-item-price">{formatPreco(i.preco * i.qty)}</span>
+                            <span className={`review-item-tag ${i.tipo}`}>{i.tipo === 'avista' ? 'À Vista' : 'A Prazo'}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="detail-section">
+                      <h4><i className="fa-solid fa-credit-card"></i> Pagamento</h4>
+                      <p>{order.pagamento === 'avista' ? 'À Vista' : order.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}</p>
+                      {order.pagamento !== 'avista' && (
+                        <div style={{ marginTop: '0.35rem' }}>
+                          <p><strong>Total à vista:</strong> {formatPreco(order.totalAvista || 0)}</p>
+                          <p><strong>Total a prazo:</strong> {formatPreco(order.totalAprazo || 0)}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {orderFin.length > 0 && (
+                      <div className="detail-section">
+                        <h4><i className="fa-solid fa-calendar"></i> Contas a Prazo</h4>
+                        {orderFin.map(f => {
+                          const diff = diffDays(hoje(), f.dueDate)
+                          const overdue = f.status === 'pendente' && diff > 0
+                          return (
+                            <div key={f.id} className="detail-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                                <span className="detail-item-name">{f.itemName} ({f.qty}x)</span>
+                                <span className="detail-item-qty"><strong>{formatPreco(f.value)}</strong></span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '0.78rem' }}>
+                                <span style={{ color: overdue ? 'var(--danger)' : 'var(--text-muted)' }}>
+                                  Vence: {formatDate(f.dueDate)}
+                                  {overdue && <span style={{ color: 'var(--danger)', fontWeight: 700 }}> ({diff} dias atrasado)</span>}
+                                  {f.status === 'pendente' && !overdue && diff <= 0 && <span style={{ color: 'var(--text-muted)' }}> (faltam {Math.abs(diff)} dias)</span>}
+                                </span>
+                                <span className={`status-tag ${f.status === 'pago' ? 'status-pago' : overdue ? 'status-atrasado' : 'status-pendente'}`}>
+                                  {f.status === 'pago' ? 'Pago' : overdue ? 'Atrasado' : 'Pendente'}
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    <div className="detail-section">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '1rem' }}>
+                        <span style={{ fontWeight: 600 }}>Total</span>
+                        <span style={{ fontWeight: 800, color: 'var(--accent)' }}>{formatPreco(order.total)}</span>
+                      </div>
+                    </div>
+
+                    {order.status === 'entregue' && order.returnedItems?.length > 0 && (
+                      <div className="detail-section">
+                        <h4 style={{ color: 'var(--danger)' }}><i className="fa-solid fa-rotate-left"></i> Itens Devolvidos</h4>
+                        {order.returnedItems.map((i, idx) => (
+                          <div key={idx} className="review-item">
+                            <span className="review-item-name">{i.nome} <span className="review-item-qty">({i.returnedQty}x)</span></span>
+                            <div className="review-item-right">
+                              <span className="review-item-price">{formatPreco(i.preco * i.returnedQty)}</span>
+                              <span className="review-item-tag" style={{ background: '#fef2f2', color: 'var(--danger)' }}>Devolvido</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {order.status === 'entregue' && (order.identityPhoto || order.addressProof) && (
+                      <div className="detail-section">
+                        <h4><i className="fa-solid fa-file"></i> Documentos</h4>
+                        {order.identityPhoto && (
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <p style={{ fontSize: '0.78rem', fontWeight: 600, marginBottom: '0.25rem' }}>Identidade</p>
+                            <img src={order.identityPhoto} alt="Identidade" style={{ maxWidth: '180px', borderRadius: '6px', border: '1px solid var(--admin-border)', cursor: 'pointer' }} onClick={() => window.open(order.identityPhoto, '_blank')} />
+                          </div>
+                        )}
+                        {order.addressProof && (
+                          <div>
+                            <p style={{ fontSize: '0.78rem', fontWeight: 600, marginBottom: '0.25rem' }}>Comprovante de Endereço</p>
+                            <img src={order.addressProof} alt="Comprovante" style={{ maxWidth: '180px', borderRadius: '6px', border: '1px solid var(--admin-border)', cursor: 'pointer' }} onClick={() => window.open(order.addressProof, '_blank')} />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
+
+              <div className="modal-actions" style={{ marginTop: '1rem' }}>
+                {selectedOrder.status === 'pre-pedido' && (
+                  <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
+                    onClick={() => { setEditedPreItems(selectedOrder.items.map(i => ({ ...i }))); setEditPreOrder(true) }}>
+                    <i className="fa-solid fa-pen"></i> Editar Comanda
+                  </button>
+                )}
+                {selectedOrder.status === 'em-rota' && (
+                  <button className="admin-btn" style={{ background: 'var(--accent)', color: 'white', borderColor: 'var(--accent)' }}
+                    onClick={() => { setShowUserDelivery(selectedOrder); setUserReturnQtys({}); setUserPayQtys({}); setIdentityPreview(''); setAddressPreview('') }}>
+                    <i className="fa-solid fa-rotate-left"></i> Registrar Pagamento / Devolução
+                  </button>
+                )}
+                <button className="admin-btn admin-btn-sec" onClick={() => setSelectedOrder(null)}>Fechar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sticky bottom nav for mobile */}
       <nav className="admin-bottom-nav">
@@ -601,6 +852,217 @@ export default function UserDashboard({ produtos = [], onVoltar }) {
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PRE-PEDIDO EDIT MODAL */}
+      {editPreOrder && selectedOrder && (
+        <div className="admin-overlay" onClick={() => setEditPreOrder(false)}>
+          <div className="admin-modal admin-modal-lg" onClick={e => e.stopPropagation()} style={{ maxWidth: '550px' }}>
+            <div className="admin-modal-header">
+              <h3><i className="fa-solid fa-pen"></i> Editar Comanda — Pedido #{selectedOrder.id.toString().slice(-6)}</h3>
+              <button className="admin-modal-close" onClick={() => setEditPreOrder(false)}><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <div className="admin-modal-body">
+              <div style={{ marginBottom: '1rem' }}>
+                <h4 style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem' }}>Itens</h4>
+                {editedPreItems.map((i, idx) => (
+                  <div key={idx} className="detail-item" style={{ opacity: i.qty <= 0 ? 0.4 : 1 }}>
+                    <div style={{ flex: 1 }}>
+                      <span className="detail-item-name" style={{ textDecoration: i.qty <= 0 ? 'line-through' : 'none' }}>{i.nome}</span>
+                      <span className="detail-item-qty">{formatPreco(i.preco)}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <span className={`split-badge ${i.tipo === 'avista' ? 'vista' : 'aprazo'}`}>
+                        {i.tipo === 'avista' ? 'À Vista' : 'A Prazo'}
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '2px', border: '1px solid var(--admin-border)', borderRadius: '6px', padding: '2px' }}>
+                        <button className="qty-btn-sm" onClick={() => changeQty(idx, -1)}><i className="fa-solid fa-minus"></i></button>
+                        <span style={{ minWidth: '20px', textAlign: 'center', fontSize: '0.82rem', fontWeight: 600 }}>{i.qty}</span>
+                        <button className="qty-btn-sm" onClick={() => changeQty(idx, 1)}><i className="fa-solid fa-plus"></i></button>
+                      </div>
+                      <button className="action-btn action-delete" title="Remover" onClick={() => removeEditedItem(idx)}><i className="fa-solid fa-trash"></i></button>
+                    </div>
+                  </div>
+                ))}
+                {editedPreItems.length === 0 && <p style={{ fontSize: '0.85rem', color: 'var(--admin-text-sec)' }}>Nenhum item na comanda</p>}
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <h4 style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem' }}><i className="fa-solid fa-plus-circle"></i> Adicionar Produtos</h4>
+                <div className="admin-search-prod" style={{ marginBottom: '0.5rem' }}>
+                  <i className="fa-solid fa-search"></i>
+                  <input type="text" placeholder="Buscar produto..." value={preAddSearch} onChange={e => setPreAddSearch(e.target.value)} style={{ width: '100%' }} />
+                </div>
+                {filteredPreAddProds.length > 0 && (
+                  <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid var(--admin-border)', borderRadius: '8px' }}>
+                    {filteredPreAddProds.map(p => {
+                      const inCart = preAddCart[p.id]
+                      return (
+                        <div key={p.id} className="add-prod-row" style={{ padding: '0.4rem 0.6rem' }}>
+                          <div className="add-prod-info">
+                            <span className="add-prod-name">{p.nome}</span>
+                            <span className="add-prod-price">{formatPreco(p.preco)}</span>
+                          </div>
+                          {inCart ? (
+                            <div className="add-prod-controls">
+                              <span className="add-prod-qty">{inCart.qty}x</span>
+                              <button className="qty-btn-sm" onClick={() => removeFromPreCart(p.id)}><i className="fa-solid fa-minus"></i></button>
+                              <button className="qty-btn-sm" onClick={() => addToPreCart(p)}><i className="fa-solid fa-plus"></i></button>
+                            </div>
+                          ) : (
+                            <button className="add-prod-add" onClick={() => addToPreCart(p)}>
+                              <i className="fa-solid fa-plus"></i> Adicionar
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+                {Object.values(preAddCart).filter(i => i.qty > 0).length > 0 && (
+                  <button className="admin-btn" style={{ marginTop: '0.5rem', fontSize: '0.82rem', background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }} onClick={confirmPreAdd}>
+                    <i className="fa-solid fa-check"></i> Adicionar {Object.values(preAddCart).reduce((s, i) => s + i.qty, 0)} item(ns)
+                  </button>
+                )}
+                {!preAddSearch && <p style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>Digite o nome do produto para buscá-lo no catálogo</p>}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Total: <strong style={{ color: 'var(--accent)', fontSize: '1.1rem' }}>{formatPreco(editedPreItems.filter(i => i.qty > 0).reduce((s, i) => s + i.preco * i.qty, 0))}</strong></span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>{editedPreItems.filter(i => i.qty > 0).length} itens</span>
+              </div>
+
+              <div className="modal-actions">
+                <button className="admin-btn admin-btn-sec" onClick={() => setEditPreOrder(false)}>Cancelar</button>
+                <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} disabled={editedPreItems.filter(i => i.qty > 0).length === 0} onClick={() => savePrePedidoEdits(editedPreItems.filter(i => i.qty > 0))}>
+                  <i className="fa-solid fa-check"></i> Salvar Alterações
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* USER DELIVERY MODAL (EM ROTA) */}
+      {showUserDelivery && (
+        <div className="admin-overlay" onClick={() => setShowUserDelivery(null)}>
+          <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+            <div className="admin-modal-header">
+              <h3><i className="fa-solid fa-rotate-left"></i> Registrar Pagamento / Devolução</h3>
+              <button className="admin-modal-close" onClick={() => setShowUserDelivery(null)}><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <div className="admin-modal-body">
+              <p style={{ fontSize: '0.85rem', color: 'var(--admin-text-sec)', marginBottom: '0.75rem' }}>
+                Informe o que deseja <strong>pagar</strong> e o que vai <strong>devolver</strong>.
+              </p>
+
+              {/* Items */}
+              <div style={{ marginBottom: '1rem' }}>
+                {showUserDelivery.items.map((i, idx) => {
+                  const returnQty = userReturnQtys[i.id] || 0
+                  const payQty = userPayQtys[i.id] || 0
+                  const maxReturn = i.qty
+                  const remaining = i.qty - returnQty
+                  return (
+                    <div key={idx} style={{ padding: '0.6rem 0', borderBottom: '1px solid var(--admin-border)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>{i.nome} ({i.qty}x)</span>
+                        <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{formatPreco(i.preco * i.qty)}</span>
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)', marginBottom: '0.35rem' }}>
+                        {i.preco.toFixed(2).replace('.', ',')} /un — {i.tipo === 'avista' ? 'À Vista' : 'A Prazo'}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.82rem' }}>
+                          <span style={{ color: 'var(--success)', fontWeight: 600 }}>Pagar:</span>
+                          <input type="number" min="0" max={maxReturn} step="1" value={payQty || ''}
+                            placeholder="0"
+                            onChange={e => {
+                              const val = e.target.value === '' ? '' : Math.min(Number(e.target.value), maxReturn)
+                              setUserPayQtys(prev => ({ ...prev, [i.id]: val }))
+                            }}
+                            style={{ width: '50px', padding: '0.25rem 0.35rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', textAlign: 'center' }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.82rem' }}>
+                          <span style={{ color: 'var(--danger)', fontWeight: 600 }}>Devolver:</span>
+                          <input type="number" min="0" max={maxReturn} step="1" value={returnQty || ''}
+                            placeholder="0"
+                            onChange={e => {
+                              const val = e.target.value === '' ? '' : Math.min(Number(e.target.value), maxReturn)
+                              setUserReturnQtys(prev => ({ ...prev, [i.id]: val }))
+                            }}
+                            style={{ width: '50px', padding: '0.25rem 0.35rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', textAlign: 'center' }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Auto-calc summary */}
+              {(() => {
+                const totalOriginal = showUserDelivery.items.reduce((s, i) => s + i.preco * i.qty, 0)
+                const totalPago = showUserDelivery.items.reduce((s, i) => s + i.preco * (userPayQtys[i.id] || 0), 0)
+                const totalDevolvido = showUserDelivery.items.reduce((s, i) => s + i.preco * (userReturnQtys[i.id] || 0), 0)
+                const totalCobrar = totalOriginal - totalDevolvido
+                return (
+                  <div style={{ background: '#f9fafb', borderRadius: '10px', padding: '0.75rem 1rem', marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.25rem' }}>
+                      <span>Total original</span>
+                      <span>{formatPreco(totalOriginal)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.25rem', color: 'var(--success)' }}>
+                      <span><i className="fa-solid fa-check-circle"></i> Total a pagar</span>
+                      <span style={{ fontWeight: 700 }}>{formatPreco(totalPago)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.25rem', color: 'var(--danger)' }}>
+                      <span><i className="fa-solid fa-rotate-left"></i> Total devolvido</span>
+                      <span style={{ fontWeight: 700 }}>{formatPreco(totalDevolvido)}</span>
+                    </div>
+                    <div style={{ borderTop: '1px solid var(--admin-border)', marginTop: '0.35rem', paddingTop: '0.35rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
+                      <span style={{ fontWeight: 700 }}>Total a cobrar</span>
+                      <span style={{ fontWeight: 800, color: totalCobrar > 0 ? 'var(--accent)' : 'var(--success)' }}>{formatPreco(totalCobrar)}</span>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Document upload (optional) */}
+              <div style={{ marginBottom: '1rem' }}>
+                <p style={{ fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.5rem' }}>
+                  <i className="fa-solid fa-file"></i> Documentos <span style={{ fontWeight: 400, fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>(opcional — apenas para primeiro cadastro)</span>
+                </p>
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: '140px' }}>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--admin-text-sec)' }}>Foto de Identidade</label>
+                    <input type="file" accept="image/*" onChange={e => handleFile(e, 'identity')} style={{ fontSize: '0.75rem', width: '100%' }} />
+                    {identityPreview && <img src={identityPreview} alt="Preview" style={{ maxWidth: '100%', maxHeight: '60px', marginTop: '0.25rem', borderRadius: '4px' }} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: '140px' }}>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--admin-text-sec)' }}>Comprovante de Endereço</label>
+                    <input type="file" accept="image/*" onChange={e => handleFile(e, 'address')} style={{ fontSize: '0.75rem', width: '100%' }} />
+                    {addressPreview && <img src={addressPreview} alt="Preview" style={{ maxWidth: '100%', maxHeight: '60px', marginTop: '0.25rem', borderRadius: '4px' }} />}
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button className="admin-btn admin-btn-sec" onClick={() => setShowUserDelivery(null)}>Cancelar</button>
+                <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }}
+                  disabled={finalizing || Object.values(userReturnQtys).every(v => !v || v <= 0)}
+                  onClick={finalizarUserEntrega}>
+                  {finalizing ? (
+                    <><i className="fa-solid fa-spinner fa-spin"></i> Finalizando...</>
+                  ) : (
+                    <><i className="fa-solid fa-check"></i> Finalizar Pedido</>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
