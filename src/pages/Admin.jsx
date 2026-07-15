@@ -178,6 +178,8 @@ export default function Admin({ produtos, onVoltar }) {
   const [usuarios, setUsuarios] = useState(() => LS.get('thsm_usuarios', []))
   const [selectedUserEmail, setSelectedUserEmail] = useState(null)
   const [selectedUserDetail, setSelectedUserDetail] = useState(null)
+  const [editingUser, setEditingUser] = useState(false)
+  const [editUserData, setEditUserData] = useState(null)
   const [userSearch, setUserSearch] = useState('')
   const [userCityFilter, setUserCityFilter] = useState('TODAS')
   const [userSort, setUserSort] = useState({ field: 'nome', dir: 'asc' })
@@ -429,6 +431,29 @@ export default function Admin({ produtos, onVoltar }) {
     setFinancial(prev => prev.filter(f => f.orderId !== id))
     supabaseDeleteOrder(id)
     showToast('Pedido excluído')
+  }
+
+  const saveUserEdit = async () => {
+    if (!editUserData) return
+    const payload = {
+      telefone: editUserData.telefone,
+      nome: editUserData.nome,
+      email: editUserData.email || '',
+      endereco: { ...(editUserData.endereco || {}) }
+    }
+    if (editUserData.senha) payload.endereco.senha = editUserData.senha
+    else if (selectedUserDetail?.endereco?.senha) payload.endereco.senha = selectedUserDetail.endereco.senha
+
+    const saved = await upsertUser(payload)
+    if (saved) {
+      setUsuarios(prev => prev.map(u => u.telefone === saved.telefone ? saved : u))
+      setSelectedUserDetail(saved)
+      setEditingUser(false)
+      setEditUserData(null)
+      showToast('Usuário atualizado com sucesso!')
+    } else {
+      showToast('Erro ao salvar usuário', 'error')
+    }
   }
 
   const formatPhone = (v) => {
@@ -1204,48 +1229,148 @@ export default function Admin({ produtos, onVoltar }) {
                     <h1>{selectedUserDetail.nome}</h1>
                     <p className="admin-subtitle">{selectedUserDetail.telefone} &middot; {selectedUserDetail.email || 'sem email'}</p>
                   </div>
+                  <button className="admin-btn" style={{ background: editingUser ? 'var(--success)' : 'var(--accent)', color: 'white', borderColor: editingUser ? 'var(--success)' : 'var(--accent)' }}
+                    onClick={editingUser ? saveUserEdit : () => { setEditingUser(true); setEditUserData({ ...selectedUserDetail }) }}>
+                    <i className={`fa-solid ${editingUser ? 'fa-check' : 'fa-pen'}`}></i> {editingUser ? 'Salvar' : 'Editar'}
+                  </button>
                 </div>
 
-                {/* User Info Card */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.65rem', marginBottom: '1.25rem' }}>
-                  <div className="admin-card card-blue" style={{ padding: '0.75rem 1rem' }}>
-                    <i className="fa-solid fa-id-card"></i>
-                    <div><strong>{selectedUserDetail.nome}</strong><span>Nome</span></div>
-                  </div>
-                  <div className="admin-card" style={{ padding: '0.75rem 1rem', borderLeft: '3px solid var(--accent)' }}>
-                    <i className="fa-solid fa-phone"></i>
-                    <div><strong>{selectedUserDetail.telefone}</strong><span>Telefone</span></div>
-                  </div>
-                  {selectedUserDetail.email && (
-                    <div className="admin-card" style={{ padding: '0.75rem 1rem', borderLeft: '3px solid #8b5cf6' }}>
-                      <i className="fa-solid fa-envelope"></i>
-                      <div><strong>{selectedUserDetail.email}</strong><span>Email</span></div>
+                {/* Info Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                  <div className="admin-card" style={{ padding: '1rem 1.25rem', borderLeft: '4px solid var(--accent)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--accent-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontSize: '1.1rem' }}>
+                        <i className="fa-solid fa-user"></i>
+                      </div>
+                      <div>
+                        {editingUser ? (
+                          <input type="text" value={editUserData.nome} onChange={e => setEditUserData(p => ({ ...p, nome: e.target.value }))}
+                            style={{ fontWeight: 700, fontSize: '0.95rem', border: '1px solid var(--admin-border)', borderRadius: '6px', padding: '0.25rem 0.5rem', width: '100%' }} />
+                        ) : (
+                          <strong style={{ fontSize: '0.95rem' }}>{selectedUserDetail.nome}</strong>
+                        )}
+                        <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>Nome</span>
+                      </div>
                     </div>
-                  )}
-                  {selectedUserDetail.created_at && (
-                    <div className="admin-card" style={{ padding: '0.75rem 1rem', borderLeft: '3px solid #f59e0b' }}>
-                      <i className="fa-solid fa-calendar"></i>
-                      <div><strong>{formatDate(new Date(selectedUserDetail.created_at).toISOString().split('T')[0])}</strong><span>Cadastro</span></div>
+                  </div>
+                  <div className="admin-card" style={{ padding: '1rem 1.25rem', borderLeft: '4px solid #06b6d4' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#ecfeff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#06b6d4', fontSize: '1.1rem' }}>
+                        <i className="fa-solid fa-phone"></i>
+                      </div>
+                      <div>
+                        {editingUser ? (
+                          <input type="text" value={editUserData.telefone} onChange={e => setEditUserData(p => ({ ...p, telefone: e.target.value }))}
+                            style={{ fontWeight: 700, fontSize: '0.95rem', border: '1px solid var(--admin-border)', borderRadius: '6px', padding: '0.25rem 0.5rem', width: '100%' }} />
+                        ) : (
+                          <strong style={{ fontSize: '0.95rem' }}>{selectedUserDetail.telefone}</strong>
+                        )}
+                        <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>Telefone</span>
+                      </div>
                     </div>
+                  </div>
+                  <div className="admin-card" style={{ padding: '1rem 1.25rem', borderLeft: '4px solid #8b5cf6' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#f5f3ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8b5cf6', fontSize: '1.1rem' }}>
+                        <i className="fa-solid fa-envelope"></i>
+                      </div>
+                      <div>
+                        {editingUser ? (
+                          <input type="email" value={editUserData.email} onChange={e => setEditUserData(p => ({ ...p, email: e.target.value }))}
+                            style={{ fontWeight: 700, fontSize: '0.95rem', border: '1px solid var(--admin-border)', borderRadius: '6px', padding: '0.25rem 0.5rem', width: '100%' }} />
+                        ) : (
+                          <strong style={{ fontSize: '0.95rem' }}>{selectedUserDetail.email || '-'}</strong>
+                        )}
+                        <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>Email</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="admin-card" style={{ padding: '1rem 1.25rem', borderLeft: '4px solid #f59e0b' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#fffbeb', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b', fontSize: '1.1rem' }}>
+                        <i className="fa-solid fa-calendar"></i>
+                      </div>
+                      <div>
+                        <strong style={{ fontSize: '0.95rem' }}>{formatDate(selectedUserDetail.created_at ? new Date(selectedUserDetail.created_at).toISOString().split('T')[0] : '')}</strong>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>Cadastro</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Password Card */}
+                <div style={{ background: '#f9fafb', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1.25rem', border: '1px solid var(--admin-border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                    <h4 style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <i className="fa-solid fa-lock" style={{ color: 'var(--admin-text-sec)' }}></i> Senha
+                    </h4>
+                  </div>
+                  {editingUser ? (
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <input type="text" placeholder="Nova senha" value={editUserData.senha || ''} onChange={e => setEditUserData(p => ({ ...p, senha: e.target.value }))}
+                        style={{ flex: 1, padding: '0.45rem 0.7rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.85rem' }} />
+                      <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>Deixe vazio para manter</span>
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: '0.82rem', color: 'var(--admin-text-sec)' }}>
+                      {selectedUserDetail.endereco?.senha ? '••••••••' : 'Nenhuma senha definida'}
+                    </p>
                   )}
                 </div>
 
                 {/* Address Card */}
+                <div style={{ background: '#f9fafb', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1.25rem', border: '1px solid var(--admin-border)' }}>
+                  <h4 style={{ fontSize: '0.85rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <i className="fa-solid fa-location-dot"></i> Endereço
+                  </h4>
+                  {editingUser ? (
+                    <AddressForm value={editUserData.endereco || {}} onChange={(a) => setEditUserData(p => ({ ...p, endereco: a }))} />
+                  ) : (
+                    (() => {
+                      const e = selectedUserDetail.endereco || {}
+                      const hasAddr = e.cep || e.rua || e.bairro || e.cidade || e.estado || e.rota
+                      if (!hasAddr) return <p style={{ fontSize: '0.82rem', color: 'var(--admin-text-sec)' }}>Nenhum endereço cadastrado</p>
+                      return (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.6rem', fontSize: '0.85rem' }}>
+                          {e.cep && <div><span style={{ color: 'var(--admin-text-sec)', display: 'block', fontSize: '0.72rem' }}>CEP</span><strong>{e.cep}</strong></div>}
+                          {e.rua && <div><span style={{ color: 'var(--admin-text-sec)', display: 'block', fontSize: '0.72rem' }}>Logradouro</span><strong>{e.rua}{e.numero ? `, ${e.numero}` : ''}</strong></div>}
+                          {e.bairro && <div><span style={{ color: 'var(--admin-text-sec)', display: 'block', fontSize: '0.72rem' }}>Bairro</span><strong>{e.bairro}</strong></div>}
+                          {e.cidade && <div><span style={{ color: 'var(--admin-text-sec)', display: 'block', fontSize: '0.72rem' }}>Cidade</span><strong>{e.cidade}{e.estado ? ` / ${e.estado}` : ''}</strong></div>}
+                          {e.complemento && <div><span style={{ color: 'var(--admin-text-sec)', display: 'block', fontSize: '0.72rem' }}>Complemento</span><strong>{e.complemento}</strong></div>}
+                          {e.rota && <div><span style={{ color: 'var(--admin-text-sec)', display: 'block', fontSize: '0.72rem' }}>Rota</span><strong style={{ color: '#8b5cf6' }}>{e.rota}</strong></div>}
+                        </div>
+                      )
+                    })()
+                  )}
+                </div>
+
+                {/* Stats Cards */}
                 {(() => {
-                  const e = selectedUserDetail.endereco || {}
-                  const hasAddr = e.cep || e.rua || e.bairro || e.cidade || e.estado
-                  if (!hasAddr) return null
+                  const totalPedidos = userOrdersDetail.length
+                  const totalGasto = userOrdersDetail.reduce((s, o) => s + o.total, 0)
+                  const ultimoPedido = userOrdersDetail.length > 0 ? userOrdersDetail.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0] : null
                   return (
-                    <div style={{ background: '#f9fafb', borderRadius: '10px', padding: '0.85rem 1rem', marginBottom: '1.25rem', border: '1px solid var(--admin-border)' }}>
-                      <h4 style={{ fontSize: '0.85rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                        <i className="fa-solid fa-location-dot"></i> Endereço
-                      </h4>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.5rem', fontSize: '0.82rem' }}>
-                        {e.cep && <div><span style={{ color: 'var(--admin-text-sec)' }}>CEP:</span> {e.cep}</div>}
-                        {e.rua && <div><span style={{ color: 'var(--admin-text-sec)' }}>Rua:</span> {e.rua}{e.numero ? `, ${e.numero}` : ''}</div>}
-                        {e.bairro && <div><span style={{ color: 'var(--admin-text-sec)' }}>Bairro:</span> {e.bairro}</div>}
-                        {e.cidade && <div><span style={{ color: 'var(--admin-text-sec)' }}>Cidade:</span> {e.cidade}{e.estado ? ` / ${e.estado}` : ''}</div>}
-                        {e.complemento && <div><span style={{ color: 'var(--admin-text-sec)' }}>Complemento:</span> {e.complemento}</div>}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.65rem', marginBottom: '1.25rem' }}>
+                      <div className="admin-card" style={{ padding: '0.85rem 1rem', borderLeft: '4px solid var(--accent)', textAlign: 'center' }}>
+                        <strong style={{ fontSize: '1.2rem', color: 'var(--accent)' }}>{totalPedidos}</strong>
+                        <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>Pedidos</span>
+                      </div>
+                      <div className="admin-card" style={{ padding: '0.85rem 1rem', borderLeft: '4px solid var(--success)', textAlign: 'center' }}>
+                        <strong style={{ fontSize: '1.2rem', color: 'var(--success)' }}>{formatPreco(totalGasto)}</strong>
+                        <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>Total Gasto</span>
+                      </div>
+                      <div className="admin-card" style={{ padding: '0.85rem 1rem', borderLeft: '4px solid #8b5cf6', textAlign: 'center' }}>
+                        <strong style={{ fontSize: '1.2rem', color: '#8b5cf6' }}>{ultimoPedido ? formatDate(ultimoPedido.date) : '-'}</strong>
+                        <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>Último Pedido</span>
+                      </div>
+                      <div className="admin-card" style={{ padding: '0.85rem 1rem', borderLeft: '4px solid #f59e0b', textAlign: 'center' }}>
+                        <strong style={{ fontSize: '1.2rem', color: '#f59e0b' }}>
+                          {(() => {
+                            const pend = userOrdersDetail.filter(o => o.status === 'pendente' || o.status === 'pre-pedido').length
+                            return pend || '0'
+                          })()}
+                        </strong>
+                        <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>Pendentes</span>
                       </div>
                     </div>
                   )
@@ -1255,10 +1380,7 @@ export default function Admin({ produtos, onVoltar }) {
                 <h3 style={{ fontSize: '0.95rem', marginBottom: '0.65rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                   <i className="fa-solid fa-clipboard-list"></i> Pedidos
                   <span className="cat-tag">{userOrdersDetail.length} pedidos</span>
-                  {(() => {
-                    const total = userOrdersDetail.reduce((s, o) => s + o.total, 0)
-                    return total > 0 ? <span style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>— {formatPreco(total)}</span> : null
-                  })()}
+                  {userOrdersDetail.length > 0 && <span style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>— {formatPreco(userOrdersDetail.reduce((s, o) => s + o.total, 0))}</span>}
                 </h3>
 
                 <div className="admin-table-wrap">
