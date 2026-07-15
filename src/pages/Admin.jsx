@@ -154,13 +154,54 @@ function sendStatusWebhook(order, newStatus, extra = {}) {
   }).catch(() => {})
 }
 
-async function sendAlertRota(tipo, contatos, customText = '') {
+async function sendAlertRota(tipo, contatos, orders, customText = '') {
+  function formatDate(str) {
+    if (!str) return '-'
+    const d = new Date(str + (str.length <= 10 ? 'T12:00:00' : ''))
+    return d.toLocaleDateString('pt-BR')
+  }
+  function formatPreco(v) {
+    return `R$ ${Number(v).toFixed(2).replace('.', ',')}`
+  }
   const contacts = await Promise.all(contatos.map(async (c) => {
     const telefone = c.remoteJid?.replace(/@.*/, '').replace(/\D/g, '') || ''
+    const normalizedPhone = telefone.startsWith('55') ? telefone : '55' + telefone
     let loginLink = ''
     if (telefone) {
-      const token = await generateLoginToken(telefone.startsWith('55') ? telefone : '55' + telefone)
+      const token = await generateLoginToken(normalizedPhone)
       if (token) loginLink = `${window.location.origin}${window.location.pathname}?login=${token}`
+    }
+    const userOrders = (orders || []).filter(o => {
+      const ot = o.customer?.telefone || ''
+      return ot === normalizedPhone || ot === telefone
+    })
+    const openOrders = userOrders.filter(o => !['entregue', 'cancelado'].includes(o.status))
+    const lastOrder = openOrders[0]
+    let whatsappMessage = ''
+    const nome = c.pushName || c.nome || 'Cliente'
+    if (tipo === 'personalizado') {
+      whatsappMessage = customText
+    } else if (tipo === 'alerta') {
+      if (lastOrder) {
+        const itens = lastOrder.items?.slice(0, 3).map(i => `  • ${i.nome} (${i.qty}x)`).join('\n') || ''
+        const extras = lastOrder.items?.length > 3 ? `\n  ...e mais ${lastOrder.items.length - 3} item(ns)` : ''
+        whatsappMessage = `🚚 *PASSANDO NA SUA CIDADE!* 🚚\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n📋 Pedido #${lastOrder.id.toString().slice(-6)}\n📌 Status: ${lastOrder.status}\n💵 Total: ${formatPreco(lastOrder.total)}\n${itens}${extras}\n━━━━━━━━━━━━━━━━━━\nEstamos na sua região! Seu pedido está em aberto.\n🔗 Acesse sua conta: ${loginLink}`
+      } else {
+        whatsappMessage = `🚚 *PASSANDO NA SUA CIDADE!* 🚚\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n━━━━━━━━━━━━━━━━━━\nEstamos passando na sua cidade! Aproveite para fazer seu pedido.\n🔗 Faça já seu pedido: ${loginLink}`
+      }
+    } else if (tipo === 'atualizacao') {
+      if (lastOrder) {
+        const itens = lastOrder.items?.slice(0, 3).map(i => `  • ${i.nome} (${i.qty}x) — ${formatPreco(i.preco * i.qty)}`).join('\n') || ''
+        const extras = lastOrder.items?.length > 3 ? `\n  ...e mais ${lastOrder.items.length - 3} item(ns)` : ''
+        const dataPedido = formatDate(lastOrder.date || lastOrder.createdAt)
+        const finRecords = JSON.parse(localStorage.getItem('thsm_admin_financeiro') || '[]')
+          .filter(f => f.orderId === lastOrder.id && f.status === 'pendente')
+        const vencimentos = finRecords.slice(0, 2).map(f => `  📅 ${f.itemName}: ${formatDate(f.dueDate)} — ${formatPreco(f.value)}`).join('\n')
+        const vencExtras = finRecords.length > 2 ? `\n  ...e mais ${finRecords.length - 2} parcela(s)` : ''
+        whatsappMessage = `📋 *ATUALIZAÇÃO DO PEDIDO* 📋\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n📋 Pedido: #${lastOrder.id.toString().slice(-6)}\n📅 Data: ${dataPedido}\n📌 Status: ${lastOrder.status}\n${itens}${extras}\n💵 Total: ${formatPreco(lastOrder.total)}${vencimentos ? `\n━━━━━━━━━━━━━━━━━━\n📆 *Pendências:*\n${vencimentos}${vencExtras}` : ''}\n━━━━━━━━━━━━━━━━━━\n🔗 Acompanhe seu pedido: ${loginLink}`
+      } else {
+        whatsappMessage = `📋 *ATUALIZAÇÃO* 📋\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n━━━━━━━━━━━━━━━━━━\nVocê ainda não tem pedidos conosco.\nAproveite para fazer seu pedido agora!\n🔗 Fazer pedido: ${loginLink}`
+      }
     }
     return {
       remoteJid: c.remoteJid,
@@ -168,13 +209,14 @@ async function sendAlertRota(tipo, contatos, customText = '') {
       cidade: c.cidade || '',
       rota: c.rota || '',
       telefone,
-      loginLink
+      loginLink,
+      whatsappMessage
     }
   }))
   const payload = {
     event: tipo === 'alerta' ? 'alertar-rotas' : tipo === 'atualizacao' ? 'atualizacao-pedidos' : 'personalizado',
     contacts,
-    ...(customText ? { message: customText } : {})
+    ...(tipo === 'personalizado' && customText ? { message: customText } : {})
   }
   fetch(ALERTAR_ROTAS_URL, {
     method: 'POST',
@@ -1931,11 +1973,11 @@ export default function Admin({ produtos, onVoltar }) {
                                 <i className="fa-solid fa-map-location-dot"></i>
                                 <span>Mapa</span>
                               </button>
-                              <button className="rota-map-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }} title="Alertar Rotas" onClick={e => { e.stopPropagation(); if (confirm(`Enviar alerta para ${totalVisivel} contatos da rota "${grupo.rota}"?`)) { sendAlertRota('alerta', allContatos); showToast(`Alerta enviado para ${totalVisivel} contatos`) } }}>
+                              <button className="rota-map-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }} title="Alertar Rotas" onClick={e => { e.stopPropagation(); if (confirm(`Enviar alerta para ${totalVisivel} contatos da rota "${grupo.rota}"?`)) { sendAlertRota('alerta', allContatos, orders); showToast(`Alerta enviado para ${totalVisivel} contatos`) } }}>
                                 <i className="fa-solid fa-bullhorn"></i>
                                 <span>Alertar</span>
                               </button>
-                              <button className="rota-map-btn" style={{ background: '#059669', color: 'white', borderColor: '#059669' }} title="Atualização Pedidos" onClick={e => { e.stopPropagation(); if (confirm(`Enviar atualização de pedidos para ${totalVisivel} contatos da rota "${grupo.rota}"?`)) { sendAlertRota('atualizacao', allContatos); showToast(`Atualização enviada para ${totalVisivel} contatos`) } }}>
+                              <button className="rota-map-btn" style={{ background: '#059669', color: 'white', borderColor: '#059669' }} title="Atualização Pedidos" onClick={e => { e.stopPropagation(); if (confirm(`Enviar atualização de pedidos para ${totalVisivel} contatos da rota "${grupo.rota}"?`)) { sendAlertRota('atualizacao', allContatos, orders); showToast(`Atualização enviada para ${totalVisivel} contatos`) } }}>
                                 <i className="fa-solid fa-rotate"></i>
                                 <span>Pedidos</span>
                               </button>
@@ -2341,7 +2383,7 @@ export default function Admin({ produtos, onVoltar }) {
               <div className="modal-actions">
                 <button className="admin-btn admin-btn-sec" onClick={() => { setCustomMsgRota(null); setCustomMsgText('') }}>Cancelar</button>
                 <button className="admin-btn admin-btn-primary" disabled={!customMsgText.trim()} onClick={() => {
-                  sendAlertRota('personalizado', customMsgRota.contatos, customMsgText.trim())
+                  sendAlertRota('personalizado', customMsgRota.contatos, orders, customMsgText.trim())
                   showToast(`Mensagem enviada para ${customMsgRota.total} contatos`)
                   setCustomMsgRota(null)
                   setCustomMsgText('')
