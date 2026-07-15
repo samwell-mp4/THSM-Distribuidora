@@ -29,8 +29,7 @@ function App() {
   const [showFilters, setShowFilters] = useState(false)
   const [checkout, setCheckout] = useState(null)
   const [customer, setCustomer] = useState({ nome: '', email: '', telefone: '', senha: '', endereco: { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' } })
-  const [pagamento, setPagamento] = useState('avista')
-  const [splitItems, setSplitItems] = useState({})
+  const [pagamento, setPagamento] = useState('aprazo')
   const [showLogin, setShowLogin] = useState(false)
   const [loginEmail, setLoginEmail] = useState('')
   const [loginSenha, setLoginSenha] = useState('')
@@ -273,9 +272,9 @@ function App() {
     const nome = order.customer?.nome || 'Cliente'
     const id = `#${order.id.toString().slice(-6)}`
     const msgItems = order.items.map(i => `  • ${i.nome} (${i.qty}x) — R$ ${i.preco.toFixed(2)}`).join('\n')
-    const msgPagamento = order.pagamento === 'avista' ? 'À Vista' : order.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'
+    const msgPagamento = order.pagamento === 'aprazo' ? 'A Prazo' : 'À Vista'
     const msgStatus = order.status === 'pendente' ? '✅ Aguardando confirmação' : order.status === 'pre-pedido' ? '⏳ Pré-pedido aguardando aprovação' : order.status
-    return `🆕 *NOVO PEDIDO* 🆕\n━━━━━━━━━━━━━━━━━━\n📋 Pedido: ${id}\n📅 Data: ${order.date}\n👤 Cliente: ${nome}\n📞 Telefone: ${order.customer?.telefone || '-'}\n📍 Endereço: ${order.customer?.endereco?.rua || '-'}, ${order.customer?.endereco?.numero || '-'} - ${order.customer?.endereco?.bairro || '-'}, ${order.customer?.endereco?.cidade || '-'}/${order.customer?.endereco?.estado || '-'}\n━━━━━━━━━━━━━━━━━━\n💳 Pagamento: ${msgPagamento}\n💰 Total: R$ ${order.total.toFixed(2)}${order.totalAprazo > 0 ? `\n📋 A Prazo: R$ ${order.totalAprazo.toFixed(2)}` : ''}\n━━━━━━━━━━━━━━━━━━\n📦 *ITENS:*\n${msgItems}\n━━━━━━━━━━━━━━━━━━\n📌 Status: ${msgStatus}\n🔗 Acesse o pedido: ${link}`
+    return `🆕 *NOVO PEDIDO* 🆕\n━━━━━━━━━━━━━━━━━━\n📋 Pedido: ${id}\n📅 Data: ${order.date}\n👤 Cliente: ${nome}\n📞 Telefone: ${order.customer?.telefone || '-'}\n📍 Endereço: ${order.customer?.endereco?.rua || '-'}, ${order.customer?.endereco?.numero || '-'} - ${order.customer?.endereco?.bairro || '-'}, ${order.customer?.endereco?.cidade || '-'}/${order.customer?.endereco?.estado || '-'}\n━━━━━━━━━━━━━━━━━━\n💳 Pagamento: ${msgPagamento}\n💰 Total: R$ ${order.total.toFixed(2)}\n━━━━━━━━━━━━━━━━━━\n📦 *ITENS:*\n${msgItems}\n━━━━━━━━━━━━━━━━━━\n📌 Status: ${msgStatus}\n🔗 Acesse o pedido: ${link}`
   }
 
   const sendOrderWebhook = (order) => {
@@ -302,20 +301,19 @@ function App() {
 
   const finalizarCheckout = () => {
     if (!autoLoginOuRegistro()) { showToast('Erro ao identificar usuário', 'error'); return }
-    const items = cartItems.map(i => ({ ...i, tipo: pagamento === 'aprazo' ? 'aprazo' : (pagamento === 'avista' ? 'avista' : (splitItems[i.id] || 'avista')) }))
-    const totalAvista = items.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
-    const totalAprazo = items.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
+    const items = cartItems.map(i => ({ ...i, tipo: 'aprazo' }))
+    const total = items.reduce((s, i) => s + i.preco * i.qty, 0)
     const order = {
       id: Date.now(),
       user_id: currentUser?.id || null,
       date: new Date().toISOString().split('T')[0],
       customer: { nome: customer.nome, email: customer.email, telefone: customer.telefone, endereco: customer.endereco },
       items,
-      pagamento,
-      total_avista: totalAvista,
-      total_aprazo: totalAprazo,
-      total: totalAvista + totalAprazo,
-      status: pagamento === 'aprazo' || totalAprazo > 0 ? 'pre-pedido' : 'pendente',
+      pagamento: 'aprazo',
+      total_avista: 0,
+      total_aprazo: total,
+      total,
+      status: 'pre-pedido',
       pre_approved_at: null,
       created_at: new Date().toISOString()
     }
@@ -685,9 +683,7 @@ function App() {
                 <h3><i className="fa-solid fa-credit-card"></i> Forma de Pagamento</h3>
                 <div className="payment-options">
                   {[
-                    { id: 'avista', icon: 'fa-money-bill-wave', label: 'À Vista', desc: 'Pagar tudo agora' },
                     { id: 'aprazo', icon: 'fa-calendar', label: 'A Prazo', desc: 'Pagar depois (no acerto)' },
-                    { id: 'misto', icon: 'fa-split', label: 'Misto', desc: 'Parte à vista, parte a prazo' },
                   ].map(p => (
                     <label key={p.id} className={`payment-option ${pagamento === p.id ? 'selected' : ''}`}>
                       <input type="radio" name="pagamento" value={p.id} checked={pagamento === p.id} onChange={() => setPagamento(p.id)} />
@@ -697,33 +693,11 @@ function App() {
                           <strong>{p.label}</strong>
                           <span>{p.desc}</span>
                         </div>
-                        {p.id !== 'misto' && <span className="payment-tag">{formatPreco(cartTotal)}</span>}
+                        <span className="payment-tag">{formatPreco(cartTotal)}</span>
                       </div>
                     </label>
                   ))}
                 </div>
-
-                {pagamento === 'misto' && (
-                  <div className="split-items">
-                    <p className="split-hint"><i className="fa-solid fa-hand-pointer"></i> Selecione os itens para pagar a prazo:</p>
-                    {cartItems.map(item => {
-                      const tipo = splitItems[item.id] || 'avista'
-                      return (
-                        <div key={item.id} className={`split-row ${tipo === 'aprazo' ? 'prazo' : 'vista'}`} onClick={() => setSplitItems(prev => ({ ...prev, [item.id]: tipo === 'avista' ? 'aprazo' : 'avista' }))}>
-                          <div className="split-info">
-                            <span className="split-name">{item.nome}</span>
-                            <span className="split-qty">{item.qty}x {formatPreco(item.preco * item.qty)}</span>
-                          </div>
-                          <span className={`split-tag ${tipo === 'avista' ? 'tag-vista' : 'tag-aprazo'}`}>{tipo === 'avista' ? 'À Vista' : 'A Prazo'}</span>
-                        </div>
-                      )
-                    })}
-                    <div className="split-total">
-                      <span>Total à vista: <strong>{formatPreco(cartItems.filter(i => (splitItems[i.id] || 'avista') === 'avista').reduce((s, i) => s + i.preco * i.qty, 0))}</strong></span>
-                      <span>Total a prazo: <strong>{formatPreco(cartItems.filter(i => splitItems[i.id] === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0))}</strong></span>
-                    </div>
-                  </div>
-                )}
 
                 <div className="checkout-nav">
                   <button className="btn-back" onClick={() => setCheckout('info')}><i className="fa-solid fa-arrow-left"></i> Voltar</button>
@@ -745,13 +719,12 @@ function App() {
                 <div className="review-section">
                   <h4><i className="fa-solid fa-box"></i> Itens</h4>
                   {cartItems.map(item => {
-                    const tipo = pagamento === 'misto' ? (splitItems[item.id] || 'avista') : (pagamento === 'aprazo' ? 'aprazo' : 'avista')
                     return (
                       <div key={item.id} className="review-item">
                         <span className="review-item-name">{item.nome} <span className="review-item-qty">({item.qty}x)</span></span>
                         <div className="review-item-right">
                           <span className="review-item-price">{formatPreco(item.preco * item.qty)}</span>
-                          <span className={`review-item-tag ${tipo}`}>{tipo === 'avista' ? 'À Vista' : 'A Prazo'}</span>
+                          <span className="review-item-tag aprazo">A Prazo</span>
                         </div>
                       </div>
                     )
