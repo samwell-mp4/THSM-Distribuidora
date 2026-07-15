@@ -156,7 +156,8 @@ function sendStatusWebhook(order, newStatus, extra = {}) {
 import AddressForm from '../components/AddressForm'
 
 export default function Admin({ produtos, onVoltar }) {
-  const [tab, setTab] = useState('dashboard')
+  const [tab, setTab] = useState(() => sessionStorage.getItem('thsm_admin_tab') || 'dashboard')
+  useEffect(() => { sessionStorage.setItem('thsm_admin_tab', tab) }, [tab])
   const [orders, setOrders] = useState(() => LS.get(STORAGE_ORDERS, []))
   const [prodChanges, setProdChanges] = useState(() => LS.get(STORAGE_PRODUCTS, {}))
   const [financial, setFinancial] = useState(() => LS.get(STORAGE_FINANCIAL, []))

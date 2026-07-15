@@ -32,7 +32,8 @@ function setLS(key, data) {
 }
 
 export default function UserDashboard({ produtos = [], onVoltar, initialOrderId }) {
-  const [tab, setTab] = useState('pedidos')
+  const [tab, setTab] = useState(() => sessionStorage.getItem('thsm_user_tab') || 'pedidos')
+  useEffect(() => { sessionStorage.setItem('thsm_user_tab', tab) }, [tab])
   const [finFilter, setFinFilter] = useState('todas')
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [showPayment, setShowPayment] = useState(null)

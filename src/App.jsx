@@ -15,7 +15,6 @@ const ADMIN_USER = 'thsmadmin'
 const ADMIN_PASS = 'th2026smdistribuidora!'
 
 function App() {
-  const [showAdmin, setShowAdmin] = useState(false)
   const [search, setSearch] = useState('')
   const [categoria, setCategoria] = useState('TODOS')
   const [selected, setSelected] = useState(null)
@@ -42,17 +41,41 @@ function App() {
   const [adminPass, setAdminPass] = useState('')
   const [initialOrderId, setInitialOrderId] = useState(null)
 
+  const getRouteFromHash = useCallback(() => {
+    if (new URLSearchParams(window.location.search).has('pedido')) return 'userdash'
+    const hash = window.location.hash.replace(/^#/, '') || '/'
+    const path = hash.replace(/\/+$/, '') || '/'
+    if (path.startsWith('/admin')) return 'admin'
+    if (path.startsWith('/minha-conta')) return 'userdash'
+    return 'catalog'
+  }, [])
+
+  const [route, setRoute] = useState(getRouteFromHash)
+
+  const navigate = useCallback((path) => {
+    window.location.hash = path
+    setRoute(getRouteFromHash())
+  }, [getRouteFromHash])
+
+  useEffect(() => {
+    const onHashChange = () => setRoute(getRouteFromHash())
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [getRouteFromHash])
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const pid = params.get('pedido')
     if (pid) {
       setInitialOrderId(Number(pid))
-      setShowUserDash(true)
+      // Clean ?pedido from URL
       const url = new URL(window.location)
       url.searchParams.delete('pedido')
       window.history.replaceState({}, '', url)
+      // Only navigate if not already on userdash
+      if (route !== 'userdash') navigate('/minha-conta')
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [adminAuth, setAdminAuth] = useState(() => {
     try { const d = localStorage.getItem(LS_ADMIN); return d ? JSON.parse(d) : null } catch { return null }
   })
@@ -66,7 +89,7 @@ function App() {
       setShowAdminLogin(false)
       setAdminUser('')
       setAdminPass('')
-      setShowAdmin(true)
+      navigate('/admin')
     } else {
       alert('Usuário ou senha incorretos')
     }
@@ -298,7 +321,7 @@ function App() {
     setCart({})
     setCheckout(null)
     showToast('Pedido enviado com sucesso!')
-    setShowUserDash(true)
+    navigate('/minha-conta')
     sendOrderWebhook(order)
   }
 
@@ -310,8 +333,8 @@ function App() {
   }
 
   // Admin & UserDash views
-  if (showAdmin && adminAuth?.loggedIn) return <Admin produtos={produtos} onVoltar={() => { setShowAdmin(false); localStorage.removeItem(LS_ADMIN); setAdminAuth(null) }} />
-  if (showUserDash) return <UserDashboard produtos={produtos} onVoltar={() => setShowUserDash(false)} initialOrderId={initialOrderId} />
+  if (route === 'admin' && adminAuth?.loggedIn) return <Admin produtos={produtos} onVoltar={() => { navigate('/'); localStorage.removeItem(LS_ADMIN); setAdminAuth(null) }} />
+  if (route === 'userdash') return <UserDashboard produtos={produtos} onVoltar={() => navigate('/')} initialOrderId={initialOrderId} />
 
   return (
     <div className="app">
@@ -335,7 +358,7 @@ function App() {
           <div className="header-actions">
             {currentUser ? (
               <div className="user-menu">
-                <button className="user-btn" onClick={() => setShowUserDash(true)} title="Meus Pedidos">
+                <button className="user-btn" onClick={() => navigate('/minha-conta')} title="Meus Pedidos">
                   <i className="fa-solid fa-user"></i>
                   <span className="user-name">{currentUser.nome.split(' ')[0]}</span>
                 </button>
@@ -818,11 +841,11 @@ function App() {
       {/* Mobile user bottom nav (always on when logged in) */}
       {currentUser && (
         <div className="mobile-user-nav">
-          <button className="mobile-user-item" onClick={() => setShowUserDash(true)}>
+          <button className="mobile-user-item" onClick={() => navigate('/minha-conta')}>
             <i className="fa-solid fa-clipboard-list"></i>
             <span>Pedidos</span>
           </button>
-          <button className="mobile-user-item" onClick={() => setShowUserDash(true)}>
+          <button className="mobile-user-item" onClick={() => navigate('/minha-conta')}>
             <i className="fa-solid fa-coins"></i>
             <span>Financeiro</span>
           </button>
