@@ -41,6 +41,8 @@ function App() {
   const [showAddressRequired, setShowAddressRequired] = useState(false)
   const [addressRequiredEndereco, setAddressRequiredEndereco] = useState({ cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
   const [savingAddress, setSavingAddress] = useState(false)
+  const [showAddressEdit, setShowAddressEdit] = useState(false)
+  const [addressEditEndereco, setAddressEditEndereco] = useState({ cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
   const [adminAuth, setAdminAuth] = useState(() => {
     try { const d = localStorage.getItem(LS_ADMIN); return d ? JSON.parse(d) : null } catch { return null }
   })
@@ -264,6 +266,18 @@ function App() {
     navigate('/')
   }
 
+  const saveAddressEdit = async () => {
+    const addr = addressEditEndereco
+    if (!addr.cep || !addr.cidade || !addr.rua || !addr.numero) { showToast('Preencha CEP, cidade, rua e número', 'error'); return }
+    setSavingAddress(true)
+    const updated = { ...currentUser, endereco: { ...(currentUser?.endereco || {}), ...addr } }
+    await upsertUser(updated)
+    setCurrentUser(updated)
+    setShowAddressEdit(false)
+    setSavingAddress(false)
+    showToast('Endereço atualizado!')
+  }
+
   const autoLoginOuRegistro = async () => {
     const raw = customer.telefone.replace(/\D/g, '')
     const telefone = raw.startsWith('55') ? raw : '55' + raw
@@ -426,6 +440,12 @@ function App() {
                   <i className="fa-solid fa-user"></i>
                   <span className="user-name">{currentUser.nome.split(' ')[0]}</span>
                 </button>
+                {currentUser.endereco?.cidade && (
+                  <button className="header-address-btn" onClick={() => { setAddressEditEndereco({ cep: currentUser.endereco.cep || '', estado: currentUser.endereco.estado || '', cidade: currentUser.endereco.cidade || '', bairro: currentUser.endereco.bairro || '', rua: currentUser.endereco.rua || '', numero: currentUser.endereco.numero || '', complemento: currentUser.endereco.complemento || '' }); setShowAddressEdit(true) }} title="Alterar endereço">
+                    <i className="fa-solid fa-location-dot"></i>
+                    <span className="header-address-text">{currentUser.endereco.cidade}{currentUser.endereco.bairro ? `, ${currentUser.endereco.bairro}` : ''}</span>
+                  </button>
+                )}
                 <button className="user-logout" onClick={logout} title="Sair">
                   <i className="fa-solid fa-right-from-bracket"></i>
                 </button>
@@ -899,6 +919,29 @@ function App() {
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.25rem' }}>
                 <button className="btn-next" style={{ flex: 1, justifyContent: 'center' }} disabled={savingAddress || !addressRequiredEndereco.cep || !addressRequiredEndereco.cidade || !addressRequiredEndereco.rua || !addressRequiredEndereco.numero} onClick={saveRequiredAddress}>
                   {savingAddress ? <><i className="fa-solid fa-spinner fa-spin"></i> Salvando...</> : <><i className="fa-solid fa-check"></i> Salvar e Continuar</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADDRESS EDIT MODAL */}
+      {showAddressEdit && (
+        <div className="overlay" onClick={() => setShowAddressEdit(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <button className="modal-close" onClick={() => setShowAddressEdit(false)}><i className="fa-solid fa-xmark"></i></button>
+            <div className="modal-body">
+              <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+                <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--warning-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem' }}>
+                  <i className="fa-solid fa-location-dot" style={{ fontSize: '1.4rem', color: 'var(--warning)' }}></i>
+                </div>
+                <h2 style={{ fontSize: '1.1rem', marginBottom: '0.25rem' }}>Alterar Endereço</h2>
+              </div>
+              <AddressForm value={addressEditEndereco} onChange={(addr) => setAddressEditEndereco(addr)} />
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.25rem' }}>
+                <button className="btn-next" style={{ flex: 1, justifyContent: 'center' }} disabled={savingAddress || !addressEditEndereco.cep || !addressEditEndereco.cidade || !addressEditEndereco.rua || !addressEditEndereco.numero} onClick={saveAddressEdit}>
+                  {savingAddress ? <><i className="fa-solid fa-spinner fa-spin"></i> Salvando...</> : <><i className="fa-solid fa-check"></i> Salvar</>}
                 </button>
               </div>
             </div>

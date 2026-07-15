@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
-import { supabase, upsertOrder, upsertFinancial, deleteOrder as supabaseDeleteOrder } from '../lib/supabase'
+import { supabase, upsertOrder, upsertFinancial, deleteOrder as supabaseDeleteOrder, upsertUser } from '../lib/supabase'
+import AddressForm from '../components/AddressForm'
 
 const LS_ORDERS = 'thsm_admin_orders'
 const LS_FINANCIAL = 'thsm_admin_financeiro'
@@ -56,6 +57,47 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
   const [identityPreview, setIdentityPreview] = useState('')
   const [addressPreview, setAddressPreview] = useState('')
   const [finalizing, setFinalizing] = useState(false)
+  const [editNome, setEditNome] = useState('')
+  const [editEmail, setEditEmail] = useState('')
+  const [editTelefone, setEditTelefone] = useState('')
+  const [editSenha, setEditSenha] = useState('')
+  const [editEndereco, setEditEndereco] = useState({ cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
+  const [savingProfile, setSavingProfile] = useState(false)
+
+  const initConta = () => {
+    setTab('conta')
+    if (!currentUser) return
+    setEditNome(currentUser.nome || '')
+    setEditEmail(currentUser.email || '')
+    setEditTelefone(currentUser.telefone || '')
+    setEditSenha(currentUser.endereco?.senha || '')
+    setEditEndereco({
+      cep: currentUser.endereco?.cep || '',
+      estado: currentUser.endereco?.estado || '',
+      cidade: currentUser.endereco?.cidade || '',
+      bairro: currentUser.endereco?.bairro || '',
+      rua: currentUser.endereco?.rua || '',
+      numero: currentUser.endereco?.numero || '',
+      complemento: currentUser.endereco?.complemento || ''
+    })
+  }
+
+  const saveProfile = async () => {
+    if (!editNome.trim()) { alert('Nome é obrigatorio'); return }
+    setSavingProfile(true)
+    const updated = {
+      ...currentUser,
+      id: currentUser.id,
+      nome: editNome.trim(),
+      email: editEmail.trim(),
+      telefone: editTelefone.replace(/\D/g, ''),
+      endereco: { ...(currentUser.endereco || {}), ...editEndereco, senha: editSenha || currentUser.endereco?.senha || '' }
+    }
+    await upsertUser(updated)
+    localStorage.setItem(LS_SESSAO, JSON.stringify(updated))
+    setSavingProfile(false)
+    alert('Dados salvos com sucesso!')
+  }
 
   useEffect(() => {
     if (initialOrderId) {
@@ -286,6 +328,9 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
           <button className={`admin-nav-item ${tab === 'financeiro' ? 'active' : ''}`} onClick={() => setTab('financeiro')}>
             <i className="fa-solid fa-coins"></i> <span>Financeiro</span>
             {pendentes.length > 0 && <span className="admin-badge">{pendentes.length}</span>}
+          </button>
+          <button className={`admin-nav-item ${tab === 'conta' ? 'active' : ''}`} onClick={initConta}>
+            <i className="fa-solid fa-user-gear"></i> <span>Minha Conta</span>
           </button>
         </nav>
         <div className="admin-sidebar-footer">
@@ -738,6 +783,42 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
         </div>
       )}
 
+      {tab === 'conta' && (
+        <div className="admin-section">
+          <div className="admin-header-row">
+            <div>
+              <h1>Minha Conta</h1>
+              <p className="admin-subtitle">Edite suas informações pessoais</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: 500, marginTop: '1rem' }}>
+            <div className="form-group">
+              <label>Nome</label>
+              <input type="text" value={editNome} onChange={e => setEditNome(e.target.value)} placeholder="Seu nome" />
+            </div>
+            <div className="form-group">
+              <label>Email</label>
+              <input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="seu@email.com" />
+            </div>
+            <div className="form-group">
+              <label>Telefone / WhatsApp</label>
+              <input type="text" value={editTelefone} onChange={e => setEditTelefone(e.target.value)} placeholder="(31) 99999-9999" />
+            </div>
+            <div className="form-group">
+              <label>Senha</label>
+              <input type="password" value={editSenha} onChange={e => setEditSenha(e.target.value)} placeholder="Nova senha" />
+            </div>
+            <div className="form-group">
+              <label>Endereço</label>
+              <AddressForm value={editEndereco} onChange={(addr) => setEditEndereco(addr)} />
+            </div>
+            <button className="btn-next" style={{ alignSelf: 'flex-start' }} disabled={savingProfile} onClick={saveProfile}>
+              {savingProfile ? <span><i className="fa-solid fa-spinner fa-spin"></i> Salvando...</span> : <span><i className="fa-solid fa-check"></i> Salvar Alterações</span>}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Sticky bottom nav for mobile */}
       <nav className="admin-bottom-nav">
         <button className="admin-bottom-item" onClick={onVoltar}>
@@ -752,6 +833,10 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
           <i className="fa-solid fa-coins"></i>
           <span>Financeiro</span>
           {pendentes.length > 0 && <span className="admin-bottom-badge">{pendentes.length}</span>}
+        </button>
+        <button className={`admin-bottom-item ${tab === 'conta' ? 'active' : ''}`} onClick={initConta}>
+          <i className="fa-solid fa-user-gear"></i>
+          <span>Conta</span>
         </button>
         <button className="admin-bottom-item" onClick={onVoltar}>
           <i className="fa-solid fa-arrow-left"></i>
