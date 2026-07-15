@@ -7,6 +7,7 @@ const STORAGE_PRODUCTS = 'thsm_admin_produtos'
 const STORAGE_FINANCIAL = 'thsm_admin_financeiro'
 const WEBHOOK_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/novo-pedido'
 const LISTA_CONTATOS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/lista-contatos'
+const ALERTAR_ROTAS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/alertar-rotas'
 
 const LS = {
   get(key, def) {
@@ -153,6 +154,25 @@ function sendStatusWebhook(order, newStatus, extra = {}) {
   }).catch(() => {})
 }
 
+function sendAlertRota(tipo, contatos, customText = '') {
+  const payload = {
+    event: tipo === 'alerta' ? 'alertar-rotas' : tipo === 'atualizacao' ? 'atualizacao-pedidos' : 'personalizado',
+    contacts: contatos.map(c => ({
+      remoteJid: c.remoteJid,
+      pushName: c.pushName || c.nome || '',
+      cidade: c.cidade || '',
+      rota: c.rota || '',
+      telefone: c.remoteJid?.replace(/@.*/, '').replace(/\D/g, '') || ''
+    })),
+    ...(customText ? { message: customText } : {})
+  }
+  fetch(ALERTAR_ROTAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).catch(() => {})
+}
+
 import AddressForm from '../components/AddressForm'
 
 export default function Admin({ produtos, onVoltar }) {
@@ -213,6 +233,8 @@ export default function Admin({ produtos, onVoltar }) {
   const [filterCidade, setFilterCidade] = useState('TODAS')
   const [filterRota, setFilterRota] = useState('TODAS')
   const [filterRotaSearch, setFilterRotaSearch] = useState('')
+  const [customMsgRota, setCustomMsgRota] = useState(null)
+  const [customMsgText, setCustomMsgText] = useState('')
   const PROD_PER_PAGE = 20
 
   const showToast = (msg, type = 'success') => {
@@ -1899,6 +1921,18 @@ export default function Admin({ produtos, onVoltar }) {
                                 <i className="fa-solid fa-map-location-dot"></i>
                                 <span>Mapa</span>
                               </button>
+                              <button className="rota-map-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }} title="Alertar Rotas" onClick={e => { e.stopPropagation(); if (confirm(`Enviar alerta para ${totalVisivel} contatos da rota "${grupo.rota}"?`)) { sendAlertRota('alerta', allContatos); showToast(`Alerta enviado para ${totalVisivel} contatos`) } }}>
+                                <i className="fa-solid fa-bullhorn"></i>
+                                <span>Alertar</span>
+                              </button>
+                              <button className="rota-map-btn" style={{ background: '#059669', color: 'white', borderColor: '#059669' }} title="Atualização Pedidos" onClick={e => { e.stopPropagation(); if (confirm(`Enviar atualização de pedidos para ${totalVisivel} contatos da rota "${grupo.rota}"?`)) { sendAlertRota('atualizacao', allContatos); showToast(`Atualização enviada para ${totalVisivel} contatos`) } }}>
+                                <i className="fa-solid fa-rotate"></i>
+                                <span>Pedidos</span>
+                              </button>
+                              <button className="rota-map-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} title="Personalizado" onClick={e => { e.stopPropagation(); setCustomMsgRota({ rota: grupo.rota, contatos: allContatos, total: totalVisivel }) }}>
+                                <i className="fa-solid fa-pen"></i>
+                                <span>Custom</span>
+                              </button>
                               <span className="rota-expand-icon">
                                 <i className={`fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
                               </span>
@@ -2265,6 +2299,44 @@ export default function Admin({ produtos, onVoltar }) {
                 <button className="admin-btn admin-btn-sec" onClick={() => { setShowBulkStock(false); setBulkStockValue('') }}>Cancelar</button>
                 <button className="admin-btn admin-btn-primary" disabled={bulkStockValue === ''} onClick={applyBulkStock}>
                   <i className="fa-solid fa-check"></i> Aplicar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {customMsgRota && (
+        <div className="admin-overlay" onClick={() => { setCustomMsgRota(null); setCustomMsgText('') }}>
+          <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '450px' }}>
+            <div className="admin-modal-header">
+              <h3><i className="fa-solid fa-pen"></i> Mensagem Personalizada</h3>
+              <button className="admin-modal-close" onClick={() => { setCustomMsgRota(null); setCustomMsgText('') }}><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <div className="admin-modal-body">
+              <p style={{ marginBottom: '0.75rem', fontSize: '0.85rem', color: 'var(--admin-text-sec)' }}>
+                Enviar mensagem personalizada para <strong>{customMsgRota.total} contatos</strong> da rota <strong>{customMsgRota.rota}</strong>:
+              </p>
+              <div className="form-group">
+                <label>Texto da mensagem</label>
+                <textarea
+                  placeholder="Digite a mensagem que será enviada..."
+                  value={customMsgText}
+                  onChange={e => setCustomMsgText(e.target.value)}
+                  rows={5}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', resize: 'vertical', fontFamily: 'inherit' }}
+                  autoFocus
+                />
+              </div>
+              <div className="modal-actions">
+                <button className="admin-btn admin-btn-sec" onClick={() => { setCustomMsgRota(null); setCustomMsgText('') }}>Cancelar</button>
+                <button className="admin-btn admin-btn-primary" disabled={!customMsgText.trim()} onClick={() => {
+                  sendAlertRota('personalizado', customMsgRota.contatos, customMsgText.trim())
+                  showToast(`Mensagem enviada para ${customMsgRota.total} contatos`)
+                  setCustomMsgRota(null)
+                  setCustomMsgText('')
+                }}>
+                  <i className="fa-solid fa-paper-plane"></i> Enviar
                 </button>
               </div>
             </div>
