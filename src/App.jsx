@@ -257,10 +257,10 @@ function App() {
       nome: currentUser?.nome || '',
       email: currentUser?.email || '',
       telefone: currentUser?.telefone || '',
+      senha: '',
       endereco: currentUser?.endereco || { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' }
     })
-    setPagamento('avista')
-    setSplitItems({})
+    setPagamento('aprazo')
     setCheckout(currentUser ? 'payment' : 'info')
     setCartOpen(false)
   }
