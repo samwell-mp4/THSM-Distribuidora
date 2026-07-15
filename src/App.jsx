@@ -88,7 +88,7 @@ function App() {
           setCurrentUser(user)
           showToast(`Bem-vindo, ${user.nome}!`)
           const addr = user.endereco || {}
-          if (!addr.cidade || !addr.rua || !addr.numero) {
+          if (!addr.cep || !addr.cidade || !addr.rua || !addr.numero) {
             setAddressRequiredEndereco({ cep: addr.cep || '', estado: addr.estado || '', cidade: addr.cidade || '', bairro: addr.bairro || '', rua: addr.rua || '', numero: addr.numero || '', complemento: addr.complemento || '' })
             setShowAddressRequired(true)
           } else {
@@ -202,6 +202,11 @@ function App() {
     setLoginEmail('')
     setLoginSenha('')
     showToast(`Bem-vindo, ${user.nome}!`)
+    const addr = user.endereco || {}
+    if (!addr.cep || !addr.cidade || !addr.rua || !addr.numero) {
+      setAddressRequiredEndereco({ cep: addr.cep || '', estado: addr.estado || '', cidade: addr.cidade || '', bairro: addr.bairro || '', rua: addr.rua || '', numero: addr.numero || '', complemento: addr.complemento || '' })
+      setShowAddressRequired(true)
+    }
   }
 
   const fazerRegistro = async () => {
@@ -223,6 +228,11 @@ function App() {
     setLoginEmail('')
     setLoginSenha('')
     showToast('Conta criada com sucesso!')
+    const addr = data.endereco || {}
+    if (!addr.cep || !addr.cidade || !addr.rua || !addr.numero) {
+      setAddressRequiredEndereco({ cep: addr.cep || '', estado: addr.estado || '', cidade: addr.cidade || '', bairro: addr.bairro || '', rua: addr.rua || '', numero: addr.numero || '', complemento: addr.complemento || '' })
+      setShowAddressRequired(true)
+    }
   }
 
   const logout = () => {
@@ -233,7 +243,7 @@ function App() {
 
   const saveRequiredAddress = async () => {
     const addr = addressRequiredEndereco
-    if (!addr.cidade || !addr.rua || !addr.numero) { showToast('Preencha cidade, rua e número', 'error'); return }
+    if (!addr.cep || !addr.cidade || !addr.rua || !addr.numero) { showToast('Preencha CEP, cidade, rua e número', 'error'); return }
     setSavingAddress(true)
     const updated = { ...currentUser, endereco: { ...(currentUser?.endereco || {}), ...addr } }
     await upsertUser(updated)
@@ -241,7 +251,7 @@ function App() {
     setShowAddressRequired(false)
     setSavingAddress(false)
     showToast('Endereço salvo com sucesso!')
-    if (route !== 'userdash') navigate('/minha-conta')
+    navigate('/')
   }
 
   const autoLoginOuRegistro = async () => {
@@ -877,7 +887,7 @@ function App() {
               </div>
               <AddressForm value={addressRequiredEndereco} onChange={(addr) => setAddressRequiredEndereco(addr)} />
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.25rem' }}>
-                <button className="btn-next" style={{ flex: 1, justifyContent: 'center' }} disabled={savingAddress || !addressRequiredEndereco.cidade || !addressRequiredEndereco.rua || !addressRequiredEndereco.numero} onClick={saveRequiredAddress}>
+                <button className="btn-next" style={{ flex: 1, justifyContent: 'center' }} disabled={savingAddress || !addressRequiredEndereco.cep || !addressRequiredEndereco.cidade || !addressRequiredEndereco.rua || !addressRequiredEndereco.numero} onClick={saveRequiredAddress}>
                   {savingAddress ? <><i className="fa-solid fa-spinner fa-spin"></i> Salvando...</> : <><i className="fa-solid fa-check"></i> Salvar e Continuar</>}
                 </button>
               </div>
