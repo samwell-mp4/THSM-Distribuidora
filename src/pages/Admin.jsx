@@ -291,6 +291,12 @@ export default function Admin({ produtos, onVoltar }) {
   const [newRotaName, setNewRotaName] = useState('')
   const [newRotaSearch, setNewRotaSearch] = useState('')
   const [newRotaSelected, setNewRotaSelected] = useState([])
+  const [newContactPhone, setNewContactPhone] = useState('')
+  const [newContactName, setNewContactName] = useState('')
+  const [editCustomContact, setEditCustomContact] = useState(null)
+  const [editContactName, setEditContactName] = useState('')
+  const [editContactPhone, setEditContactPhone] = useState('')
+  const [editContactCity, setEditContactCity] = useState('')
   const [customRotas, setCustomRotas] = useState(() => LS.get(STORAGE_CUSTOM_ROTAS, []))
   const PROD_PER_PAGE = 20
 
@@ -1841,7 +1847,7 @@ export default function Admin({ produtos, onVoltar }) {
                 <p className="admin-subtitle">Mapa de rotas e contatos de WhatsApp</p>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button className="admin-btn" style={{ background: '#059669', color: 'white', borderColor: '#059669' }} onClick={() => { setNewRotaName(''); setNewRotaSearch(''); setNewRotaSelected([]); setShowNewRota(true) }}>
+                <button className="admin-btn" style={{ background: '#059669', color: 'white', borderColor: '#059669' }} onClick={() => { setNewRotaName(''); setNewRotaSearch(''); setNewRotaSelected([]); setNewContactPhone(''); setNewContactName(''); setShowNewRota(true) }}>
                   <i className="fa-solid fa-plus"></i> Nova Rota
                 </button>
                 <button className="admin-btn admin-btn-primary" onClick={fetchRotas} disabled={rotasLoading}>
@@ -2060,6 +2066,18 @@ export default function Admin({ produtos, onVoltar }) {
                                         >
                                           <i className="fa-brands fa-whatsapp"></i>
                                         </button>
+                                        {grupo._custom && (
+                                          <>
+                                            <button className="rota-whatsapp-btn" style={{ background: 'var(--accent)', borderColor: 'var(--accent)' }} title="Editar"
+                                              onClick={e => { e.stopPropagation(); setEditCustomContact({ contato: ct, rotaName: grupo.rota }); setEditContactName(ct.pushName || ''); setEditContactPhone((ct.remoteJid || '').replace(/@.*/, '').replace(/\D/g, '')); setEditContactCity(ct.cidade || '') }}>
+                                              <i className="fa-solid fa-pen" style={{ fontSize: '0.65rem' }}></i>
+                                            </button>
+                                            <button className="rota-whatsapp-btn" style={{ background: '#dc2626', borderColor: '#dc2626' }} title="Remover"
+                                              onClick={e => { e.stopPropagation(); if (confirm(`Remover ${ct.pushName || 'contato'} da rota "${grupo.rota}"?`)) { setCustomRotas(prev => prev.map(cr => cr.rota === grupo.rota ? { ...cr, cidades: cr.cidades.map(cid => ({ ...cid, contatos: cid.contatos.filter(x => x.remoteJid !== ct.remoteJid) })).filter(cid => cid.contatos.length > 0) } : cr).filter(cr => cr.cidades.length > 0)); showToast('Contato removido') } }}>
+                                              <i className="fa-solid fa-trash" style={{ fontSize: '0.65rem' }}></i>
+                                            </button>
+                                          </>
+                                        )}
                                       </div>
                                     ))}
                                   </div>
@@ -2435,8 +2453,30 @@ export default function Admin({ produtos, onVoltar }) {
                 <label>Nome da Rota</label>
                 <input type="text" placeholder="Ex: Zona Norte" value={newRotaName} onChange={e => setNewRotaName(e.target.value)} autoFocus />
               </div>
+              <div style={{ marginBottom: '0.75rem', padding: '0.65rem', background: '#f9fafb', borderRadius: '8px', border: '1px dashed var(--admin-border)' }}>
+                <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.82rem', fontWeight: 600 }}>Adicionar Contato Manual</label>
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.4rem' }}>
+                  <input type="text" placeholder="Telefone (obrigatório)" value={newContactPhone} onChange={e => setNewContactPhone(e.target.value.replace(/\D/g, '').slice(0, 11))} style={{ flex: 1, minWidth: '140px', padding: '0.4rem 0.55rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.8rem' }} />
+                  <input type="text" placeholder="Nome (opcional)" value={newContactName} onChange={e => setNewContactName(e.target.value)} style={{ flex: 1, minWidth: '140px', padding: '0.4rem 0.55rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.8rem' }} />
+                  <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.7rem', background: '#059669', color: 'white', borderColor: '#059669' }} disabled={!newContactPhone} onClick={() => {
+                    const nums = newContactPhone.replace(/\D/g, '')
+                    if (nums.length < 10) { showToast('Telefone inválido — mínimo 10 dígitos', 'error'); return }
+                    const normalized = nums.startsWith('55') ? nums : '55' + nums
+                    const allExisting = [...rotas, ...newRotaSelected]
+                    if (allExisting.some(r => (r.remoteJid || '').includes(normalized))) { showToast('Este telefone já está na lista', 'error'); return }
+                    const name = newContactName.trim() || 'Contato'
+                    setNewRotaSelected(prev => [...prev, { remoteJid: `${normalized}@s.whatsapp.net`, pushName: name, nome: name, cidade: 'Personalizado' }])
+                    setNewContactPhone('')
+                    setNewContactName('')
+                    showToast(`${name} adicionado à seleção`)
+                  }}>
+                    <i className="fa-solid fa-plus"></i> Adicionar
+                  </button>
+                </div>
+                <p style={{ fontSize: '0.7rem', color: 'var(--admin-text-sec)', margin: 0 }}>Digite apenas números — o sistema normaliza automaticamente com 55</p>
+              </div>
               <div style={{ marginBottom: '0.75rem' }}>
-                <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.82rem', fontWeight: 600 }}>Adicionar Contatos</label>
+                <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.82rem', fontWeight: 600 }}>Buscar Contatos Existentes</label>
                 <div className="admin-search-prod" style={{ marginBottom: '0.5rem' }}>
                   <i className="fa-solid fa-search"></i>
                   <input type="text" placeholder="Buscar contatos..." value={newRotaSearch} onChange={e => setNewRotaSearch(e.target.value)} style={{ width: '100%' }} />
@@ -2503,6 +2543,55 @@ export default function Admin({ produtos, onVoltar }) {
                   setNewRotaSelected([])
                 }}>
                   <i className="fa-solid fa-check"></i> Criar Rota
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editCustomContact && (
+        <div className="admin-overlay" onClick={() => setEditCustomContact(null)}>
+          <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <div className="admin-modal-header">
+              <h3><i className="fa-solid fa-pen"></i> Editar Contato</h3>
+              <button className="admin-modal-close" onClick={() => setEditCustomContact(null)}><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <div className="admin-modal-body">
+              <div className="form-group">
+                <label>Nome</label>
+                <input type="text" placeholder="Nome do contato" value={editContactName} onChange={e => setEditContactName(e.target.value)} autoFocus />
+              </div>
+              <div className="form-group">
+                <label>Telefone (com DDD, só números)</label>
+                <input type="text" placeholder="31999999999" value={editContactPhone} onChange={e => setEditContactPhone(e.target.value.replace(/\D/g, '').slice(0, 11))} />
+              </div>
+              <div className="form-group">
+                <label>Cidade</label>
+                <input type="text" placeholder="Cidade" value={editContactCity} onChange={e => setEditContactCity(e.target.value)} />
+              </div>
+              <div className="modal-actions">
+                <button className="admin-btn admin-btn-sec" onClick={() => setEditCustomContact(null)}>Cancelar</button>
+                <button className="admin-btn admin-btn-primary" disabled={!editContactPhone || editContactPhone.replace(/\D/g, '').length < 10} onClick={() => {
+                  const nums = editContactPhone.replace(/\D/g, '')
+                  const normalized = nums.startsWith('55') ? nums : '55' + nums
+                  const oldJid = editCustomContact.contato.remoteJid
+                  setCustomRotas(prev => prev.map(cr => cr.rota === editCustomContact.rotaName ? {
+                    ...cr,
+                    cidades: cr.cidades.map(cid => ({
+                      ...cid,
+                      contatos: cid.contatos.map(x => x.remoteJid === oldJid ? {
+                        ...x,
+                        pushName: editContactName.trim() || x.pushName,
+                        remoteJid: `${normalized}@s.whatsapp.net`,
+                        cidade: editContactCity.trim() || x.cidade
+                      } : x)
+                    }))
+                  } : cr))
+                  showToast('Contato atualizado')
+                  setEditCustomContact(null)
+                }}>
+                  <i className="fa-solid fa-check"></i> Salvar
                 </button>
               </div>
             </div>
