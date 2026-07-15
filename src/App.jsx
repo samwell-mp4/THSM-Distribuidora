@@ -79,27 +79,37 @@ function App() {
     const params = new URLSearchParams(window.location.search)
     const pid = params.get('pedido')
     const loginToken = params.get('login')
-    if (loginToken) {
+    const doLogin = async (telefone) => {
       sessionStorage.setItem('thsm_user_tab', 'pedidos')
+      let user = usuarios.find(u => u.telefone === telefone)
+      if (!user) {
+        const { data } = await supabase.from('usuarios').select('*').eq('telefone', telefone).single()
+        if (data) {
+          user = data
+          setUsuarios(prev => {
+            const merged = [...prev.filter(u => u.telefone !== data.telefone), data]
+            localStorage.setItem(LS_USUARIOS, JSON.stringify(merged))
+            return merged
+          })
+        }
+      }
+      if (user) {
+        setCurrentUser(user)
+        showToast(`Bem-vindo, ${user.nome}!`)
+        const addr = user.endereco || {}
+        if (!addr.cep || !addr.cidade || !addr.rua || !addr.numero) {
+          setAddressRequiredEndereco({ cep: addr.cep || '', estado: addr.estado || '', cidade: addr.cidade || '', bairro: addr.bairro || '', rua: addr.rua || '', numero: addr.numero || '', complemento: addr.complemento || '' })
+          setShowAddressRequired(true)
+        } else {
+          if (route !== 'userdash') navigate('/')
+        }
+      }
+    }
+    if (loginToken) {
       try {
         const telefone = atob(loginToken)
-        const user = usuarios.find(u => u.telefone === telefone)
-        if (user) {
-          setCurrentUser(user)
-          showToast(`Bem-vindo, ${user.nome}!`)
-          const addr = user.endereco || {}
-          if (!addr.cep || !addr.cidade || !addr.rua || !addr.numero) {
-            setAddressRequiredEndereco({ cep: addr.cep || '', estado: addr.estado || '', cidade: addr.cidade || '', bairro: addr.bairro || '', rua: addr.rua || '', numero: addr.numero || '', complemento: addr.complemento || '' })
-            setShowAddressRequired(true)
-          } else {
-            if (route !== 'userdash') navigate('/minha-conta')
-          }
-        } else {
-          if (route !== 'userdash') navigate('/minha-conta')
-        }
-      } catch {
-        if (route !== 'userdash') navigate('/minha-conta')
-      }
+        doLogin(telefone)
+      } catch { /* ignore invalid base64 */ }
       const url = new URL(window.location)
       url.searchParams.delete('login')
       window.history.replaceState({}, '', url)
