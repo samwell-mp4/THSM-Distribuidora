@@ -248,6 +248,7 @@ function App() {
   }
 
   const logout = () => {
+    if (!window.confirm('Tem certeza que deseja sair?')) return
     setCurrentUser(null)
     localStorage.removeItem(LS_SESSAO)
     showToast('Você saiu da sua conta')

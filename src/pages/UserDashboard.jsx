@@ -791,7 +791,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
               <p className="admin-subtitle">Edite suas informações pessoais</p>
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%', maxWidth: 500, marginTop: '1rem' }}>
+          <div className="conta-form">
             <div className="form-group">
               <label>Nome</label>
               <input type="text" value={editNome} onChange={e => setEditNome(e.target.value)} placeholder="Seu nome" />
@@ -821,9 +821,9 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
 
       {/* Sticky bottom nav for mobile */}
       <nav className="admin-bottom-nav">
-        <button className="admin-bottom-item" onClick={onVoltar}>
-          <i className="fa-solid fa-box"></i>
-          <span>Produtos</span>
+        <button className={`admin-bottom-item ${tab === 'conta' ? 'active' : ''}`} onClick={initConta}>
+          <i className="fa-solid fa-user-gear"></i>
+          <span>Minha Conta</span>
         </button>
         <button className={`admin-bottom-item ${tab === 'pedidos' ? 'active' : ''}`} onClick={() => setTab('pedidos')}>
           <i className="fa-solid fa-clipboard-list"></i>
@@ -833,10 +833,6 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
           <i className="fa-solid fa-coins"></i>
           <span>Financeiro</span>
           {pendentes.length > 0 && <span className="admin-bottom-badge">{pendentes.length}</span>}
-        </button>
-        <button className={`admin-bottom-item ${tab === 'conta' ? 'active' : ''}`} onClick={initConta}>
-          <i className="fa-solid fa-user-gear"></i>
-          <span>Conta</span>
         </button>
         <button className="admin-bottom-item" onClick={onVoltar}>
           <i className="fa-solid fa-arrow-left"></i>

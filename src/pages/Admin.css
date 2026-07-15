@@ -153,6 +153,19 @@
   max-height: 100vh;
 }
 
+.conta-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  max-width: 500px;
+  margin-top: 1rem;
+}
+
+.conta-save-btn {
+  align-self: flex-start;
+}
+
 .admin-section h1 {
   font-size: 1.4rem;
   font-weight: 800;
