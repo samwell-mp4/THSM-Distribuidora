@@ -192,6 +192,8 @@ export default function Admin({ produtos, onVoltar }) {
   const [prodSelectedIds, setProdSelectedIds] = useState(new Set())
   const [showBulkPrice, setShowBulkPrice] = useState(false)
   const [bulkPriceValue, setBulkPriceValue] = useState('')
+  const [showBulkStock, setShowBulkStock] = useState(false)
+  const [bulkStockValue, setBulkStockValue] = useState('')
   const [orderSearch, setOrderSearch] = useState('')
   const [orderSort, setOrderSort] = useState({ field: 'createdAt', dir: 'desc' })
   const [selectedIds, setSelectedIds] = useState(new Set())
@@ -748,8 +750,8 @@ export default function Admin({ produtos, onVoltar }) {
   }
 
   const toggleProdSelectAll = () => {
-    if (prodSelectedIds.size === paginatedProds.length) setProdSelectedIds(new Set())
-    else setProdSelectedIds(new Set(paginatedProds.map(p => p.id)))
+    if (prodSelectedIds.size === filteredProds.length) setProdSelectedIds(new Set())
+    else setProdSelectedIds(new Set(filteredProds.map(p => p.id)))
   }
 
   const toggleProdSelect = (id) => {
@@ -773,6 +775,9 @@ export default function Admin({ produtos, onVoltar }) {
     } else if (action === 'preco') {
       setShowBulkPrice(true)
       return
+    } else if (action === 'estoque') {
+      setShowBulkStock(true)
+      return
     }
     setProdSelectedIds(new Set())
   }
@@ -786,6 +791,17 @@ export default function Admin({ produtos, onVoltar }) {
     setProdSelectedIds(new Set())
     setShowBulkPrice(false)
     setBulkPriceValue('')
+  }
+
+  const applyBulkStock = () => {
+    const val = parseInt(bulkStockValue, 10)
+    if (isNaN(val) || val < 0) { showToast('Valor inválido', 'error'); return }
+    if (!confirm(`Definir estoque ${val} para ${prodSelectedIds.size} produto(s)?`)) return
+    prodSelectedIds.forEach(id => updateProduct(id, { estoque: val }))
+    showToast(`Estoque atualizado para ${prodSelectedIds.size} produto(s)`)
+    setProdSelectedIds(new Set())
+    setShowBulkStock(false)
+    setBulkStockValue('')
   }
 
   // =============================================
@@ -1164,6 +1180,9 @@ export default function Admin({ produtos, onVoltar }) {
                 <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', background: 'var(--accent)', color: 'white', borderColor: 'var(--accent)' }} onClick={() => bulkProdAction('preco')}>
                   <i className="fa-solid fa-dollar-sign"></i> Trocar Preço
                 </button>
+                <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', background: '#10b981', color: 'white', borderColor: '#10b981' }} onClick={() => bulkProdAction('estoque')}>
+                  <i className="fa-solid fa-warehouse"></i> Definir Estoque
+                </button>
                 <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }} onClick={() => setProdSelectedIds(new Set())}>
                   <i className="fa-solid fa-xmark"></i> Limpar
                 </button>
@@ -1175,7 +1194,7 @@ export default function Admin({ produtos, onVoltar }) {
                 <thead>
                   <tr>
                     <th style={{ width: '36px' }}>
-                      <input type="checkbox" checked={paginatedProds.length > 0 && prodSelectedIds.size === paginatedProds.length} onChange={toggleProdSelectAll} style={{ cursor: 'pointer', width: '15px', height: '15px' }} />
+                      <input type="checkbox" checked={filteredProds.length > 0 && prodSelectedIds.size === filteredProds.length} onChange={toggleProdSelectAll} style={{ cursor: 'pointer', width: '15px', height: '15px' }} title={prodSelectedIds.size === filteredProds.length ? 'Desmarcar todos' : `Selecionar todos (${filteredProds.length} produtos)`} />
                     </th>
                     <th style={{width: '50px'}}>Foto</th>
                     <th style={{ cursor: 'pointer' }} onClick={() => toggleProdSort('nome')}>Produto {prodSortIcon('nome')}</th>
@@ -2053,6 +2072,32 @@ export default function Admin({ produtos, onVoltar }) {
               <div className="modal-actions">
                 <button className="admin-btn admin-btn-sec" onClick={() => { setShowBulkPrice(false); setBulkPriceValue('') }}>Cancelar</button>
                 <button className="admin-btn admin-btn-primary" disabled={!bulkPriceValue} onClick={applyBulkPrice}>
+                  <i className="fa-solid fa-check"></i> Aplicar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBulkStock && (
+        <div className="admin-overlay" onClick={() => { setShowBulkStock(false); setBulkStockValue('') }}>
+          <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <div className="admin-modal-header">
+              <h3><i className="fa-solid fa-warehouse"></i> Definir Estoque em Massa</h3>
+              <button className="admin-modal-close" onClick={() => { setShowBulkStock(false); setBulkStockValue('') }}><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <div className="admin-modal-body">
+              <p style={{ marginBottom: '0.75rem', fontSize: '0.85rem', color: 'var(--admin-text-sec)' }}>
+                Defina a quantidade em estoque para <strong>{prodSelectedIds.size} produto(s)</strong> selecionado(s):
+              </p>
+              <div className="form-group">
+                <label>Quantidade</label>
+                <input type="number" step="1" min="0" placeholder="0" value={bulkStockValue} onChange={e => setBulkStockValue(e.target.value)} autoFocus />
+              </div>
+              <div className="modal-actions">
+                <button className="admin-btn admin-btn-sec" onClick={() => { setShowBulkStock(false); setBulkStockValue('') }}>Cancelar</button>
+                <button className="admin-btn admin-btn-primary" disabled={bulkStockValue === ''} onClick={applyBulkStock}>
                   <i className="fa-solid fa-check"></i> Aplicar
                 </button>
               </div>
