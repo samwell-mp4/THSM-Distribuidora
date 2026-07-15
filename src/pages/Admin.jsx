@@ -327,9 +327,14 @@ export default function Admin({ produtos, onVoltar }) {
       if (o.length) { LS.set(STORAGE_ORDERS, o); setOrders(o) }
       if (f.length) { LS.set(STORAGE_FINANCIAL, f); setFinancial(f) }
       if (u.length) { LS.set('thsm_usuarios', u); setUsuarios(u) }
-      if (r.length) setRotas(r)
+      if (r.length) { setRotas(r) } else { fetchRotas() }
     }).catch(() => {})
   }, [])
+
+  // Auto-expand first rota when rotas load
+  useEffect(() => {
+    if (rotasAgrupadas.length > 0 && !expandedRota) setExpandedRota(rotasAgrupadas[0].rota)
+  }, [rotasAgrupadas, expandedRota])
 
   const produtosAtuais = useMemo(() => {
     return produtos.map(p => ({
