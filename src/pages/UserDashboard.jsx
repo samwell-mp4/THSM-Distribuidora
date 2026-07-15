@@ -57,6 +57,9 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
   const [identityPreview, setIdentityPreview] = useState('')
   const [addressPreview, setAddressPreview] = useState('')
   const [finalizing, setFinalizing] = useState(false)
+  const [finSearch, setFinSearch] = useState('')
+  const [finDateStart, setFinDateStart] = useState('')
+  const [finDateEnd, setFinDateEnd] = useState('')
   const [editNome, setEditNome] = useState('')
   const [editEmail, setEditEmail] = useState('')
   const [editTelefone, setEditTelefone] = useState('')
@@ -119,11 +122,20 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
     if (!currentUser?.telefone) return
     supabase.from('usuarios').select('id').eq('telefone', currentUser.telefone).single().then(({ data: user }) => {
       if (!user) return
-      supabase.from('pedidos').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).then(({ data }) => {
+      supabase.from('pedidos').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).then(async ({ data }) => {
         if (data?.length) {
           const orders = data.map(r => r.data || r)
           setAllOrders(orders)
           setLS(LS_ORDERS, orders)
+          const orderIds = orders.filter(o => o.id).map(o => o.id)
+          if (orderIds.length > 0) {
+            const { data: finData } = await supabase.from('financeiro').select('*').in('order_id', orderIds)
+            if (finData?.length) {
+              const finRecords = finData.map(f => f.data || f)
+              setFinancial(finRecords)
+              setLS(LS_FINANCIAL, finRecords)
+            }
+          }
         }
       })
     }).catch(() => {})
@@ -555,6 +567,15 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
                 </div>
               </div>
             </div>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <div className="search-box" style={{ flex: 1, minWidth: 160 }}>
+                <i className="fa-solid fa-magnifying-glass"></i>
+                <input type="text" placeholder="Buscar por item..." value={finSearch} onChange={e => setFinSearch(e.target.value)} />
+                {finSearch && <button className="search-clear" onClick={() => setFinSearch('')}><i className="fa-solid fa-xmark"></i></button>}
+              </div>
+              <input type="date" value={finDateStart} onChange={e => setFinDateStart(e.target.value)} style={{ padding: '0.4rem 0.5rem', borderRadius: 6, border: '1px solid var(--border)', fontSize: '0.78rem' }} title="Data início" />
+              <input type="date" value={finDateEnd} onChange={e => setFinDateEnd(e.target.value)} style={{ padding: '0.4rem 0.5rem', borderRadius: 6, border: '1px solid var(--border)', fontSize: '0.78rem' }} title="Data fim" />
+            </div>
             <div className="admin-tabs">
               {[
                 { id: 'todas', label: 'Todas', count: userFinancial.length },
@@ -567,7 +588,13 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
               ))}
             </div>
             {(() => {
-              const filtered = finFilter === 'todas' ? userFinancial : userFinancial.filter(f => f.status === finFilter)
+              let filtered = finFilter === 'todas' ? userFinancial : userFinancial.filter(f => f.status === finFilter)
+              if (finSearch.trim()) {
+                const term = finSearch.toLowerCase().trim()
+                filtered = filtered.filter(f => f.itemName?.toLowerCase().includes(term))
+              }
+              if (finDateStart) filtered = filtered.filter(f => f.dueDate >= finDateStart)
+              if (finDateEnd) filtered = filtered.filter(f => f.dueDate <= finDateEnd)
               return filtered.length === 0 ? (
                 <div className="empty">
                   <i className="fa-solid fa-coins"></i>
@@ -579,6 +606,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
                   <table className="admin-table">
                     <thead>
                       <tr>
+                        <th>Pedido</th>
                         <th>Item</th>
                         <th>Valor</th>
                         <th>Vencimento</th>
@@ -594,12 +622,13 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
                         const order = allOrders.find(o => o.id === f.orderId)
                         return (
                           <tr key={f.id} className={overdue ? 'row-overdue' : ''}>
+                            <td data-label="Pedido">#{f.orderId?.toString().slice(-6) || '-'}</td>
                             <td className="td-prod-name" data-label="Item">{f.itemName} ({f.qty}x)</td>
                             <td className="td-price" data-label="Valor">{formatPreco(f.value)}</td>
-                            <td data-label="Vencimento">{formatDate(f.dueDate)}</td>
+                            <td data-label="Vencimento">{f.dueDate ? formatDate(f.dueDate) : '-'}</td>
                             <td data-label="Dias">
                               {f.status === 'pago' ? (
-                                <span className="days-ok">Pago</span>
+                                <span className="days-ok">Pago{f.paidDate ? ` em ${formatDate(f.paidDate)}` : ''}</span>
                               ) : diff > 0 ? (
                                 <span className="days-overdue">+{diff} dias</span>
                               ) : diff === 0 ? (
