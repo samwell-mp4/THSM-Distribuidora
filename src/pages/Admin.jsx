@@ -322,6 +322,51 @@ export default function Admin({ produtos, onVoltar }) {
     LS.set(STORAGE_FINANCIAL, financial)
     if (financial.length > 0) upsertFinancial(financial)
   }, [financial])
+
+  const fetchRotas = useCallback(async () => {
+    setRotasLoading(true)
+    setRotasError(null)
+    try {
+      let allContacts = []
+      let offset = 0
+      const PAGE_SIZE = 1000
+      const MAX_PAGES = 10
+      const seen = new Set()
+
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const res = await fetch(LISTA_CONTATOS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ offset, limit: PAGE_SIZE })
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        const arr = Array.isArray(data) ? data : (data.code === 0 ? [] : [data])
+        if (arr.length === 0) break
+
+        const newContacts = arr.filter(c => {
+          const key = c.remoteJid || c.pushName || Math.random()
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+
+        if (newContacts.length === 0) break
+
+        allContacts = allContacts.concat(newContacts)
+        offset += arr.length
+
+        if (arr.length < PAGE_SIZE) break
+      }
+
+      setRotas(allContacts)
+    } catch (e) {
+      setRotasError(e.message)
+    } finally {
+      setRotasLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     syncAllForAdmin().then(({ orders: o, financial: f, users: u, rotas: r }) => {
       if (o.length) { LS.set(STORAGE_ORDERS, o); setOrders(o) }
@@ -333,8 +378,8 @@ export default function Admin({ produtos, onVoltar }) {
 
   // Auto-expand first rota when rotas load
   useEffect(() => {
-    if (rotasAgrupadas.length > 0 && !expandedRota) setExpandedRota(rotasAgrupadas[0].rota)
-  }, [rotasAgrupadas, expandedRota])
+    if (rotas.length > 0 && !expandedRota) setExpandedRota(rotas[0].rota)
+  }, [rotas, expandedRota])
 
   const produtosAtuais = useMemo(() => {
     return produtos.map(p => ({
@@ -582,52 +627,6 @@ export default function Admin({ produtos, onVoltar }) {
     if (nums.length <= 7) return `(${nums.slice(0, 2)}) ${nums.slice(2)}`
     return `(${nums.slice(0, 2)}) ${nums.slice(2, 7)}-${nums.slice(7)}`
   }
-
-  const fetchRotas = useCallback(async () => {
-    setRotasLoading(true)
-    setRotasError(null)
-    try {
-      let allContacts = []
-      let offset = 0
-      const PAGE_SIZE = 1000
-      const MAX_PAGES = 10
-      const seen = new Set()
-
-      for (let page = 0; page < MAX_PAGES; page++) {
-        const res = await fetch(LISTA_CONTATOS_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ offset, limit: PAGE_SIZE })
-        })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
-        const arr = Array.isArray(data) ? data : (data.code === 0 ? [] : [data])
-        if (arr.length === 0) break
-
-        // Deduplicate by remoteJid
-        const newContacts = arr.filter(c => {
-          const key = c.remoteJid || c.pushName || Math.random()
-          if (seen.has(key)) return false
-          seen.add(key)
-          return true
-        })
-
-        if (newContacts.length === 0) break // all duplicates = reached end
-
-        allContacts = allContacts.concat(newContacts)
-        offset += arr.length
-
-        // If fewer items than requested, this was the last page
-        if (arr.length < PAGE_SIZE) break
-      }
-
-      setRotas(allContacts)
-    } catch (e) {
-      setRotasError(e.message)
-    } finally {
-      setRotasLoading(false)
-    }
-  }, [])
 
   const cidadesOrders = useMemo(() => {
     const cidades = [...new Set(orders.map(o => o.customer?.endereco?.cidade).filter(Boolean))]
