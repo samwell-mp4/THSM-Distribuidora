@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import './Admin.css'
-import { supabase, syncAllForAdmin, upsertOrders, upsertFinancial, upsertOrder, deleteOrder as supabaseDeleteOrder, syncContatosToUsuarios, setSessionContext } from '../lib/supabase'
+import { supabase, syncAllForAdmin, upsertOrders, upsertFinancial, upsertOrder, deleteOrder as supabaseDeleteOrder, syncContatosToUsuarios } from '../lib/supabase'
 
 const STORAGE_ORDERS = 'thsm_admin_orders'
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
@@ -216,7 +216,6 @@ export default function Admin({ produtos, onVoltar }) {
     if (financial.length > 0) upsertFinancial(financial)
   }, [financial])
   useEffect(() => {
-    setSessionContext('admin', true)
     syncAllForAdmin().then(({ orders: o, financial: f, users: u, rotas: r }) => {
       if (o.length) { LS.set(STORAGE_ORDERS, o); setOrders(o) }
       if (f.length) { LS.set(STORAGE_FINANCIAL, f); setFinancial(f) }

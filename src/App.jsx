@@ -3,7 +3,7 @@ import produtos from './data/produtos.json'
 import Admin from './pages/Admin'
 import AddressForm from './components/AddressForm'
 import UserDashboard from './pages/UserDashboard'
-import { supabase, upsertOrder, upsertUser, setSessionContext } from './lib/supabase'
+import { supabase, upsertOrder, upsertUser } from './lib/supabase'
 import './App.css'
 
 const LS_USUARIOS = 'thsm_usuarios'
@@ -167,7 +167,6 @@ function App() {
     const telefone = raw.startsWith('55') ? raw : '55' + raw
     const user = usuarios.find(u => u.telefone === telefone)
     if (!user) { showToast('Telefone não cadastrado', 'error'); return }
-    setSessionContext(user.telefone, false)
     setCurrentUser(user)
     setShowLogin(false)
     setLoginEmail('')
@@ -187,7 +186,6 @@ function App() {
       endereco: customer.endereco || {}
     }).select().single()
     if (error) { showToast('Erro ao cadastrar', 'error'); return }
-    setSessionContext(telefone, false)
     setUsuarios(prev => [...prev, data])
     setCurrentUser(data)
     setShowLogin(false)
@@ -209,7 +207,6 @@ function App() {
     const existente = usuarios.find(u => u.telefone === telefone)
     if (existente) {
       setCurrentUser(existente)
-      setSessionContext(telefone, false)
       return true
     }
     const { data, error } = await supabase.from('usuarios').insert({
@@ -219,7 +216,6 @@ function App() {
       endereco: customer.endereco || {}
     }).select().single()
     if (error) { showToast('Erro ao criar cadastro', 'error'); return false }
-    setSessionContext(telefone, false)
     setUsuarios(prev => [...prev, data])
     setCurrentUser(data)
     return true

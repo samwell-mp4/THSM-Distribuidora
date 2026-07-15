@@ -5,10 +5,10 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-// Set RLS session variables
-export function setSessionContext(phone, isAdmin = false) {
-  supabase.rpc('app_set_config', { key: 'app.user_phone', value: phone || '' }).catch(() => {})
-  supabase.rpc('app_set_config', { key: 'app.is_admin', value: isAdmin ? 'true' : 'false' }).catch(() => {})
+function toDateInput(val) {
+  if (!val) return new Date().toISOString()
+  if (typeof val === 'number') return new Date(val).toISOString()
+  return val
 }
 
 // ---- USERS ----
@@ -44,7 +44,7 @@ export async function upsertOrder(order) {
     id: order.id,
     user_id: order.user_id || order.userId || null,
     status: order.status || 'pendente',
-    created_at: order.created_at || order.createdAt || new Date().toISOString(),
+    created_at: toDateInput(order.created_at || order.createdAt),
     data: order
   }
   const { error } = await supabase.from('pedidos').upsert(record, { onConflict: 'id' })
@@ -56,7 +56,7 @@ export async function upsertOrders(orders) {
     id: o.id,
     user_id: o.user_id || o.userId || null,
     status: o.status || 'pendente',
-    created_at: o.created_at || o.createdAt || new Date().toISOString(),
+    created_at: toDateInput(o.created_at || o.createdAt),
     data: o
   }))
   if (records.length === 0) return
