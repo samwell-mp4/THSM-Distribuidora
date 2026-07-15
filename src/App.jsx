@@ -28,7 +28,7 @@ function App() {
   const [toast, setToast] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
   const [checkout, setCheckout] = useState(null)
-  const [customer, setCustomer] = useState({ nome: '', email: '', telefone: '', endereco: { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' } })
+  const [customer, setCustomer] = useState({ nome: '', email: '', telefone: '', senha: '', endereco: { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' } })
   const [pagamento, setPagamento] = useState('avista')
   const [splitItems, setSplitItems] = useState({})
   const [showLogin, setShowLogin] = useState(false)
@@ -167,6 +167,8 @@ function App() {
     const telefone = raw.startsWith('55') ? raw : '55' + raw
     const user = usuarios.find(u => u.telefone === telefone)
     if (!user) { showToast('Telefone não cadastrado', 'error'); return }
+    const senha = user.endereco?.senha
+    if (senha && loginSenha !== senha) { showToast('Senha incorreta', 'error'); return }
     setCurrentUser(user)
     setShowLogin(false)
     setLoginEmail('')
@@ -177,13 +179,14 @@ function App() {
   const fazerRegistro = async () => {
     const raw = loginEmail.replace(/\D/g, '')
     const telefone = raw.startsWith('55') ? raw : '55' + raw
-    if (!telefone) { showToast('Informe o telefone', 'error'); return }
+    if (!telefone || telefone.replace(/\D/g, '').length < 11) { showToast('Telefone inválido', 'error'); return }
     if (usuarios.find(u => u.telefone === telefone)) { showToast('Telefone já cadastrado', 'error'); return }
+    const nome = loginEmail.includes('@') ? loginEmail.split('@')[0] : 'Usuário'
     const { data, error } = await supabase.from('usuarios').insert({
       telefone,
-      nome: customer.nome || 'Usuário',
-      email: '',
-      endereco: customer.endereco || {}
+      nome,
+      email: loginEmail.includes('@') ? loginEmail : '',
+      endereco: { senha: loginSenha || '' }
     }).select().single()
     if (error) { showToast('Erro ao cadastrar', 'error'); return }
     setUsuarios(prev => [...prev, data])
@@ -206,14 +209,17 @@ function App() {
     if (!telefone) { showToast('Informe seu telefone', 'error'); return false }
     const existente = usuarios.find(u => u.telefone === telefone)
     if (existente) {
+      const senha = existente.endereco?.senha
+      if (senha && customer.senha !== senha) { showToast('Senha incorreta', 'error'); return false }
       setCurrentUser(existente)
       return true
     }
+    if (!customer.senha) { showToast('Escolha uma senha', 'error'); return false }
     const { data, error } = await supabase.from('usuarios').insert({
       telefone,
       nome: customer.nome,
       email: customer.email,
-      endereco: customer.endereco || {}
+      endereco: { ...(customer.endereco || {}), senha: customer.senha }
     }).select().single()
     if (error) { showToast('Erro ao criar cadastro', 'error'); return false }
     setUsuarios(prev => [...prev, data])
@@ -661,7 +667,13 @@ function App() {
                   <label>Endereço de entrega</label>
                   <AddressForm value={customer.endereco} onChange={(addr) => setCustomer({ ...customer, endereco: addr })} />
                 </div>
-                <p className="info-msg"><i className="fa-solid fa-info-circle"></i> Ao continuar, você cria ou acessa sua conta automaticamente (senha = telefone sem 55).</p>
+                {!currentUser && (
+                  <div className="form-group">
+                    <label>Senha <small>(escolha uma senha para sua conta)</small></label>
+                    <input type="password" placeholder="Sua senha" value={customer.senha} onChange={e => setCustomer({ ...customer, senha: e.target.value })} />
+                  </div>
+                )}
+                <p className="info-msg"><i className="fa-solid fa-info-circle"></i> Ao continuar, você cria ou acessa sua conta automaticamente.</p>
                 <button className="btn-next" disabled={!customer.nome.trim() || !customer.email.trim() || !customer.telefone.trim()} onClick={() => { if (autoLoginOuRegistro()) setCheckout('payment') }}>
                   Continuar <i className="fa-solid fa-arrow-right"></i>
                 </button>
@@ -807,19 +819,19 @@ function App() {
               </h2>
               <h2 style={{ textAlign: 'center', fontSize: '1.2rem' }}>{isRegistering ? 'Criar Conta' : 'Entrar'}</h2>
               <p style={{ textAlign: 'center', fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
-                {isRegistering ? 'Informe seu email. Sua senha será seu telefone sem 55.' : 'Use seu email e senha (telefone sem 55).'}
+                {isRegistering ? 'Crie sua conta com telefone e senha.' : 'Entre com seu telefone e senha.'}
               </p>
               <div className="form-group">
-                <label>Email</label>
-                <input type="text" inputMode="email" placeholder="seu@email.com" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} />
+                <label>Telefone / Email</label>
+                <input type="text" inputMode="email" placeholder="(31) 99999-9999 ou email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} />
               </div>
               <div className="form-group">
-                <label>Senha <small>(telefone sem 55)</small></label>
-                <input type="password" placeholder="Ex: 3199999999" value={loginSenha} onChange={e => setLoginSenha(e.target.value)} />
+                <label>Senha</label>
+                <input type="password" placeholder="Sua senha" value={loginSenha} onChange={e => setLoginSenha(e.target.value)} />
               </div>
               {isRegistering && (
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-                  <i className="fa-solid fa-info-circle"></i> Sua senha será seu telefone sem o 55 (ex: 3199999999)
+                  <i className="fa-solid fa-info-circle"></i> Escolha uma senha para sua conta
                 </p>
               )}
               <button className="btn-next" style={{ width: '100%', marginTop: '0.5rem' }} disabled={!loginEmail || !loginSenha} onClick={isRegistering ? fazerRegistro : fazerLogin}>

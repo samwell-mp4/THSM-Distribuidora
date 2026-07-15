@@ -456,6 +456,25 @@ export default function Admin({ produtos, onVoltar }) {
     }
   }
 
+  const gerarSenhasUsuarios = async () => {
+    if (!confirm('Gerar senha para todos os usuários que não têm? (Senha = primeiro nome + 4 últimos dígitos do telefone)')) return
+    const semSenha = usuarios.filter(u => !u.endereco?.senha)
+    if (semSenha.length === 0) { showToast('Todos os usuários já têm senha!', 'warning'); return }
+    let count = 0
+    for (const u of semSenha) {
+      const primeiroNome = (u.nome || 'Usuario').split(' ')[0]
+      const ultimos4 = (u.telefone || '').replace(/\D/g, '').slice(-4)
+      const senha = primeiroNome + ultimos4
+      const endereco = { ...(u.endereco || {}), senha }
+      const saved = await upsertUser({ telefone: u.telefone, nome: u.nome, email: u.email || '', endereco })
+      if (saved) {
+        setUsuarios(prev => prev.map(x => x.telefone === saved.telefone ? saved : x))
+        count++
+      }
+    }
+    showToast(`${count} senha(s) gerada(s) com sucesso!`)
+  }
+
   const formatPhone = (v) => {
     const nums = v.replace(/\D/g, '')
     if (nums.length <= 2) return `(${nums}`
@@ -1424,6 +1443,12 @@ export default function Admin({ produtos, onVoltar }) {
                   <div>
                     <h1>Usuários</h1>
                     <p className="admin-subtitle">{usuarios.length} usuários cadastrados</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6', fontSize: '0.82rem', padding: '0.45rem 0.85rem' }}
+                      onClick={gerarSenhasUsuarios}>
+                      <i className="fa-solid fa-key"></i> Gerar Senhas
+                    </button>
                   </div>
                 </div>
 
