@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import './Admin.css'
-import { supabase, syncAllForAdmin, upsertOrders, upsertFinancial, upsertOrder, upsertUser, deleteOrder as supabaseDeleteOrder, syncContatosToUsuarios, generateLoginToken } from '../lib/supabase'
+import { supabase, syncAllForAdmin, upsertOrders, upsertFinancial, upsertOrder, upsertUser, deleteOrder as supabaseDeleteOrder, syncContatosToUsuarios } from '../lib/supabase'
 
 const STORAGE_ORDERS = 'thsm_admin_orders'
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
@@ -154,7 +154,7 @@ function sendStatusWebhook(order, newStatus, extra = {}) {
   }).catch(() => {})
 }
 
-async function sendAlertRota(tipo, contatos, orders, customText = '') {
+function sendAlertRota(tipo, contatos, orders, customText = '') {
   function formatDate(str) {
     if (!str) return '-'
     const d = new Date(str + (str.length <= 10 ? 'T12:00:00' : ''))
@@ -163,13 +163,12 @@ async function sendAlertRota(tipo, contatos, orders, customText = '') {
   function formatPreco(v) {
     return `R$ ${Number(v).toFixed(2).replace('.', ',')}`
   }
-  const contacts = await Promise.all(contatos.map(async (c) => {
+  const contacts = contatos.map((c) => {
     const telefone = c.remoteJid?.replace(/@.*/, '').replace(/\D/g, '') || ''
     const normalizedPhone = telefone.startsWith('55') ? telefone : '55' + telefone
     let loginLink = ''
     if (telefone) {
-      const token = await generateLoginToken(normalizedPhone)
-      if (token) loginLink = `${window.location.origin}${window.location.pathname}?login=${token}`
+      loginLink = `${window.location.origin}${window.location.pathname}?login=${btoa(normalizedPhone)}`
     }
     const userOrders = (orders || []).filter(o => {
       const ot = o.customer?.telefone || ''
@@ -212,7 +211,7 @@ async function sendAlertRota(tipo, contatos, orders, customText = '') {
       loginLink,
       whatsappMessage
     }
-  }))
+  })
   const payload = {
     event: tipo === 'alerta' ? 'alertar-rotas' : tipo === 'atualizacao' ? 'atualizacao-pedidos' : 'personalizado',
     contacts,
