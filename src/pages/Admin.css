@@ -806,6 +806,7 @@
 }
 
 .add-prod-add:hover { background: var(--accent); color: white; }
+.add-prod-add.in-cart { background: var(--accent); color: white; }
 
 .add-prod-summary {
   display: flex;

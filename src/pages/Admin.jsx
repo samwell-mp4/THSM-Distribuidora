@@ -5,6 +5,7 @@ import { supabase, syncAllForAdmin, upsertOrders, upsertFinancial, upsertOrder, 
 const STORAGE_ORDERS = 'thsm_admin_orders'
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
 const STORAGE_FINANCIAL = 'thsm_admin_financeiro'
+const STORAGE_CUSTOM_ROTAS = 'thsm_custom_rotas'
 const WEBHOOK_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/novo-pedido'
 const LISTA_CONTATOS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/lista-contatos'
 const ALERTAR_ROTAS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/alertar-rotas'
@@ -286,6 +287,11 @@ export default function Admin({ produtos, onVoltar }) {
   const [filterRotaSearch, setFilterRotaSearch] = useState('')
   const [customMsgRota, setCustomMsgRota] = useState(null)
   const [customMsgText, setCustomMsgText] = useState('')
+  const [showNewRota, setShowNewRota] = useState(false)
+  const [newRotaName, setNewRotaName] = useState('')
+  const [newRotaSearch, setNewRotaSearch] = useState('')
+  const [newRotaSelected, setNewRotaSelected] = useState([])
+  const [customRotas, setCustomRotas] = useState(() => LS.get(STORAGE_CUSTOM_ROTAS, []))
   const PROD_PER_PAGE = 20
 
   const showToast = (msg, type = 'success') => {
@@ -299,6 +305,7 @@ export default function Admin({ produtos, onVoltar }) {
     if (orders.length > 0) upsertOrders(orders)
   }, [orders])
   useEffect(() => { LS.set(STORAGE_PRODUCTS, prodChanges) }, [prodChanges])
+  useEffect(() => { LS.set(STORAGE_CUSTOM_ROTAS, customRotas) }, [customRotas])
   useEffect(() => {
     LS.set(STORAGE_FINANCIAL, financial)
     if (financial.length > 0) upsertFinancial(financial)
@@ -952,6 +959,18 @@ export default function Admin({ produtos, onVoltar }) {
       if (!groups[rotaKey].cidades[cidadeKey]) groups[rotaKey].cidades[cidadeKey] = { cidade: cidadeKey, contatos: [] }
       groups[rotaKey].cidades[cidadeKey].contatos.push(r)
       groups[rotaKey].total++
+    })
+    customRotas.forEach(cr => {
+      const rotaKey = cr.rota
+      if (!groups[rotaKey]) groups[rotaKey] = { rota: rotaKey, cidades: {}, total: 0, _custom: true }
+      cr.cidades.forEach(c => {
+        const cidadeKey = c.cidade || 'Sem cidade'
+        if (!groups[rotaKey].cidades[cidadeKey]) groups[rotaKey].cidades[cidadeKey] = { cidade: cidadeKey, contatos: [] }
+        c.contatos.forEach(ct => {
+          groups[rotaKey].cidades[cidadeKey].contatos.push(ct)
+          groups[rotaKey].total++
+        })
+      })
     })
     return Object.values(groups).map(g => ({
       ...g,
@@ -1822,6 +1841,9 @@ export default function Admin({ produtos, onVoltar }) {
                 <p className="admin-subtitle">Mapa de rotas e contatos de WhatsApp</p>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button className="admin-btn" style={{ background: '#059669', color: 'white', borderColor: '#059669' }} onClick={() => { setNewRotaName(''); setNewRotaSearch(''); setNewRotaSelected([]); setShowNewRota(true) }}>
+                  <i className="fa-solid fa-plus"></i> Nova Rota
+                </button>
                 <button className="admin-btn admin-btn-primary" onClick={fetchRotas} disabled={rotasLoading}>
                   <i className={`fa-solid ${rotasLoading ? 'fa-spinner fa-spin' : 'fa-rotate'}`}></i>
                   {rotasLoading ? 'Buscando...' : 'Atualizar'}
@@ -1984,6 +2006,12 @@ export default function Admin({ produtos, onVoltar }) {
                                 <i className="fa-solid fa-pen"></i>
                                 <span>Custom</span>
                               </button>
+                              {grupo._custom && (
+                                <button className="rota-map-btn" style={{ background: '#dc2626', color: 'white', borderColor: '#dc2626' }} title="Excluir rota" onClick={e => { e.stopPropagation(); if (confirm(`Excluir rota "${grupo.rota}"?`)) { setCustomRotas(prev => prev.filter(cr => cr.rota !== grupo.rota)); showToast(`Rota "${grupo.rota}" excluída`) } }}>
+                                  <i className="fa-solid fa-trash"></i>
+                                  <span>Excluir</span>
+                                </button>
+                              )}
                               <span className="rota-expand-icon">
                                 <i className={`fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
                               </span>
@@ -2388,6 +2416,93 @@ export default function Admin({ produtos, onVoltar }) {
                   setCustomMsgText('')
                 }}>
                   <i className="fa-solid fa-paper-plane"></i> Enviar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showNewRota && (
+        <div className="admin-overlay" onClick={() => setShowNewRota(false)}>
+          <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="admin-modal-header">
+              <h3><i className="fa-solid fa-plus-circle"></i> Nova Rota</h3>
+              <button className="admin-modal-close" onClick={() => setShowNewRota(false)}><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <div className="admin-modal-body">
+              <div className="form-group">
+                <label>Nome da Rota</label>
+                <input type="text" placeholder="Ex: Zona Norte" value={newRotaName} onChange={e => setNewRotaName(e.target.value)} autoFocus />
+              </div>
+              <div style={{ marginBottom: '0.75rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.82rem', fontWeight: 600 }}>Adicionar Contatos</label>
+                <div className="admin-search-prod" style={{ marginBottom: '0.5rem' }}>
+                  <i className="fa-solid fa-search"></i>
+                  <input type="text" placeholder="Buscar contatos..." value={newRotaSearch} onChange={e => setNewRotaSearch(e.target.value)} style={{ width: '100%' }} />
+                </div>
+                <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--admin-border)', borderRadius: '8px' }}>
+                  {rotas.filter(r => {
+                    const t = newRotaSearch.toLowerCase().trim()
+                    if (!t) return false
+                    return (r.pushName || '').toLowerCase().includes(t) || (r.remoteJid || '').includes(t) || (r.cidade || '').toLowerCase().includes(t)
+                  }).slice(0, 30).map((r, i) => {
+                    const phone = r.remoteJid?.replace(/@.*/, '').replace(/\D/g, '') || ''
+                    const isSelected = newRotaSelected.some(s => s.remoteJid === r.remoteJid)
+                    return (
+                      <div key={i} className="add-prod-row" style={{ padding: '0.35rem 0.5rem' }}>
+                        <div className="add-prod-info" style={{ flex: 1, minWidth: 0 }}>
+                          <span className="add-prod-name" style={{ fontSize: '0.82rem' }}>{r.pushName || 'Sem nome'}</span>
+                          <span className="add-prod-price" style={{ fontSize: '0.72rem' }}>{phone} {r.cidade ? `- ${r.cidade}` : ''}</span>
+                        </div>
+                        <button className={`add-prod-add ${isSelected ? 'in-cart' : ''}`} style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}
+                          onClick={() => {
+                            if (isSelected) setNewRotaSelected(prev => prev.filter(s => s.remoteJid !== r.remoteJid))
+                            else setNewRotaSelected(prev => [...prev, { ...r, cidade: r.cidade || 'Sem cidade' }])
+                          }}>
+                          {isSelected ? <><i className="fa-solid fa-check"></i> Adicionado</> : <><i className="fa-solid fa-plus"></i> Adicionar</>}
+                        </button>
+                      </div>
+                    )
+                  })}
+                  {newRotaSearch && rotas.filter(r => (r.pushName || '').toLowerCase().includes(newRotaSearch.toLowerCase())).length === 0 && (
+                    <p style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.8rem', color: 'var(--admin-text-sec)' }}>Nenhum contato encontrado</p>
+                  )}
+                </div>
+              </div>
+              {newRotaSelected.length > 0 && (
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <p style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.35rem' }}>{newRotaSelected.length} contato(s) selecionado(s):</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                    {newRotaSelected.map((s, i) => (
+                      <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.5rem', background: '#eef2ff', borderRadius: '50px', fontSize: '0.72rem', color: 'var(--accent)', fontWeight: 500 }}>
+                        {s.pushName || s.remoteJid?.replace(/@.*/, '')}
+                        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', padding: 0, fontSize: '0.75rem' }} onClick={() => setNewRotaSelected(prev => prev.filter(x => x.remoteJid !== s.remoteJid))}>
+                          <i className="fa-solid fa-xmark"></i>
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="modal-actions">
+                <button className="admin-btn admin-btn-sec" onClick={() => setShowNewRota(false)}>Cancelar</button>
+                <button className="admin-btn admin-btn-primary" disabled={!newRotaName.trim() || newRotaSelected.length === 0} onClick={() => {
+                  const grouped = {}
+                  newRotaSelected.forEach(s => {
+                    const cid = s.cidade || 'Sem cidade'
+                    if (!grouped[cid]) grouped[cid] = { cidade: cid, contatos: [] }
+                    grouped[cid].contatos.push(s)
+                  })
+                  const novaRota = { rota: newRotaName.trim(), cidades: Object.values(grouped) }
+                  setCustomRotas(prev => [...prev, novaRota])
+                  showToast(`Rota "${newRotaName.trim()}" criada com ${newRotaSelected.length} contato(s)`)
+                  setShowNewRota(false)
+                  setNewRotaName('')
+                  setNewRotaSearch('')
+                  setNewRotaSelected([])
+                }}>
+                  <i className="fa-solid fa-check"></i> Criar Rota
                 </button>
               </div>
             </div>
