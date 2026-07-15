@@ -440,12 +440,6 @@ function App() {
                   <i className="fa-solid fa-user"></i>
                   <span className="user-name">{currentUser.nome.split(' ')[0]}</span>
                 </button>
-                {currentUser.endereco?.cidade && (
-                  <button className="header-address-btn" onClick={() => { setAddressEditEndereco({ cep: currentUser.endereco.cep || '', estado: currentUser.endereco.estado || '', cidade: currentUser.endereco.cidade || '', bairro: currentUser.endereco.bairro || '', rua: currentUser.endereco.rua || '', numero: currentUser.endereco.numero || '', complemento: currentUser.endereco.complemento || '' }); setShowAddressEdit(true) }} title="Alterar endereço">
-                    <i className="fa-solid fa-location-dot"></i>
-                    <span className="header-address-text">{currentUser.endereco.cidade}{currentUser.endereco.bairro ? `, ${currentUser.endereco.bairro}` : ''}</span>
-                  </button>
-                )}
                 <button className="user-logout" onClick={logout} title="Sair">
                   <i className="fa-solid fa-right-from-bracket"></i>
                 </button>
@@ -462,6 +456,14 @@ function App() {
             </button>
           </div>
         </div>
+        {currentUser?.endereco?.cidade && (
+          <div className="header-address-row">
+            <button className="header-address-btn" onClick={() => { setAddressEditEndereco({ cep: currentUser.endereco.cep || '', estado: currentUser.endereco.estado || '', cidade: currentUser.endereco.cidade || '', bairro: currentUser.endereco.bairro || '', rua: currentUser.endereco.rua || '', numero: currentUser.endereco.numero || '', complemento: currentUser.endereco.complemento || '' }); setShowAddressEdit(true) }} title="Alterar endereço">
+              <i className="fa-solid fa-location-dot"></i>
+              <span>{currentUser.endereco.cidade}{currentUser.endereco.bairro ? `, ${currentUser.endereco.bairro}` : ''}</span>
+            </button>
+          </div>
+        )}
       </header>
 
       {/* FILTERS */}

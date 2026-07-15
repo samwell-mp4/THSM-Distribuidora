@@ -202,7 +202,7 @@ input, select { font-family: inherit; }
 }
 
 .header-address-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.3rem;
   padding: 0.3rem 0.5rem;
@@ -214,16 +214,33 @@ input, select { font-family: inherit; }
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 160px;
-  flex-shrink: 1;
-  min-width: 0;
 }
 .header-address-btn:hover {
   background: var(--warning);
   color: white;
   border-color: var(--warning);
+}
+
+.header-address-row {
+  display: none;
+  padding: 0.25rem 0.75rem;
+  background: var(--warning-bg);
+  border-top: 1px solid var(--border);
+  overflow-x: auto;
+}
+.header-address-row .header-address-btn {
+  font-size: 0.72rem;
+  padding: 0.15rem 0.4rem;
+  border: none;
+  background: transparent;
+  color: var(--warning);
+  max-width: none;
+  white-space: nowrap;
+  overflow: visible;
+}
+.header-address-row .header-address-btn:hover {
+  color: var(--warning);
+  text-decoration: underline;
 }
 
 .user-btn:hover {
@@ -1518,6 +1535,8 @@ input, select { font-family: inherit; }
   .header-brand h1 { font-size: 0.95rem; }
   .header-sub { display: none; }
   .brand-icon { width: 32px; height: 32px; font-size: 0.9rem; }
+
+  .header-address-row { display: flex; }
 
   .header-actions { gap: 0.4rem; }
   .user-btn { padding: 0.35rem 0.5rem; font-size: 0.75rem; }
