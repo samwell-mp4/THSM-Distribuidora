@@ -38,6 +38,9 @@ function App() {
   const [adminUser, setAdminUser] = useState('')
   const [adminPass, setAdminPass] = useState('')
   const [initialOrderId, setInitialOrderId] = useState(null)
+  const [showAddressRequired, setShowAddressRequired] = useState(false)
+  const [addressRequiredEndereco, setAddressRequiredEndereco] = useState({ cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
+  const [savingAddress, setSavingAddress] = useState(false)
   const [adminAuth, setAdminAuth] = useState(() => {
     try { const d = localStorage.getItem(LS_ADMIN); return d ? JSON.parse(d) : null } catch { return null }
   })
@@ -84,12 +87,22 @@ function App() {
         if (user) {
           setCurrentUser(user)
           showToast(`Bem-vindo, ${user.nome}!`)
+          const addr = user.endereco || {}
+          if (!addr.cidade || !addr.rua || !addr.numero) {
+            setAddressRequiredEndereco({ cep: addr.cep || '', estado: addr.estado || '', cidade: addr.cidade || '', bairro: addr.bairro || '', rua: addr.rua || '', numero: addr.numero || '', complemento: addr.complemento || '' })
+            setShowAddressRequired(true)
+          } else {
+            if (route !== 'userdash') navigate('/minha-conta')
+          }
+        } else {
+          if (route !== 'userdash') navigate('/minha-conta')
         }
-      } catch {}
+      } catch {
+        if (route !== 'userdash') navigate('/minha-conta')
+      }
       const url = new URL(window.location)
       url.searchParams.delete('login')
       window.history.replaceState({}, '', url)
-      if (route !== 'userdash') navigate('/minha-conta')
     } else if (pid) {
       setInitialOrderId(Number(pid))
       const url = new URL(window.location)
@@ -216,6 +229,19 @@ function App() {
     setCurrentUser(null)
     localStorage.removeItem(LS_SESSAO)
     showToast('Você saiu da sua conta')
+  }
+
+  const saveRequiredAddress = async () => {
+    const addr = addressRequiredEndereco
+    if (!addr.cidade || !addr.rua || !addr.numero) { showToast('Preencha cidade, rua e número', 'error'); return }
+    setSavingAddress(true)
+    const updated = { ...currentUser, endereco: { ...(currentUser?.endereco || {}), ...addr } }
+    await upsertUser(updated)
+    setCurrentUser(updated)
+    setShowAddressRequired(false)
+    setSavingAddress(false)
+    showToast('Endereço salvo com sucesso!')
+    if (route !== 'userdash') navigate('/minha-conta')
   }
 
   const autoLoginOuRegistro = async () => {
@@ -832,6 +858,29 @@ function App() {
                   {isRegistering ? 'Faça login' : 'Cadastre-se'}
                 </button>
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADDRESS REQUIRED MODAL */}
+      {showAddressRequired && (
+        <div className="overlay">
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal-body">
+              <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+                <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--warning-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem' }}>
+                  <i className="fa-solid fa-location-dot" style={{ fontSize: '1.4rem', color: 'var(--warning)' }}></i>
+                </div>
+                <h2 style={{ fontSize: '1.1rem', marginBottom: '0.25rem' }}>Endereço Obrigatório</h2>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Para continuar, cadastre seu endereço de entrega.</p>
+              </div>
+              <AddressForm value={addressRequiredEndereco} onChange={(addr) => setAddressRequiredEndereco(addr)} />
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.25rem' }}>
+                <button className="btn-next" style={{ flex: 1, justifyContent: 'center' }} disabled={savingAddress || !addressRequiredEndereco.cidade || !addressRequiredEndereco.rua || !addressRequiredEndereco.numero} onClick={saveRequiredAddress}>
+                  {savingAddress ? <><i className="fa-solid fa-spinner fa-spin"></i> Salvando...</> : <><i className="fa-solid fa-check"></i> Salvar e Continuar</>}
+                </button>
+              </div>
             </div>
           </div>
         </div>
