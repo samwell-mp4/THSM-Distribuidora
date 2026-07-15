@@ -177,6 +177,7 @@ export default function Admin({ produtos, onVoltar }) {
   const [finEdit, setFinEdit] = useState(null)
   const [usuarios, setUsuarios] = useState(() => LS.get('thsm_usuarios', []))
   const [selectedUserEmail, setSelectedUserEmail] = useState(null)
+  const [selectedUserDetail, setSelectedUserDetail] = useState(null)
   const [prodCatFilter, setProdCatFilter] = useState('TODOS')
   const [prodStockFilter, setProdStockFilter] = useState('todos')
   const [prodPriceRange, setProdPriceRange] = useState([0, 5000])
@@ -434,6 +435,12 @@ export default function Admin({ produtos, onVoltar }) {
     const cidades = [...new Set(orders.map(o => o.customer?.endereco?.cidade).filter(Boolean))]
     return ['TODAS', ...cidades.sort((a, b) => a.localeCompare(b, 'pt-BR'))]
   }, [orders])
+
+  const userOrdersDetail = useMemo(() => {
+    if (!selectedUserDetail) return []
+    return orders.filter(o => o.customer?.telefone === selectedUserDetail.telefone || o.user_id === selectedUserDetail.id)
+      .sort((a, b) => (b.createdAt || b.date || 0) - (a.createdAt || a.date || 0))
+  }, [orders, selectedUserDetail])
 
   const filteredOrders = useMemo(() => {
     let result = orders
@@ -1089,64 +1096,183 @@ export default function Admin({ produtos, onVoltar }) {
         {/* USUÁRIOS */}
         {tab === 'usuarios' && (
           <div className="admin-section">
-            <h1>Usuários</h1>
-            <p className="admin-subtitle">{usuarios.length} usuários cadastrados</p>
+            {selectedUserDetail ? (
+              <>
+                <div className="admin-header-row">
+                  <div>
+                    <button className="admin-btn admin-btn-sec" onClick={() => setSelectedUserDetail(null)} style={{ marginBottom: '0.5rem', fontSize: '0.78rem' }}>
+                      <i className="fa-solid fa-arrow-left"></i> Voltar
+                    </button>
+                    <h1>{selectedUserDetail.nome}</h1>
+                    <p className="admin-subtitle">{selectedUserDetail.telefone} &middot; {selectedUserDetail.email || 'sem email'}</p>
+                  </div>
+                </div>
 
-            {selectedUserEmail && (
-              <div style={{ marginBottom: '1rem', padding: '0.65rem 0.85rem', background: 'var(--accent-bg)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '0.85rem', color: 'var(--accent)', fontWeight: 500 }}>
-                  <i className="fa-solid fa-filter"></i> Filtrando pedidos de: <strong>{selectedUserEmail}</strong>
-                </span>
-                <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }} onClick={() => { setSelectedUserEmail(null); setTab('pedidos') }}>
-                  <i className="fa-solid fa-xmark"></i> Limpar filtro
-                </button>
-              </div>
-            )}
+                {/* User Info Card */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.65rem', marginBottom: '1.25rem' }}>
+                  <div className="admin-card card-blue" style={{ padding: '0.75rem 1rem' }}>
+                    <i className="fa-solid fa-id-card"></i>
+                    <div><strong>{selectedUserDetail.nome}</strong><span>Nome</span></div>
+                  </div>
+                  <div className="admin-card" style={{ padding: '0.75rem 1rem', borderLeft: '3px solid var(--accent)' }}>
+                    <i className="fa-solid fa-phone"></i>
+                    <div><strong>{selectedUserDetail.telefone}</strong><span>Telefone</span></div>
+                  </div>
+                  {selectedUserDetail.email && (
+                    <div className="admin-card" style={{ padding: '0.75rem 1rem', borderLeft: '3px solid #8b5cf6' }}>
+                      <i className="fa-solid fa-envelope"></i>
+                      <div><strong>{selectedUserDetail.email}</strong><span>Email</span></div>
+                    </div>
+                  )}
+                  {selectedUserDetail.created_at && (
+                    <div className="admin-card" style={{ padding: '0.75rem 1rem', borderLeft: '3px solid #f59e0b' }}>
+                      <i className="fa-solid fa-calendar"></i>
+                      <div><strong>{formatDate(new Date(selectedUserDetail.created_at).toISOString().split('T')[0])}</strong><span>Cadastro</span></div>
+                    </div>
+                  )}
+                </div>
 
-            <div className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Nome</th>
-                    <th>Email</th>
-                    <th>Telefone</th>
-                    <th>Cadastro</th>
-                    <th>Pedidos</th>
-                    <th>Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {usuarios.map(u => {
-                    const userOrders = orders.filter(o => o.customer?.email === u.email)
-                    const totalGasto = userOrders.reduce((s, o) => s + o.total, 0)
-                    return (
-                      <tr key={u.id}>
-                        <td style={{ fontWeight: 600 }}>{u.nome}</td>
-                        <td>{u.email}</td>
-                        <td>{u.telefone}</td>
-                        <td>{formatDate(u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : '')}</td>
-                        <td>
-                          <span className="cat-tag">{userOrders.length} pedidos</span>
-                          {userOrders.length > 0 && (
-                            <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>
-                              {formatPreco(totalGasto)}
-                            </span>
-                          )}
-                        </td>
-                        <td>
-                          <div className="td-actions">
-                            <button className="action-btn" title="Ver pedidos do usuário" onClick={() => { setSelectedUserEmail(u.email); setTab('pedidos') }}>
-                              <i className="fa-solid fa-clipboard-list"></i>
-                            </button>
-                          </div>
-                        </td>
+                {/* Address Card */}
+                {(() => {
+                  const e = selectedUserDetail.endereco || {}
+                  const hasAddr = e.cep || e.rua || e.bairro || e.cidade || e.estado
+                  if (!hasAddr) return null
+                  return (
+                    <div style={{ background: '#f9fafb', borderRadius: '10px', padding: '0.85rem 1rem', marginBottom: '1.25rem', border: '1px solid var(--admin-border)' }}>
+                      <h4 style={{ fontSize: '0.85rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <i className="fa-solid fa-location-dot"></i> Endereço
+                      </h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.5rem', fontSize: '0.82rem' }}>
+                        {e.cep && <div><span style={{ color: 'var(--admin-text-sec)' }}>CEP:</span> {e.cep}</div>}
+                        {e.rua && <div><span style={{ color: 'var(--admin-text-sec)' }}>Rua:</span> {e.rua}{e.numero ? `, ${e.numero}` : ''}</div>}
+                        {e.bairro && <div><span style={{ color: 'var(--admin-text-sec)' }}>Bairro:</span> {e.bairro}</div>}
+                        {e.cidade && <div><span style={{ color: 'var(--admin-text-sec)' }}>Cidade:</span> {e.cidade}{e.estado ? ` / ${e.estado}` : ''}</div>}
+                        {e.complemento && <div><span style={{ color: 'var(--admin-text-sec)' }}>Complemento:</span> {e.complemento}</div>}
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Orders from this user */}
+                <h3 style={{ fontSize: '0.95rem', marginBottom: '0.65rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <i className="fa-solid fa-clipboard-list"></i> Pedidos
+                  <span className="cat-tag">{userOrdersDetail.length} pedidos</span>
+                  {(() => {
+                    const total = userOrdersDetail.reduce((s, o) => s + o.total, 0)
+                    return total > 0 ? <span style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>— {formatPreco(total)}</span> : null
+                  })()}
+                </h3>
+
+                <div className="admin-table-wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Data</th>
+                        <th>Itens</th>
+                        <th>Total</th>
+                        <th>Pagamento</th>
+                        <th>Status</th>
+                        <th>Ações</th>
                       </tr>
-                    )
-                  })}
-                  {usuarios.length === 0 && <tr><td colSpan="6" className="td-empty">Nenhum usuário cadastrado</td></tr>}
-                </tbody>
-              </table>
-            </div>
+                    </thead>
+                    <tbody>
+                      {userOrdersDetail.map(o => (
+                        <tr key={o.id}>
+                          <td>#{o.id.toString().slice(-6)}</td>
+                          <td>{formatDate(o.date)}</td>
+                          <td>{o.items.reduce((s, i) => s + i.qty, 0)} itens</td>
+                          <td className="td-price">{formatPreco(o.total)}</td>
+                          <td>{o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}</td>
+                          <td><span className={`status-tag status-${o.status}`}>{o.status}</span></td>
+                          <td>
+                            <div className="td-actions">
+                              <button className="action-btn" title="Ver pedido" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-eye"></i></button>
+                              <button className="action-btn action-delete" title="Excluir" onClick={() => { if (confirm(`Excluir pedido #${o.id}?`)) deleteOrder(o.id) }}><i className="fa-solid fa-trash"></i></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {userOrdersDetail.length === 0 && <tr><td colSpan="7" className="td-empty">Nenhum pedido deste usuário</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="admin-header-row">
+                  <div>
+                    <h1>Usuários</h1>
+                    <p className="admin-subtitle">{usuarios.length} usuários cadastrados</p>
+                  </div>
+                </div>
+
+                {selectedUserEmail && (
+                  <div style={{ marginBottom: '1rem', padding: '0.65rem 0.85rem', background: 'var(--accent-bg)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--accent)', fontWeight: 500 }}>
+                      <i className="fa-solid fa-filter"></i> Filtrando pedidos de: <strong>{selectedUserEmail}</strong>
+                    </span>
+                    <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }} onClick={() => { setSelectedUserEmail(null); setTab('pedidos') }}>
+                      <i className="fa-solid fa-xmark"></i> Limpar filtro
+                    </button>
+                  </div>
+                )}
+
+                <div className="admin-table-wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Nome</th>
+                        <th>Telefone</th>
+                        <th>Email</th>
+                        <th>Endereço</th>
+                        <th>Cadastro</th>
+                        <th>Pedidos</th>
+                        <th>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {usuarios.map(u => {
+                        const userOrders = orders.filter(o => o.customer?.telefone === u.telefone || o.user_id === u.id)
+                        const totalGasto = userOrders.reduce((s, o) => s + o.total, 0)
+                        const e = u.endereco || {}
+                        const endStr = [e.rua && `${e.rua}${e.numero ? `, ${e.numero}` : ''}`, e.bairro, e.cidade].filter(Boolean).join(', ') || '-'
+                        return (
+                          <tr key={u.id}>
+                            <td style={{ fontWeight: 600 }}>{u.nome}</td>
+                            <td>{u.telefone}</td>
+                            <td>{u.email || '-'}</td>
+                            <td style={{ fontSize: '0.78rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={endStr}>
+                              {endStr}
+                            </td>
+                            <td>{formatDate(u.created_at ? new Date(u.created_at).toISOString().split('T')[0] : (u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : ''))}</td>
+                            <td>
+                              <span className="cat-tag">{userOrders.length} pedidos</span>
+                              {userOrders.length > 0 && (
+                                <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>
+                                  {formatPreco(totalGasto)}
+                                </span>
+                              )}
+                            </td>
+                            <td>
+                              <div className="td-actions">
+                                <button className="action-btn action-green" title="Ver detalhes do usuário" onClick={() => setSelectedUserDetail(u)}>
+                                  <i className="fa-solid fa-user"></i>
+                                </button>
+                                <button className="action-btn" title="Ver pedidos" onClick={() => { setSelectedUserEmail(u.email || u.telefone); setTab('pedidos') }}>
+                                  <i className="fa-solid fa-clipboard-list"></i>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                      {usuarios.length === 0 && <tr><td colSpan="7" className="td-empty">Nenhum usuário cadastrado</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
         )}
 
