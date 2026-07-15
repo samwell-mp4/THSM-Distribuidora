@@ -34,7 +34,7 @@ const ESTADOS_BR = [
   { sigla: 'TO', nome: 'Tocantins' },
 ]
 
-export default function AddressForm({ value, onChange }) {
+export default function AddressForm({ value, onChange, showErrors }) {
   const [cep, setCep] = useState(value.cep || '')
   const [estado, setEstado] = useState(value.estado || '')
   const [cidade, setCidade] = useState(value.cidade || '')
@@ -46,6 +46,8 @@ export default function AddressForm({ value, onChange }) {
   const [loadingCep, setLoadingCep] = useState(false)
   const [loadingCidades, setLoadingCidades] = useState(false)
   const [cepError, setCepError] = useState('')
+
+  const required = { cep: !value.cep, cidade: !value.cidade, rua: !value.rua, numero: !value.numero }
 
   const emitChange = useCallback((updates) => {
     onChange({ cep, estado, cidade, bairro, rua, numero, complemento, ...updates })
@@ -121,8 +123,8 @@ export default function AddressForm({ value, onChange }) {
   return (
     <div className="address-form">
       <div className="cep-row">
-        <div className="form-group cep-field">
-          <label>CEP</label>
+        <div className={`form-group cep-field ${showErrors && required.cep ? 'field-error' : ''}`}>
+          <label>CEP <span className="required-star">*</span></label>
           <div className="cep-input-wrap">
             <input
               type="text"
@@ -142,7 +144,8 @@ export default function AddressForm({ value, onChange }) {
               {loadingCep ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-location-dot"></i>}
             </button>
           </div>
-          {cepError && <span className="cep-error">{cepError}</span>}
+          {cepError && <span className="field-error-msg">{cepError}</span>}
+          {showErrors && required.cep && <span className="field-error-msg">CEP é obrigatório</span>}
         </div>
       </div>
 
@@ -156,23 +159,26 @@ export default function AddressForm({ value, onChange }) {
             ))}
           </select>
         </div>
-        <div className="form-group">
-          <label>Cidade</label>
+        <div className={`form-group ${showErrors && required.cidade ? 'field-error' : ''}`}>
+          <label>Cidade <span className="required-star">*</span></label>
           <select value={cidade} onChange={e => setCidade(e.target.value)} disabled={!estado || loadingCidades}>
             <option value="">{loadingCidades ? 'Carregando...' : 'Selecione...'}</option>
             {cidades.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
+          {showErrors && required.cidade && <span className="field-error-msg">Cidade é obrigatória</span>}
         </div>
       </div>
 
       <div className="form-row">
-        <div className="form-group" style={{ flex: 2 }}>
-          <label>Logradouro</label>
+        <div className={`form-group ${showErrors && required.rua ? 'field-error' : ''}`} style={{ flex: 2 }}>
+          <label>Logradouro <span className="required-star">*</span></label>
           <input type="text" placeholder="Rua, Avenida..." value={rua} onChange={e => setRua(e.target.value)} />
+          {showErrors && required.rua && <span className="field-error-msg">Logradouro é obrigatório</span>}
         </div>
-        <div className="form-group" style={{ flex: 0.6 }}>
-          <label>Número</label>
+        <div className={`form-group ${showErrors && required.numero ? 'field-error' : ''}`} style={{ flex: 0.6 }}>
+          <label>Número <span className="required-star">*</span></label>
           <input type="text" placeholder="Nº" value={numero} onChange={e => setNumero(e.target.value)} />
+          {showErrors && required.numero && <span className="field-error-msg">Número é obrigatório</span>}
         </div>
       </div>
 

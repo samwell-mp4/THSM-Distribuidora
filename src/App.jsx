@@ -40,8 +40,9 @@ function App() {
   const [initialOrderId, setInitialOrderId] = useState(null)
   const [showAddressRequired, setShowAddressRequired] = useState(false)
   const [addressRequiredEndereco, setAddressRequiredEndereco] = useState({ cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
-  const [savingAddress, setSavingAddress] = useState(false)
+  const [triedSaveRequired, setTriedSaveRequired] = useState(false)
   const [showAddressEdit, setShowAddressEdit] = useState(false)
+  const [triedSaveEdit, setTriedSaveEdit] = useState(false)
   const [addressEditEndereco, setAddressEditEndereco] = useState({ cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
   const [adminAuth, setAdminAuth] = useState(() => {
     try { const d = localStorage.getItem(LS_ADMIN); return d ? JSON.parse(d) : null } catch { return null }
@@ -918,9 +919,9 @@ function App() {
                 <h2 style={{ fontSize: '1.1rem', marginBottom: '0.25rem' }}>Endereço Obrigatório</h2>
                 <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Para continuar, cadastre seu endereço de entrega.</p>
               </div>
-              <AddressForm value={addressRequiredEndereco} onChange={(addr) => setAddressRequiredEndereco(addr)} />
+              <AddressForm value={addressRequiredEndereco} onChange={(addr) => { setAddressRequiredEndereco(addr); setTriedSaveRequired(false) }} showErrors={triedSaveRequired} />
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.25rem' }}>
-                <button className="btn-next" style={{ flex: 1, justifyContent: 'center' }} disabled={savingAddress || !addressRequiredEndereco.cep || !addressRequiredEndereco.cidade || !addressRequiredEndereco.rua || !addressRequiredEndereco.numero} onClick={saveRequiredAddress}>
+                <button className="btn-next" style={{ flex: 1, justifyContent: 'center' }} disabled={savingAddress} onClick={() => { setTriedSaveRequired(true); if (addressRequiredEndereco.cep && addressRequiredEndereco.cidade && addressRequiredEndereco.rua && addressRequiredEndereco.numero) saveRequiredAddress() }}>
                   {savingAddress ? <><i className="fa-solid fa-spinner fa-spin"></i> Salvando...</> : <><i className="fa-solid fa-check"></i> Salvar e Continuar</>}
                 </button>
               </div>
@@ -941,9 +942,9 @@ function App() {
                 </div>
                 <h2 style={{ fontSize: '1.1rem', marginBottom: '0.25rem' }}>Alterar Endereço</h2>
               </div>
-              <AddressForm value={addressEditEndereco} onChange={(addr) => setAddressEditEndereco(addr)} />
+              <AddressForm value={addressEditEndereco} onChange={(addr) => { setAddressEditEndereco(addr); setTriedSaveEdit(false) }} showErrors={triedSaveEdit} />
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.25rem' }}>
-                <button className="btn-next" style={{ flex: 1, justifyContent: 'center' }} disabled={savingAddress || !addressEditEndereco.cep || !addressEditEndereco.cidade || !addressEditEndereco.rua || !addressEditEndereco.numero} onClick={saveAddressEdit}>
+                <button className="btn-next" style={{ flex: 1, justifyContent: 'center' }} disabled={savingAddress} onClick={() => { setTriedSaveEdit(true); if (addressEditEndereco.cep && addressEditEndereco.cidade && addressEditEndereco.rua && addressEditEndereco.numero) saveAddressEdit() }}>
                   {savingAddress ? <><i className="fa-solid fa-spinner fa-spin"></i> Salvando...</> : <><i className="fa-solid fa-check"></i> Salvar</>}
                 </button>
               </div>

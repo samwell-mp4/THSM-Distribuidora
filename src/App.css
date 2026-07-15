@@ -845,6 +845,24 @@ input, select { font-family: inherit; }
   color: var(--text-muted);
 }
 
+.required-star {
+  color: var(--danger);
+  font-size: 1.1em;
+}
+
+.address-form .form-group.field-error input,
+.address-form .form-group.field-error select {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.15);
+}
+
+.field-error-msg {
+  display: block;
+  color: var(--danger);
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
 .card-badges {
   position: absolute;
   top: 8px;
