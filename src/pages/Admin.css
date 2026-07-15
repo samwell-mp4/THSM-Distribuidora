@@ -159,11 +159,23 @@
   gap: 1rem;
   width: 100%;
   max-width: 500px;
-  margin-top: 1rem;
+  margin: 1rem auto;
+  padding: 0 0.5rem;
 }
 
 .conta-save-btn {
   align-self: flex-start;
+}
+
+@media (max-width: 768px) {
+  .conta-form {
+    padding: 0 0.25rem;
+  }
+  .conta-save-btn {
+    width: 100%;
+    justify-content: center;
+    align-self: stretch;
+  }
 }
 
 .admin-section h1 {
@@ -1311,7 +1323,7 @@
   .admin-modal-header { padding: 0.65rem 0.75rem; }
   .admin-modal-header h3 { font-size: 0.82rem; }
   .admin-modal-body { padding: 0.75rem; }
-  .conta-save-btn { width: 100%; justify-content: center; }
+
 
   .admin-bottom-item { font-size: 0.55rem; min-width: 44px; }
   .admin-bottom-item i { font-size: 0.85rem; }
