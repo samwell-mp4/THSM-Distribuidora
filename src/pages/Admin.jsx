@@ -191,6 +191,8 @@ export default function Admin({ produtos, onVoltar }) {
   const [orderDateStart, setOrderDateStart] = useState('')
   const [orderDateEnd, setOrderDateEnd] = useState('')
   const [orderCityFilter, setOrderCityFilter] = useState('TODAS')
+  const [orderPage, setOrderPage] = useState(1)
+  const ORDER_PAGE_SIZE = 50
   const [rotas, setRotas] = useState([])
   const [rotasLoading, setRotasLoading] = useState(false)
   const [rotasError, setRotasError] = useState(null)
@@ -470,6 +472,15 @@ export default function Admin({ produtos, onVoltar }) {
     return result
   }, [orders, orderFilter, selectedUserEmail, orderSearch, orderSort, orderDateStart, orderDateEnd, orderCityFilter])
 
+  const paginatedOrders = useMemo(() => {
+    const start = (orderPage - 1) * ORDER_PAGE_SIZE
+    return filteredOrders.slice(start, start + ORDER_PAGE_SIZE)
+  }, [filteredOrders, orderPage])
+
+  const totalOrderPages = useMemo(() => Math.ceil(filteredOrders.length / ORDER_PAGE_SIZE), [filteredOrders])
+
+  useEffect(() => { setOrderPage(1) }, [orderSearch, orderFilter, orderDateStart, orderDateEnd, orderCityFilter, selectedUserEmail])
+
   const toggleSort = (field) => {
     setOrderSort(prev => prev.field === field ? { field, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { field, dir: 'asc' })
   }
@@ -480,8 +491,8 @@ export default function Admin({ produtos, onVoltar }) {
   }
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === filteredOrders.length) setSelectedIds(new Set())
-    else setSelectedIds(new Set(filteredOrders.map(o => o.id)))
+    if (selectedIds.size === paginatedOrders.length) setSelectedIds(new Set())
+    else setSelectedIds(new Set(paginatedOrders.map(o => o.id)))
   }
 
   const toggleSelect = (id) => {
@@ -928,7 +939,7 @@ export default function Admin({ produtos, onVoltar }) {
                 <thead>
                   <tr>
                     <th style={{ width: '36px' }}>
-                      <input type="checkbox" checked={filteredOrders.length > 0 && selectedIds.size === filteredOrders.length} onChange={toggleSelectAll} style={{ cursor: 'pointer', width: '15px', height: '15px' }} />
+                      <input type="checkbox" checked={paginatedOrders.length > 0 && selectedIds.size === paginatedOrders.length} onChange={toggleSelectAll} style={{ cursor: 'pointer', width: '15px', height: '15px' }} />
                     </th>
                     <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('cliente')}>Cliente {sortIcon('cliente')}</th>
                     <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('telefone')}>Telefone {sortIcon('telefone')}</th>
@@ -942,13 +953,13 @@ export default function Admin({ produtos, onVoltar }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredOrders.map(o => (
+                  {paginatedOrders.map(o => (
                     <tr key={o.id} className={selectedIds.has(o.id) ? 'row-selected' : ''}>
                       <td>
                         <input type="checkbox" checked={selectedIds.has(o.id)} onChange={() => toggleSelect(o.id)} style={{ cursor: 'pointer', width: '15px', height: '15px' }} />
                       </td>
-                      <td style={{ fontWeight: 600 }}>{o.customer.nome}</td>
-                      <td>{o.customer.telefone}</td>
+                      <td style={{ fontWeight: 600 }}>{o.customer?.nome || '-'}</td>
+                      <td>{o.customer?.telefone || '-'}</td>
                       <td>{[o.customer.endereco?.cidade, o.customer.endereco?.estado].filter(Boolean).join('/') || '-'}</td>
                       <td>{formatDate(o.date)}</td>
                       <td>{o.items.reduce((s, i) => s + i.qty, 0)} itens</td>
@@ -971,7 +982,7 @@ export default function Admin({ produtos, onVoltar }) {
                       </td>
                     </tr>
                   ))}
-                  {filteredOrders.length === 0 && <tr><td colSpan="11" className="td-empty">Nenhum pedido encontrado</td></tr>}
+                  {paginatedOrders.length === 0 && <tr><td colSpan="11" className="td-empty">Nenhum pedido encontrado</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -1417,8 +1428,22 @@ export default function Admin({ produtos, onVoltar }) {
                                   <span className="rota-dot"></span>
                                   <i className="fa-solid fa-city"></i> {cidadesVisiveis.length} {cidadesVisiveis.length === 1 ? 'cidade' : 'cidades'}
                                 </span>
-                              </div>
-                            </div>
+            </div>
+
+            {totalOrderPages > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '1rem 0', fontSize: '0.85rem' }}>
+                <button className="admin-btn admin-btn-sec" style={{ padding: '0.35rem 0.75rem', fontSize: '0.82rem' }} disabled={orderPage <= 1} onClick={() => setOrderPage(p => Math.max(1, p - 1))}>
+                  <i className="fa-solid fa-chevron-left"></i> Anterior
+                </button>
+                <span style={{ color: 'var(--admin-text-sec)' }}>
+                  Página {orderPage} de {totalOrderPages} ({filteredOrders.length} pedidos)
+                </span>
+                <button className="admin-btn admin-btn-sec" style={{ padding: '0.35rem 0.75rem', fontSize: '0.82rem' }} disabled={orderPage >= totalOrderPages} onClick={() => setOrderPage(p => Math.min(totalOrderPages, p + 1))}>
+                  Próxima <i className="fa-solid fa-chevron-right"></i>
+                </button>
+              </div>
+            )}
+          </div>
                             <div className="rota-card-actions">
                               <button className="rota-map-btn" title="Ver no Google Maps" onClick={e => { e.stopPropagation(); window.open(`https://www.google.com/maps/search/${encodeURIComponent(grupo.rota)}`, '_blank') }}>
                                 <i className="fa-solid fa-map-location-dot"></i>
@@ -2220,9 +2245,12 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
         <div className="admin-modal-body">
           <div className="detail-section">
             <h4>Cliente</h4>
-            <p><strong>Nome:</strong> {order.customer.nome}</p>
-            <p><strong>Telefone:</strong> {order.customer.telefone}</p>
-            {order.customer.endereco?.cidade && <p><strong>Endereço:</strong> {[order.customer.endereco.rua, order.customer.endereco.numero, order.customer.endereco.bairro, order.customer.endereco.cidade, order.customer.endereco.estado].filter(Boolean).join(', ')}</p>}
+            <p><strong>Nome:</strong> {order.customer?.nome || '-'}</p>
+            <p><strong>Email:</strong> {order.customer?.email || '-'}</p>
+            <p><strong>Telefone:</strong> {order.customer?.telefone || '-'}</p>
+            <p><strong>Endereço:</strong> {order.customer?.endereco ? [order.customer.endereco.rua, order.customer.endereco.numero, order.customer.endereco.bairro, order.customer.endereco.cidade, order.customer.endereco.estado].filter(Boolean).join(', ') || '-' : '-'}</p>
+            {order.customer?.endereco?.cep && <p><strong>CEP:</strong> {order.customer.endereco.cep}</p>}
+            {order.customer?.endereco?.complemento && <p><strong>Complemento:</strong> {order.customer.endereco.complemento}</p>}
           </div>
 
           <div className="detail-section">

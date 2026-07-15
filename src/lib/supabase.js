@@ -30,8 +30,20 @@ export async function getAllUsers() {
 
 // ---- ORDERS ----
 export async function getAllOrders() {
-  const { data } = await supabase.from('pedidos').select('*').order('created_at', { ascending: false })
+  const { data } = await supabase.from('pedidos').select('*').order('created_at', { ascending: false }).range(0, 99999)
   return (data || []).map(fixOrder)
+}
+
+export async function getOrdersCount() {
+  const { count } = await supabase.from('pedidos').select('*', { count: 'exact', head: true })
+  return count || 0
+}
+
+export async function getOrdersPage(page = 1, pageSize = 100) {
+  const from = (page - 1) * pageSize
+  const to = from + pageSize - 1
+  const { data, count } = await supabase.from('pedidos').select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(from, to)
+  return { orders: (data || []).map(fixOrder), count: count || 0 }
 }
 
 export async function getUserOrders(userId) {
@@ -76,7 +88,7 @@ function fixOrder(row) {
 
 // ---- FINANCIAL ----
 export async function getAllFinancial() {
-  const { data } = await supabase.from('financeiro').select('*')
+  const { data } = await supabase.from('financeiro').select('*').range(0, 99999)
   return (data || []).map(f => f.data || f)
 }
 
