@@ -178,6 +178,11 @@ export default function Admin({ produtos, onVoltar }) {
   const [usuarios, setUsuarios] = useState(() => LS.get('thsm_usuarios', []))
   const [selectedUserEmail, setSelectedUserEmail] = useState(null)
   const [selectedUserDetail, setSelectedUserDetail] = useState(null)
+  const [userSearch, setUserSearch] = useState('')
+  const [userCityFilter, setUserCityFilter] = useState('TODAS')
+  const [userSort, setUserSort] = useState({ field: 'nome', dir: 'asc' })
+  const [userPage, setUserPage] = useState(1)
+  const USER_PAGE_SIZE = 50
   const [prodCatFilter, setProdCatFilter] = useState('TODOS')
   const [prodStockFilter, setProdStockFilter] = useState('todos')
   const [prodPriceRange, setProdPriceRange] = useState([0, 5000])
@@ -566,6 +571,42 @@ export default function Admin({ produtos, onVoltar }) {
     const recebido = financial.filter(f => f.status === 'pago').reduce((s, f) => s + f.value, 0)
     return { total, pendentes, prePedidos, confirmados, emAndamento, entregues, faturamento, aReceber, recebido }
   }, [orders, financial])
+
+  // Usuarios filter & pagination
+  const filteredUsuarios = useMemo(() => {
+    if (!selectedUserEmail && !userSearch && userCityFilter === 'TODAS') return usuarios
+    const t = userSearch.toLowerCase().trim()
+    return usuarios.filter(u => {
+      if (userCityFilter !== 'TODAS') {
+        const cidade = (u.endereco?.cidade || u.endereco?.cidade || '').toLowerCase()
+        if (cidade !== userCityFilter.toLowerCase()) return false
+      }
+      if (t && !u.nome?.toLowerCase().includes(t) && !u.telefone?.includes(t) && !(u.email || '').toLowerCase().includes(t)) return false
+      return true
+    }).sort((a, b) => {
+      let va, vb
+      switch (userSort.field) {
+        case 'nome': va = a.nome || ''; vb = b.nome || ''; return userSort.dir === 'asc' ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR')
+        case 'telefone': va = a.telefone || ''; vb = b.telefone || ''; return userSort.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+        case 'cidade': va = a.endereco?.cidade || ''; vb = b.endereco?.cidade || ''; return userSort.dir === 'asc' ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR')
+        default: return (a.nome || '').localeCompare(b.nome || '', 'pt-BR')
+      }
+    })
+  }, [usuarios, userSearch, userCityFilter, userSort, selectedUserEmail])
+
+  const paginatedUsuarios = useMemo(() => {
+    const start = (userPage - 1) * USER_PAGE_SIZE
+    return filteredUsuarios.slice(start, start + USER_PAGE_SIZE)
+  }, [filteredUsuarios, userPage])
+
+  const totalUserPages = useMemo(() => Math.ceil(filteredUsuarios.length / USER_PAGE_SIZE), [filteredUsuarios])
+
+  useEffect(() => { setUserPage(1) }, [userSearch, userCityFilter, selectedUserEmail])
+
+  const userCities = useMemo(() => {
+    const cidades = [...new Set(usuarios.map(u => u.endereco?.cidade).filter(Boolean))]
+    return ['TODAS', ...cidades.sort((a, b) => a.localeCompare(b, 'pt-BR'))]
+  }, [usuarios])
 
   // =============================================
   // PRODUCTS
@@ -1229,6 +1270,24 @@ export default function Admin({ produtos, onVoltar }) {
                   </div>
                 )}
 
+                <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '0.85rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div className="admin-search-prod" style={{ flex: '1', minWidth: '180px' }}>
+                    <i className="fa-solid fa-search"></i>
+                    <input type="text" placeholder="Buscar por nome, telefone ou email..." value={userSearch} onChange={e => setUserSearch(e.target.value)} style={{ width: '100%' }} />
+                  </div>
+                  <select value={userCityFilter} onChange={e => setUserCityFilter(e.target.value)} style={{ padding: '0.45rem 0.7rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', background: 'white', cursor: 'pointer', maxWidth: '160px' }}>
+                    {userCities.map(c => <option key={c} value={c}>{c === 'TODAS' ? 'Todas as cidades' : c}</option>)}
+                  </select>
+                  <div style={{ display: 'flex', gap: '0.35rem', fontSize: '0.78rem' }}>
+                    <button className={`admin-btn ${userSort.field === 'nome' ? 'admin-btn-primary' : 'admin-btn-sec'}`} style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem' }} onClick={() => setUserSort(prev => prev.field === 'nome' ? { field: 'nome', dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { field: 'nome', dir: 'asc' })}>
+                      Nome {userSort.field === 'nome' && <i className={`fa-solid fa-sort-${userSort.dir === 'asc' ? 'up' : 'down'}`}></i>}
+                    </button>
+                    <button className={`admin-btn ${userSort.field === 'cidade' ? 'admin-btn-primary' : 'admin-btn-sec'}`} style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem' }} onClick={() => setUserSort(prev => prev.field === 'cidade' ? { field: 'cidade', dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { field: 'cidade', dir: 'asc' })}>
+                      Cidade {userSort.field === 'cidade' && <i className={`fa-solid fa-sort-${userSort.dir === 'asc' ? 'up' : 'down'}`}></i>}
+                    </button>
+                  </div>
+                </div>
+
                 <div className="admin-table-wrap">
                   <table className="admin-table">
                     <thead>
@@ -1243,7 +1302,7 @@ export default function Admin({ produtos, onVoltar }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {usuarios.map(u => {
+                      {paginatedUsuarios.map(u => {
                         const userOrders = orders.filter(o => o.customer?.telefone === u.telefone || o.user_id === u.id)
                         const totalGasto = userOrders.reduce((s, o) => s + o.total, 0)
                         const e = u.endereco || {}
@@ -1278,10 +1337,24 @@ export default function Admin({ produtos, onVoltar }) {
                           </tr>
                         )
                       })}
-                      {usuarios.length === 0 && <tr><td colSpan="7" className="td-empty">Nenhum usuário cadastrado</td></tr>}
+                      {paginatedUsuarios.length === 0 && <tr><td colSpan="7" className="td-empty">Nenhum usuário encontrado</td></tr>}
                     </tbody>
                   </table>
                 </div>
+
+                {totalUserPages > 1 && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '1rem 0', fontSize: '0.85rem' }}>
+                    <button className="admin-btn admin-btn-sec" style={{ padding: '0.35rem 0.75rem', fontSize: '0.82rem' }} disabled={userPage <= 1} onClick={() => setUserPage(p => Math.max(1, p - 1))}>
+                      <i className="fa-solid fa-chevron-left"></i> Anterior
+                    </button>
+                    <span style={{ color: 'var(--admin-text-sec)' }}>
+                      Página {userPage} de {totalUserPages} ({filteredUsuarios.length} usuários)
+                    </span>
+                    <button className="admin-btn admin-btn-sec" style={{ padding: '0.35rem 0.75rem', fontSize: '0.82rem' }} disabled={userPage >= totalUserPages} onClick={() => setUserPage(p => Math.min(totalUserPages, p + 1))}>
+                      Próxima <i className="fa-solid fa-chevron-right"></i>
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>
