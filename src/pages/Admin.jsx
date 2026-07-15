@@ -166,6 +166,10 @@ export default function Admin({ produtos, onVoltar }) {
   const [prodSearch, setProdSearch] = useState('')
   const [prodPage, setProdPage] = useState(1)
   const [editingProd, setEditingProd] = useState(null)
+  const [prodViewMode, setProdViewMode] = useState('visual')
+  const [prodCart, setProdCart] = useState({})
+  const [prodCartOpen, setProdCartOpen] = useState(false)
+  const [prodImageErrors, setProdImageErrors] = useState({})
   const [showAddOrder, setShowAddOrder] = useState(false)
   const [showOrderDetail, setShowOrderDetail] = useState(null)
   const [showDeliveryModal, setShowDeliveryModal] = useState(null)
@@ -323,10 +327,6 @@ export default function Admin({ produtos, onVoltar }) {
     const order = orders.find(o => o.id === orderId)
     if (!order) return
     const rejected = new Set(rejectedItemIds)
-    setTimeout(() => {
-      const updated = orders.find(o => o.id === orderId)
-      if (updated && updated.status === 'em-andamento') sendStatusWebhook(updated, 'em-andamento')
-    }, 100)
     let remainingItems = order.items.filter((_, idx) => !rejected.has(idx))
     if (replacements.length > 0) {
       remainingItems = [...remainingItems, ...replacements]
@@ -335,8 +335,8 @@ export default function Admin({ produtos, onVoltar }) {
     const totalAvista = remainingItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
     const totalAprazo = remainingItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
     const now = Date.now()
-    setOrders(prev => prev.map(o => o.id === orderId ? {
-      ...o,
+    const updatedOrder = {
+      ...order,
       items: remainingItems,
       totalAvista,
       totalAprazo,
@@ -344,7 +344,8 @@ export default function Admin({ produtos, onVoltar }) {
       status: 'em-andamento',
       preApprovedAt: now,
       rejectedItems: rejectedItemIds.length > 0 ? rejectedItemIds.map(idx => order.items[idx]) : []
-    } : o))
+    }
+    setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o))
     // Create financial records for approved a-prazo items
     const finRecords = remainingItems.filter(i => i.tipo === 'aprazo').map(i => {
       const dias = 60
@@ -365,6 +366,7 @@ export default function Admin({ produtos, onVoltar }) {
     if (finRecords.length > 0) setFinancial(prev => [...finRecords, ...prev])
     showToast(`Pedido #${orderId} pré-aprovado como "Em Andamento"`)
     setShowOrderDetail(null)
+    sendStatusWebhook(updatedOrder, 'em-andamento')
   }
 
   const handleDeliveryFile = (e, type) => {
@@ -762,6 +764,41 @@ export default function Admin({ produtos, onVoltar }) {
     })
   }
 
+  const addToProdCart = (p) => {
+    setProdCart(prev => {
+      const existing = prev[p.id]
+      if (existing) return { ...prev, [p.id]: { ...existing, qty: existing.qty + 1 } }
+      return { ...prev, [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, tipo: 'aprazo', qty: 1 } }
+    })
+  }
+
+  const removeFromProdCart = (id) => {
+    setProdCart(prev => {
+      const existing = prev[id]
+      if (!existing) return prev
+      if (existing.qty <= 1) {
+        const { [id]: _, ...rest } = prev
+        return rest
+      }
+      return { ...prev, [id]: { ...existing, qty: existing.qty - 1 } }
+    })
+  }
+
+  const prodCartItems = useMemo(() => Object.values(prodCart).filter(i => i.qty > 0), [prodCart])
+  const prodCartCount = useMemo(() => prodCartItems.reduce((s, i) => s + i.qty, 0), [prodCartItems])
+  const prodCartTotal = useMemo(() => prodCartItems.reduce((s, i) => s + i.preco * i.qty, 0), [prodCartItems])
+
+  const clearProdCart = () => setProdCart({})
+
+  const createOrderFromCart = () => {
+    if (prodCartItems.length === 0) { showToast('Carrinho vazio', 'error'); return }
+    setShowAddOrder(true)
+  }
+
+  const toggleProdImageError = (id) => {
+    setProdImageErrors(prev => ({ ...prev, [id]: true }))
+  }
+
   const bulkProdAction = (action) => {
     if (prodSelectedIds.size === 0) { showToast('Selecione pelo menos um produto', 'error'); return }
     if (action === 'zerar') {
@@ -1144,9 +1181,25 @@ export default function Admin({ produtos, onVoltar }) {
                 <h1>Produtos</h1>
                 <p className="admin-subtitle">{produtosAtuais.length} produtos cadastrados</p>
               </div>
-
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                {prodCartCount > 0 && (
+                  <button className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6', position: 'relative' }} onClick={() => setProdCartOpen(true)}>
+                    <i className="fa-solid fa-shopping-cart"></i> Carrinho
+                    <span style={{ position: 'absolute', top: '-6px', right: '-6px', background: '#dc2626', color: 'white', borderRadius: '50%', width: '18px', height: '18px', fontSize: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{prodCartCount}</span>
+                  </button>
+                )}
+                <div style={{ display: 'flex', gap: '0.25rem', background: '#e5e7eb', borderRadius: '8px', padding: '2px' }}>
+                  <button className={`admin-btn ${prodViewMode === 'visual' ? 'admin-btn-primary' : 'admin-btn-sec'}`} style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', border: 'none' }} onClick={() => setProdViewMode('visual')}>
+                    <i className="fa-solid fa-th"></i>
+                  </button>
+                  <button className={`admin-btn ${prodViewMode === 'tabela' ? 'admin-btn-primary' : 'admin-btn-sec'}`} style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', border: 'none' }} onClick={() => setProdViewMode('tabela')}>
+                    <i className="fa-solid fa-list"></i>
+                  </button>
+                </div>
+              </div>
             </div>
 
+            {/* Search + Filter bar */}
             <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '0.85rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <div className="admin-search-prod" style={{ flex: '1', minWidth: '180px' }}>
                 <i className="fa-solid fa-search"></i>
@@ -1168,6 +1221,7 @@ export default function Admin({ produtos, onVoltar }) {
               </div>
             </div>
 
+            {/* Bulk actions bar */}
             {prodSelectedIds.size > 0 && (
               <div style={{ marginBottom: '0.65rem', padding: '0.5rem 0.75rem', background: 'rgba(37,99,235,0.05)', borderRadius: '8px', border: '1px solid rgba(37,99,235,0.15)', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--accent)' }}>{prodSelectedIds.size} selecionado(s)</span>
@@ -1189,67 +1243,178 @@ export default function Admin({ produtos, onVoltar }) {
               </div>
             )}
 
-            <div className="admin-table-wrap">
-              <table className="admin-table table-prod">
-                <thead>
-                  <tr>
-                    <th style={{ width: '36px' }}>
-                      <input type="checkbox" checked={filteredProds.length > 0 && prodSelectedIds.size === filteredProds.length} onChange={toggleProdSelectAll} style={{ cursor: 'pointer', width: '15px', height: '15px' }} title={prodSelectedIds.size === filteredProds.length ? 'Desmarcar todos' : `Selecionar todos (${filteredProds.length} produtos)`} />
-                    </th>
-                    <th style={{width: '50px'}}>Foto</th>
-                    <th style={{ cursor: 'pointer' }} onClick={() => toggleProdSort('nome')}>Produto {prodSortIcon('nome')}</th>
-                    <th style={{ cursor: 'pointer' }} onClick={() => toggleProdSort('categoria')}>Categoria {prodSortIcon('categoria')}</th>
-                    <th style={{ cursor: 'pointer' }} onClick={() => toggleProdSort('preco')}>Preço {prodSortIcon('preco')}</th>
-                    <th style={{ cursor: 'pointer' }} onClick={() => toggleProdSort('estoque')}>Estoque {prodSortIcon('estoque')}</th>
-                    <th>Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedProds.map(p => (
-                    <tr key={p.id} className={prodSelectedIds.has(p.id) ? 'row-selected' : ''}>
-                      <td>
-                        <input type="checkbox" checked={prodSelectedIds.has(p.id)} onChange={() => toggleProdSelect(p.id)} style={{ cursor: 'pointer', width: '15px', height: '15px' }} />
-                      </td>
-                      <td>
-                        <div className="prod-thumb">
-                          {p.imagem ? <img src={p.imagem} alt={p.nome} /> : <i className="fa-solid fa-image"></i>}
+            {/* Visual Grid View */}
+            {prodViewMode === 'visual' && (
+              <>
+                <div className="admin-prod-grid">
+                  {paginatedProds.map((p, i) => (
+                    <div key={p.id} className={`admin-prod-card ${prodSelectedIds.has(p.id) ? 'selected' : ''}`} style={{ animationDelay: `${i * 25}ms` }}>
+                      <div className="admin-prod-card-check">
+                        <input type="checkbox" checked={prodSelectedIds.has(p.id)} onChange={() => toggleProdSelect(p.id)} />
+                      </div>
+                      <div className="admin-prod-card-img" onClick={() => setEditingProd(p)}>
+                        {p.imagem && !prodImageErrors[p.id] ? (
+                          <img src={p.imagem} alt={p.nome} loading="lazy" onError={() => toggleProdImageError(p.id)} />
+                        ) : (
+                          <div className="admin-prod-card-img-fallback"><i className="fa-solid fa-image"></i></div>
+                        )}
+                        <div className="admin-prod-card-badges">
+                          {p.estoque <= 0 ? <span className="admin-badge out">Indisponível</span>
+                            : p.estoque <= 5 ? <span className="admin-badge low">Últimas {p.estoque}</span>
+                            : <span className="admin-badge in">Disponível</span>}
                         </div>
-                      </td>
-                      <td className="td-prod-name">{p.nome}</td>
-                      <td><span className="cat-tag">{p.categoria}</span></td>
-                      <td className="td-price">{formatPreco(p.preco)}</td>
-                      <td>
-                        <span className={`stock-tag ${p.estoque > 0 ? 'in' : 'out'}`}>
-                          {p.estoque > 0 ? `${p.estoque} un` : 'Indisponível'}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="td-actions">
-                          <button className="action-btn action-green" title="Editar" onClick={() => setEditingProd(p)}>
-                            <i className="fa-solid fa-pen"></i>
-                          </button>
-                          <button className="action-btn" title="Zerar estoque" onClick={() => { if (confirm(`Zerar estoque de "${p.nome}"?`)) updateProduct(p.id, { estoque: 0 }) }}>
-                            <i className="fa-solid fa-ban" style={{ color: '#dc2626' }}></i>
-                          </button>
-                          <button className="action-btn" title="Alternar disponibilidade" onClick={() => updateProduct(p.id, { estoque: p.estoque > 0 ? 0 : 1 })}>
-                            <i className={`fa-solid ${p.estoque > 0 ? 'fa-eye-slash' : 'fa-eye'}`} style={{ color: p.estoque > 0 ? '#f59e0b' : 'var(--success)' }}></i>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                        <div className="admin-prod-card-cat">{p.categoria}</div>
+                      </div>
+                      <div className="admin-prod-card-body">
+                        <h3 className="admin-prod-card-title" onClick={() => setEditingProd(p)}>{p.nome}</h3>
+                        <div className="admin-prod-card-price">{formatPreco(p.preco)}</div>
+                        <button className={`admin-prod-card-btn ${prodCart[p.id] ? 'in-cart' : ''}`} onClick={() => addToProdCart(p)} disabled={p.estoque <= 0}>
+                          {prodCart[p.id] ? <><i className="fa-solid fa-check"></i> Adicionado</> : <><i className="fa-solid fa-plus"></i> Adicionar</>}
+                        </button>
+                      </div>
+                    </div>
                   ))}
-                  {paginatedProds.length === 0 && <tr><td colSpan="7" className="td-empty">Nenhum produto encontrado</td></tr>}
-                </tbody>
-              </table>
-            </div>
+                  {paginatedProds.length === 0 && (
+                    <div className="admin-prod-empty">
+                      <i className="fa-solid fa-box-open"></i>
+                      <h3>Nenhum produto encontrado</h3>
+                      <p>Tente ajustar os filtros</p>
+                    </div>
+                  )}
+                </div>
 
-            {totalProdPages > 1 && (
-              <div className="admin-pagination">
-                <button disabled={prodPage === 1} onClick={() => setProdPage(p => p - 1)}><i className="fa-solid fa-chevron-left"></i></button>
-                <span>{prodPage} de {totalProdPages}</span>
-                <button disabled={prodPage === totalProdPages} onClick={() => setProdPage(p => p + 1)}><i className="fa-solid fa-chevron-right"></i></button>
-              </div>
+                {totalProdPages > 1 && (
+                  <div className="admin-pagination">
+                    <button disabled={prodPage === 1} onClick={() => setProdPage(p => p - 1)}><i className="fa-solid fa-chevron-left"></i></button>
+                    <span>{prodPage} de {totalProdPages}</span>
+                    <button disabled={prodPage === totalProdPages} onClick={() => setProdPage(p => p + 1)}><i className="fa-solid fa-chevron-right"></i></button>
+                  </div>
+                )}
+              </>
             )}
+
+            {/* Table View */}
+            {prodViewMode === 'tabela' && (
+              <>
+                <div className="admin-table-wrap">
+                  <table className="admin-table table-prod">
+                    <thead>
+                      <tr>
+                        <th style={{ width: '36px' }}>
+                          <input type="checkbox" checked={filteredProds.length > 0 && prodSelectedIds.size === filteredProds.length} onChange={toggleProdSelectAll} style={{ cursor: 'pointer', width: '15px', height: '15px' }} title={prodSelectedIds.size === filteredProds.length ? 'Desmarcar todos' : `Selecionar todos (${filteredProds.length} produtos)`} />
+                        </th>
+                        <th style={{width: '50px'}}>Foto</th>
+                        <th style={{ cursor: 'pointer' }} onClick={() => toggleProdSort('nome')}>Produto {prodSortIcon('nome')}</th>
+                        <th style={{ cursor: 'pointer' }} onClick={() => toggleProdSort('categoria')}>Categoria {prodSortIcon('categoria')}</th>
+                        <th style={{ cursor: 'pointer' }} onClick={() => toggleProdSort('preco')}>Preço {prodSortIcon('preco')}</th>
+                        <th style={{ cursor: 'pointer' }} onClick={() => toggleProdSort('estoque')}>Estoque {prodSortIcon('estoque')}</th>
+                        <th>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedProds.map(p => (
+                        <tr key={p.id} className={prodSelectedIds.has(p.id) ? 'row-selected' : ''}>
+                          <td>
+                            <input type="checkbox" checked={prodSelectedIds.has(p.id)} onChange={() => toggleProdSelect(p.id)} style={{ cursor: 'pointer', width: '15px', height: '15px' }} />
+                          </td>
+                          <td>
+                            <div className="prod-thumb">
+                              {p.imagem ? <img src={p.imagem} alt={p.nome} /> : <i className="fa-solid fa-image"></i>}
+                            </div>
+                          </td>
+                          <td className="td-prod-name">{p.nome}</td>
+                          <td><span className="cat-tag">{p.categoria}</span></td>
+                          <td className="td-price">{formatPreco(p.preco)}</td>
+                          <td>
+                            <span className={`stock-tag ${p.estoque > 0 ? 'in' : 'out'}`}>
+                              {p.estoque > 0 ? `${p.estoque} un` : 'Indisponível'}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="td-actions">
+                              <button className="action-btn action-green" title="Editar" onClick={() => setEditingProd(p)}>
+                                <i className="fa-solid fa-pen"></i>
+                              </button>
+                              <button className="action-btn" title="Zerar estoque" onClick={() => { if (confirm(`Zerar estoque de "${p.nome}"?`)) updateProduct(p.id, { estoque: 0 }) }}>
+                                <i className="fa-solid fa-ban" style={{ color: '#dc2626' }}></i>
+                              </button>
+                              <button className="action-btn" title="Alternar disponibilidade" onClick={() => updateProduct(p.id, { estoque: p.estoque > 0 ? 0 : 1 })}>
+                                <i className={`fa-solid ${p.estoque > 0 ? 'fa-eye-slash' : 'fa-eye'}`} style={{ color: p.estoque > 0 ? '#f59e0b' : 'var(--success)' }}></i>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {paginatedProds.length === 0 && <tr><td colSpan="7" className="td-empty">Nenhum produto encontrado</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+
+                {totalProdPages > 1 && (
+                  <div className="admin-pagination">
+                    <button disabled={prodPage === 1} onClick={() => setProdPage(p => p - 1)}><i className="fa-solid fa-chevron-left"></i></button>
+                    <span>{prodPage} de {totalProdPages}</span>
+                    <button disabled={prodPage === totalProdPages} onClick={() => setProdPage(p => p + 1)}><i className="fa-solid fa-chevron-right"></i></button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* CART DRAWER */}
+        {prodCartOpen && (
+          <div className="admin-overlay" onClick={() => setProdCartOpen(false)}>
+            <div className="admin-cart-drawer" onClick={e => e.stopPropagation()}>
+              <div className="admin-cart-header">
+                <h3><i className="fa-solid fa-shopping-cart"></i> Carrinho</h3>
+                <button className="admin-modal-close" onClick={() => setProdCartOpen(false)}><i className="fa-solid fa-xmark"></i></button>
+              </div>
+              <div className="admin-cart-body">
+                {prodCartItems.length === 0 ? (
+                  <div className="admin-cart-empty">
+                    <i className="fa-solid fa-cart-plus"></i>
+                    <p>Carrinho vazio</p>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>Adicione produtos do catálogo</p>
+                  </div>
+                ) : (
+                  <>
+                    {prodCartItems.map(item => (
+                      <div key={item.id} className="admin-cart-item">
+                        <div className="admin-cart-item-img">
+                          {item.imagem ? <img src={item.imagem} alt={item.nome} /> : <i className="fa-solid fa-image"></i>}
+                        </div>
+                        <div className="admin-cart-item-info">
+                          <span className="admin-cart-item-name">{item.nome}</span>
+                          <span className="admin-cart-item-price">{formatPreco(item.preco)}</span>
+                        </div>
+                        <div className="admin-cart-item-qty">
+                          <button className="qty-btn-sm" onClick={() => removeFromProdCart(item.id)}><i className="fa-solid fa-minus"></i></button>
+                          <span>{item.qty}</span>
+                          <button className="qty-btn-sm" onClick={() => addToProdCart({ id: item.id, nome: item.nome, preco: item.preco, imagem: item.imagem })}><i className="fa-solid fa-plus"></i></button>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+              {prodCartItems.length > 0 && (
+                <div className="admin-cart-footer">
+                  <div className="admin-cart-total">
+                    <span>Total:</span>
+                    <strong>{formatPreco(prodCartTotal)}</strong>
+                  </div>
+                  <div className="admin-cart-actions">
+                    <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.78rem' }} onClick={clearProdCart}>
+                      <i className="fa-solid fa-trash"></i> Limpar
+                    </button>
+                    <button className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6', fontSize: '0.78rem' }} onClick={() => { setProdCartOpen(false); createOrderFromCart() }}>
+                      <i className="fa-solid fa-file-invoice"></i> Criar Pedido
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -1926,8 +2091,9 @@ export default function Admin({ produtos, onVoltar }) {
         <AddOrderModal
           produtos={produtosAtuais}
           usuarios={usuarios}
-          onSave={addOrder}
-          onClose={() => setShowAddOrder(false)}
+          initialCart={prodCart}
+          onSave={(order) => { addOrder(order); clearProdCart() }}
+          onClose={() => { setShowAddOrder(false); clearProdCart() }}
         />
       )}
 
@@ -2148,7 +2314,7 @@ export default function Admin({ produtos, onVoltar }) {
 // =============================================
 // MODAL: ADD ORDER
 // =============================================
-function AddOrderModal({ produtos, usuarios, onSave, onClose }) {
+function AddOrderModal({ produtos, usuarios, initialCart, onSave, onClose }) {
   const [step, setStep] = useState(1)
   const [showNewForm, setShowNewForm] = useState(false)
   const [userSearch, setUserSearch] = useState('')
@@ -2158,7 +2324,14 @@ function AddOrderModal({ produtos, usuarios, onSave, onClose }) {
   const [endereco, setEndereco] = useState({ cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
   const [pagamento, setPagamento] = useState('avista')
   const [diasPrazo, setDiasPrazo] = useState(30)
-  const [cart, setCart] = useState({})
+  const [cart, setCart] = useState(() => {
+    if (initialCart && Object.keys(initialCart).length > 0) {
+      return Object.fromEntries(
+        Object.entries(initialCart).map(([id, item]) => [id, { ...item, tipo: item.tipo || 'avista' }])
+      )
+    }
+    return {}
+  })
   const [search, setSearch] = useState('')
   const [prodPage, setProdPage] = useState(1)
 
