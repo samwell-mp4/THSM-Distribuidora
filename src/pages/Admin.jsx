@@ -3544,49 +3544,53 @@ function KitModal({ produtos, kit, onSave, onClose }) {
 
   return (
     <div className="admin-overlay" onClick={onClose}>
-      <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '650px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+      <div className="admin-modal kit-modal" onClick={e => e.stopPropagation()}>
         <div className="admin-modal-header">
           <h3><i className="fa-solid fa-toolbox"></i> {kit ? 'Editar Kit' : 'Montar Novo Kit'}</h3>
           <button className="admin-modal-close" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
         </div>
-        <div className="admin-modal-body" style={{ flex: 1, overflow: 'auto' }}>
-          <div className="form-group">
-            <label>Nome do Kit <span className="required-star">*</span></label>
-            <input type="text" placeholder="Ex: Kit Dia das Mães" value={nome} onChange={e => setNome(e.target.value)} autoFocus />
-          </div>
-          <div className="form-group">
-            <label>Descrição</label>
-            <textarea rows="2" placeholder="Uma descrição curta e atraente para o kit..." value={descricao} onChange={e => setDescricao(e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label>Texto de Prazo / Pagamento</label>
-            <textarea rows="3" placeholder="Explique as condições de pagamento (prazo, parcelamento, etc.)" value={prazoTexto} onChange={e => setPrazoTexto(e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label>Observações (opcional)</label>
-            <textarea rows="2" placeholder="Informações extras sobre o kit..." value={observacoes} onChange={e => setObservacoes(e.target.value)} />
+        <div className="kit-modal-body">
+          <div className="kit-modal-fields">
+            <div className="form-group">
+              <label>Nome do Kit <span className="required-star">*</span></label>
+              <input type="text" placeholder="Ex: Kit Dia das Mães" value={nome} onChange={e => setNome(e.target.value)} autoFocus />
+            </div>
+            <div className="form-group">
+              <label>Descrição</label>
+              <textarea rows="2" placeholder="Uma descrição curta e atraente para o kit..." value={descricao} onChange={e => setDescricao(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label>Texto de Prazo / Pagamento</label>
+              <textarea rows="3" placeholder="Explique as condições de pagamento (prazo, parcelamento, etc.)" value={prazoTexto} onChange={e => setPrazoTexto(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label>Observações (opcional)</label>
+              <textarea rows="2" placeholder="Informações extras sobre o kit..." value={observacoes} onChange={e => setObservacoes(e.target.value)} />
+            </div>
           </div>
 
-          <div className="form-group">
-            <label>Selecionar Produtos ({selectedIds.size} selecionados)</label>
-            <div className="admin-search-prod" style={{ marginBottom: '0.5rem' }}>
-              <i className="fa-solid fa-search"></i>
-              <input type="text" placeholder="Buscar produto..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: '100%' }} />
+          <div className="kit-modal-produtos">
+            <div className="kit-modal-produtos-header">
+              <label>Produtos no Kit <span className="selected-count">{selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}</span></label>
+              <div className="admin-search-prod">
+                <i className="fa-solid fa-search"></i>
+                <input type="text" placeholder="Buscar produto..." value={search} onChange={e => setSearch(e.target.value)} />
+              </div>
             </div>
-            <div style={{ maxHeight: '260px', overflow: 'auto', border: '1px solid var(--admin-border)', borderRadius: '8px' }}>
+            <div className="kit-produtos-lista">
               {filtered.map(p => (
-                <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.65rem', cursor: 'pointer', borderBottom: '1px solid var(--admin-border)', fontSize: '0.82rem', background: selectedIds.has(p.id) ? 'rgba(5, 150, 105, 0.06)' : 'white' }}>
-                  <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggle(p.id)} style={{ cursor: 'pointer' }} />
-                  <span style={{ flex: 1, fontWeight: selectedIds.has(p.id) ? 600 : 400 }}>{p.nome}</span>
-                  <span style={{ color: 'var(--admin-text-sec)', fontSize: '0.75rem' }}>{p.categoria}</span>
-                  <span style={{ fontWeight: 600, fontSize: '0.78rem' }}>R$ {p.preco.toFixed(2).replace('.', ',')}</span>
+                <label key={p.id} className={`kit-prod-item ${selectedIds.has(p.id) ? 'selected' : ''}`}>
+                  <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggle(p.id)} />
+                  <span className="kit-prod-nome">{p.nome}</span>
+                  <span className="kit-prod-cat">{p.categoria}</span>
+                  <span className="kit-prod-preco">R$ {p.preco.toFixed(2).replace('.', ',')}</span>
                 </label>
               ))}
-              {filtered.length === 0 && <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--admin-text-sec)', fontSize: '0.82rem' }}>Nenhum produto encontrado</div>}
+              {filtered.length === 0 && <div className="kit-prod-empty">Nenhum produto encontrado</div>}
             </div>
           </div>
         </div>
-        <div className="modal-actions" style={{ padding: '1rem 1.25rem', borderTop: '1px solid var(--admin-border)' }}>
+        <div className="modal-actions">
           <button className="admin-btn admin-btn-sec" onClick={onClose}>Cancelar</button>
           <button className="admin-btn admin-btn-primary" disabled={!nome.trim() || selectedIds.size === 0}
             onClick={() => onSave({
