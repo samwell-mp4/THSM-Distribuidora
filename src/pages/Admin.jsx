@@ -257,7 +257,8 @@ export default function Admin({ produtos, onVoltar }) {
   const [addressPreview, setAddressPreview] = useState('')
   const [finFilter, setFinFilter] = useState('todos')
   const [finEdit, setFinEdit] = useState(null)
-  const [usuarios, setUsuarios] = useState(() => LS.get('thsm_usuarios', []))
+  const [usuarios, setUsuarios] = useState([])
+  const [syncingUsers, setSyncingUsers] = useState(false)
   const [selectedUserEmail, setSelectedUserEmail] = useState(null)
   const [selectedUserDetail, setSelectedUserDetail] = useState(null)
   const [editingUser, setEditingUser] = useState(false)
@@ -368,12 +369,14 @@ export default function Admin({ produtos, onVoltar }) {
   }, [])
 
   useEffect(() => {
+    setSyncingUsers(true)
     syncAllForAdmin().then(({ orders: o, financial: f, users: u, rotas: r }) => {
       if (o.length) { LS.set(STORAGE_ORDERS, o); setOrders(o) }
       if (f.length) { LS.set(STORAGE_FINANCIAL, f); setFinancial(f) }
-      if (u.length) { LS.set('thsm_usuarios', u); setUsuarios(u) }
+      LS.set('thsm_usuarios', u); setUsuarios(u)
       if (r.length) { setRotas(r) } else { fetchRotas() }
-    }).catch(() => {})
+    }).catch(e => { console.error('syncAllForAdmin error:', e) })
+      .finally(() => setSyncingUsers(false))
   }, [])
 
   // Auto-expand first rota when rotas load
@@ -1740,7 +1743,11 @@ export default function Admin({ produtos, onVoltar }) {
                     <h1>Usuários</h1>
                     <p className="admin-subtitle">{usuarios.length} usuários cadastrados</p>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.78rem', padding: '0.4rem 0.7rem' }}
+                      onClick={() => { setSyncingUsers(true); syncAllForAdmin().then(({ users: u }) => { if (u.length) { LS.set('thsm_usuarios', u); setUsuarios(u) } }).catch(e => console.error('sync error:', e)).finally(() => setSyncingUsers(false)) }}>
+                      <i className={`fa-solid ${syncingUsers ? 'fa-spinner fa-spin' : 'fa-rotate'}`}></i> {syncingUsers ? 'Sincronizando' : 'Sincronizar'}
+                    </button>
                     <button className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6', fontSize: '0.82rem', padding: '0.45rem 0.85rem' }}
                       onClick={gerarSenhasUsuarios}>
                       <i className="fa-solid fa-key"></i> Gerar Senhas
