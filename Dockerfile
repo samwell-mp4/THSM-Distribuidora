@@ -1,7 +1,7 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 COPY . .
 RUN npm run build
 
@@ -10,6 +10,6 @@ WORKDIR /app
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/server.js .
 COPY --from=build /app/package*.json .
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 EXPOSE 3000
 CMD ["node", "server.js"]
