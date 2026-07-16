@@ -17,25 +17,34 @@ app.post('/api/criar-usuario', async (req, res) => {
     const telefone = (body.telefone || '').replace(/@s\.whatsapp\.net$/, '').replace(/\D/g, '')
     if (!telefone) return res.status(400).json({ error: 'telefone é obrigatório' })
 
-    const usuario = {
-      telefone,
-      nome: dados.nome || body.nome || '',
-      endereco: {
-        rua: dados.logradouro || dados.rua || '',
-        numero: dados.numero || '',
-        bairro: dados.bairro || '',
-        cidade: dados.cidade || '',
-        estado: dados.estado || '',
-        cep: dados.cep || '',
-        revende: dados.revende || '',
-        trabalha_fora: dados.trabalha_fora || '',
-        horario_trabalho: dados.horario_trabalho || ''
-      }
+    const nome = dados.nome || body.nome || ''
+
+    // Check if user already exists (to preserve existing password)
+    const { data: existing } = await supabase.from('usuarios').select('endereco').eq('telefone', telefone).maybeSingle()
+    const existingSenha = existing?.endereco?.senha || ''
+
+    // Generate password: FirstName + last 4 digits of phone
+    const primeiroNome = (nome.split(' ')[0] || '').trim()
+    const ultimos4 = telefone.slice(-4)
+    const senha = existingSenha || `${primeiroNome}${ultimos4}`
+
+    const endereco = {
+      ...(existing?.endereco || {}),
+      rua: dados.logradouro || dados.rua || '',
+      numero: dados.numero || '',
+      bairro: dados.bairro || '',
+      cidade: dados.cidade || '',
+      estado: dados.estado || '',
+      cep: dados.cep || '',
+      revende: dados.revende || '',
+      trabalha_fora: dados.trabalha_fora || '',
+      horario_trabalho: dados.horario_trabalho || '',
+      senha
     }
 
     const { data, error } = await supabase
       .from('usuarios')
-      .upsert(usuario, { onConflict: 'telefone' })
+      .upsert({ telefone, nome, endereco }, { onConflict: 'telefone' })
       .select()
       .single()
 
@@ -44,7 +53,7 @@ app.post('/api/criar-usuario', async (req, res) => {
       return res.status(500).json({ error: error.message })
     }
 
-    res.json({ success: true, usuario: data })
+    res.json({ success: true, usuario: data, senha_gerada: existingSenha ? false : true })
   } catch (err) {
     console.error('Server error:', err)
     res.status(500).json({ error: err.message })
