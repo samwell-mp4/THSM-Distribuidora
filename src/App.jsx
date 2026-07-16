@@ -429,7 +429,7 @@ function App() {
       <header className="header">
         <div className="header-inner">
           <div className="header-brand">
-            <div className="brand-icon" onDoubleClick={() => setShowAdminLogin(true)} title="Admin"><img src="/thsmdistribuidora.webp" alt="THSM" style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '6px' }} /></div>
+            <div className="brand-icon"><img src="/thsmdistribuidora.webp" alt="THSM" style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '6px' }} /></div>
             <div>
               <h1>THSM Distribuidora</h1>
               <span className="header-sub">Catálogo de Produtos</span>
@@ -447,10 +447,15 @@ function App() {
                 </button>
               </div>
             ) : (
-              <button className="user-btn" onClick={() => setShowLogin(true)} title="Entrar">
-                <i className="fa-solid fa-user"></i>
-                <span className="user-name">Entrar</span>
-              </button>
+              <>
+                <button className="user-btn" onClick={() => setShowLogin(true)} title="Entrar">
+                  <i className="fa-solid fa-user"></i>
+                  <span className="user-name">Entrar</span>
+                </button>
+                <button className="admin-login-link" onClick={() => setShowAdminLogin(true)} title="Admin">
+                  <i className="fa-solid fa-lock"></i>
+                </button>
+              </>
             )}
             <button className="cart-btn" onClick={() => setCartOpen(true)}>
               <i className="fa-solid fa-bag-shopping"></i>
