@@ -23,15 +23,28 @@ export async function findUserByPhone(telefone) {
   return data || null
 }
 
+async function paginateAll(table, pageSize = 1000) {
+  let all = []
+  let offset = 0
+  while (true) {
+    const { data } = await supabase.from(table).select('*').range(offset, offset + pageSize - 1)
+    if (!data || data.length === 0) break
+    all = all.concat(data)
+    if (data.length < pageSize) break
+    offset += pageSize
+  }
+  return all
+}
+
 export async function getAllUsers() {
-  const { data } = await supabase.from('usuarios').select('*').order('nome').range(0, 999999)
-  return data || []
+  const data = await paginateAll('usuarios')
+  return data.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
 }
 
 // ---- ORDERS ----
 export async function getAllOrders() {
-  const { data } = await supabase.from('pedidos').select('*').order('created_at', { ascending: false }).range(0, 99999)
-  return (data || []).map(fixOrder)
+  const data = await paginateAll('pedidos')
+  return (data || []).map(fixOrder).sort((a, b) => new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0))
 }
 
 export async function getOrdersCount() {
@@ -88,7 +101,7 @@ function fixOrder(row) {
 
 // ---- FINANCIAL ----
 export async function getAllFinancial() {
-  const { data } = await supabase.from('financeiro').select('*').range(0, 99999)
+  const data = await paginateAll('financeiro')
   return (data || []).map(f => f.data || f)
 }
 
