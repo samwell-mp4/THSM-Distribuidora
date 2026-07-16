@@ -183,11 +183,16 @@ export async function consumeLoginToken(token) {
   return data.telefone
 }
 export async function syncAllForAdmin() {
-  const [orders, financial, users, rotas] = await Promise.all([
+  const [orders, financial, users, rotas] = await Promise.allSettled([
     getAllOrders(),
     getAllFinancial(),
     getAllUsers(),
     getRotasContatos()
   ])
-  return { orders, financial, users, rotas }
+  return {
+    orders: orders.status === 'fulfilled' ? orders.value : [],
+    financial: financial.status === 'fulfilled' ? financial.value : [],
+    users: users.status === 'fulfilled' ? users.value : [],
+    rotas: rotas.status === 'fulfilled' ? rotas.value : []
+  }
 }

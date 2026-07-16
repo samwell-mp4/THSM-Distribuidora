@@ -1746,7 +1746,7 @@ export default function Admin({ produtos, onVoltar }) {
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                     <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.78rem', padding: '0.4rem 0.7rem' }}
-                      onClick={() => { setSyncingUsers(true); syncAllForAdmin().then(({ users: u }) => { if (u.length) { LS.set('thsm_usuarios', u); setUsuarios(u) } }).catch(e => console.error('sync error:', e)).finally(() => setSyncingUsers(false)) }}>
+                      onClick={() => { setSyncingUsers(true); syncAllForAdmin().then(({ users: u }) => { LS.set('thsm_usuarios', u); setUsuarios(u) }).catch(e => console.error('sync error:', e)).finally(() => setSyncingUsers(false)) }}>
                       <i className={`fa-solid ${syncingUsers ? 'fa-spinner fa-spin' : 'fa-rotate'}`}></i> {syncingUsers ? 'Sincronizando' : 'Sincronizar'}
                     </button>
                     <button className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6', fontSize: '0.82rem', padding: '0.45rem 0.85rem' }}
