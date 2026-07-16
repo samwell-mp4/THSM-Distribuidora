@@ -144,7 +144,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
   const userOrders = useMemo(() => {
     if (!currentUser) return []
     return allOrders
-      .filter(o => o.userId === currentUser.id || o.customer?.email === currentUser.email)
+      .filter(o => o.userId === currentUser.id || (currentUser.email && o.customer?.email && o.customer.email === currentUser.email) || o.customer?.telefone === currentUser.telefone)
       .sort((a, b) => b.createdAt - a.createdAt)
   }, [allOrders, currentUser])
 
