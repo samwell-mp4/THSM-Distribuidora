@@ -306,6 +306,9 @@ export default function Admin({ produtos, onVoltar }) {
   const [editContactPhone, setEditContactPhone] = useState('')
   const [editContactCity, setEditContactCity] = useState('')
   const [customRotas, setCustomRotas] = useState(() => LS.get(STORAGE_CUSTOM_ROTAS, []))
+  const [kits, setKits] = useState(() => LS.get('thsm_kits', []))
+  const [showKitModal, setShowKitModal] = useState(false)
+  const [editingKit, setEditingKit] = useState(null)
   const PROD_PER_PAGE = 20
 
   const showToast = (msg, type = 'success') => {
@@ -1309,6 +1312,9 @@ export default function Admin({ produtos, onVoltar }) {
                 <p className="admin-subtitle">{produtosAtuais.length} produtos cadastrados</p>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <button className="admin-btn" style={{ background: '#059669', color: 'white', borderColor: '#059669', fontSize: '0.78rem', padding: '0.35rem 0.7rem' }} onClick={() => { setEditingKit(null); setShowKitModal(true) }}>
+                  <i className="fa-solid fa-toolbox"></i> Montar Kit
+                </button>
                 {prodCartCount > 0 && (
                   <button className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6', position: 'relative' }} onClick={() => setProdCartOpen(true)}>
                     <i className="fa-solid fa-shopping-cart"></i> Carrinho
@@ -2661,6 +2667,52 @@ export default function Admin({ produtos, onVoltar }) {
         </div>
       )}
 
+      {/* KIT MODAL */}
+      {showKitModal && (
+        <KitModal
+          produtos={produtosAtuais}
+          kit={editingKit}
+          onSave={(kit) => {
+            const saved = { ...kit, id: kit.id || Date.now().toString(36) + Math.random().toString(36).substring(2, 6), criadoEm: new Date().toISOString() }
+            const updated = editingKit ? kits.map(k => k.id === saved.id ? saved : k) : [...kits, saved]
+            LS.set('thsm_kits', updated)
+            setKits(updated)
+            setShowKitModal(false)
+            setEditingKit(null)
+            showToast(`Kit "${saved.nome}" ${editingKit ? 'atualizado' : 'criado'}! URL: ${window.location.origin}${window.location.pathname}#/kit/${saved.id}`)
+          }}
+          onClose={() => { setShowKitModal(false); setEditingKit(null) }}
+        />
+      )}
+
+      {/* Lista de Kits salvos */}
+      {kits.length > 0 && tab === 'produtos' && !showKitModal && (
+        <div style={{ marginBottom: '1rem', padding: '0.75rem 1rem', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+            <h4 style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#166534' }}>
+              <i className="fa-solid fa-toolbox"></i> Kits Criados
+            </h4>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {kits.map(kit => (
+              <div key={kit.id} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.3rem 0.65rem', background: 'white', borderRadius: '20px', border: '1px solid #bbf7d0', fontSize: '0.78rem' }}>
+                <span style={{ fontWeight: 600 }}>{kit.nome}</span>
+                <span style={{ color: 'var(--admin-text-sec)', fontSize: '0.7rem' }}>({(kit.produtoIds || []).length} prod)</span>
+                <button style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '0.75rem', padding: '0.15rem 0.25rem' }} title="Copiar link" onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}${window.location.pathname}#/kit/${kit.id}`); showToast('Link copiado!') }}>
+                  <i className="fa-solid fa-link"></i>
+                </button>
+                <button style={{ background: 'none', border: 'none', color: '#f59e0b', cursor: 'pointer', fontSize: '0.75rem', padding: '0.15rem 0.25rem' }} title="Editar" onClick={() => { setEditingKit(kit); setShowKitModal(true) }}>
+                  <i className="fa-solid fa-pen"></i>
+                </button>
+                <button style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '0.75rem', padding: '0.15rem 0.25rem' }} title="Excluir" onClick={() => { if (confirm(`Excluir kit "${kit.nome}"?`)) { const updated = kits.filter(k => k.id !== kit.id); LS.set('thsm_kits', updated); setKits(updated); showToast('Kit excluído') } }}>
+                  <i className="fa-solid fa-trash-can"></i>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* MODAL EDIT PRODUCT */}
       {editingProd && (
         <EditProductModal
@@ -3460,6 +3512,93 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
             )}
             <button className="admin-btn admin-btn-sec" onClick={onClose}>Fechar</button>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// =============================================
+// MODAL: MONTAR KIT
+// =============================================
+function KitModal({ produtos, kit, onSave, onClose }) {
+  const [nome, setNome] = useState(kit?.nome || '')
+  const [descricao, setDescricao] = useState(kit?.descricao || '')
+  const [prazoTexto, setPrazoTexto] = useState(kit?.prazoTexto || '')
+  const [observacoes, setObservacoes] = useState(kit?.observacoes || '')
+  const [selectedIds, setSelectedIds] = useState(new Set(kit?.produtoIds || []))
+  const [search, setSearch] = useState('')
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim()
+    return q ? produtos.filter(p => p.nome.toLowerCase().includes(q) || (p.categoria || '').toLowerCase().includes(q)) : produtos
+  }, [produtos, search])
+
+  const toggle = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  return (
+    <div className="admin-overlay" onClick={onClose}>
+      <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '650px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+        <div className="admin-modal-header">
+          <h3><i className="fa-solid fa-toolbox"></i> {kit ? 'Editar Kit' : 'Montar Novo Kit'}</h3>
+          <button className="admin-modal-close" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
+        </div>
+        <div className="admin-modal-body" style={{ flex: 1, overflow: 'auto' }}>
+          <div className="form-group">
+            <label>Nome do Kit <span className="required-star">*</span></label>
+            <input type="text" placeholder="Ex: Kit Dia das Mães" value={nome} onChange={e => setNome(e.target.value)} autoFocus />
+          </div>
+          <div className="form-group">
+            <label>Descrição</label>
+            <textarea rows="2" placeholder="Uma descrição curta e atraente para o kit..." value={descricao} onChange={e => setDescricao(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label>Texto de Prazo / Pagamento</label>
+            <textarea rows="3" placeholder="Explique as condições de pagamento (prazo, parcelamento, etc.)" value={prazoTexto} onChange={e => setPrazoTexto(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label>Observações (opcional)</label>
+            <textarea rows="2" placeholder="Informações extras sobre o kit..." value={observacoes} onChange={e => setObservacoes(e.target.value)} />
+          </div>
+
+          <div className="form-group">
+            <label>Selecionar Produtos ({selectedIds.size} selecionados)</label>
+            <div className="admin-search-prod" style={{ marginBottom: '0.5rem' }}>
+              <i className="fa-solid fa-search"></i>
+              <input type="text" placeholder="Buscar produto..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: '100%' }} />
+            </div>
+            <div style={{ maxHeight: '260px', overflow: 'auto', border: '1px solid var(--admin-border)', borderRadius: '8px' }}>
+              {filtered.map(p => (
+                <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.65rem', cursor: 'pointer', borderBottom: '1px solid var(--admin-border)', fontSize: '0.82rem', background: selectedIds.has(p.id) ? 'rgba(5, 150, 105, 0.06)' : 'white' }}>
+                  <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggle(p.id)} style={{ cursor: 'pointer' }} />
+                  <span style={{ flex: 1, fontWeight: selectedIds.has(p.id) ? 600 : 400 }}>{p.nome}</span>
+                  <span style={{ color: 'var(--admin-text-sec)', fontSize: '0.75rem' }}>{p.categoria}</span>
+                  <span style={{ fontWeight: 600, fontSize: '0.78rem' }}>R$ {p.preco.toFixed(2).replace('.', ',')}</span>
+                </label>
+              ))}
+              {filtered.length === 0 && <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--admin-text-sec)', fontSize: '0.82rem' }}>Nenhum produto encontrado</div>}
+            </div>
+          </div>
+        </div>
+        <div className="modal-actions" style={{ padding: '1rem 1.25rem', borderTop: '1px solid var(--admin-border)' }}>
+          <button className="admin-btn admin-btn-sec" onClick={onClose}>Cancelar</button>
+          <button className="admin-btn admin-btn-primary" disabled={!nome.trim() || selectedIds.size === 0}
+            onClick={() => onSave({
+              ...kit,
+              nome: nome.trim(),
+              descricao: descricao.trim(),
+              prazoTexto: prazoTexto.trim(),
+              observacoes: observacoes.trim(),
+              produtoIds: [...selectedIds]
+            })}>
+            <i className="fa-solid fa-check"></i> {kit ? 'Atualizar Kit' : 'Criar Kit'}
+          </button>
         </div>
       </div>
     </div>

@@ -3,6 +3,7 @@ import produtos from './data/produtos.json'
 import Admin from './pages/Admin'
 import AddressForm from './components/AddressForm'
 import UserDashboard from './pages/UserDashboard'
+import KitPage from './pages/KitPage'
 import { supabase, upsertOrder, upsertUser } from './lib/supabase'
 import './App.css'
 
@@ -62,6 +63,7 @@ function App() {
     const path = hash.replace(/\/+$/, '') || '/'
     if (path.startsWith('/admin')) return 'admin'
     if (path.startsWith('/minha-conta')) return 'userdash'
+    if (path.startsWith('/kit')) return 'kit'
     return 'catalog'
   }, [])
 
@@ -410,6 +412,14 @@ function App() {
     if (nums.length <= 2) return `(${nums}`
     if (nums.length <= 7) return `(${nums.slice(0, 2)}) ${nums.slice(2)}`
     return `(${nums.slice(0, 2)}) ${nums.slice(2, 7)}-${nums.slice(7)}`
+  }
+
+  // Kit view
+  if (route === 'kit') {
+    const kitId = window.location.hash.replace(/^#\/kit\//, '').split('/')[0] || ''
+    const allKits = (() => { try { return JSON.parse(localStorage.getItem('thsm_kits') || '[]') } catch { return [] } })()
+    const kit = allKits.find(k => k.id === kitId)
+    return <KitPage kit={kit} produtos={produtos} onVoltar={() => navigate('/')} />
   }
 
   // Admin & UserDash views
