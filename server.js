@@ -54,7 +54,7 @@ app.post('/api/criar-usuario', async (req, res) => {
       return res.status(500).json({ error: error.message })
     }
 
-    const loginLink = `${process.env.BASE_URL || 'https://thsmdistribuidora.plugsales.app'}/?login=${Buffer.from(telefone).toString('base64')}`
+        const loginLink = `https://thsmdistribuidora.com/?login=${Buffer.from(telefone).toString('base64')}`
 
     res.json({ success: true, usuario: data, senha_gerada: existingSenha ? false : true, loginLink })
   } catch (err) {
