@@ -94,6 +94,17 @@ export async function deleteOrder(id) {
   await supabase.from('pedidos').delete().eq('id', id)
 }
 
+export async function deleteUserByTelefone(telefone) {
+  const { data: orders } = await supabase.from('pedidos').select('id').eq('user_id', telefone)
+  const orderIds = (orders || []).map(o => o.id)
+  if (orderIds.length > 0) {
+    await supabase.from('financeiro').delete().in('order_id', orderIds)
+    await supabase.from('pedidos').delete().in('id', orderIds)
+  }
+  const { error } = await supabase.from('usuarios').delete().eq('telefone', telefone)
+  return { error, deletedOrders: orderIds.length }
+}
+
 function fixOrder(row) {
   if (row.data && typeof row.data === 'object') return { ...row.data, user_id: row.user_id, status: row.status }
   return row
@@ -149,7 +160,7 @@ export async function syncContatosToUsuarios(contatos) {
     const phone = ct.remoteJid?.replace(/@.*/, '').replace(/\D/g, '')
     if (!phone || phone.length < 10) return null
     const normalized = phone.startsWith('55') ? phone : `55${phone}`
-    const mergedEndereco = { ...(existingMap[normalized] || {}), cidade: ct.cidade || '', rota: ct.rota || '' }
+    const mergedEndereco = { ...(existingMap[normalized] || {}), cidade: ct.cidade || '', rota: ct.rota || '', origem: existingMap[normalized]?.origem || 'Importado WhatsApp' }
     return {
       telefone: normalized,
       nome: ct.pushName || 'Contato',

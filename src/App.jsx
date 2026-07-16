@@ -296,7 +296,7 @@ function App() {
       telefone,
       nome: customer.nome,
       email: customer.email,
-      endereco: { ...(customer.endereco || {}), senha: customer.senha }
+      endereco: { ...(customer.endereco || {}), senha: customer.senha, origem: 'Registro do Site' }
     }).select().single()
     if (error) { showToast('Erro ao criar cadastro', 'error'); return false }
     setUsuarios(prev => [...prev, data])

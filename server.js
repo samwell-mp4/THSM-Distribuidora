@@ -39,6 +39,7 @@ app.post('/api/criar-usuario', async (req, res) => {
       revende: dados.revende || '',
       trabalha_fora: dados.trabalha_fora || '',
       horario_trabalho: dados.horario_trabalho || '',
+      origem: existing?.endereco?.origem || 'BOT',
       senha
     }
 

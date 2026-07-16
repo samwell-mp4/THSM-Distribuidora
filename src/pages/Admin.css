@@ -553,6 +553,18 @@
   object-fit: cover;
 }
 
+.origem-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.origem-badge i { font-size: 0.7rem; }
+
 .cat-tag {
   font-size: 0.7rem;
   font-weight: 600;

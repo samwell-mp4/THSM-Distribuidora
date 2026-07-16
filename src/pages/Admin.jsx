@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import './Admin.css'
-import { supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser, deleteOrder as supabaseDeleteOrder, syncContatosToUsuarios } from '../lib/supabase'
+import { supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser, deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios } from '../lib/supabase'
 
 const STORAGE_ORDERS = 'thsm_admin_orders'
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
@@ -414,11 +414,13 @@ export default function Admin({ produtos, onVoltar }) {
     setOrders(prev => [order, ...prev])
 
     // Upsert user to Supabase and update local list
+    const existingUser = usuarios.find(u => u.telefone === data.telefone)
+    const mergedEndereco = { ...(existingUser?.endereco || {}), ...(data.endereco || {}), origem: existingUser?.endereco?.origem || 'Admin' }
     const savedUser = await upsertUser({
       telefone: data.telefone,
       nome: data.nome,
       email: data.email || '',
-      endereco: data.endereco || {}
+      endereco: mergedEndereco
     })
     if (savedUser) {
       order.user_id = savedUser.id
@@ -623,6 +625,15 @@ export default function Admin({ produtos, onVoltar }) {
       }
     }
     showToast(`${count} senha(s) gerada(s) com sucesso!`)
+  }
+
+  const handleDeleteUser = async (user) => {
+    if (!confirm(`Tem certeza que deseja excluir "${user.nome}" (${user.telefone})?\n\nIsso também excluirá todos os pedidos e financeiro deste usuário.`)) return
+    const { error, deletedOrders } = await deleteUserByTelefone(user.telefone)
+    if (error) { showToast('Erro ao excluir usuário', 'error'); return }
+    setUsuarios(prev => prev.filter(u => u.telefone !== user.telefone))
+    if (selectedUserDetail?.telefone === user.telefone) setSelectedUserDetail(null)
+    showToast(`Usuário excluído! ${deletedOrders > 0 ? `${deletedOrders} pedido(s) removido(s).` : ''}`)
   }
 
   const formatPhone = (v) => {
@@ -1548,10 +1559,18 @@ export default function Admin({ produtos, onVoltar }) {
                     <h1>{selectedUserDetail.nome}</h1>
                     <p className="admin-subtitle">{selectedUserDetail.telefone} &middot; {selectedUserDetail.email || 'sem email'}</p>
                   </div>
-                  <button className="admin-btn" style={{ background: editingUser ? 'var(--success)' : 'var(--accent)', color: 'white', borderColor: editingUser ? 'var(--success)' : 'var(--accent)' }}
-                    onClick={editingUser ? saveUserEdit : () => { setEditingUser(true); setEditUserData({ ...selectedUserDetail }) }}>
-                    <i className={`fa-solid ${editingUser ? 'fa-check' : 'fa-pen'}`}></i> {editingUser ? 'Salvar' : 'Editar'}
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    {!editingUser && (
+                      <button className="admin-btn" style={{ background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)' }}
+                        onClick={() => handleDeleteUser(selectedUserDetail)}>
+                        <i className="fa-solid fa-trash-can"></i> Excluir
+                      </button>
+                    )}
+                    <button className="admin-btn" style={{ background: editingUser ? 'var(--success)' : 'var(--accent)', color: 'white', borderColor: editingUser ? 'var(--success)' : 'var(--accent)' }}
+                      onClick={editingUser ? saveUserEdit : () => { setEditingUser(true); setEditUserData({ ...selectedUserDetail }) }}>
+                      <i className={`fa-solid ${editingUser ? 'fa-check' : 'fa-pen'}`}></i> {editingUser ? 'Salvar' : 'Editar'}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Info Cards */}
@@ -1786,55 +1805,67 @@ export default function Admin({ produtos, onVoltar }) {
                 </div>
 
                 <div className="admin-table-wrap">
-                  <table className="admin-table">
-                    <thead>
-                      <tr>
-                        <th>Nome</th>
-                        <th>Telefone</th>
-                        <th>Email</th>
-                        <th>Endereço</th>
-                        <th>Cadastro</th>
-                        <th>Pedidos</th>
-                        <th>Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginatedUsuarios.map(u => {
-                        const userOrders = orders.filter(o => o.customer?.telefone === u.telefone || o.user_id === u.id)
-                        const totalGasto = userOrders.reduce((s, o) => s + o.total, 0)
-                        const e = u.endereco || {}
-                        const endStr = [e.rua && `${e.rua}${e.numero ? `, ${e.numero}` : ''}`, e.bairro, e.cidade].filter(Boolean).join(', ') || '-'
-                        return (
-                          <tr key={u.id}>
-                            <td style={{ fontWeight: 600 }}>{u.nome}</td>
-                            <td>{u.telefone}</td>
-                            <td>{u.email || '-'}</td>
-                            <td style={{ fontSize: '0.78rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={endStr}>
-                              {endStr}
-                            </td>
-                            <td>{formatDate(u.created_at ? new Date(u.created_at).toISOString().split('T')[0] : (u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : ''))}</td>
-                            <td>
-                              <span className="cat-tag">{userOrders.length} pedidos</span>
-                              {userOrders.length > 0 && (
-                                <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>
-                                  {formatPreco(totalGasto)}
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>Nome</th>
+                          <th>Telefone</th>
+                          <th>Email</th>
+                          <th>Origem</th>
+                          <th>Endereço</th>
+                          <th>Cadastro</th>
+                          <th>Pedidos</th>
+                          <th>Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedUsuarios.map(u => {
+                          const userOrders = orders.filter(o => o.customer?.telefone === u.telefone || o.user_id === u.id)
+                          const totalGasto = userOrders.reduce((s, o) => s + o.total, 0)
+                          const e = u.endereco || {}
+                          const endStr = [e.rua && `${e.rua}${e.numero ? `, ${e.numero}` : ''}`, e.bairro, e.cidade].filter(Boolean).join(', ') || '-'
+                          const origem = e.origem || '—'
+                          const origemColors = { 'BOT': '#8b5cf6', 'Registro do Site': '#16a34a', 'Admin': '#2563eb', 'Importado WhatsApp': '#d97706' }
+                          return (
+                            <tr key={u.id}>
+                              <td style={{ fontWeight: 600 }}>{u.nome}</td>
+                              <td>{u.telefone}</td>
+                              <td>{u.email || '-'}</td>
+                              <td>
+                                <span className="origem-badge" style={{ background: `${origemColors[origem] || '#6b7280'}18`, color: origemColors[origem] || '#6b7280', border: `1px solid ${origemColors[origem] || '#6b7280'}30` }}>
+                                  {origem === 'BOT' ? <i className="fa-solid fa-robot"></i> : origem === 'Registro do Site' ? <i className="fa-solid fa-globe"></i> : origem === 'Admin' ? <i className="fa-solid fa-user-tie"></i> : origem === 'Importado WhatsApp' ? <i className="fa-brands fa-whatsapp"></i> : <i className="fa-solid fa-circle-question"></i>}
+                                  {' '}{origem}
                                 </span>
-                              )}
-                            </td>
-                            <td>
-                              <div className="td-actions">
-                                <button className="action-btn action-green" title="Ver detalhes do usuário" onClick={() => setSelectedUserDetail(u)}>
-                                  <i className="fa-solid fa-user"></i>
-                                </button>
-                                <button className="action-btn" title="Ver pedidos" onClick={() => { setSelectedUserEmail(u.email || u.telefone); setTab('pedidos') }}>
-                                  <i className="fa-solid fa-clipboard-list"></i>
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                      {paginatedUsuarios.length === 0 && <tr><td colSpan="7" className="td-empty">Nenhum usuário encontrado</td></tr>}
+                              </td>
+                              <td style={{ fontSize: '0.78rem', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={endStr}>
+                                {endStr}
+                              </td>
+                              <td>{formatDate(u.created_at ? new Date(u.created_at).toISOString().split('T')[0] : (u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : ''))}</td>
+                              <td>
+                                <span className="cat-tag">{userOrders.length} pedidos</span>
+                                {userOrders.length > 0 && (
+                                  <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>
+                                    {formatPreco(totalGasto)}
+                                  </span>
+                                )}
+                              </td>
+                              <td>
+                                <div className="td-actions">
+                                  <button className="action-btn action-green" title="Ver detalhes do usuário" onClick={() => setSelectedUserDetail(u)}>
+                                    <i className="fa-solid fa-user"></i>
+                                  </button>
+                                  <button className="action-btn" title="Ver pedidos" onClick={() => { setSelectedUserEmail(u.email || u.telefone); setTab('pedidos') }}>
+                                    <i className="fa-solid fa-clipboard-list"></i>
+                                  </button>
+                                  <button className="action-btn" style={{ color: 'var(--danger)' }} title="Excluir usuário" onClick={() => handleDeleteUser(u)}>
+                                    <i className="fa-solid fa-trash-can"></i>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                        {paginatedUsuarios.length === 0 && <tr><td colSpan="8" className="td-empty">Nenhum usuário encontrado</td></tr>}
                     </tbody>
                   </table>
                 </div>
