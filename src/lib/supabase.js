@@ -24,7 +24,7 @@ export async function findUserByPhone(telefone) {
 }
 
 export async function getAllUsers() {
-  const { data } = await supabase.from('usuarios').select('*').order('nome')
+  const { data } = await supabase.from('usuarios').select('*').order('nome').range(0, 999999)
   return data || []
 }
 
@@ -118,33 +118,42 @@ export async function getRotasContatos() {
 export async function syncContatosToUsuarios(contatos) {
   if (!contatos || contatos.length === 0) return 0
 
-  // Batch: upsert with merge via raw SQL approach
-  let updated = 0
-  for (const ct of contatos) {
+  // Fetch existing users' endereco in one query
+  const telefones = contatos.map(ct => {
     const phone = ct.remoteJid?.replace(/@.*/, '').replace(/\D/g, '')
-    if (!phone || phone.length < 10) continue
+    if (!phone || phone.length < 10) return null
     const normalized = phone.startsWith('55') ? phone : `55${phone}`
+    return normalized
+  }).filter(Boolean)
 
-    // Get existing endereco to merge
-    const { data: existing } = await supabase.from('usuarios').select('endereco').eq('telefone', normalized).maybeSingle()
-    const mergedEndereco = { ...(existing?.endereco || {}) }
-    if (ct.cidade) mergedEndereco.cidade = ct.cidade
-    if (ct.rota) mergedEndereco.rota = ct.rota
+  if (telefones.length === 0) return 0
 
-    const { error } = await supabase.from('usuarios').upsert({
+  const { data: existing } = await supabase.from('usuarios').select('telefone, endereco').in('telefone', telefones)
+  const existingMap = {}
+  if (existing) existing.forEach(u => { existingMap[u.telefone] = u.endereco || {} })
+
+  const batch = contatos.map(ct => {
+    const phone = ct.remoteJid?.replace(/@.*/, '').replace(/\D/g, '')
+    if (!phone || phone.length < 10) return null
+    const normalized = phone.startsWith('55') ? phone : `55${phone}`
+    const mergedEndereco = { ...(existingMap[normalized] || {}), cidade: ct.cidade || '', rota: ct.rota || '' }
+    return {
       telefone: normalized,
       nome: ct.pushName || 'Contato',
       endereco: mergedEndereco
-    }, { onConflict: 'telefone' })
-
-    if (error) {
-      console.error('Erro syncContatosToUsuarios:', error, ct)
-    } else {
-      updated++
     }
+  }).filter(Boolean)
+
+  if (batch.length === 0) return 0
+
+  const { error } = await supabase.from('usuarios').upsert(batch, { onConflict: 'telefone', ignoreDuplicates: false })
+
+  if (error) {
+    console.error('Erro syncContatosToUsuarios:', error)
+    return 0
   }
 
-  return updated
+  return batch.length
 }
 
 function makeToken() {

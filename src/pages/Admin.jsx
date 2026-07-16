@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import './Admin.css'
-import { supabase, syncAllForAdmin, upsertOrders, upsertFinancial, upsertOrder, upsertUser, deleteOrder as supabaseDeleteOrder, syncContatosToUsuarios } from '../lib/supabase'
+import { supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser, deleteOrder as supabaseDeleteOrder, syncContatosToUsuarios } from '../lib/supabase'
 
 const STORAGE_ORDERS = 'thsm_admin_orders'
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
@@ -287,6 +287,7 @@ export default function Admin({ produtos, onVoltar }) {
   const ORDER_PAGE_SIZE = 50
   const [rotas, setRotas] = useState([])
   const [rotasLoading, setRotasLoading] = useState(false)
+  const [importingRotas, setImportingRotas] = useState(false)
   const [rotasError, setRotasError] = useState(null)
   const [expandedRota, setExpandedRota] = useState(null)
   const [filterCidade, setFilterCidade] = useState('TODAS')
@@ -1876,19 +1877,28 @@ export default function Admin({ produtos, onVoltar }) {
                   {rotasLoading ? 'Buscando...' : 'Atualizar'}
                 </button>
                 <button className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }}
-                  disabled={rotas.length === 0}
+                  disabled={rotas.length === 0 || importingRotas}
                   onClick={async () => {
-                    const added = await syncContatosToUsuarios(rotas)
-                    if (added > 0) {
-                      showToast(`${added} novo(s) usuário(s) importado(s)!`)
-                      // Refresh usuarios
-                      const { data: u } = await supabase.from('usuarios').select('*').order('nome')
-                      if (u) { setUsuarios(u); LS.set('thsm_usuarios', u) }
-                    } else {
-                      showToast('Nenhum novo contato para importar', 'warning')
+                    if (importingRotas) return
+                    setImportingRotas(true)
+                    try {
+                      const added = await syncContatosToUsuarios(rotas)
+                      if (added > 0) {
+                        showToast(`${added} contato(s) importado(s) para usuários!`)
+                        const u = await getAllUsers()
+                        if (u.length) { setUsuarios(u); LS.set('thsm_usuarios', u) }
+                      } else {
+                        showToast('Nenhum novo contato para importar', 'warning')
+                      }
+                    } catch (e) {
+                      console.error('Erro ao importar:', e)
+                      showToast('Erro ao importar contatos', 'error')
+                    } finally {
+                      setImportingRotas(false)
                     }
                   }}>
-                  <i className="fa-solid fa-users"></i> Importar para Usuários
+                  <i className={`fa-solid ${importingRotas ? 'fa-spinner fa-spin' : 'fa-users'}`}></i>
+                  {importingRotas ? 'Importando...' : 'Importar para Usuários'}
                 </button>
               </div>
             </div>
