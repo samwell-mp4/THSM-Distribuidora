@@ -104,7 +104,7 @@ function App() {
           setAddressRequiredEndereco({ cep: addr.cep || '', estado: addr.estado || '', cidade: addr.cidade || '', bairro: addr.bairro || '', rua: addr.rua || '', numero: addr.numero || '', complemento: addr.complemento || '' })
           setShowAddressRequired(true)
         } else {
-          if (route !== 'userdash') navigate('/')
+          navigate('/')
         }
       }
     }
