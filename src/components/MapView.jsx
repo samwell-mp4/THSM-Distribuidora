@@ -426,37 +426,56 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
               const linhas = txt.split('\n').map(l => l.trim()).filter(Boolean)
               if (linhas.length < 2) { setCsvMsg({ t: 'erro', v: 'CSV vazio' }); return }
               const cabecalho = linhas[0].toLowerCase()
-              const idxNome = cabecalho.includes('nome') ? 0 : -1
-              const idxTel = cabecalho.includes('telefone') || cabecalho.includes('tel') ? 1 : -1
-              const idxLat = cabecalho.includes('lat') ? cabecalho.split(';').findIndex(c => c.includes('lat')) : -1
-              const idxLng = cabecalho.includes('lon') || cabecalho.includes('lng') ? cabecalho.split(';').findIndex(c => c.includes('lon') || c.includes('lng')) : -1
+              const colsHeader = cabecalho.split(';').map(c => c.trim())
+              const idxNome = colsHeader.findIndex(c => c.includes('nome'))
+              const idxTel = colsHeader.findIndex(c => c.includes('telefone') || c.includes('tel'))
+              const idxLat = colsHeader.findIndex(c => c.includes('lat'))
+              const idxLng = colsHeader.findIndex(c => c.includes('lon') || c.includes('lng'))
               if (idxLat < 0 || idxLng < 0) { setCsvMsg({ t: 'erro', v: 'CSV precisa ter colunas Latitude e Longitude' }); return }
               const cache = JSON.parse(localStorage.getItem('thsm_geocode_cache') || '{}')
-              let importados = 0
+              let importados = 0; let naoMatch = 0
               for (let i = 1; i < linhas.length; i++) {
-                const cols = linhas[i].split(';').map(c => c.replace(/^"|"$/g, '').trim())
+                const raw = linhas[i]
+                const cols = raw.split(';').map(c => c.replace(/^"|"$/g, '').trim())
                 if (cols.length <= Math.max(idxLat, idxLng)) continue
                 const lat = parseFloat(cols[idxLat].replace(',', '.'))
                 const lng = parseFloat(cols[idxLng].replace(',', '.'))
                 if (isNaN(lat) || isNaN(lng)) continue
-                const nomeCSV = cols[idxNome] || ''
+                const nomeCSV = (cols[idxNome] || '').toLowerCase().trim()
                 const telCSV = (cols[idxTel] || '').replace(/\D/g, '')
+                const endCSV = (cols[idxNome + 1 === idxTel ? idxTel + 1 : 2] || '').toLowerCase().trim()
                 const item = items.find(p => {
-                  const telUser = (p.user.telefone || '').replace(/\D/g, '')
-                  return telUser && telUser === telCSV
-                }) || (nomeCSV ? items.find(p => (p.user.nome || p.user.pushName || '').toLowerCase() === nomeCSV.toLowerCase()) : null)
-                if (!item) continue
+                  if (telCSV) {
+                    const telUser = (p.user.telefone || '').replace(/\D/g, '')
+                    if (telUser.endsWith(telCSV) || telCSV.endsWith(telUser)) return true
+                  }
+                  if (nomeCSV) {
+                    const nomeUser = (p.user.nome || p.user.pushName || '').toLowerCase().trim()
+                    if (nomeUser === nomeCSV || nomeUser.includes(nomeCSV) || nomeCSV.includes(nomeUser)) return true
+                  }
+                  if (endCSV && endCSV.length > 5) {
+                    const addrUser = queryAddr(p.user.endereco).toLowerCase()
+                    if (addrUser.includes(endCSV) || endCSV.includes(addrUser)) return true
+                  }
+                  return false
+                })
+                if (!item) { naoMatch++; continue }
                 const addrKey = queryAddr(item.user.endereco)
+                const bairroKey = queryBairro(item.user.endereco)
                 cache[addrKey] = [lat, lng]
+                if (bairroKey !== addrKey) cache[bairroKey] = [lat, lng]
                 importados++
               }
               localStorage.setItem('thsm_geocode_cache', JSON.stringify(cache))
-              setCsvMsg({ t: 'ok', v: `${importados} coordenadas importadas de ${linhas.length - 1} linhas` })
+              const msg = `${importados} coordenadas importadas de ${linhas.length - 1} linhas${naoMatch > 0 ? ` (${naoMatch} sem match)` : ''}`
+              setCsvMsg({ t: naoMatch === 0 ? 'ok' : 'aviso', v: msg })
               setItems(prev => prev.map(i => {
                 const addrKey = queryAddr(i.user.endereco)
-                return cache[addrKey] ? { ...i, coords: cache[addrKey], fallback: false } : i
+                const bairroKey = queryBairro(i.user.endereco)
+                const c = cache[addrKey] || cache[bairroKey]
+                return c ? { ...i, coords: c, fallback: false } : i
               }))
-              setTimeout(() => setCsvMsg(null), 4000)
+              setTimeout(() => setCsvMsg(null), 5000)
             }
             reader.readAsText(file)
             e.target.value = ''
