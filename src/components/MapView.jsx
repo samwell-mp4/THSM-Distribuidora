@@ -286,12 +286,15 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
     }
   }, [filtered, sel, buildPopup, onMarkOnWay, onViewUser, financial])
 
-  // Zoom to filter
+  // Zoom to filter (only on filter change, not items update)
+  const itemsRef = useRef(items)
+  itemsRef.current = items
   useEffect(() => {
-    if (!map.current || !items.length) return
+    if (!map.current || !itemsRef.current.length) return
+    const it = itemsRef.current
     let target = null
     if (filtroCidade !== 'TODAS') {
-      const found = items.find(i => (i.user.endereco?.cidade || '').toLowerCase() === filtroCidade.toLowerCase())
+      const found = it.find(i => (i.user.endereco?.cidade || '').toLowerCase() === filtroCidade.toLowerCase())
       const ec = found ? cityCoord(found.user.endereco.cidade, found.user.endereco.estado) : null
       if (ec) target = { coords: ec, zoom: 12 }
     } else if (filtroEstado !== 'TODOS') {
@@ -302,14 +305,14 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
     else if (filtroCidade === 'TODAS' && filtroEstado === 'TODOS') {
       const bounds = L.latLngBounds()
       let has = false
-      for (const item of items) {
+      for (const item of it) {
         if (!item.coords) continue
         bounds.extend(item.coords)
         has = true
       }
       if (has) map.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 })
     }
-  }, [filtroCidade, filtroEstado, items])
+  }, [filtroCidade, filtroEstado])
 
   // Routes
   useEffect(() => {
