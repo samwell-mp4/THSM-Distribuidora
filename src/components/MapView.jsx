@@ -162,7 +162,7 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
       // Try bairro first (more specific than city center)
       const query = bairroAi !== addrAi ? bairroAi : addrAi
       const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=br&limit=1`
-      fetch(url, { headers: { 'User-Agent': 'THSM-Distribuidora/1.0' } })
+      return fetch(url, { headers: { 'User-Agent': 'THSM-Distribuidora/1.0' } })
         .then(res => res.json())
         .then(data => {
           if (data && data[0]) {
