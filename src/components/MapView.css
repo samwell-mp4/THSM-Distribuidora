@@ -13,7 +13,7 @@
   flex-wrap: wrap;
 }
 
-.mv-title {
+.mv-tit {
   font-size: 1.1rem;
   font-weight: 700;
   display: flex;
@@ -44,6 +44,7 @@
   align-items: center;
   gap: 5px;
   white-space: nowrap;
+  transition: all 0.12s;
 }
 
 .mbtn:hover { border-color: #6366f1; color: #6366f1; }
@@ -60,6 +61,8 @@
   z-index: 0;
 }
 
+.mv-map .leaflet-container { border-radius: 10px; }
+
 .mv-list {
   border: 1px solid #e5e7eb;
   border-radius: 10px;
@@ -70,7 +73,7 @@
   max-height: 260px;
 }
 
-.mv-list-header {
+.mv-lh {
   padding: 8px 12px;
   font-size: 0.82rem;
   font-weight: 600;
@@ -82,29 +85,30 @@
   flex-shrink: 0;
 }
 
-.mv-list-count {
+.mv-lc {
   margin-left: auto;
   font-weight: 400;
   color: #6b7280;
   font-size: 0.75rem;
 }
 
-.mv-list-body {
+.mv-lb {
   overflow-y: auto;
   flex: 1;
 }
 
-.mv-item {
+.mv-i {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
   cursor: pointer;
   border-bottom: 1px solid #f3f4f6;
+  transition: background 0.1s;
 }
 
-.mv-item:hover { background: #f9fafb; }
-.mv-item.sel { background: #fef2f2; }
+.mv-i:hover { background: #f9fafb; }
+.mv-i.s { background: #fef2f2; }
 
 .mv-av {
   width: 30px;
@@ -120,12 +124,12 @@
   box-shadow: 0 1px 3px rgba(0,0,0,0.15);
 }
 
-.mv-info {
+.mv-if {
   flex: 1;
   min-width: 0;
 }
 
-.mv-info b {
+.mv-if b {
   display: block;
   font-size: 0.82rem;
   white-space: nowrap;
@@ -133,7 +137,7 @@
   text-overflow: ellipsis;
 }
 
-.mv-info span {
+.mv-if span {
   display: block;
   font-size: 0.72rem;
   color: #6b7280;
@@ -142,8 +146,34 @@
   text-overflow: ellipsis;
 }
 
-.mv-empty {
+.mv-e {
   padding: 24px;
   text-align: center;
   color: #6b7280;
+}
+
+/* MarkerCluster overrides */
+.marker-cluster-small {
+  background-color: rgba(37, 99, 235, 0.15) !important;
+}
+.marker-cluster-small div {
+  background-color: #2563eb !important;
+  color: white !important;
+  font-weight: 600;
+}
+.marker-cluster-medium {
+  background-color: rgba(217, 119, 6, 0.15) !important;
+}
+.marker-cluster-medium div {
+  background-color: #d97706 !important;
+  color: white !important;
+  font-weight: 600;
+}
+.marker-cluster-large {
+  background-color: rgba(220, 38, 38, 0.15) !important;
+}
+.marker-cluster-large div {
+  background-color: #dc2626 !important;
+  color: white !important;
+  font-weight: 600;
 }
