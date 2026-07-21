@@ -2088,7 +2088,19 @@ export default function Admin({ produtos, onVoltar }) {
         {/* MAPA */}
         {tab === 'mapa' && (
           <div className="admin-section" style={{ height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column' }}>
-            <MapView usuarios={usuarios} />
+            <MapView usuarios={usuarios} orders={orders} financial={financial}
+  onMarkOnWay={(user) => {
+    const userOrders = orders.filter(o => o.customer?.telefone === user.telefone || o.user_id === user.id)
+    const toUpdate = userOrders.filter(o => !['entregue', 'cancelado'].includes(o.status))
+    if (toUpdate.length === 0) return
+    if (confirm(`Marcar ${toUpdate.length} pedido(s) de ${user.nome || user.pushName} como "Em Rota"?`)) {
+      setOrders(prev => prev.map(o => toUpdate.some(t => t.id === o.id) ? { ...o, status: 'em-rota' } : o))
+    }
+  }}
+  onViewUser={(user) => {
+    setSelectedUserDetail(user)
+    setTab('usuarios')
+  }} />
           </div>
         )}
 

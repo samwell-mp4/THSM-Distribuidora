@@ -30,13 +30,15 @@ const CIDADE = {
   'divinopolis': [-20.15, -44.90], 'cons. lafaiete': [-20.66, -43.78],
   'ouro branco': [-20.52, -43.69], 'mariana': [-20.38, -43.42],
   'vicosa': [-20.75, -42.88], 'ponte nova': [-20.41, -42.91],
-  'ubá': [-21.12, -42.94], 'rio pomba': [-21.27, -42.64],
-  'sao joao del rei': [-21.14, -44.26], 'andrelândia': [-21.74, -44.31],
-  'lima duarte': [-21.84, -43.80], 'bom jardim de minas': [-21.97, -44.19],
-  'carandai': [-20.95, -43.81], 'rio espera': [-20.85, -43.48],
-  'tres coracoes': [-21.70, -45.26], 'varginha': [-21.55, -45.43],
-  'pouso alegre': [-22.23, -45.93], 'passos': [-20.72, -46.61],
-  'poços de caldas': [-21.79, -46.57], 'almirante soares': [-22.88, -43.10],
+  'rio pomba': [-21.27, -42.64], 'sao joao del rei': [-21.14, -44.26],
+  'andrelândia': [-21.74, -44.31], 'lima duarte': [-21.84, -43.80],
+  'bom jardim de minas': [-21.97, -44.19], 'carandai': [-20.95, -43.81],
+  'rio espera': [-20.85, -43.48], 'tres coracoes': [-21.70, -45.26],
+  'varginha': [-21.55, -45.43], 'pouso alegre': [-22.23, -45.93],
+  'passos': [-20.72, -46.61], 'poços de caldas': [-21.79, -46.57],
+  'sao joao del-rei': [-21.14, -44.26], 'tiradentes': [-21.11, -44.18],
+  'santa rita do sapucai': [-22.25, -45.70], 'itajubá': [-22.43, -45.45],
+  'conselheiro lafaiete': [-20.66, -43.78], 'ouro preto': [-20.39, -43.51],
 }
 
 const ESTADO = {
@@ -69,21 +71,21 @@ function hashId(id) {
   return Math.abs(h)
 }
 
-function jitter(seed) {
-  return (hashId(seed) % 200 - 100) / 10000
-}
+function jitter(seed) { return (hashId(seed) % 200 - 100) / 10000 }
 
 function hasAddr(e) { return !!(e?.rua && e?.cidade) }
 function fullAddr(e) { return [e.rua, e.numero, e.bairro, e.cidade, e.estado].filter(Boolean).join(', ') }
+function shortAddr(e) { return [e.cidade, e.estado].filter(Boolean).join('/') }
 function fmt(v) { return `R$ ${Number(v).toFixed(2).replace('.', ',')}` }
 function fmtDate(d) { if (!d) return '—'; return new Date(d + (d.length <= 10 ? 'T12:00:00' : '')).toLocaleDateString('pt-BR') }
+function fmtKm(m) { return `${(m / 1000).toFixed(1)} km` }
+function fmtTime(s) { const h = Math.floor(s / 3600); const m = Math.round((s % 3600) / 60); return h > 0 ? `${h}h ${m}min` : `${m}min` }
 
-function makeIcon(color, size, pulse) {
+function makeIcon(color, size) {
   const s = size || 26
-  const shadow = pulse ? 'box-shadow:0 0 0 4px rgba(37,99,235,0.2),0 2px 8px rgba(0,0,0,0.3)' : 'box-shadow:0 2px 6px rgba(0,0,0,0.25)'
   return L.divIcon({
     className: '',
-    html: `<div style="background:${color};width:${s}px;height:${s}px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:${Math.round(s*0.42)}px;border:2px solid white;${shadow};cursor:pointer"><i class="fa-solid fa-user"></i></div>`,
+    html: `<div style="background:${color};width:${s}px;height:${s}px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:${Math.round(s*0.42)}px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.25);cursor:pointer"><i class="fa-solid fa-user"></i></div>`,
     iconSize: [s, s],
     iconAnchor: [s/2, s/2],
     popupAnchor: [0, -(s/2+4)]
@@ -92,7 +94,15 @@ function makeIcon(color, size, pulse) {
 
 const ROTA_CORES = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#8b5cf6', '#ec4899']
 
-export default function MapView({ usuarios, orders }) {
+function getGeoCache() {
+  try { return JSON.parse(localStorage.getItem(GEO_CACHE_KEY) || '{}') } catch { return {} }
+}
+
+function setGeoCache(cache) {
+  localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(cache))
+}
+
+export default function MapView({ usuarios, orders, financial, onMarkOnWay, onViewUser }) {
   const mapRef = useRef(null)
   const map = useRef(null)
   const mkLayer = useRef(null)
@@ -101,6 +111,7 @@ export default function MapView({ usuarios, orders }) {
   const [items, setItems] = useState([])
   const [sel, setSel] = useState(new Set())
   const [rotas, setRotas] = useState([])
+  const [rotaMeta, setRotaMeta] = useState(null)
   const [calc, setCalc] = useState(false)
   const [geoStatus, setGeoStatus] = useState('')
 
@@ -111,38 +122,94 @@ export default function MapView({ usuarios, orders }) {
     const m = L.map(mapRef.current, { zoomControl: false }).setView([-21.5, -44.5], 7)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(m)
     L.control.zoom({ position: 'topright' }).addTo(m)
-    const mg = L.layerGroup().addTo(m)
-    const rg = L.layerGroup().addTo(m)
-    mkLayer.current = mg
-    rtLayer.current = rg
+    mkLayer.current = L.layerGroup().addTo(m)
+    rtLayer.current = L.layerGroup().addTo(m)
     map.current = m
     return () => { m.remove(); map.current = null }
   }, [])
 
-  const buildPopup = useCallback((user) => {
+  const buildPopupHTML = useCallback((user) => {
     const nome = user.nome || user.pushName || '—'
     const addr = fullAddr(user.endereco || {})
-    const telefone = user.telefone || '—'
-    const userOrders = (orders || []).filter(o => o.customer?.telefone === user.telefone || o.user_id === user.id)
-    const totalPedidos = userOrders.length
-    const totalGasto = userOrders.reduce((s, o) => s + o.total, 0)
-    const pendentes = userOrders.filter(o => !['entregue', 'cancelado'].includes(o.status)).length
-    const ultimo = userOrders.length > 0 ? userOrders.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0] : null
+    const tel = user.telefone || ''
+    const phoneClean = tel.replace(/\D/g, '')
+    const uOrders = (orders || []).filter(o => o.customer?.telefone === user.telefone || o.user_id === user.id)
+    const totalPed = uOrders.length
+    const totalGasto = uOrders.reduce((s, o) => s + o.total, 0)
+    const pendentes = uOrders.filter(o => !['entregue', 'cancelado'].includes(o.status)).length
+    const ultimo = uOrders.length > 0 ? uOrders.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0] : null
+    const ultimoData = ultimo ? fmtDate(ultimo.date || ultimo.createdAt) : '—'
+    const finPend = (financial || []).filter(f => f.telefone === user.telefone || f.userId === user.id).filter(f => f.status === 'pendente')
+    const saldoPend = finPend.reduce((s, f) => s + (f.value || f.valor || 0), 0)
+    const addrEnc = encodeURIComponent(addr)
+    const mapsUrl = `https://www.google.com/maps/search/${addrEnc}`
+    const waUrl = phoneClean ? `https://wa.me/55${phoneClean}?text=${encodeURIComponent(`Olá ${nome}, tudo bem? Sou da THSM Distribuidora.`)}` : '#'
 
-    let html = `<div style="font-size:13px;line-height:1.6;min-width:220px;max-width:300px">`
-    html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><b style="font-size:14px">${nome}</b></div>`
-    html += `<span style="color:#666">${telefone}</span><br/>`
-    html += `<span style="color:#888;font-size:12px">${addr}</span>`
-    html += `<hr style="margin:6px 0;border:none;border-top:1px solid #e5e7eb"/>`
-    html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;font-size:12px">`
-    html += `<span style="color:#6b7280">Pedidos:</span><span style="font-weight:500">${totalPedidos}</span>`
-    html += `<span style="color:#6b7280">Total:</span><span style="font-weight:500">${fmt(totalGasto)}</span>`
-    html += `<span style="color:#6b7280">Pendentes:</span><span style="font-weight:500;color:#d97706">${pendentes}</span>`
-    html += `<span style="color:#6b7280">Último:</span><span style="font-weight:500">${ultimo ? fmtDate(ultimo.date || ultimo.createdAt) : '—'}</span>`
-    html += `</div>`
-    html += `</div>`
-    return html
-  }, [orders])
+    return `<div class="mp">
+  <div class="mp-h">
+    <div class="mp-av">${nome.charAt(0).toUpperCase()}</div>
+    <div class="mp-hi">
+      <b>${nome}</b>
+      <span>${tel}${user.email ? ` · ${user.email}` : ''}</span>
+    </div>
+  </div>
+  <div class="mp-s">
+    <div class="mp-si"><i class="fa-solid fa-location-dot"></i> ${addr}</div>
+  </div>
+  <div class="mp-grid">
+    <div><span>Pedidos</span><strong>${totalPed}</strong></div>
+    <div><span>Total</span><strong>${fmt(totalGasto)}</strong></div>
+    <div><span>Pendentes</span><strong class="c1">${pendentes}</strong></div>
+    <div><span>Último</span><strong>${ultimoData}</strong></div>
+    ${saldoPend > 0 ? `<div><span>Saldo Pend.</span><strong class="c2">${fmt(saldoPend)}</strong></div>` : ''}
+  </div>
+  <div class="mp-actions">
+    ${waUrl !== '#' ? `<button class="mp-btn wa" data-action="whatsapp" data-url="${waUrl}"><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>` : ''}
+    <button class="mp-btn gm" data-action="gmap" data-url="${mapsUrl}"><i class="fa-solid fa-location-dot"></i> Maps</button>
+    ${pendentes > 0 ? `<button class="mp-btn rt" data-action="rota"><i class="fa-solid fa-truck"></i> A Caminho</button>` : ''}
+    ${saldoPend > 0 ? `<button class="mp-btn fn" data-action="saldo"><i class="fa-solid fa-coins"></i> Saldo Pend.</button>` : ''}
+    <button class="mp-btn vi" data-action="view"><i class="fa-solid fa-eye"></i> Ver Pedidos</button>
+  </div>
+</div>`
+  }, [orders, financial])
+
+  const bindPopupActions = useCallback((mk, user) => {
+    mk.on('popupopen', (e) => {
+      const el = e.popup.getElement()
+      if (!el) return
+      const tel = (user.telefone || '').replace(/\D/g, '')
+
+      el.querySelector('[data-action="whatsapp"]')?.addEventListener('click', (ev) => {
+        ev.stopPropagation()
+        const url = `https://wa.me/55${tel}?text=${encodeURIComponent(`Olá ${user.nome || user.pushName || ''}, tudo bem? Sou da THSM Distribuidora.`)}`
+        window.open(url, '_blank')
+      })
+
+      el.querySelector('[data-action="gmap"]')?.addEventListener('click', (ev) => {
+        ev.stopPropagation()
+        const addr = fullAddr(user.endereco || {})
+        window.open(`https://www.google.com/maps/search/${encodeURIComponent(addr)}`, '_blank')
+      })
+
+      el.querySelector('[data-action="rota"]')?.addEventListener('click', (ev) => {
+        ev.stopPropagation()
+        onMarkOnWay?.(user)
+        mk.closePopup()
+      })
+
+      el.querySelector('[data-action="saldo"]')?.addEventListener('click', (ev) => {
+        ev.stopPropagation()
+        const finPend = (financial || []).filter(f => f.telefone === user.telefone || f.userId === user.id).filter(f => f.status === 'pendente')
+        const total = finPend.reduce((s, f) => s + (f.value || f.valor || 0), 0)
+        alert(`Saldo pendente de ${user.nome || user.pushName || '—'}: ${fmt(total)}\n\n${finPend.map(f => `• ${f.itemName || f.descricao || 'Item'} - ${fmt(f.value || f.valor || 0)} (vence ${fmtDate(f.dueDate || f.vencimento)})`).join('\n') || 'Nenhum registro pendente'}`)
+      })
+
+      el.querySelector('[data-action="view"]')?.addEventListener('click', (ev) => {
+        ev.stopPropagation()
+        onViewUser?.(user)
+      })
+    })
+  }, [financial, onMarkOnWay, onViewUser])
 
   const updateMarkers = useCallback((newItems, selected) => {
     if (!map.current) return
@@ -154,21 +221,16 @@ export default function MapView({ usuarios, orders }) {
     for (const item of newItems) {
       if (!item.coords) continue
       const isSel = selected.has(item.id)
-      const refined = item.refined
-      const color = isSel ? '#dc2626' : refined ? '#2563eb' : '#8b5cf6'
-      const size = isSel ? 30 : refined ? 26 : 22
-      const mk = L.marker(item.coords, { icon: makeIcon(color, size, refined) })
-      const user = item.user
+      const color = isSel ? '#dc2626' : item.refined ? '#2563eb' : '#8b5cf6'
+      const size = isSel ? 30 : 26
+      const mk = L.marker(item.coords, { icon: makeIcon(color, size) })
 
-      mk.bindPopup(buildPopup(user))
+      mk.bindPopup(buildPopupHTML(item.user))
+      bindPopupActions(mk, item.user)
 
       mk.on('click', () => {
         map.current.setView(item.coords, 15)
-        setSel(prev => {
-          const n = new Set(prev)
-          n.has(item.id) ? n.delete(item.id) : n.add(item.id)
-          return n
-        })
+        setSel(prev => { const n = new Set(prev); n.has(item.id) ? n.delete(item.id) : n.add(item.id); return n })
       })
       g.addLayer(mk)
       bounds.extend(item.coords)
@@ -178,7 +240,7 @@ export default function MapView({ usuarios, orders }) {
       map.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 })
       initialFit.current = true
     }
-  }, [buildPopup])
+  }, [buildPopupHTML, bindPopupActions])
 
   useEffect(() => { updateMarkers(items, sel) }, [items, sel, updateMarkers])
 
@@ -213,9 +275,7 @@ export default function MapView({ usuarios, orders }) {
 
       const cc = cityCoord(u.endereco.cidade, u.endereco.estado)
       if (cc) {
-        const jx = jitter(id)
-        const jy = jitter(id + 1)
-        result.push({ id, user: u, coords: [cc[0] + jx, cc[1] + jy], refined: false })
+        result.push({ id, user: u, coords: [cc[0] + jitter(id), cc[1] + jitter(id + 1)], refined: false })
         toRefine.push(u)
       } else {
         result.push({ id, user: u, coords: null, refined: false })
@@ -223,8 +283,7 @@ export default function MapView({ usuarios, orders }) {
     }
 
     setItems(result)
-    setGeoStatus(toRefine.length > 0 ? `Refinando ${toRefine.length} endereços...` : '')
-
+    setGeoStatus(toRefine.length > 0 ? `Refinando ${toRefine.length}...` : '')
     if (toRefine.length === 0) return
 
     let idx = 0
@@ -232,25 +291,14 @@ export default function MapView({ usuarios, orders }) {
       const id = u.telefone || u.id
       const addr = fullAddr(u.endereco || {})
       const cacheKey = addr.toLowerCase()
-
       try {
         await new Promise(r => setTimeout(r, 1200))
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(addr)}&format=json&limit=1`
-        const res = await fetch(url, { headers: { 'User-Agent': 'THSM-Distribuidora/1.0' } })
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(addr)}&format=json&limit=1`, { headers: { 'User-Agent': 'THSM-Distribuidora/1.0' } })
         const data = await res.json()
-        if (data && data.length > 0) {
-          const lat = parseFloat(data[0].lat)
-          const lng = parseFloat(data[0].lon)
-          const cache = getGeoCache()
-          cache[cacheKey] = { lat, lng }
-          setGeoCache(cache)
-
-          setItems(prev => {
-            const next = [...prev]
-            const i = next.findIndex(p => p.id === id)
-            if (i >= 0) { next[i] = { ...next[i], coords: [lat, lng], refined: true } }
-            return next
-          })
+        if (data?.length > 0) {
+          const lat = parseFloat(data[0].lat); const lng = parseFloat(data[0].lon)
+          const cache = getGeoCache(); cache[cacheKey] = { lat, lng }; setGeoCache(cache)
+          setItems(prev => { const next = [...prev]; const i = next.findIndex(p => p.id === id); if (i >= 0) next[i] = { ...next[i], coords: [lat, lng], refined: true }; return next })
         }
       } catch {}
       idx++
@@ -271,20 +319,31 @@ export default function MapView({ usuarios, orders }) {
     const selPts = items.filter(p => sel.has(p.id) && p.coords)
     if (selPts.length < 2) return
     setCalc(true)
+    setRotaMeta(null)
     try {
       const str = selPts.map(p => `${p.coords[1]},${p.coords[0]}`).join(';')
-      const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${str}?overview=full&geometries=geojson`)
+      const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${str}?overview=full&geometries=geojson&steps=false&alternatives=true`)
       const d = await r.json()
-      if (d.code === 'Ok' && d.routes?.length > 0) setRotas(d.routes.map(r => r.geometry.coordinates.map(c => [c[1], c[0]])))
+      if (d.code === 'Ok' && d.routes?.length > 0) {
+        setRotas(d.routes.map(r => r.geometry.coordinates.map(c => [c[1], c[0]])))
+        setRotaMeta(d.routes.map(r => ({
+          distancia: r.distance,
+          duracao: r.duration
+        })))
+      }
     } catch {}
     setCalc(false)
   }, [items, sel])
 
-  const toggle = (id) => setSel(prev => {
-    const n = new Set(prev)
-    n.has(id) ? n.delete(id) : n.add(id)
-    return n
-  })
+  const toggle = (id) => setSel(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  const openGmapsRoute = () => {
+    const selected = items.filter(p => sel.has(p.id) && p.coords)
+    const addresses = selected.map(p => fullAddr(p.user.endereco || {}))
+    if (addresses.length >= 2) {
+      window.open(`https://www.google.com/maps/dir/${addresses.map(a => encodeURIComponent(a)).join('/')}`, '_blank')
+    }
+  }
 
   return (
     <div className="mv">
@@ -292,18 +351,33 @@ export default function MapView({ usuarios, orders }) {
         <div>
           <div className="mv-tit"><i className="fa-solid fa-map"></i> Mapa</div>
           <div className="mv-sub">
-            {users.length} usuários · {items.filter(i => i.coords).length} no mapa
-            {geoStatus && <span style={{color:'#d97706',marginLeft:'8px'}}><i className="fa-solid fa-spinner fa-spin"></i> {geoStatus}</span>}
+            {users.length} usuários · {items.filter(i => i.coords).length} no mapa{items.filter(i => i.coords && !i.refined).length > 0 ? ` · ${items.filter(i => i.coords && !i.refined).length} por cidade` : ''}
+            {geoStatus && <span className="mv-geo"><i className="fa-solid fa-spinner fa-spin"></i> {geoStatus}</span>}
           </div>
         </div>
         <div className="mv-actions">
+          {rotaMeta && (
+            <div className="mv-rota-info">
+              {rotaMeta.map((r, i) => (
+                <span key={i} style={{color: ROTA_CORES[i % ROTA_CORES.length]}}>
+                  <i className="fa-solid fa-road"></i> {fmtKm(r.distancia)} · {fmtTime(r.duracao)}
+                  {i === 0 ? ' (principal)' : ' (alt.' + (i) + ')'}
+                </span>
+              ))}
+            </div>
+          )}
           {sel.size >= 2 && (
-            <button className="mbtn mbtn-red" disabled={calc} onClick={tracar}>
-              <i className={`fa-solid ${calc ? 'fa-spinner fa-spin' : 'fa-route'}`}></i> Rota ({sel.size})
-            </button>
+            <>
+              <button className="mbtn mbtn-gm" onClick={openGmapsRoute}>
+                <i className="fa-solid fa-location-dot"></i> Maps
+              </button>
+              <button className="mbtn mbtn-red" disabled={calc} onClick={tracar}>
+                <i className={`fa-solid ${calc ? 'fa-spinner fa-spin' : 'fa-route'}`}></i> Rota ({sel.size})
+              </button>
+            </>
           )}
           {sel.size > 0 && (
-            <button className="mbtn mbtn-sec" onClick={() => { setSel(new Set()); setRotas([]) }}>
+            <button className="mbtn mbtn-sec" onClick={() => { setSel(new Set()); setRotas([]); setRotaMeta(null) }}>
               <i className="fa-solid fa-xmark"></i> Limpar
             </button>
           )}
@@ -324,7 +398,7 @@ export default function MapView({ usuarios, orders }) {
                   <b>{p.user.nome || p.user.pushName || '—'}</b>
                   <span>{fullAddr(p.user.endereco || {})}</span>
                 </div>
-                {!p.refined && <span style={{fontSize:'0.65rem',color:'#8b5cf6',background:'#f5f3ff',padding:'2px 6px',borderRadius:'4px',flexShrink:0}}>Cidade</span>}
+                {!p.refined && <span className="mv-badge">Cidade</span>}
               </div>
             )
           })}
@@ -333,12 +407,4 @@ export default function MapView({ usuarios, orders }) {
       </div>
     </div>
   )
-}
-
-function getGeoCache() {
-  try { return JSON.parse(localStorage.getItem(GEO_CACHE_KEY) || '{}') } catch { return {} }
-}
-
-function setGeoCache(cache) {
-  localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(cache))
 }
