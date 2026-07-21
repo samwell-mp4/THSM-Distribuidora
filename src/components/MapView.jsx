@@ -92,6 +92,8 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
   const [filtroEstado, setFiltroEstado] = useState('TODOS')
   const [filtroSearch, setFiltroSearch] = useState('')
   const [geoStatus, setGeoStatus] = useState(0)
+  const csvInputRef = useRef(null)
+  const [csvMsg, setCsvMsg] = useState(null)
 
   const users = useMemo(() => usuarios.filter(u => hasAddr(u.endereco || {})), [usuarios])
 
@@ -396,7 +398,7 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
       <div className="mv-top">
         <div>
           <div className="mv-tit"><i className="fa-solid fa-map"></i> Mapa</div>
-          <div className="mv-sub">{users.length} usuários · {filtered.filter(i => i.coords).length} no mapa · {sel.size} selecionados{geoStatus > 0 && geoStatus < 100 ? ` · Geocodificando ${geoStatus}%` : ''}</div>
+          <div className="mv-sub">{users.length} usuários · {filtered.filter(i => i.coords).length} no mapa · {sel.size} selecionados{geoStatus > 0 && geoStatus < 100 ? ` · Geocodificando ${geoStatus}%` : ''}{csvMsg ? ` · ${csvMsg.v}` : ''}</div>
         </div>
         <div className="mv-actions">
           <button className="mbtn" onClick={() => {
@@ -413,7 +415,52 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
             const url = URL.createObjectURL(blob)
             const a = document.createElement('a'); a.href = url; a.download = 'usuarios.csv'; a.click()
             URL.revokeObjectURL(url)
-          }}><i className="fa-solid fa-file-csv"></i> CSV</button>
+          }}><i className="fa-solid fa-download"></i> CSV</button>
+          <button className="mbtn" onClick={() => csvInputRef.current?.click()}><i className="fa-solid fa-upload"></i> Importar</button>
+          <input ref={csvInputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={e => {
+            const file = e.target.files?.[0]
+            if (!file) return
+            const reader = new FileReader()
+            reader.onload = (ev) => {
+              const txt = ev.target.result
+              const linhas = txt.split('\n').map(l => l.trim()).filter(Boolean)
+              if (linhas.length < 2) { setCsvMsg({ t: 'erro', v: 'CSV vazio' }); return }
+              const cabecalho = linhas[0].toLowerCase()
+              const idxNome = cabecalho.includes('nome') ? 0 : -1
+              const idxTel = cabecalho.includes('telefone') || cabecalho.includes('tel') ? 1 : -1
+              const idxLat = cabecalho.includes('lat') ? cabecalho.split(';').findIndex(c => c.includes('lat')) : -1
+              const idxLng = cabecalho.includes('lon') || cabecalho.includes('lng') ? cabecalho.split(';').findIndex(c => c.includes('lon') || c.includes('lng')) : -1
+              if (idxLat < 0 || idxLng < 0) { setCsvMsg({ t: 'erro', v: 'CSV precisa ter colunas Latitude e Longitude' }); return }
+              const cache = JSON.parse(localStorage.getItem('thsm_geocode_cache') || '{}')
+              let importados = 0
+              for (let i = 1; i < linhas.length; i++) {
+                const cols = linhas[i].split(';').map(c => c.replace(/^"|"$/g, '').trim())
+                if (cols.length <= Math.max(idxLat, idxLng)) continue
+                const lat = parseFloat(cols[idxLat].replace(',', '.'))
+                const lng = parseFloat(cols[idxLng].replace(',', '.'))
+                if (isNaN(lat) || isNaN(lng)) continue
+                const nomeCSV = cols[idxNome] || ''
+                const telCSV = (cols[idxTel] || '').replace(/\D/g, '')
+                const item = items.find(p => {
+                  const telUser = (p.user.telefone || '').replace(/\D/g, '')
+                  return telUser && telUser === telCSV
+                }) || (nomeCSV ? items.find(p => (p.user.nome || p.user.pushName || '').toLowerCase() === nomeCSV.toLowerCase()) : null)
+                if (!item) continue
+                const addrKey = queryAddr(item.user.endereco)
+                cache[addrKey] = [lat, lng]
+                importados++
+              }
+              localStorage.setItem('thsm_geocode_cache', JSON.stringify(cache))
+              setCsvMsg({ t: 'ok', v: `${importados} coordenadas importadas de ${linhas.length - 1} linhas` })
+              setItems(prev => prev.map(i => {
+                const addrKey = queryAddr(i.user.endereco)
+                return cache[addrKey] ? { ...i, coords: cache[addrKey], fallback: false } : i
+              }))
+              setTimeout(() => setCsvMsg(null), 4000)
+            }
+            reader.readAsText(file)
+            e.target.value = ''
+          }} />
           {rotaMeta && rotaMeta.map((r, i) => (
             <span key={i} className="mv-ri" style={{ color: ROTA_CORES[i % ROTA_CORES.length] }}>
               <i className="fa-solid fa-road"></i> {fmtKm(r.distancia)} · {fmtTime(r.duracao)}{i === 0 ? '' : ` (alt.${i})`}
