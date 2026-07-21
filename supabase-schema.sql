@@ -70,6 +70,19 @@ CREATE TABLE IF NOT EXISTS login_tokens (
 CREATE INDEX IF NOT EXISTS idx_login_tokens_token ON login_tokens(token);
 CREATE INDEX IF NOT EXISTS idx_login_tokens_expires ON login_tokens(expires_at);
 
+-- 7. LEADS (site registrations from landing page)
+CREATE TABLE IF NOT EXISTS leads (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome text NOT NULL,
+  telefone text UNIQUE NOT NULL,
+  email text DEFAULT '',
+  endereco jsonb DEFAULT '{}',
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_leads_telefone ON leads(telefone);
+CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads(created_at DESC);
+
 -- =============================================
 -- ROW LEVEL SECURITY
 -- =============================================
@@ -79,6 +92,7 @@ ALTER TABLE financeiro ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rotas_contatos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE produtos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE login_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
 
 -- Helper: sets app config for RLS (renamed to avoid conflict with PG built-in)
 CREATE OR REPLACE FUNCTION app_set_config(key text, value text)
@@ -153,6 +167,13 @@ CREATE POLICY "Login tokens select" ON login_tokens
 
 CREATE POLICY "Login tokens update" ON login_tokens
   FOR UPDATE USING (true);
+
+-- Leads: anon can insert, admin can select all
+CREATE POLICY "Leads insert" ON leads
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Leads select" ON leads
+  FOR SELECT USING (current_setting('app.is_admin', true) = 'true');
 
 -- =============================================
 -- FUNCTION: sync contatos from webhook

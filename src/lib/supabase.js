@@ -180,6 +180,12 @@ export async function syncContatosToUsuarios(contatos) {
   return batch.length
 }
 
+// ---- LEADS ----
+export async function getAllLeads() {
+  const { data } = await supabase.from('leads').select('*').order('created_at', { ascending: false })
+  return data || []
+}
+
 function makeToken() {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 6)
 }

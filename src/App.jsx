@@ -4,6 +4,7 @@ import Admin from './pages/Admin'
 import AddressForm from './components/AddressForm'
 import UserDashboard from './pages/UserDashboard'
 import KitPage from './pages/KitPage'
+import LandingPage from './pages/LandingPage'
 import { supabase, upsertOrder, upsertUser, generateLoginToken, consumeLoginToken } from './lib/supabase'
 import './App.css'
 
@@ -69,12 +70,14 @@ function App() {
   const getRouteFromHash = useCallback(() => {
     if (new URLSearchParams(window.location.search).has('pedido')) return 'userdash'
     if (new URLSearchParams(window.location.search).has('login')) return 'userdash'
+    if (new URLSearchParams(window.location.search).has('recover')) return 'catalog'
     const hash = window.location.hash.replace(/^#/, '') || '/'
     const path = hash.replace(/\/+$/, '') || '/'
     if (path.startsWith('/admin')) return 'admin'
     if (path.startsWith('/minha-conta')) return 'userdash'
     if (path.startsWith('/kit')) return 'kit'
-    return 'catalog'
+    if (path.startsWith('/catalogo')) return 'catalog'
+    return 'landing'
   }, [])
 
   const [route, setRoute] = useState(getRouteFromHash)
@@ -517,6 +520,11 @@ function App() {
     if (nums.length <= 2) return `(${nums}`
     if (nums.length <= 7) return `(${nums.slice(0, 2)}) ${nums.slice(2)}`
     return `(${nums.slice(0, 2)}) ${nums.slice(2, 7)}-${nums.slice(7)}`
+  }
+
+  // Landing page
+  if (route === 'landing') {
+    return <LandingPage onVerCatalogo={() => navigate('/catalogo')} />
   }
 
   // Kit view

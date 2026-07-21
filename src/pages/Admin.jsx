@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import './Admin.css'
-import { supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser, deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios } from '../lib/supabase'
+import { supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser, deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads } from '../lib/supabase'
 
 const STORAGE_ORDERS = 'thsm_admin_orders'
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
@@ -280,6 +280,7 @@ export default function Admin({ produtos, onVoltar }) {
   const [bulkPriceValue, setBulkPriceValue] = useState('')
   const [showBulkStock, setShowBulkStock] = useState(false)
   const [bulkStockValue, setBulkStockValue] = useState('')
+  const [leads, setLeads] = useState([])
   const [orderSearch, setOrderSearch] = useState('')
   const [orderSort, setOrderSort] = useState({ field: 'createdAt', dir: 'desc' })
   const [selectedIds, setSelectedIds] = useState(new Set())
@@ -384,6 +385,7 @@ export default function Admin({ produtos, onVoltar }) {
       if (r.length) { setRotas(r) } else { fetchRotas() }
     }).catch(e => { console.error('syncAllForAdmin error:', e) })
       .finally(() => setSyncingUsers(false))
+    getAllLeads().then(setLeads).catch(() => {})
   }, [])
 
   // Auto-expand first rota when rotas load
@@ -1066,6 +1068,7 @@ export default function Admin({ produtos, onVoltar }) {
     { id: 'rotas', icon: 'fa-route', label: 'Rotas', count: rotaStats.totalRotas },
     { id: 'financeiro', icon: 'fa-coins', label: 'Financeiro', count: financial.filter(f => f.status === 'pendente').length },
     { id: 'usuarios', icon: 'fa-users', label: 'Usuários', count: usuarios.length },
+    { id: 'leads', icon: 'fa-file-pen', label: 'Inscrições', count: leads.length },
   ]
 
   return (
@@ -1921,6 +1924,50 @@ export default function Admin({ produtos, onVoltar }) {
                 )}
               </>
             )}
+          </div>
+        )}
+
+        {/* LEADS */}
+        {tab === 'leads' && (
+          <div className="admin-section">
+            <div className="admin-header-row">
+              <div>
+                <h1 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <i className="fa-solid fa-file-pen" style={{ color: 'var(--accent)' }}></i>
+                  Inscrições do Site
+                </h1>
+                <p className="admin-subtitle">{leads.length} cadastros recebidos</p>
+              </div>
+            </div>
+
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Telefone</th>
+                    <th>Email</th>
+                    <th>Cidade</th>
+                    <th>Data</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leads.map(l => {
+                    const e = l.endereco || {}
+                    return (
+                      <tr key={l.id}>
+                        <td style={{ fontWeight: 600 }}>{l.nome}</td>
+                        <td>{l.telefone}</td>
+                        <td>{l.email || '-'}</td>
+                        <td>{[e.cidade, e.estado].filter(Boolean).join('/') || '-'}</td>
+                        <td>{formatDate(l.created_at)}</td>
+                      </tr>
+                    )
+                  })}
+                  {leads.length === 0 && <tr><td colSpan="5" className="td-empty">Nenhuma inscrição recebida</td></tr>}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
