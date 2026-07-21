@@ -86,8 +86,32 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
   const [rotas, setRotas] = useState([])
   const [rotaMeta, setRotaMeta] = useState(null)
   const [calc, setCalc] = useState(false)
+  const [filtroCidade, setFiltroCidade] = useState('TODAS')
+  const [filtroEstado, setFiltroEstado] = useState('TODOS')
+  const [filtroSearch, setFiltroSearch] = useState('')
 
   const users = useMemo(() => usuarios.filter(u => hasAddr(u.endereco || {})), [usuarios])
+
+  const cidades = useMemo(() => {
+    const s = new Set(users.map(u => u.endereco?.cidade).filter(Boolean))
+    return ['TODAS', ...Array.from(s).sort()]
+  }, [users])
+
+  const estados = useMemo(() => {
+    const s = new Set(users.map(u => (u.endereco?.estado || '').toUpperCase()).filter(Boolean))
+    return ['TODOS', ...Array.from(s).sort()]
+  }, [users])
+
+  const filtered = useMemo(() => {
+    let r = items
+    if (filtroCidade !== 'TODAS') r = r.filter(i => (i.user.endereco?.cidade || '').toLowerCase() === filtroCidade.toLowerCase())
+    if (filtroEstado !== 'TODOS') r = r.filter(i => (i.user.endereco?.estado || '').toUpperCase() === filtroEstado)
+    if (filtroSearch) {
+      const t = filtroSearch.toLowerCase()
+      r = r.filter(i => (i.user.nome || i.user.pushName || '').toLowerCase().includes(t) || (i.user.telefone || '').includes(t))
+    }
+    return r
+  }, [items, filtroCidade, filtroEstado, filtroSearch])
 
   // Init map
   useEffect(() => {
@@ -101,24 +125,25 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
     return () => { m.remove(); map.current = null; markersRef.current = {} }
   }, [])
 
-  // Build items once from users
+  // Build items from users
   useEffect(() => {
     if (!users.length) { setItems([]); return }
-    const result = []
+    const r = []
     for (const u of users) {
       const id = u.telefone || u.id
       const cc = cityCoord(u.endereco.cidade, u.endereco.estado)
-      if (cc) result.push({ id, user: u, coords: [cc[0] + jitter(id), cc[1] + jitter(id + 1)] })
-      else result.push({ id, user: u, coords: null })
+      if (cc) r.push({ id, user: u, coords: [cc[0] + jitter(id), cc[1] + jitter(id + 1)] })
+      else r.push({ id, user: u, coords: null })
     }
-    setItems(result)
+    setItems(r)
     initialFit.current = false
   }, [users])
 
-  const buildPopupHTML = useCallback((user) => {
+  const buildPopup = useCallback((user) => {
     const nome = user.nome || user.pushName || '—'
     const addr = fullAddr(user.endereco || {})
-    const tel = user.telefone || ''
+    const tel = (user.telefone || '').replace(/\D/g, '')
+    const email = user.email || ''
     const uOrders = (orders || []).filter(o => o.customer?.telefone === user.telefone || o.user_id === user.id)
     const totalPed = uOrders.length
     const totalGasto = uOrders.reduce((s, o) => s + o.total, 0)
@@ -127,12 +152,13 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
     const ultimoData = ultimo ? fmtDate(ultimo.date || ultimo.createdAt) : '—'
     const finPend = (financial || []).filter(f => f.telefone === user.telefone || f.userId === user.id).filter(f => f.status === 'pendente')
     const saldoPend = finPend.reduce((s, f) => s + (f.value || f.valor || 0), 0)
-    const email = user.email || ''
+    const userId = user.id
+    const userTel = user.telefone || ''
 
-    return `<div class="mp">
+    return `<div class="mp" data-id="${userId}" data-tel="${tel}" data-nome="${nome}" data-addr="${addr}">
   <div class="mp-h">
     <div class="mp-av">${nome.charAt(0).toUpperCase()}</div>
-    <div class="mp-hi"><b>${nome}</b><span>${tel}${email ? ' · ' + email : ''}</span></div>
+    <div class="mp-hi"><b>${nome}</b><span>${user.telefone || ''}${email ? ' · ' + email : ''}</span></div>
   </div>
   <div class="mp-s"><i class="fa-solid fa-location-dot"></i> ${addr}</div>
   <div class="mp-grid">
@@ -143,7 +169,7 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
     ${saldoPend > 0 ? `<div><span>Saldo Pend.</span><strong class="c2">${fmt(saldoPend)}</strong></div>` : ''}
   </div>
   <div class="mp-actions">
-    <button class="mp-btn wa" data-action="whatsapp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>
+    ${tel ? `<button class="mp-btn wa" data-action="whatsapp"><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>` : ''}
     <button class="mp-btn gm" data-action="gmap"><i class="fa-solid fa-location-dot"></i> Maps</button>
     ${pendentes > 0 ? `<button class="mp-btn rt" data-action="rota"><i class="fa-solid fa-truck"></i> A Caminho</button>` : ''}
     ${saldoPend > 0 ? `<button class="mp-btn fn" data-action="saldo"><i class="fa-solid fa-coins"></i> Saldo Pend.</button>` : ''}
@@ -152,38 +178,7 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
 </div>`
   }, [orders, financial])
 
-  const bindPopupActions = useCallback((popupEl, user) => {
-    if (!popupEl) return
-    const tel = (user.telefone || '').replace(/\D/g, '')
-
-    popupEl.querySelector('[data-action="whatsapp"]')?.addEventListener('click', (e) => {
-      e.stopPropagation()
-      if (tel) window.open(`https://wa.me/55${tel}?text=${encodeURIComponent('Olá, tudo bem? Sou da THSM Distribuidora.')}`, '_blank')
-    })
-    popupEl.querySelector('[data-action="gmap"]')?.addEventListener('click', (e) => {
-      e.stopPropagation()
-      window.open(`https://www.google.com/maps/search/${encodeURIComponent(fullAddr(user.endereco || {}))}`, '_blank')
-    })
-    popupEl.querySelector('[data-action="rota"]')?.addEventListener('click', (e) => {
-      e.stopPropagation(); onMarkOnWay?.(user)
-      const mk = markersRef.current[user.telefone || user.id]
-      mk?.closePopup()
-    })
-    popupEl.querySelector('[data-action="saldo"]')?.addEventListener('click', (e) => {
-      e.stopPropagation()
-      const finPend = (financial || []).filter(f => f.telefone === user.telefone || f.userId === user.id).filter(f => f.status === 'pendente')
-      const total = finPend.reduce((s, f) => s + (f.value || f.valor || 0), 0)
-      const msg = finPend.map(f => `• ${f.itemName || f.descricao || 'Item'} - ${fmt(f.value || f.valor || 0)} (vence ${fmtDate(f.dueDate || f.vencimento)})`).join('\n')
-      alert(`Saldo pendente de ${user.nome || user.pushName || '—'}: ${fmt(total)}\n\n${msg || 'Nenhum registro pendente'}`)
-    })
-    popupEl.querySelector('[data-action="view"]')?.addEventListener('click', (e) => {
-      e.stopPropagation(); onViewUser?.(user)
-      const mk = markersRef.current[user.telefone || user.id]
-      mk?.closePopup()
-    })
-  }, [financial, onMarkOnWay, onViewUser])
-
-  // Sync markers with items + selection
+  // Sync markers
   useEffect(() => {
     if (!map.current) return
     const g = mkLayer.current
@@ -191,7 +186,7 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
     let has = false
     const currentIds = new Set()
 
-    for (const item of items) {
+    for (const item of filtered) {
       if (!item.coords) continue
       const id = item.id
       currentIds.add(id)
@@ -200,19 +195,44 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
 
       if (!mk) {
         mk = L.marker(item.coords, { icon: makeIcon(isSel ? '#dc2626' : '#2563eb', isSel ? 30 : 26) })
-        mk.bindPopup(buildPopupHTML(item.user))
-
+        mk.bindPopup(buildPopup(item.user))
         mk.on('popupopen', () => {
           const el = mk.getPopup()?.getElement()
-          if (el) bindPopupActions(el, item.user)
-        })
+          if (!el) return
+          // Delegate: listen on popup element for button clicks
+          el.onclick = (e) => {
+            const btn = e.target.closest('[data-action]')
+            if (!btn) return
+            e.stopPropagation()
+            const action = btn.dataset.action
+            const nome = el.dataset.nome
+            const tel = el.dataset.tel
+            const addr = el.dataset.addr
+            const uid = el.dataset.id
 
+            if (action === 'whatsapp' && tel) {
+              window.open(`https://wa.me/55${tel}?text=${encodeURIComponent('Olá, tudo bem? Sou da THSM Distribuidora.')}`, '_blank')
+            } else if (action === 'gmap') {
+              window.open(`https://www.google.com/maps/search/${encodeURIComponent(addr)}`, '_blank')
+            } else if (action === 'rota') {
+              onMarkOnWay?.(item.user)
+              mk.closePopup()
+            } else if (action === 'saldo') {
+              const finPend = (financial || []).filter(f => f.telefone === item.user.telefone || f.userId === item.user.id).filter(f => f.status === 'pendente')
+              const total = finPend.reduce((s, f) => s + (f.value || f.valor || 0), 0)
+              const msg = finPend.map(f => `• ${f.itemName || f.descricao || 'Item'} - ${fmt(f.value || f.valor || 0)} (vence ${fmtDate(f.dueDate || f.vencimento)})`).join('\n')
+              alert(`Saldo pendente de ${nome}: ${fmt(total)}\n\n${msg || 'Nenhum registro pendente'}`)
+            } else if (action === 'view') {
+              onViewUser?.(item.user)
+              mk.closePopup()
+            }
+          }
+        })
         mk.on('click', () => {
           map.current.setView(item.coords, 15)
           mk.openPopup()
           setSel(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
         })
-
         g.addLayer(mk)
         markersRef.current[id] = mk
       } else {
@@ -224,7 +244,6 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
       has = true
     }
 
-    // Remove stale markers
     for (const id of Object.keys(markersRef.current)) {
       if (!currentIds.has(id)) {
         g.removeLayer(markersRef.current[id])
@@ -236,9 +255,9 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
       map.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 })
       initialFit.current = true
     }
-  }, [items, sel, buildPopupHTML, bindPopupActions])
+  }, [filtered, sel, buildPopup, onMarkOnWay, onViewUser, financial])
 
-  // Routes layer
+  // Routes
   useEffect(() => {
     if (!map.current) return
     const g = rtLayer.current
@@ -267,7 +286,12 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
     setCalc(false)
   }, [items, sel])
 
-  const sorted = useMemo(() => { const w = items.filter(i => i.coords); const wo = items.filter(i => !i.coords); return [...w, ...wo] }, [items])
+  const sorted = useMemo(() => {
+    const w = filtered.filter(i => i.coords)
+    const wo = filtered.filter(i => !i.coords)
+    return [...w, ...wo]
+  }, [filtered])
+
   const toggle = (id) => setSel(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
 
   const openGmapsRoute = () => {
@@ -281,7 +305,7 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
       <div className="mv-top">
         <div>
           <div className="mv-tit"><i className="fa-solid fa-map"></i> Mapa</div>
-          <div className="mv-sub">{users.length} usuários · {items.filter(i => i.coords).length} no mapa · {sel.size} selecionados</div>
+          <div className="mv-sub">{users.length} usuários · {filtered.filter(i => i.coords).length} no mapa · {sel.size} selecionados</div>
         </div>
         <div className="mv-actions">
           {rotaMeta && rotaMeta.map((r, i) => (
@@ -304,7 +328,24 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
           )}
         </div>
       </div>
+
+      <div className="mv-filters">
+        <div className="mv-search">
+          <i className="fa-solid fa-search"></i>
+          <input type="text" placeholder="Buscar nome ou telefone..." value={filtroSearch} onChange={e => setFiltroSearch(e.target.value)} />
+        </div>
+        <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}>
+          <option value="TODOS">Todos estados</option>
+          {estados.filter(e => e !== 'TODOS').map(e => <option key={e} value={e}>{e}</option>)}
+        </select>
+        <select value={filtroCidade} onChange={e => setFiltroCidade(e.target.value)}>
+          <option value="TODAS">Todas cidades</option>
+          {cidades.filter(c => c !== 'TODAS').map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+
       <div className="mv-map" ref={mapRef}></div>
+
       <div className="mv-list">
         <div className="mv-lh"><i className="fa-solid fa-list"></i> Usuários <span className="mv-lc">{sel.size} selecionados</span></div>
         <div className="mv-lb">
@@ -320,7 +361,7 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
               </div>
             )
           })}
-          {items.filter(i => i.coords).length === 0 && <div className="mv-e">Nenhum usuário com endereço</div>}
+          {sorted.filter(i => i.coords).length === 0 && <div className="mv-e">Nenhum usuário encontrado</div>}
         </div>
       </div>
     </div>
