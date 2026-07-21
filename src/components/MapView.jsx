@@ -399,6 +399,21 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
           <div className="mv-sub">{users.length} usuários · {filtered.filter(i => i.coords).length} no mapa · {sel.size} selecionados{geoStatus > 0 && geoStatus < 100 ? ` · Geocodificando ${geoStatus}%` : ''}</div>
         </div>
         <div className="mv-actions">
+          <button className="mbtn" onClick={() => {
+            const BOM = '\uFEFF'
+            const cab = 'Nome;Telefone;Endereço\n'
+            const linhas = items.map(i => {
+              const e = i.user.endereco || {}
+              const addr = [e.rua, e.numero, e.bairro, e.cidade, e.estado].filter(Boolean).join(', ')
+              const nome = `"${(i.user.nome || i.user.pushName || '').replace(/"/g, '""')}"`
+              const tel = i.user.telefone || ''
+              return `${nome};${tel};"${addr.replace(/"/g, '""')}"`
+            }).join('\n')
+            const blob = new Blob([BOM + cab + linhas], { type: 'text/csv;charset=utf-8;' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a'); a.href = url; a.download = 'usuarios.csv'; a.click()
+            URL.revokeObjectURL(url)
+          }}><i className="fa-solid fa-file-csv"></i> CSV</button>
           {rotaMeta && rotaMeta.map((r, i) => (
             <span key={i} className="mv-ri" style={{ color: ROTA_CORES[i % ROTA_CORES.length] }}>
               <i className="fa-solid fa-road"></i> {fmtKm(r.distancia)} · {fmtTime(r.duracao)}{i === 0 ? '' : ` (alt.${i})`}
