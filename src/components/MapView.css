@@ -21,8 +21,7 @@
 .mbtn-gm:hover { background: #dbeafe; border-color: #60a5fa; color: #2563eb; }
 .mv-ri { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; background: #f9fafb; border-radius: 4px; font-weight: 500; font-size: 0.75rem; }
 
-.mv-map { height: 480px; border-radius: 10px; border: 1px solid #e5e7eb; overflow: hidden; z-index: 0; }
-.mv-map .leaflet-container { border-radius: 10px; }
+.mv-map { height: 480px; border-radius: 10px; border: 1px solid #e5e7eb; overflow: hidden; }
 
 .mv-list { border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; background: white; display: flex; flex-direction: column; max-height: 240px; }
 .mv-lh { padding: 8px 12px; font-size: 0.82rem; font-weight: 600; background: #f9fafb; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
 import './MapView.css'
+
+const GM_KEY = 'AIzaSyAfq_6M0nELuVLp3Vqz8RrFpyejRQbLJlE'
 
 const CIDADE = {
   'belo horizonte': [-19.92, -43.94], 'sao paulo': [-23.55, -46.63], 'rio de janeiro': [-22.91, -43.20],
@@ -63,26 +63,27 @@ function fmtDate(d) { if (!d) return '—'; return new Date(d + (d.length <= 10 
 function fmtKm(m) { return `${(m / 1000).toFixed(1)} km` }
 function fmtTime(s) { const h = Math.floor(s / 3600); const m = Math.round((s % 3600) / 60); return h > 0 ? `${h}h ${m}min` : `${m}min` }
 
-function makeIcon(color, size) {
-  const s = size || 26
-  return L.divIcon({
-    className: '',
-    html: `<div style="background:${color};width:${s}px;height:${s}px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:${Math.round(s*0.42)}px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.25);cursor:pointer"><i class="fa-solid fa-user"></i></div>`,
-    iconSize: [s, s],
-    iconAnchor: [s/2, s/2],
-    popupAnchor: [0, -(s/2+4)]
-  })
+function makeIcon(color) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26"><circle cx="13" cy="13" r="12" fill="${color}" stroke="#fff" stroke-width="2.5"/></svg>`
+  return { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg), scaledSize: new google.maps.Size(26, 26), anchor: new google.maps.Point(13, 13) }
+}
+function makeIconSel() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="#dc2626" stroke="#fff" stroke-width="2.5"/></svg>`
+  return { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg), scaledSize: new google.maps.Size(32, 32), anchor: new google.maps.Point(16, 16) }
 }
 
 const ROTA_CORES = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#8b5cf6', '#ec4899']
 
 export default function MapView({ usuarios, orders, financial, onMarkOnWay, onViewUser }) {
   const mapRef = useRef(null)
-  const map = useRef(null)
-  const mkLayer = useRef(null)
-  const rtLayer = useRef(null)
+  const gMap = useRef(null)
+  const infoWin = useRef(null)
+  const dirRender = useRef(null)
   const markersRef = useRef({})
+  const polyRef = useRef([])
   const initialFit = useRef(false)
+  const gmReady = useRef(false)
+  const [loaded, setLoaded] = useState(false)
   const [items, setItems] = useState([])
   const [sel, setSel] = useState(new Set())
   const [rotas, setRotas] = useState([])
@@ -118,17 +119,29 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
     return r
   }, [items, filtroCidade, filtroEstado, filtroSearch])
 
+  // Load Google Maps API
+  useEffect(() => {
+    if (window.google?.maps) { gmReady.current = true; setLoaded(true); return }
+    window.initMapView = () => { gmReady.current = true; setLoaded(true) }
+    const s = document.createElement('script')
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${GM_KEY}&callback=initMapView&libraries=maps`
+    s.async = true; s.defer = true
+    document.head.appendChild(s)
+  }, [])
+
   // Init map
   useEffect(() => {
-    if (map.current) return
-    const m = L.map(mapRef.current, { zoomControl: false }).setView([-21.5, -44.5], 7)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(m)
-    L.control.zoom({ position: 'topright' }).addTo(m)
-    mkLayer.current = L.layerGroup().addTo(m)
-    rtLayer.current = L.layerGroup().addTo(m)
-    map.current = m
-    return () => { m.remove(); map.current = null; markersRef.current = {} }
-  }, [])
+    if (!loaded || !mapRef.current || gMap.current) return
+    const m = new google.maps.Map(mapRef.current, {
+      center: { lat: -21.5, lng: -44.5 }, zoom: 7,
+      mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
+      styles: [{ featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] }]
+    })
+    infoWin.current = new google.maps.InfoWindow()
+    dirRender.current = new google.maps.DirectionsRenderer({ suppressMarkers: true, polylineOptions: { strokeWeight: 4, strokeOpacity: 0.6 } })
+    gMap.current = m
+    return () => { gMap.current = null; markersRef.current = {} }
+  }, [loaded])
 
   // Build items from users + geocode
   useEffect(() => {
@@ -155,13 +168,10 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
     setGeoStatus(prev => prev || toGeo.length ? 1 : 0)
     initialFit.current = false
     if (!toGeo.length) return
-
     let done = 0
     const total = toGeo.length
-
     function geocodeOne(item) {
       const { id, user, bairroAi, addrAi } = item
-      // Try bairro first (more specific than city center)
       const query = bairroAi !== addrAi ? bairroAi : addrAi
       const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=br&limit=1`
       return fetch(url, { headers: { 'User-Agent': 'THSM-Distribuidora/1.0' } })
@@ -174,7 +184,6 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
             setItems(prev => prev.map(i => i.id === id ? { ...i, coords, fallback: false } : i))
             return
           }
-          // Fallback: try full address
           if (bairroAi !== addrAi) {
             return fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addrAi)}&countrycodes=br&limit=1`, { headers: { 'User-Agent': 'THSM-Distribuidora/1.0' } })
               .then(res => res.json())
@@ -189,18 +198,11 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
           }
         })
         .catch(e => console.error('Geocode error for', query, e))
-        .finally(() => {
-          done++
-          setGeoStatus(Math.round((done / total) * 100))
-        })
+        .finally(() => { done++; setGeoStatus(Math.round((done / total) * 100)) })
     }
-
     const PAR = 3
     let gIdx = 0
-    function worker() {
-      if (gIdx >= total) return
-      geocodeOne(toGeo[gIdx++]).finally(() => setTimeout(worker, 1200))
-    }
+    function worker() { if (gIdx >= total) return; geocodeOne(toGeo[gIdx++]).finally(() => setTimeout(worker, 1200)) }
     for (let i = 0; i < Math.min(PAR, total); i++) worker()
   }, [users])
 
@@ -219,7 +221,6 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
     const saldoPend = finPend.reduce((s, f) => s + (f.value || f.valor || 0), 0)
     const userId = user.id
     const userTel = user.telefone || ''
-
     return `<div class="mp" data-id="${userId}" data-tel="${tel}" data-nome="${nome}" data-addr="${addr}">
   <div class="mp-h">
     <div class="mp-av">${nome.charAt(0).toUpperCase()}</div>
@@ -245,11 +246,12 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
 
   // Sync markers
   useEffect(() => {
-    if (!map.current) return
-    const g = mkLayer.current
-    const bounds = L.latLngBounds()
+    if (!gMap.current) return
+    const m = gMap.current
+    const bounds = new google.maps.LatLngBounds()
     let has = false
     const currentIds = new Set()
+    const iw = infoWin.current
 
     for (const item of filtered) {
       if (!item.coords) continue
@@ -259,74 +261,85 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
       let mk = markersRef.current[id]
 
       if (!mk) {
-        mk = L.marker(item.coords, { icon: makeIcon(isSel ? '#dc2626' : '#2563eb', isSel ? 30 : 26) })
-        mk.bindPopup(buildPopup(item.user))
-        mk.on('popupopen', () => {
-          const el = mk.getPopup()?.getElement()
-          if (!el) return
-          // Delegate: listen on popup element for button clicks
-          el.onclick = (e) => {
-            const btn = e.target.closest('[data-action]')
-            if (!btn) return
-            e.stopPropagation()
-            const action = btn.dataset.action
-            const nome = el.dataset.nome
-            const tel = el.dataset.tel
-            const addr = el.dataset.addr
-            const uid = el.dataset.id
-
-            if (action === 'whatsapp' && tel) {
-              window.open(`https://wa.me/55${tel}?text=${encodeURIComponent('Olá, tudo bem? Sou da THSM Distribuidora.')}`, '_blank')
-            } else if (action === 'gmap') {
-              window.open(`https://www.google.com/maps/search/${encodeURIComponent(addr)}`, '_blank')
-            } else if (action === 'rota') {
-              onMarkOnWay?.(item.user)
-              mk.closePopup()
-            } else if (action === 'saldo') {
-              const finPend = (financial || []).filter(f => f.telefone === item.user.telefone || f.userId === item.user.id).filter(f => f.status === 'pendente')
-              const total = finPend.reduce((s, f) => s + (f.value || f.valor || 0), 0)
-              const msg = finPend.map(f => `• ${f.itemName || f.descricao || 'Item'} - ${fmt(f.value || f.valor || 0)} (vence ${fmtDate(f.dueDate || f.vencimento)})`).join('\n')
-              alert(`Saldo pendente de ${nome}: ${fmt(total)}\n\n${msg || 'Nenhum registro pendente'}`)
-            } else if (action === 'view') {
-              onViewUser?.(item.user)
-              mk.closePopup()
-            }
-          }
+        mk = new google.maps.Marker({
+          position: { lat: item.coords[0], lng: item.coords[1] },
+          map: m,
+          icon: isSel ? makeIconSel() : makeIcon(isSel ? '#dc2626' : '#2563eb'),
+          zIndex: isSel ? 100 : 1
         })
-        mk.on('click', () => {
-          map.current.setView(item.coords, 15)
-          mk.openPopup()
+        mk.addListener('click', () => {
+          if (iw) {
+            const html = buildPopup(item.user)
+            iw.setContent(html)
+            iw.open({ anchor: mk, map: m })
+            google.maps.event.addListenerOnce(iw, 'domready', () => {
+              const el = iw.getContent()
+              if (!el || typeof el === 'string') return
+              const root = typeof el === 'string' ? null : el
+              const attach = (parent) => {
+                if (!parent) return
+                parent.onclick = (e) => {
+                  const btn = e.target.closest('[data-action]')
+                  if (!btn) return; e.stopPropagation()
+                  const action = btn.dataset.action
+                  const nome = parent.dataset.nome
+                  const tel = parent.dataset.tel
+                  const addr = parent.dataset.addr
+                  if (action === 'whatsapp' && tel) {
+                    window.open(`https://wa.me/55${tel}?text=${encodeURIComponent('Olá, tudo bem? Sou da THSM Distribuidora.')}`, '_blank')
+                  } else if (action === 'gmap') {
+                    window.open(`https://www.google.com/maps/search/${encodeURIComponent(addr)}`, '_blank')
+                  } else if (action === 'rota') {
+                    onMarkOnWay?.(item.user); iw.close()
+                  } else if (action === 'saldo') {
+                    const finPend = (financial || []).filter(f => f.telefone === item.user.telefone || f.userId === item.user.id).filter(f => f.status === 'pendente')
+                    const total = finPend.reduce((s, f) => s + (f.value || f.valor || 0), 0)
+                    const msg = finPend.map(f => `• ${f.itemName || f.descricao || 'Item'} - ${fmt(f.value || f.valor || 0)} (vence ${fmtDate(f.dueDate || f.vencimento)})`).join('\n')
+                    alert(`Saldo pendente de ${nome}: ${fmt(total)}\n\n${msg || 'Nenhum registro pendente'}`)
+                  } else if (action === 'view') {
+                    onViewUser?.(item.user); iw.close()
+                  }
+                }
+              }
+              // Find the mp element
+              const mp = typeof el === 'string' ? null : el.querySelector?.('.mp')
+              attach(mp || el)
+            })
+          }
+          m.panTo({ lat: item.coords[0], lng: item.coords[1] })
+          m.setZoom(15)
           setSel(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
         })
-        g.addLayer(mk)
         markersRef.current[id] = mk
       } else {
-        mk.setLatLng(item.coords)
-        mk.setIcon(makeIcon(isSel ? '#dc2626' : '#2563eb', isSel ? 30 : 26))
+        mk.setPosition({ lat: item.coords[0], lng: item.coords[1] })
+        mk.setIcon(isSel ? makeIconSel() : makeIcon('#2563eb'))
+        mk.setZIndex(isSel ? 100 : 1)
       }
-
-      bounds.extend(item.coords)
+      bounds.extend({ lat: item.coords[0], lng: item.coords[1] })
       has = true
     }
 
     for (const id of Object.keys(markersRef.current)) {
       if (!currentIds.has(id)) {
-        g.removeLayer(markersRef.current[id])
+        markersRef.current[id].setMap(null)
         delete markersRef.current[id]
       }
     }
 
     if (has && !initialFit.current) {
-      map.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 })
+      m.fitBounds(bounds)
+      google.maps.event.addListenerOnce(m, 'idle', () => { if (m.getZoom() > 12) m.setZoom(12) })
       initialFit.current = true
     }
   }, [filtered, sel, buildPopup, onMarkOnWay, onViewUser, financial])
 
-  // Zoom to filter (only on filter change, not items update)
+  // Zoom to filter
   const itemsRef = useRef(items)
   itemsRef.current = items
   useEffect(() => {
-    if (!map.current || !itemsRef.current.length) return
+    if (!gMap.current || !itemsRef.current.length) return
+    const m = gMap.current
     const it = itemsRef.current
     let target = null
     if (filtroCidade !== 'TODAS') {
@@ -337,29 +350,32 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
       const ec = ESTADO[filtroEstado.toLowerCase()]
       if (ec) target = { coords: ec, zoom: 8 }
     }
-    if (target) map.current.setView(target.coords, target.zoom)
+    if (target) { m.setCenter({ lat: target.coords[0], lng: target.coords[1] }); m.setZoom(target.zoom) }
     else if (filtroCidade === 'TODAS' && filtroEstado === 'TODOS') {
-      const bounds = L.latLngBounds()
+      const bounds = new google.maps.LatLngBounds()
       let has = false
       for (const item of it) {
         if (!item.coords) continue
-        bounds.extend(item.coords)
+        bounds.extend({ lat: item.coords[0], lng: item.coords[1] })
         has = true
       }
-      if (has) map.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 })
+      if (has) { m.fitBounds(bounds); google.maps.event.addListenerOnce(m, 'idle', () => { if (m.getZoom() > 12) m.setZoom(12) }) }
     }
   }, [filtroCidade, filtroEstado])
 
   // Routes
   useEffect(() => {
-    if (!map.current) return
-    const g = rtLayer.current
-    g.clearLayers()
+    if (!gMap.current) return
+    const m = gMap.current
+    polyRef.current.forEach(p => p.setMap(null))
+    polyRef.current = []
+    if (!rotas.length) { dirRender.current?.setMap(null); return }
+    // Use DirectionsRenderer for the first route, polylines for alternatives
     rotas.forEach((coords, i) => {
       const c = ROTA_CORES[i % ROTA_CORES.length]
-      L.polyline(coords, { color: c, weight: 4, opacity: 0.6 }).addTo(g)
-      L.marker(coords[0], { icon: L.divIcon({ className: '', html: '<div style="background:#16a34a;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:9px;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.2)"><i class="fa-solid fa-play"></i></div>', iconSize: [18,18], iconAnchor: [9,9] }) }).addTo(g)
-      L.marker(coords[coords.length-1], { icon: L.divIcon({ className: '', html: '<div style="background:#dc2626;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:9px;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.2)"><i class="fa-solid fa-flag-checkered"></i></div>', iconSize: [18,18], iconAnchor: [9,9] }) }).addTo(g)
+      const path = coords.map(crd => ({ lat: crd[0], lng: crd[1] }))
+      const poly = new google.maps.Polyline({ path, strokeColor: c, strokeWeight: 4, strokeOpacity: 0.6, map: m })
+      polyRef.current.push(poly)
     })
   }, [rotas])
 
@@ -368,15 +384,28 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
     if (selPts.length < 2) return
     setCalc(true); setRotaMeta(null)
     try {
-      const str = selPts.map(p => `${p.coords[1]},${p.coords[0]}`).join(';')
-      const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${str}?overview=full&geometries=geojson&alternatives=true`)
-      const d = await r.json()
-      if (d.code === 'Ok' && d.routes?.length > 0) {
-        setRotas(d.routes.map(r => r.geometry.coordinates.map(c => [c[1], c[0]])))
-        setRotaMeta(d.routes.map(r => ({ distancia: r.distance, duracao: r.duration })))
-      }
-    } catch {}
-    setCalc(false)
+      const waypoints = selPts.slice(1, -1).map(p => ({ location: { lat: p.coords[0], lng: p.coords[1] }, stopover: true }))
+      const origin = { lat: selPts[0].coords[0], lng: selPts[0].coords[1] }
+      const dest = { lat: selPts[selPts.length - 1].coords[0], lng: selPts[selPts.length - 1].coords[1] }
+      const ds = new google.maps.DirectionsService()
+      ds.route({
+        origin, destination: dest,
+        waypoints: waypoints.length > 0 ? waypoints : undefined,
+        travelMode: google.maps.TravelMode.DRIVING,
+        provideRouteAlternatives: true
+      }, (result, status) => {
+        if (status === 'OK' && result.routes.length > 0) {
+          const routes = result.routes.map(r => ({
+            coords: r.overview_path.map(p => [p.lat(), p.lng()]),
+            distancia: r.legs.reduce((s, l) => s + l.distance.value, 0),
+            duracao: r.legs.reduce((s, l) => s + l.duration.value, 0)
+          }))
+          setRotas(routes.map(r => r.coords))
+          setRotaMeta(routes.map(r => ({ distancia: r.distancia, duracao: r.duracao })))
+        }
+        setCalc(false)
+      })
+    } catch { setCalc(false) }
   }, [items, sel])
 
   const sorted = useMemo(() => {
@@ -529,7 +558,10 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
           {sorted.filter(i => i.coords).map(p => {
             const isSel = sel.has(p.id)
             return (
-              <div key={p.id} className={`mv-i ${isSel ? 's' : ''}`} onClick={() => { map.current?.setView(p.coords, 15); toggle(p.id) }}>
+              <div key={p.id} className={`mv-i ${isSel ? 's' : ''}`} onClick={() => {
+                if (gMap.current) { gMap.current.setCenter({ lat: p.coords[0], lng: p.coords[1] }); gMap.current.setZoom(15) }
+                toggle(p.id)
+              }}>
                 <div className="mv-av" style={{ background: isSel ? '#dc2626' : '#2563eb' }}><i className="fa-solid fa-user"></i></div>
                 <div className="mv-if">
                   <b>{p.user.nome || p.user.pushName || '—'}</b>
