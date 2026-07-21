@@ -146,7 +146,12 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
   // Build items from users + geocode (Google Maps Geocoding API)
   useEffect(() => {
     if (!users.length) { setItems([]); setGeoStatus(0); return }
-    const cache = JSON.parse(localStorage.getItem('thsm_geocode_cache') || '{}')
+    const raw = localStorage.getItem('thsm_geocode_cache') || '{}'
+    let cache = JSON.parse(raw)
+    if (cache._ver !== 2) {
+      cache = { _ver: 2 }
+      localStorage.setItem('thsm_geocode_cache', JSON.stringify(cache))
+    }
     const r = []
     const toGeo = []
     for (const u of users) {
