@@ -197,28 +197,28 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
     const total = toGeo.length
     function geocodeOne(item) {
       const { id, addrAi } = item
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addrAi)}&key=${GM_KEY}&region=br&language=pt-BR`
-      return fetch(url)
-        .then(res => res.json())
-        .then(data => {
-          if (data.status === 'OK' && data.results?.[0]?.geometry?.location) {
-            const loc = data.results[0].geometry.location
-            const coords = [loc.lat, loc.lng]
-            cache[addrAi] = coords
-            localStorage.setItem('thsm_geocode_cache', JSON.stringify(cache))
-            setItems(prev => prev.map(i => i.id === id ? { ...i, coords, fallback: false } : i))
-          } else if (data.status === 'REQUEST_DENIED') {
-            setGeoError('Geocoding API não ativada. Ative no console.cloud.google.com.')
-            setTimeout(() => setGeoError(null), 10000)
-          } else if (data.status === 'OVER_QUERY_LIMIT') {
-            setGeoError('Limite de geocode excedido. Tente novamente mais tarde.')
-            setTimeout(() => setGeoError(null), 10000)
-          } else {
-            console.warn('Geocode falhou para', addrAi, data.status)
-          }
-        })
-        .catch(e => console.error('Geocode error for', addrAi, e))
-        .finally(() => { done++; setGeoStatus(Math.round((done / total) * 100)) })
+      return new Promise(res => {
+        try {
+          const gc = new google.maps.Geocoder()
+          gc.geocode({ address: addrAi, region: 'br' }, (results, status) => {
+            if (status === 'OK' && results?.[0]?.geometry?.location) {
+              const loc = results[0].geometry.location
+              const coords = [loc.lat(), loc.lng()]
+              cache[addrAi] = coords
+              localStorage.setItem('thsm_geocode_cache', JSON.stringify(cache))
+              setItems(prev => prev.map(i => i.id === id ? { ...i, coords, fallback: false } : i))
+            } else {
+              console.warn('Geocode falhou para', addrAi, status)
+            }
+            done++; setGeoStatus(Math.round((done / total) * 100))
+            res()
+          })
+        } catch (e) {
+          console.error('Geocode error for', addrAi, e)
+          done++; setGeoStatus(Math.round((done / total) * 100))
+          res()
+        }
+      })
     }
     const PAR = 10
     let gIdx = 0
