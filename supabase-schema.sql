@@ -78,6 +78,7 @@ ALTER TABLE pedidos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE financeiro ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rotas_contatos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE produtos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE login_tokens ENABLE ROW LEVEL SECURITY;
 
 -- Helper: sets app config for RLS (renamed to avoid conflict with PG built-in)
 CREATE OR REPLACE FUNCTION app_set_config(key text, value text)
@@ -142,6 +143,16 @@ CREATE POLICY "Produtos select all" ON produtos
 
 CREATE POLICY "Produtos admin all" ON produtos
   FOR ALL USING (current_setting('app.is_admin', true) = 'true');
+
+-- Login tokens: anon can insert (recovery flow), select/update by token only
+CREATE POLICY "Login tokens insert" ON login_tokens
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Login tokens select" ON login_tokens
+  FOR SELECT USING (true);
+
+CREATE POLICY "Login tokens update" ON login_tokens
+  FOR UPDATE USING (true);
 
 -- =============================================
 -- FUNCTION: sync contatos from webhook
