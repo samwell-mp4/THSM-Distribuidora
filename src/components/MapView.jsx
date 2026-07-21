@@ -143,7 +143,7 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
     return () => { gMap.current = null; markersRef.current = {} }
   }, [loaded])
 
-  // Build items from users + geocode
+  // Build items from users + geocode (Google Maps Geocoding API)
   useEffect(() => {
     if (!users.length) { setItems([]); setGeoStatus(0); return }
     const cache = JSON.parse(localStorage.getItem('thsm_geocode_cache') || '{}')
@@ -151,17 +151,14 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
     const toGeo = []
     for (const u of users) {
       const id = u.telefone || u.id
-      const bairroAi = queryBairro(u.endereco)
       const addrAi = queryAddr(u.endereco)
       if (cache[addrAi]) {
         r.push({ id, user: u, coords: cache[addrAi] })
-      } else if (cache[bairroAi] && addrAi !== bairroAi) {
-        r.push({ id, user: u, coords: cache[bairroAi] })
       } else {
         const cc = cityCoord(u.endereco.cidade, u.endereco.estado)
         if (cc) r.push({ id, user: u, coords: [cc[0] + jitter(id), cc[1] + jitter(id + 1)], fallback: true })
         else r.push({ id, user: u, coords: null, fallback: true })
-        toGeo.push({ id, user: u, bairroAi, addrAi, cc })
+        toGeo.push({ id, user: u, addrAi })
       }
     }
     setItems(r)
@@ -171,38 +168,27 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
     let done = 0
     const total = toGeo.length
     function geocodeOne(item) {
-      const { id, user, bairroAi, addrAi } = item
-      const query = bairroAi !== addrAi ? bairroAi : addrAi
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=br&limit=1`
-      return fetch(url, { headers: { 'User-Agent': 'THSM-Distribuidora/1.0' } })
+      const { id, addrAi } = item
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addrAi)}&key=${GM_KEY}&region=br&language=pt-BR`
+      return fetch(url)
         .then(res => res.json())
         .then(data => {
-          if (data && data[0]) {
-            const coords = [parseFloat(data[0].lat), parseFloat(data[0].lon)]
-            cache[query] = coords
+          if (data.status === 'OK' && data.results?.[0]?.geometry?.location) {
+            const loc = data.results[0].geometry.location
+            const coords = [loc.lat, loc.lng]
+            cache[addrAi] = coords
             localStorage.setItem('thsm_geocode_cache', JSON.stringify(cache))
             setItems(prev => prev.map(i => i.id === id ? { ...i, coords, fallback: false } : i))
-            return
-          }
-          if (bairroAi !== addrAi) {
-            return fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addrAi)}&countrycodes=br&limit=1`, { headers: { 'User-Agent': 'THSM-Distribuidora/1.0' } })
-              .then(res => res.json())
-              .then(data2 => {
-                if (data2 && data2[0]) {
-                  const coords = [parseFloat(data2[0].lat), parseFloat(data2[0].lon)]
-                  cache[addrAi] = coords
-                  localStorage.setItem('thsm_geocode_cache', JSON.stringify(cache))
-                  setItems(prev => prev.map(i => i.id === id ? { ...i, coords, fallback: false } : i))
-                }
-              })
+          } else {
+            console.warn('Geocode falhou para', addrAi, data.status)
           }
         })
-        .catch(e => console.error('Geocode error for', query, e))
+        .catch(e => console.error('Geocode error for', addrAi, e))
         .finally(() => { done++; setGeoStatus(Math.round((done / total) * 100)) })
     }
-    const PAR = 3
+    const PAR = 10
     let gIdx = 0
-    function worker() { if (gIdx >= total) return; geocodeOne(toGeo[gIdx++]).finally(() => setTimeout(worker, 1200)) }
+    function worker() { if (gIdx >= total) return; geocodeOne(toGeo[gIdx++]).finally(worker) }
     for (let i = 0; i < Math.min(PAR, total); i++) worker()
   }, [users])
 
