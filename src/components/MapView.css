@@ -111,6 +111,12 @@
   flex-shrink: 0;
 }
 
+.map-geocoding-msg {
+  font-weight: 400;
+  color: var(--admin-text-sec);
+  font-size: 0.75rem;
+}
+
 .map-user-count {
   margin-left: auto;
   font-weight: 400;
@@ -136,6 +142,7 @@
 .map-user-item:hover { background: #f9fafb; }
 .map-user-item.selected { background: #fef2f2; }
 .map-user-item.no-coords { opacity: 0.5; }
+.map-user-item.city-level { opacity: 0.85; }
 
 .map-user-avatar {
   width: 32px;
@@ -144,7 +151,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
   font-size: 0.75rem;
   flex-shrink: 0;
   border: 2px solid white;
@@ -174,49 +180,25 @@
   text-overflow: ellipsis;
 }
 
-.map-user-no-coords {
-  font-size: 0.7rem;
-  color: #9ca3af;
-  background: #f3f4f6;
+.map-user-badge {
+  font-size: 0.65rem;
   padding: 0.15rem 0.4rem;
   border-radius: 4px;
   flex-shrink: 0;
+  font-weight: 500;
 }
 
-.map-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem 1rem;
-  color: var(--admin-text-sec);
-  text-align: center;
+.badge-city {
+  background: #f3f4f6;
+  color: #6b7280;
 }
 
-.map-empty i {
-  font-size: 3rem;
-  margin-bottom: 0.75rem;
-  opacity: 0.3;
+.badge-none {
+  background: #fef2f2;
+  color: #dc2626;
 }
 
-.map-empty h3 {
-  margin: 0 0 0.3rem;
-  font-size: 1rem;
-  color: var(--admin-text);
-}
-
-.map-empty p {
-  margin: 0;
-  font-size: 0.85rem;
-  max-width: 320px;
-}
-
-.map-marker-icon {
-  background: transparent !important;
-  border: none !important;
-}
-
-.route-start-icon, .route-end-icon {
+.mmi, .rsi, .rei {
   background: transparent !important;
   border: none !important;
 }
