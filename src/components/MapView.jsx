@@ -4,31 +4,53 @@ import './MapView.css'
 const GM_KEY = 'AIzaSyAfq_6M0nELuVLp3Vqz8RrFpyejRQbLJlE'
 
 const CIDADE = {
-  'belo horizonte': [-19.92, -43.94], 'sao paulo': [-23.55, -46.63], 'rio de janeiro': [-22.91, -43.20],
-  'brasilia': [-15.78, -47.92], 'salvador': [-12.97, -38.50], 'fortaleza': [-3.73, -38.54],
-  'recife': [-8.05, -34.88], 'porto alegre': [-30.03, -51.23], 'curitiba': [-25.43, -49.27],
-  'manaus': [-3.12, -60.02], 'belem': [-1.47, -48.48], 'goiania': [-16.64, -49.29],
-  'contagem': [-19.93, -44.05], 'barbacena': [-21.23, -43.77], 'ubá': [-21.12, -42.94],
-  'leopoldina': [-21.53, -42.64], 'cataguases': [-21.38, -42.69], 'muriaé': [-21.13, -42.37],
-  'juiz de fora': [-21.76, -43.35], 'niteroi': [-22.88, -43.10], 'vitoria': [-20.29, -40.30],
+  'belo horizonte': [-19.92, -43.94], 'contagem': [-19.93, -44.05], 'betim': [-19.97, -44.20],
+  'ibirite': [-20.02, -44.06], 'nova lima': [-19.99, -43.85], 'santa luzia': [-19.77, -43.85],
+  'sabara': [-19.89, -43.81], 'caete': [-19.88, -43.67], 'ribeirao das neves': [-19.77, -44.09],
+  'esmeraldas': [-19.76, -44.31], 'lagoa santa': [-19.63, -43.89], 'pedro leopoldo': [-19.62, -44.04],
+  'vespasiano': [-19.69, -43.92], 'matheus leme': [-19.55, -44.07],
+  'araxa': [-19.59, -46.94], 'uberlandia': [-18.92, -48.28], 'uberaba': [-19.75, -47.94],
+  'patos de minas': [-18.59, -46.52], 'patrocinio': [-18.94, -46.99],
+  'araguari': [-18.65, -48.19], 'ituiutaba': [-18.97, -49.46],
+  'governador valadares': [-18.85, -41.95], 'ipatinga': [-19.47, -42.55],
+  'coronel fabriciano': [-19.52, -42.63], 'timoteo': [-19.58, -42.65],
+  'vale do aco': [-19.52, -42.63],
+  'juiz de fora': [-21.76, -43.35], 'ubá': [-21.12, -42.94], 'muriaé': [-21.13, -42.37],
+  'leopoldina': [-21.53, -42.64], 'cataguases': [-21.38, -42.69], 'vicosa': [-20.75, -42.88],
+  'barbacena': [-21.23, -43.77], 'sao joao del rei': [-21.14, -44.26],
+  'sao joao del-rei': [-21.14, -44.26], 'andrelândia': [-21.74, -44.31],
+  'lima duarte': [-21.84, -43.80], 'conselheiro lafaiete': [-20.66, -43.78],
+  'divinopolis': [-20.15, -44.90], 'itabira': [-19.62, -43.23],
+  'sete lagoas': [-19.46, -44.25], 'unaí': [-16.36, -46.90],
+  'paracatu': [-17.22, -46.88], 'pirapora': [-17.35, -44.94],
+  'montes claros': [-16.73, -43.87], 'januaria': [-15.49, -44.35],
+  'januaba': [-15.80, -43.31],
+  'pouso alegre': [-22.23, -45.93], 'passos': [-20.72, -46.61],
+  'poços de caldas': [-21.79, -46.57], 'varginha': [-21.55, -45.43],
+  'tres coracoes': [-21.70, -45.26], 'itajuba': [-22.43, -45.46],
+  'alfenas': [-21.43, -45.95], 'machado': [-21.68, -45.92],
+  'campo belo': [-20.90, -45.28], 'formiga': [-20.47, -45.43],
+  'bom despacho': [-19.74, -45.26], 'luz': [-19.79, -45.69],
+  'abelardo luz': [-19.79, -45.69],
+  'sao paulo': [-23.55, -46.63], 'campinas': [-22.91, -47.06],
+  'ribeirao preto': [-21.17, -47.81], 'sao jose dos campos': [-23.22, -45.89],
+  'sorocaba': [-23.50, -47.46], 'santos': [-23.96, -46.33],
+  'jundiai': [-23.19, -46.88], 'taubate': [-23.03, -45.56],
+  'pindamonhangaba': [-22.92, -45.46], 'jacarei': [-23.31, -45.97],
+  'guaratingueta': [-22.82, -45.19], 'aparecida': [-22.85, -45.23],
+  'cruzeiro': [-22.58, -44.96], 'cachoeira paulista': [-22.68, -45.01],
+  'lorena': [-22.73, -45.12], 'sao jose dos pinhais': [-25.53, -49.21],
+  'rio de janeiro': [-22.91, -43.20], 'niteroi': [-22.88, -43.10],
   'campos dos goytacazes': [-21.75, -41.33], 'macaé': [-22.37, -41.78],
   'nova friburgo': [-22.29, -42.53], 'petropolis': [-22.51, -43.18],
   'volta redonda': [-22.53, -44.10], 'barra mansa': [-22.55, -44.17],
   'resende': [-22.47, -44.45], 'visconde do rio branco': [-21.01, -42.84],
-  'sao jose dos pinhais': [-25.53, -49.21], 'pindamonhangaba': [-22.92, -45.46],
-  'taubate': [-23.03, -45.56], 'jacarei': [-23.31, -45.97], 'guaratingueta': [-22.82, -45.19],
-  'aparecida': [-22.85, -45.23], 'cruzeiro': [-22.58, -44.96],
-  'cachoeira paulista': [-22.68, -45.01], 'lorena': [-22.73, -45.12],
-  'sao jose dos campos': [-23.22, -45.89], 'campinas': [-22.91, -47.06],
-  'sao paulo': [-23.55, -46.63], 'ribeirao preto': [-21.17, -47.81],
-  'uberlandia': [-18.92, -48.28], 'governador valadares': [-18.85, -41.95],
-  'ipatinga': [-19.47, -42.55], 'sete lagoas': [-19.46, -44.25],
-  'divinopolis': [-20.15, -44.90], 'vicosa': [-20.75, -42.88],
-  'sao joao del rei': [-21.14, -44.26], 'andrelândia': [-21.74, -44.31],
-  'lima duarte': [-21.84, -43.80], 'tres coracoes': [-21.70, -45.26],
-  'varginha': [-21.55, -45.43], 'pouso alegre': [-22.23, -45.93],
-  'passos': [-20.72, -46.61], 'poços de caldas': [-21.79, -46.57],
-  'sao joao del-rei': [-21.14, -44.26], 'conselheiro lafaiete': [-20.66, -43.78],
+  'vitoria': [-20.29, -40.30],
+  'brasilia': [-15.78, -47.92],
+  'salvador': [-12.97, -38.50], 'fortaleza': [-3.73, -38.54],
+  'recife': [-8.05, -34.88], 'porto alegre': [-30.03, -51.23],
+  'curitiba': [-25.43, -49.27], 'manaus': [-3.12, -60.02],
+  'belem': [-1.47, -48.48], 'goiania': [-16.64, -49.29],
 }
 
 const ESTADO = {
@@ -93,6 +115,7 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
   const [filtroEstado, setFiltroEstado] = useState('TODOS')
   const [filtroSearch, setFiltroSearch] = useState('')
   const [geoStatus, setGeoStatus] = useState(0)
+  const [geoError, setGeoError] = useState(null)
   const csvInputRef = useRef(null)
   const [csvMsg, setCsvMsg] = useState(null)
 
@@ -184,6 +207,12 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
             cache[addrAi] = coords
             localStorage.setItem('thsm_geocode_cache', JSON.stringify(cache))
             setItems(prev => prev.map(i => i.id === id ? { ...i, coords, fallback: false } : i))
+          } else if (data.status === 'REQUEST_DENIED') {
+            setGeoError('Geocoding API não ativada. Ative no console.cloud.google.com.')
+            setTimeout(() => setGeoError(null), 10000)
+          } else if (data.status === 'OVER_QUERY_LIMIT') {
+            setGeoError('Limite de geocode excedido. Tente novamente mais tarde.')
+            setTimeout(() => setGeoError(null), 10000)
           } else {
             console.warn('Geocode falhou para', addrAi, data.status)
           }
@@ -418,7 +447,7 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
       <div className="mv-top">
         <div>
           <div className="mv-tit"><i className="fa-solid fa-map"></i> Mapa</div>
-          <div className="mv-sub">{users.length} usuários · {filtered.filter(i => i.coords).length} no mapa · {sel.size} selecionados{geoStatus > 0 && geoStatus < 100 ? ` · Geocodificando ${geoStatus}%` : ''}{csvMsg ? ` · ${csvMsg.v}` : ''}</div>
+          <div className="mv-sub">{users.length} usuários · {filtered.filter(i => i.coords).length} no mapa · {sel.size} selecionados{geoStatus > 0 && geoStatus < 100 ? ` · Geocodificando ${geoStatus}%` : ''}{csvMsg ? ` · ${csvMsg.v}` : ''}{geoError ? ` · ⚠️ ${geoError}` : ''}</div>
         </div>
         <div className="mv-actions">
           <button className="mbtn" onClick={() => {
