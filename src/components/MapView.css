@@ -1,0 +1,222 @@
+.map-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  height: 100%;
+}
+
+.map-view-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.map-view-header h2 {
+  font-size: 1.15rem;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.map-view-subtitle {
+  font-size: 0.8rem;
+  color: var(--admin-text-sec);
+  margin: 0.2rem 0 0 0;
+}
+
+.map-view-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.map-btn {
+  padding: 0.4rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--admin-border);
+  background: white;
+  color: var(--admin-text);
+  font-size: 0.78rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.map-btn:hover { border-color: var(--accent); color: var(--accent); }
+.map-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.map-btn-sec { background: #f9fafb; }
+.map-btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+.map-btn-primary:hover { opacity: 0.9; color: white; }
+.map-btn-danger { background: #fef2f2; color: #dc2626; border-color: #fca5a5; }
+.map-btn-danger:hover { background: #fee2e2; border-color: #f87171; }
+
+.map-geocoding-bar {
+  position: relative;
+  height: 28px;
+  background: #e5e7eb;
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: #374151;
+  font-weight: 500;
+}
+
+.map-geocoding-progress {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+  border-radius: 14px;
+  transition: width 0.5s;
+  opacity: 0.2;
+}
+
+.map-container {
+  height: 500px;
+  border-radius: 12px;
+  border: 1px solid var(--admin-border);
+  overflow: hidden;
+  z-index: 1;
+}
+
+.map-user-list {
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: white;
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
+}
+
+.map-user-list h4 {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.82rem;
+  background: #f9fafb;
+  border-bottom: 1px solid var(--admin-border);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.map-user-count {
+  margin-left: auto;
+  font-weight: 400;
+  color: var(--admin-text-sec);
+  font-size: 0.75rem;
+}
+
+.map-user-scroll {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.map-user-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.85rem;
+  cursor: pointer;
+  transition: background 0.12s;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.map-user-item:hover { background: #f9fafb; }
+.map-user-item.selected { background: #fef2f2; }
+.map-user-item.no-coords { opacity: 0.5; }
+
+.map-user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  border: 2px solid white;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+
+.map-user-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.map-user-info strong {
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-user-info span {
+  font-size: 0.72rem;
+  color: var(--admin-text-sec);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-user-no-coords {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  background: #f3f4f6;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.map-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  color: var(--admin-text-sec);
+  text-align: center;
+}
+
+.map-empty i {
+  font-size: 3rem;
+  margin-bottom: 0.75rem;
+  opacity: 0.3;
+}
+
+.map-empty h3 {
+  margin: 0 0 0.3rem;
+  font-size: 1rem;
+  color: var(--admin-text);
+}
+
+.map-empty p {
+  margin: 0;
+  font-size: 0.85rem;
+  max-width: 320px;
+}
+
+.map-marker-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.route-start-icon, .route-end-icon {
+  background: transparent !important;
+  border: none !important;
+}

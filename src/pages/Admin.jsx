@@ -232,6 +232,7 @@ function sendAlertRota(tipo, contatos, orders, customText = '') {
 }
 
 import AddressForm from '../components/AddressForm'
+import MapView from '../components/MapView'
 
 export default function Admin({ produtos, onVoltar }) {
   const [tab, setTab] = useState(() => sessionStorage.getItem('thsm_admin_tab') || 'dashboard')
@@ -1111,6 +1112,7 @@ export default function Admin({ produtos, onVoltar }) {
     { id: 'financeiro', icon: 'fa-coins', label: 'Financeiro', count: financial.filter(f => f.status === 'pendente').length },
     { id: 'usuarios', icon: 'fa-users', label: 'Usuários', count: usuarios.length },
     { id: 'leads', icon: 'fa-file-pen', label: 'Inscrições', count: leads.length },
+    { id: 'mapa', icon: 'fa-map', label: 'Mapa' },
   ]
 
   return (
@@ -1981,6 +1983,9 @@ export default function Admin({ produtos, onVoltar }) {
                                     <button className="action-btn" style={{ color: '#2563eb' }} title="Ver no Google Maps" onClick={() => openGoogleMaps(buildAddressString(e))}>
                                       <i className="fa-solid fa-location-dot"></i>
                                     </button>
+                                    <button className="action-btn" style={{ color: '#8b5cf6' }} title="Ver no Mapa Interativo" onClick={() => { setTab('mapa'); setSelectedUserIds(new Set([u.telefone || u.id])) }}>
+                                      <i className="fa-solid fa-map"></i>
+                                    </button>
                                     <button className="action-btn" style={{ color: '#25d366' }} title="Enviar WhatsApp"
                                       onClick={() => setUserMsgMenu(userMsgMenu === u.telefone ? null : u.telefone)}>
                                       <i className="fa-brands fa-whatsapp"></i>
@@ -2077,6 +2082,13 @@ export default function Admin({ produtos, onVoltar }) {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* MAPA */}
+        {tab === 'mapa' && (
+          <div className="admin-section" style={{ height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column' }}>
+            <MapView usuarios={usuarios} />
           </div>
         )}
 
