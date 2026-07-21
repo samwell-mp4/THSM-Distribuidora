@@ -257,6 +257,31 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
     }
   }, [filtered, sel, buildPopup, onMarkOnWay, onViewUser, financial])
 
+  // Zoom to filter
+  useEffect(() => {
+    if (!map.current || !items.length) return
+    let target = null
+    if (filtroCidade !== 'TODAS') {
+      const found = items.find(i => (i.user.endereco?.cidade || '').toLowerCase() === filtroCidade.toLowerCase())
+      const ec = found ? cityCoord(found.user.endereco.cidade, found.user.endereco.estado) : null
+      if (ec) target = { coords: ec, zoom: 12 }
+    } else if (filtroEstado !== 'TODOS') {
+      const ec = ESTADO[filtroEstado.toLowerCase()]
+      if (ec) target = { coords: ec, zoom: 8 }
+    }
+    if (target) map.current.setView(target.coords, target.zoom)
+    else if (filtroCidade === 'TODAS' && filtroEstado === 'TODOS') {
+      const bounds = L.latLngBounds()
+      let has = false
+      for (const item of items) {
+        if (!item.coords) continue
+        bounds.extend(item.coords)
+        has = true
+      }
+      if (has) map.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 })
+    }
+  }, [filtroCidade, filtroEstado, items])
+
   // Routes
   useEffect(() => {
     if (!map.current) return
