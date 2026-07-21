@@ -47,7 +47,7 @@ export default function AddressForm({ value, onChange, showErrors }) {
   const [loadingCidades, setLoadingCidades] = useState(false)
   const [cepError, setCepError] = useState('')
 
-  const required = { cep: !value.cep, cidade: !value.cidade, rua: !value.rua, numero: !value.numero }
+  const required = { cep: !cep, cidade: !cidade, rua: !rua, numero: !numero }
 
   const emitChange = useCallback((updates) => {
     onChange({ cep, estado, cidade, bairro, rua, numero, complemento, ...updates })
