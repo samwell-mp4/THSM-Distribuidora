@@ -45,6 +45,7 @@ const ESTADO = {
 
 function norm(s) { return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, '').trim() }
 function queryAddr(e) { return [e.rua, e.numero, e.bairro, e.cidade, e.estado].filter(Boolean).join(', ') }
+function queryBairro(e) { return [e.bairro, e.cidade, e.estado].filter(Boolean).join(', ') }
 function cityCoord(cidade, estado) {
   if (!cidade) return null
   const m = CIDADE[norm(cidade)]
@@ -90,6 +91,7 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
   const [filtroCidade, setFiltroCidade] = useState('TODAS')
   const [filtroEstado, setFiltroEstado] = useState('TODOS')
   const [filtroSearch, setFiltroSearch] = useState('')
+  const [geoStatus, setGeoStatus] = useState(0)
 
   const users = useMemo(() => usuarios.filter(u => hasAddr(u.endereco || {})), [usuarios])
 
@@ -128,44 +130,76 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
 
   // Build items from users + geocode
   useEffect(() => {
-    if (!users.length) { setItems([]); return }
+    if (!users.length) { setItems([]); setGeoStatus(0); return }
     const cache = JSON.parse(localStorage.getItem('thsm_geocode_cache') || '{}')
     const r = []
     const toGeo = []
     for (const u of users) {
       const id = u.telefone || u.id
-      const addr = queryAddr(u.endereco)
-      if (cache[addr]) {
-        r.push({ id, user: u, coords: cache[addr] })
+      const bairroAi = queryBairro(u.endereco)
+      const addrAi = queryAddr(u.endereco)
+      if (cache[addrAi]) {
+        r.push({ id, user: u, coords: cache[addrAi] })
+      } else if (cache[bairroAi] && addrAi !== bairroAi) {
+        r.push({ id, user: u, coords: cache[bairroAi] })
       } else {
         const cc = cityCoord(u.endereco.cidade, u.endereco.estado)
         if (cc) r.push({ id, user: u, coords: [cc[0] + jitter(id), cc[1] + jitter(id + 1)], fallback: true })
         else r.push({ id, user: u, coords: null, fallback: true })
-        toGeo.push({ id, user: u, addr })
+        toGeo.push({ id, user: u, bairroAi, addrAi, cc })
       }
     }
     setItems(r)
+    setGeoStatus(prev => prev || toGeo.length ? 1 : 0)
     initialFit.current = false
     if (!toGeo.length) return
-    let idx = 0
-    const next = () => {
-      if (idx >= toGeo.length) return
-      const { id, user, addr } = toGeo[idx++]
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&countrycodes=br&limit=1`
+
+    let done = 0
+    const total = toGeo.length
+
+    function geocodeOne(item) {
+      const { id, user, bairroAi, addrAi } = item
+      // Try bairro first (more specific than city center)
+      const query = bairroAi !== addrAi ? bairroAi : addrAi
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=br&limit=1`
       fetch(url, { headers: { 'User-Agent': 'THSM-Distribuidora/1.0' } })
         .then(res => res.json())
         .then(data => {
           if (data && data[0]) {
             const coords = [parseFloat(data[0].lat), parseFloat(data[0].lon)]
-            cache[addr] = coords
+            cache[query] = coords
             localStorage.setItem('thsm_geocode_cache', JSON.stringify(cache))
             setItems(prev => prev.map(i => i.id === id ? { ...i, coords, fallback: false } : i))
+            return
+          }
+          // Fallback: try full address
+          if (bairroAi !== addrAi) {
+            return fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addrAi)}&countrycodes=br&limit=1`, { headers: { 'User-Agent': 'THSM-Distribuidora/1.0' } })
+              .then(res => res.json())
+              .then(data2 => {
+                if (data2 && data2[0]) {
+                  const coords = [parseFloat(data2[0].lat), parseFloat(data2[0].lon)]
+                  cache[addrAi] = coords
+                  localStorage.setItem('thsm_geocode_cache', JSON.stringify(cache))
+                  setItems(prev => prev.map(i => i.id === id ? { ...i, coords, fallback: false } : i))
+                }
+              })
           }
         })
-        .catch(() => {})
-        .finally(() => setTimeout(next, 1100))
+        .catch(e => console.error('Geocode error for', query, e))
+        .finally(() => {
+          done++
+          setGeoStatus(Math.round((done / total) * 100))
+        })
     }
-    next()
+
+    const PAR = 3
+    let gIdx = 0
+    function worker() {
+      if (gIdx >= total) return
+      geocodeOne(toGeo[gIdx++]).finally(() => setTimeout(worker, 1200))
+    }
+    for (let i = 0; i < Math.min(PAR, total); i++) worker()
   }, [users])
 
   const buildPopup = useCallback((user) => {
@@ -362,7 +396,7 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
       <div className="mv-top">
         <div>
           <div className="mv-tit"><i className="fa-solid fa-map"></i> Mapa</div>
-          <div className="mv-sub">{users.length} usuários · {filtered.filter(i => i.coords).length} no mapa · {sel.size} selecionados</div>
+          <div className="mv-sub">{users.length} usuários · {filtered.filter(i => i.coords).length} no mapa · {sel.size} selecionados{geoStatus > 0 && geoStatus < 100 ? ` · Geocodificando ${geoStatus}%` : ''}</div>
         </div>
         <div className="mv-actions">
           {rotaMeta && rotaMeta.map((r, i) => (
@@ -386,6 +420,11 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
         </div>
       </div>
 
+      {geoStatus > 0 && geoStatus < 100 && (
+        <div style={{ width: '100%', height: 4, background: '#e5e7eb', borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ width: `${geoStatus}%`, height: '100%', background: '#6366f1', borderRadius: 2, transition: 'width 0.3s' }} />
+        </div>
+      )}
       <div className="mv-filters">
         <div className="mv-search">
           <i className="fa-solid fa-search"></i>
