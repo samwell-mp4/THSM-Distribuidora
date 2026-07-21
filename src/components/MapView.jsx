@@ -97,6 +97,7 @@ export default function MapView({ usuarios, orders }) {
   const map = useRef(null)
   const mkLayer = useRef(null)
   const rtLayer = useRef(null)
+  const initialFit = useRef(false)
   const [items, setItems] = useState([])
   const [sel, setSel] = useState(new Set())
   const [rotas, setRotas] = useState([])
@@ -173,7 +174,10 @@ export default function MapView({ usuarios, orders }) {
       bounds.extend(item.coords)
       has = true
     }
-    if (has) map.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 })
+    if (has && !initialFit.current) {
+      map.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 })
+      initialFit.current = true
+    }
   }, [buildPopup])
 
   useEffect(() => { updateMarkers(items, sel) }, [items, sel, updateMarkers])
