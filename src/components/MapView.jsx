@@ -44,6 +44,7 @@ const ESTADO = {
 }
 
 function norm(s) { return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, '').trim() }
+function queryAddr(e) { return [e.rua, e.numero, e.bairro, e.cidade, e.estado].filter(Boolean).join(', ') }
 function cityCoord(cidade, estado) {
   if (!cidade) return null
   const m = CIDADE[norm(cidade)]
@@ -125,18 +126,46 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
     return () => { m.remove(); map.current = null; markersRef.current = {} }
   }, [])
 
-  // Build items from users
+  // Build items from users + geocode
   useEffect(() => {
     if (!users.length) { setItems([]); return }
+    const cache = JSON.parse(localStorage.getItem('thsm_geocode_cache') || '{}')
     const r = []
+    const toGeo = []
     for (const u of users) {
       const id = u.telefone || u.id
-      const cc = cityCoord(u.endereco.cidade, u.endereco.estado)
-      if (cc) r.push({ id, user: u, coords: [cc[0] + jitter(id), cc[1] + jitter(id + 1)] })
-      else r.push({ id, user: u, coords: null })
+      const addr = queryAddr(u.endereco)
+      if (cache[addr]) {
+        r.push({ id, user: u, coords: cache[addr] })
+      } else {
+        const cc = cityCoord(u.endereco.cidade, u.endereco.estado)
+        if (cc) r.push({ id, user: u, coords: [cc[0] + jitter(id), cc[1] + jitter(id + 1)], fallback: true })
+        else r.push({ id, user: u, coords: null, fallback: true })
+        toGeo.push({ id, user: u, addr })
+      }
     }
     setItems(r)
     initialFit.current = false
+    if (!toGeo.length) return
+    let idx = 0
+    const next = () => {
+      if (idx >= toGeo.length) return
+      const { id, user, addr } = toGeo[idx++]
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&countrycodes=br&limit=1`
+      fetch(url, { headers: { 'User-Agent': 'THSM-Distribuidora/1.0' } })
+        .then(res => res.json())
+        .then(data => {
+          if (data && data[0]) {
+            const coords = [parseFloat(data[0].lat), parseFloat(data[0].lon)]
+            cache[addr] = coords
+            localStorage.setItem('thsm_geocode_cache', JSON.stringify(cache))
+            setItems(prev => prev.map(i => i.id === id ? { ...i, coords, fallback: false } : i))
+          }
+        })
+        .catch(() => {})
+        .finally(() => setTimeout(next, 1100))
+    }
+    next()
   }, [users])
 
   const buildPopup = useCallback((user) => {
