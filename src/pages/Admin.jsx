@@ -249,6 +249,7 @@ export default function Admin({ produtos, onVoltar }) {
   const [prodCartOpen, setProdCartOpen] = useState(false)
   const [prodImageErrors, setProdImageErrors] = useState({})
   const [showAddOrder, setShowAddOrder] = useState(false)
+  const [preselectedUserForOrder, setPreselectedUserForOrder] = useState(null)
   const [showOrderDetail, setShowOrderDetail] = useState(null)
   const [showDeliveryModal, setShowDeliveryModal] = useState(null)
   const [returnQuantities, setReturnQuantities] = useState({})
@@ -265,6 +266,8 @@ export default function Admin({ produtos, onVoltar }) {
   const [editUserData, setEditUserData] = useState(null)
   const [userSearch, setUserSearch] = useState('')
   const [userCityFilter, setUserCityFilter] = useState('TODAS')
+  const [userOrigemFilter, setUserOrigemFilter] = useState('TODAS')
+  const [userEnderecoSearch, setUserEnderecoSearch] = useState('')
   const [userSort, setUserSort] = useState({ field: 'nome', dir: 'asc' })
   const [userPage, setUserPage] = useState(1)
   const USER_PAGE_SIZE = 50
@@ -786,12 +789,22 @@ export default function Admin({ produtos, onVoltar }) {
 
   // Usuarios filter & pagination
   const filteredUsuarios = useMemo(() => {
-    if (!selectedUserEmail && !userSearch && userCityFilter === 'TODAS') return usuarios
+    if (!selectedUserEmail && !userSearch && userCityFilter === 'TODAS' && userOrigemFilter === 'TODAS' && !userEnderecoSearch) return usuarios
     const t = userSearch.toLowerCase().trim()
+    const tEnd = userEnderecoSearch.toLowerCase().trim()
     return usuarios.filter(u => {
       if (userCityFilter !== 'TODAS') {
         const cidade = (u.endereco?.cidade || u.endereco?.cidade || '').toLowerCase()
         if (cidade !== userCityFilter.toLowerCase()) return false
+      }
+      if (userOrigemFilter !== 'TODAS') {
+        const origem = u.endereco?.origem || ''
+        if (origem !== userOrigemFilter) return false
+      }
+      if (tEnd) {
+        const e = u.endereco || {}
+        const addrStr = [e.rua, e.numero, e.bairro, e.cidade, e.estado, e.cep, e.complemento].filter(Boolean).join(' ').toLowerCase()
+        if (!addrStr.includes(tEnd)) return false
       }
       if (t && !u.nome?.toLowerCase().includes(t) && !u.telefone?.includes(t) && !(u.email || '').toLowerCase().includes(t)) return false
       return true
@@ -804,7 +817,7 @@ export default function Admin({ produtos, onVoltar }) {
         default: return (a.nome || '').localeCompare(b.nome || '', 'pt-BR')
       }
     })
-  }, [usuarios, userSearch, userCityFilter, userSort, selectedUserEmail])
+  }, [usuarios, userSearch, userCityFilter, userOrigemFilter, userEnderecoSearch, userSort, selectedUserEmail])
 
   const paginatedUsuarios = useMemo(() => {
     const start = (userPage - 1) * USER_PAGE_SIZE
@@ -813,7 +826,7 @@ export default function Admin({ produtos, onVoltar }) {
 
   const totalUserPages = useMemo(() => Math.ceil(filteredUsuarios.length / USER_PAGE_SIZE), [filteredUsuarios])
 
-  useEffect(() => { setUserPage(1) }, [userSearch, userCityFilter, selectedUserEmail])
+  useEffect(() => { setUserPage(1) }, [userSearch, userCityFilter, userOrigemFilter, userEnderecoSearch, selectedUserEmail])
 
   const userCities = useMemo(() => {
     const cidades = [...new Set(usuarios.map(u => u.endereco?.cidade).filter(Boolean))]
@@ -1567,6 +1580,12 @@ export default function Admin({ produtos, onVoltar }) {
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
                     {!editingUser && (
+                      <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }}
+                        onClick={() => { setPreselectedUserForOrder(selectedUserDetail); setShowAddOrder(true) }}>
+                        <i className="fa-solid fa-plus"></i> Novo Pedido
+                      </button>
+                    )}
+                    {!editingUser && (
                       <button className="admin-btn" style={{ background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)' }}
                         onClick={() => handleDeleteUser(selectedUserDetail)}>
                         <i className="fa-solid fa-trash-can"></i> Excluir
@@ -1800,6 +1819,17 @@ export default function Admin({ produtos, onVoltar }) {
                   <select value={userCityFilter} onChange={e => setUserCityFilter(e.target.value)} style={{ padding: '0.45rem 0.7rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', background: 'white', cursor: 'pointer', maxWidth: '160px' }}>
                     {userCities.map(c => <option key={c} value={c}>{c === 'TODAS' ? 'Todas as cidades' : c}</option>)}
                   </select>
+                  <select value={userOrigemFilter} onChange={e => setUserOrigemFilter(e.target.value)} style={{ padding: '0.45rem 0.7rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', background: 'white', cursor: 'pointer', maxWidth: '160px' }}>
+                    <option value="TODAS">Todas origens</option>
+                    <option value="BOT">BOT</option>
+                    <option value="Registro do Site">Registro do Site</option>
+                    <option value="Admin">Admin</option>
+                    <option value="Importado WhatsApp">Importado WhatsApp</option>
+                  </select>
+                  <div className="admin-search-prod" style={{ minWidth: '160px', maxWidth: '200px' }}>
+                    <i className="fa-solid fa-search"></i>
+                    <input type="text" placeholder="Buscar endereço..." value={userEnderecoSearch} onChange={e => setUserEnderecoSearch(e.target.value)} style={{ width: '100%' }} />
+                  </div>
                   <div style={{ display: 'flex', gap: '0.35rem', fontSize: '0.78rem' }}>
                     <button className={`admin-btn ${userSort.field === 'nome' ? 'admin-btn-primary' : 'admin-btn-sec'}`} style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem' }} onClick={() => setUserSort(prev => prev.field === 'nome' ? { field: 'nome', dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { field: 'nome', dir: 'asc' })}>
                       Nome {userSort.field === 'nome' && <i className={`fa-solid fa-sort-${userSort.dir === 'asc' ? 'up' : 'down'}`}></i>}
@@ -2291,8 +2321,9 @@ export default function Admin({ produtos, onVoltar }) {
           produtos={produtosAtuais}
           usuarios={usuarios}
           initialCart={prodCart}
+          preselectedUser={preselectedUserForOrder}
           onSave={(order) => { addOrder(order); clearProdCart() }}
-          onClose={() => { setShowAddOrder(false); clearProdCart() }}
+          onClose={() => { setShowAddOrder(false); setPreselectedUserForOrder(null); clearProdCart() }}
         />
       )}
 
@@ -2755,7 +2786,7 @@ export default function Admin({ produtos, onVoltar }) {
 // =============================================
 // MODAL: ADD ORDER
 // =============================================
-function AddOrderModal({ produtos, usuarios, initialCart, onSave, onClose }) {
+function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSave, onClose }) {
   const [step, setStep] = useState(1)
   const [showNewForm, setShowNewForm] = useState(false)
   const [userSearch, setUserSearch] = useState('')
@@ -2785,6 +2816,12 @@ function AddOrderModal({ produtos, usuarios, initialCart, onSave, onClose }) {
       (u.email || '').toLowerCase().includes(t)
     ).slice(0, 20)
   }, [usuarios, userSearch])
+
+  useEffect(() => {
+    if (preselectedUser) {
+      pickUser(preselectedUser)
+    }
+  }, [])
 
   const pickUser = (u) => {
     setSelectedUser(u)

@@ -4,7 +4,7 @@ import Admin from './pages/Admin'
 import AddressForm from './components/AddressForm'
 import UserDashboard from './pages/UserDashboard'
 import KitPage from './pages/KitPage'
-import { supabase, upsertOrder, upsertUser } from './lib/supabase'
+import { supabase, upsertOrder, upsertUser, generateLoginToken, consumeLoginToken } from './lib/supabase'
 import './App.css'
 
 const LS_USUARIOS = 'thsm_usuarios'
@@ -12,6 +12,7 @@ const LS_SESSAO = 'thsm_sessao'
 const LS_ORDERS = 'thsm_admin_orders'
 const LS_ADMIN = 'thsm_admin_auth'
 const WEBHOOK_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/novo-pedido'
+const WEBHOOK_RECOVER_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/recuperar-senha'
 const ADMIN_USER = 'thsmadmin'
 const ADMIN_PASS = 'th2026smdistribuidora!'
 
@@ -45,6 +46,12 @@ function App() {
   const [showAddressEdit, setShowAddressEdit] = useState(false)
   const [triedSaveEdit, setTriedSaveEdit] = useState(false)
   const [addressEditEndereco, setAddressEditEndereco] = useState({ cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
+  const [savingAddress, setSavingAddress] = useState(false)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [forgotPhone, setForgotPhone] = useState('')
+  const [showRecoverPassword, setShowRecoverPassword] = useState(false)
+  const [recoverTelefone, setRecoverTelefone] = useState('')
+  const [recoverNewPassword, setRecoverNewPassword] = useState('')
   const [adminAuth, setAdminAuth] = useState(() => {
     try { const d = localStorage.getItem(LS_ADMIN); return d ? JSON.parse(d) : null } catch { return null }
   })
@@ -53,6 +60,9 @@ function App() {
   })
   const [currentUser, setCurrentUser] = useState(() => {
     try { const d = localStorage.getItem(LS_SESSAO); return d ? JSON.parse(d) : null } catch { return null }
+  })
+  const [prodChangesApp, setProdChangesApp] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('thsm_admin_produtos')) || {} } catch { return {} }
   })
   const ITEMS_PER_PAGE = 12
 
@@ -84,33 +94,50 @@ function App() {
     const params = new URLSearchParams(window.location.search)
     const pid = params.get('pedido')
     const loginToken = params.get('login')
-    const doLogin = async (telefone) => {
-      sessionStorage.setItem('thsm_user_tab', 'pedidos')
-      let user = usuarios.find(u => u.telefone === telefone)
-      if (!user) {
-        const { data } = await supabase.from('usuarios').select('*').eq('telefone', telefone).single()
-        if (data) {
-          user = data
-          setUsuarios(prev => {
-            const merged = [...prev.filter(u => u.telefone !== data.telefone), data]
-            localStorage.setItem(LS_USUARIOS, JSON.stringify(merged))
-            return merged
-          })
-        }
-      }
-      if (user) {
-        setCurrentUser(user)
-        showToast(`Bem-vindo, ${user.nome}!`)
-        const addr = user.endereco || {}
-        if (!addr.cep || !addr.cidade || !addr.rua || !addr.numero) {
-          setAddressRequiredEndereco({ cep: addr.cep || '', estado: addr.estado || '', cidade: addr.cidade || '', bairro: addr.bairro || '', rua: addr.rua || '', numero: addr.numero || '', complemento: addr.complemento || '' })
-          setShowAddressRequired(true)
+    const recoverToken = params.get('recover')
+
+    if (recoverToken) {
+      consumeLoginToken(recoverToken).then(telefone => {
+        if (telefone) {
+          setRecoverTelefone(telefone)
+          setShowRecoverPassword(true)
         } else {
-          navigate('/')
+          showToast('Link de recuperação inválido ou expirado', 'error')
+        }
+      })
+      const url = new URL(window.location)
+      url.searchParams.delete('recover')
+      window.history.replaceState({}, '', url)
+      return
+    }
+
+    if (loginToken) {
+      const doLogin = async (telefone) => {
+        sessionStorage.setItem('thsm_user_tab', 'pedidos')
+        let user = usuarios.find(u => u.telefone === telefone)
+        if (!user) {
+          const { data } = await supabase.from('usuarios').select('*').eq('telefone', telefone).maybeSingle()
+          if (data) {
+            user = data
+            setUsuarios(prev => {
+              const merged = [...prev.filter(u => u.telefone !== data.telefone), data]
+              localStorage.setItem(LS_USUARIOS, JSON.stringify(merged))
+              return merged
+            })
+          }
+        }
+        if (user) {
+          setCurrentUser(user)
+          showToast(`Bem-vindo, ${user.nome}!`)
+          const addr = user.endereco || {}
+          if (!addr.cep || !addr.cidade || !addr.rua || !addr.numero) {
+            setAddressRequiredEndereco({ cep: addr.cep || '', estado: addr.estado || '', cidade: addr.cidade || '', bairro: addr.bairro || '', rua: addr.rua || '', numero: addr.numero || '', complemento: addr.complemento || '' })
+            setShowAddressRequired(true)
+          } else {
+            navigate('/')
+          }
         }
       }
-    }
-    if (loginToken) {
       try {
         const telefone = atob(loginToken)
         doLogin(telefone)
@@ -118,7 +145,10 @@ function App() {
       const url = new URL(window.location)
       url.searchParams.delete('login')
       window.history.replaceState({}, '', url)
-    } else if (pid) {
+      return
+    }
+
+    if (pid) {
       setInitialOrderId(Number(pid))
       const url = new URL(window.location)
       url.searchParams.delete('pedido')
@@ -161,16 +191,31 @@ function App() {
     }).catch(() => {})
   }, [])
 
+  useEffect(() => {
+    if (route === 'admin' && !adminAuth?.loggedIn) {
+      setShowAdminLogin(true)
+    }
+  }, [route, adminAuth])
+
+  useEffect(() => {
+    try { const d = JSON.parse(localStorage.getItem('thsm_admin_produtos')); if (d) setProdChangesApp(d) } catch {}
+  }, [route])
+
   const showToast = useCallback((msg, type = 'success') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 2500)
   }, [])
 
-  const categorias = useMemo(() => ['TODOS', ...[...new Set(produtos.map(p => p.categoria))].sort()], [])
+  const produtosMerged = useMemo(() => {
+    if (Object.keys(prodChangesApp).length === 0) return produtos
+    return produtos.map(p => ({ ...p, ...(prodChangesApp[p.id] || {}) }))
+  }, [produtos, prodChangesApp])
+
+  const categorias = useMemo(() => ['TODOS', ...[...new Set(produtosMerged.map(p => p.categoria))].sort()], [produtosMerged])
 
   const filtered = useMemo(() => {
     const term = search.toLowerCase().trim()
-    return produtos.filter(p => {
+    return produtosMerged.filter(p => {
       if (term && !p.nome.toLowerCase().includes(term) && !p.categoria.toLowerCase().includes(term)) return false
       if (categoria !== 'TODOS' && p.categoria !== categoria) return false
       if (p.preco < priceRange[0] || p.preco > priceRange[1]) return false
@@ -200,9 +245,9 @@ function App() {
   const cartCount = useMemo(() => cartItems.reduce((s, i) => s + i.qty, 0), [cartItems])
 
   const [priceMin, priceMax] = useMemo(() => {
-    const prices = produtos.map(p => p.preco)
+    const prices = produtosMerged.map(p => p.preco)
     return [Math.floor(Math.min(...prices)), Math.ceil(Math.max(...prices))]
-  }, [])
+  }, [produtosMerged])
 
   // --- Auth ---
   const fazerLogin = async () => {
@@ -255,6 +300,66 @@ function App() {
     setCurrentUser(null)
     localStorage.removeItem(LS_SESSAO)
     showToast('Você saiu da sua conta')
+  }
+
+  const requestPasswordRecover = async () => {
+    const raw = forgotPhone.replace(/\D/g, '')
+    const telefone = raw.startsWith('55') ? raw : '55' + raw
+    if (!telefone || telefone.replace(/\D/g, '').length < 11) { showToast('Telefone inválido', 'error'); return }
+
+    let user = usuarios.find(u => u.telefone === telefone)
+    if (!user) {
+      const { data } = await supabase.from('usuarios').select('*').eq('telefone', telefone).maybeSingle()
+      if (!data) { showToast('Telefone não cadastrado', 'error'); return }
+      user = data
+    }
+
+    const token = await generateLoginToken(telefone)
+    if (!token) { showToast('Erro ao gerar link de recuperação', 'error'); return }
+
+    const recoveryLink = `${window.location.origin}${window.location.pathname}?recover=${token}`
+    const nome = user.nome || 'Cliente'
+
+    fetch(WEBHOOK_RECOVER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event: 'recuperar-senha',
+        telefone,
+        nome,
+        recoveryLink,
+        whatsappMessage: `Olá, ${nome}! Recebemos seu pedido de recuperação de senha.\n\nClique no link abaixo para definir uma nova senha:\n${recoveryLink}\n\nEste link é válido por 24 horas.`
+      })
+    }).catch(() => {})
+
+    showToast('Link de recuperação enviado via WhatsApp!')
+    setShowForgotPassword(false)
+    setForgotPhone('')
+  }
+
+  const saveNewPassword = async () => {
+    if (!recoverNewPassword || recoverNewPassword.length < 3) {
+      showToast('A senha deve ter pelo menos 3 caracteres', 'error')
+      return
+    }
+
+    let user = usuarios.find(u => u.telefone === recoverTelefone)
+    if (user) {
+      const updated = { ...user, endereco: { ...(user.endereco || {}), senha: recoverNewPassword } }
+      await upsertUser({ telefone: recoverTelefone, nome: user.nome, email: user.email || '', endereco: updated.endereco })
+      setUsuarios(prev => prev.map(u => u.telefone === recoverTelefone ? updated : u))
+    } else {
+      const { data } = await supabase.from('usuarios').select('*').eq('telefone', recoverTelefone).maybeSingle()
+      if (data) {
+        await upsertUser({ telefone: recoverTelefone, nome: data.nome, email: data.email || '', endereco: { ...(data.endereco || {}), senha: recoverNewPassword } })
+      }
+    }
+
+    showToast('Senha redefinida com sucesso! Faça login com sua nova senha.')
+    setShowRecoverPassword(false)
+    setRecoverTelefone('')
+    setRecoverNewPassword('')
+    setShowLogin(true)
   }
 
   const saveRequiredAddress = async () => {
@@ -419,12 +524,12 @@ function App() {
     const kitId = window.location.hash.replace(/^#\/kit\//, '').split('/')[0] || ''
     const allKits = (() => { try { return JSON.parse(localStorage.getItem('thsm_kits') || '[]') } catch { return [] } })()
     const kit = allKits.find(k => k.id === kitId)
-    return <KitPage kit={kit} produtos={produtos} onVoltar={() => navigate('/')} />
+    return <KitPage kit={kit} produtos={produtosMerged} onVoltar={() => navigate('/')} />
   }
 
   // Admin & UserDash views
   if (route === 'admin' && adminAuth?.loggedIn) return <Admin produtos={produtos} onVoltar={() => { navigate('/'); localStorage.removeItem(LS_ADMIN); setAdminAuth(null) }} />
-  if (route === 'userdash') return <UserDashboard produtos={produtos} onVoltar={() => navigate('/')} initialOrderId={initialOrderId} />
+  if (route === 'userdash') return <UserDashboard produtos={produtosMerged} onVoltar={() => navigate('/')} initialOrderId={initialOrderId} />
 
   return (
     <div className="app">
@@ -903,6 +1008,13 @@ function App() {
                 <label>Senha</label>
                 <input type="password" placeholder="Sua senha" value={loginSenha} onChange={e => setLoginSenha(e.target.value)} />
               </div>
+              {!isRegistering && (
+                <p style={{ textAlign: 'right', marginBottom: '0.5rem' }}>
+                  <button onClick={() => { setShowLogin(false); setShowForgotPassword(true) }} style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '0.78rem' }}>
+                    <i className="fa-solid fa-question-circle"></i> Esqueci minha senha
+                  </button>
+                </p>
+              )}
               {isRegistering && (
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
                   <i className="fa-solid fa-info-circle"></i> Escolha uma senha para sua conta
@@ -917,6 +1029,61 @@ function App() {
                   {isRegistering ? 'Faça login' : 'Cadastre-se'}
                 </button>
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FORGOT PASSWORD MODAL */}
+      {showForgotPassword && (
+        <div className="overlay" onClick={() => setShowForgotPassword(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <button className="modal-close" onClick={() => setShowForgotPassword(false)}><i className="fa-solid fa-xmark"></i></button>
+            <div className="modal-body" style={{ textAlign: 'center' }}>
+              <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem' }}>
+                <i className="fa-solid fa-key" style={{ color: '#f59e0b', fontSize: '1.3rem' }}></i>
+              </div>
+              <h2 style={{ fontSize: '1.1rem', marginBottom: '0.25rem' }}>Recuperar Senha</h2>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
+                Informe seu telefone para receber um link de recuperação via WhatsApp.
+              </p>
+              <div className="form-group" style={{ textAlign: 'left' }}>
+                <label>Telefone</label>
+                <input type="text" placeholder="(31) 99999-9999" value={forgotPhone} onChange={e => setForgotPhone(e.target.value)} />
+              </div>
+              <button className="btn-next" style={{ width: '100%', marginTop: '0.5rem' }} disabled={!forgotPhone} onClick={requestPasswordRecover}>
+                <i className="fa-solid fa-paper-plane"></i> Enviar Link
+              </button>
+              <p style={{ textAlign: 'center', marginTop: '0.85rem' }}>
+                <button onClick={() => { setShowForgotPassword(false); setShowLogin(true) }} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontWeight: 600, cursor: 'pointer', fontSize: '0.82rem' }}>
+                  Voltar para login
+                </button>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RECOVER PASSWORD OVERLAY */}
+      {showRecoverPassword && (
+        <div className="overlay" onClick={() => { setShowRecoverPassword(false); setRecoverTelefone(''); setRecoverNewPassword('') }}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <button className="modal-close" onClick={() => { setShowRecoverPassword(false); setRecoverTelefone(''); setRecoverNewPassword('') }}><i className="fa-solid fa-xmark"></i></button>
+            <div className="modal-body" style={{ textAlign: 'center' }}>
+              <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem' }}>
+                <i className="fa-solid fa-lock-open" style={{ color: '#2563eb', fontSize: '1.3rem' }}></i>
+              </div>
+              <h2 style={{ fontSize: '1.1rem', marginBottom: '0.25rem' }}>Redefinir Senha</h2>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
+                Escolha uma nova senha para sua conta.
+              </p>
+              <div className="form-group" style={{ textAlign: 'left' }}>
+                <label>Nova Senha</label>
+                <input type="password" placeholder="Mínimo 3 caracteres" value={recoverNewPassword} onChange={e => setRecoverNewPassword(e.target.value)} />
+              </div>
+              <button className="btn-next" style={{ width: '100%', marginTop: '0.5rem' }} disabled={!recoverNewPassword || recoverNewPassword.length < 3} onClick={saveNewPassword}>
+                <i className="fa-solid fa-check"></i> Salvar Nova Senha
+              </button>
             </div>
           </div>
         </div>
