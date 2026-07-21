@@ -270,6 +270,8 @@ export default function Admin({ produtos, onVoltar }) {
   const [userEnderecoSearch, setUserEnderecoSearch] = useState('')
   const [userSort, setUserSort] = useState({ field: 'nome', dir: 'asc' })
   const [userPage, setUserPage] = useState(1)
+  const [selectedUserIds, setSelectedUserIds] = useState(new Set())
+  const [userMsgMenu, setUserMsgMenu] = useState(null)
   const USER_PAGE_SIZE = 50
   const [prodCatFilter, setProdCatFilter] = useState('TODOS')
   const [prodStockFilter, setProdStockFilter] = useState('todos')
@@ -318,6 +320,43 @@ export default function Admin({ produtos, onVoltar }) {
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 2500)
+  }
+
+  const buildAddressString = (e) => {
+    return [e.rua, e.numero, e.bairro, e.cidade, e.estado].filter(Boolean).join(', ')
+  }
+
+  const openGoogleMaps = (addr) => {
+    if (addr) window.open(`https://www.google.com/maps/search/${encodeURIComponent(addr)}`, '_blank')
+  }
+
+  const openRoutePlanning = (users) => {
+    const addresses = users.map(u => buildAddressString(u.endereco || {})).filter(Boolean)
+    if (addresses.length === 0) return showToast('Nenhum endereço válido selecionado', 'error')
+    window.open(`https://www.google.com/maps/dir/${addresses.map(a => encodeURIComponent(a)).join('/')}`, '_blank')
+  }
+
+  const USER_MSG_TEMPLATES = [
+    { key: 'passando', label: 'Passando na sua cidade', icon: 'fa-truck', msg: (nome) => `🚚 *PASSANDO NA SUA CIDADE!* 🚚\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n━━━━━━━━━━━━━━━━━━\nEstamos passando na sua cidade! Aproveite para fazer seu pedido.\n🔗 Faça já seu pedido: ${window.location.origin}${window.location.pathname}` },
+    { key: 'acerto', label: 'Acerto financeiro', icon: 'fa-coins', msg: (nome) => `💰 *ACERTO FINANCEIRO* 💰\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n━━━━━━━━━━━━━━━━━━\nOlá! Passando para lembrar sobre o acerto financeiro pendente.\n🔗 Acesse sua conta: ${window.location.origin}${window.location.pathname}?login=` },
+    { key: 'pedido', label: 'Novidades no catálogo', icon: 'fa-tag', msg: (nome) => `🛍️ *NOVIDADES NO CATÁLOGO!* 🛍️\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n━━━━━━━━━━━━━━━━━━\nTemos novidades incríveis no catálogo! Venha conferir.\n🔗 Ver catálogo: ${window.location.origin}${window.location.pathname}` },
+    { key: 'personalizado', label: 'Personalizado', icon: 'fa-pen', msg: (nome) => '' },
+  ]
+
+  const sendUserWhatsApp = (u, templateKey) => {
+    const phone = (u.telefone || '').replace(/\D/g, '')
+    if (!phone) return showToast('Usuário sem telefone', 'error')
+    const nome = u.nome || u.pushName || 'Cliente'
+    const template = USER_MSG_TEMPLATES.find(t => t.key === templateKey)
+    if (!template) return
+    if (templateKey === 'personalizado') {
+      const msg = prompt('Digite a mensagem:')
+      if (msg) window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`, '_blank')
+      return
+    }
+    const msg = template.msg(nome)
+    window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`, '_blank')
+    setUserMsgMenu(null)
   }
 
   // Persist
@@ -791,26 +830,29 @@ export default function Admin({ produtos, onVoltar }) {
 
   // Usuarios filter & pagination
   const filteredUsuarios = useMemo(() => {
-    if (!selectedUserEmail && !userSearch && userCityFilter === 'TODAS' && userOrigemFilter === 'TODAS' && !userEnderecoSearch) return usuarios
+    let result = usuarios
     const t = userSearch.toLowerCase().trim()
     const tEnd = userEnderecoSearch.toLowerCase().trim()
-    return usuarios.filter(u => {
-      if (userCityFilter !== 'TODAS') {
-        const cidade = (u.endereco?.cidade || u.endereco?.cidade || '').toLowerCase()
-        if (cidade !== userCityFilter.toLowerCase()) return false
-      }
-      if (userOrigemFilter !== 'TODAS') {
-        const origem = u.endereco?.origem || ''
-        if (origem !== userOrigemFilter) return false
-      }
-      if (tEnd) {
-        const e = u.endereco || {}
-        const addrStr = [e.rua, e.numero, e.bairro, e.cidade, e.estado, e.cep, e.complemento].filter(Boolean).join(' ').toLowerCase()
-        if (!addrStr.includes(tEnd)) return false
-      }
-      if (t && !u.nome?.toLowerCase().includes(t) && !u.telefone?.includes(t) && !(u.email || '').toLowerCase().includes(t)) return false
-      return true
-    }).sort((a, b) => {
+    if (selectedUserEmail || t || userCityFilter !== 'TODAS' || userOrigemFilter !== 'TODAS' || tEnd) {
+      result = usuarios.filter(u => {
+        if (userCityFilter !== 'TODAS') {
+          const cidade = (u.endereco?.cidade || u.endereco?.cidade || '').toLowerCase()
+          if (cidade !== userCityFilter.toLowerCase()) return false
+        }
+        if (userOrigemFilter !== 'TODAS') {
+          const origem = u.endereco?.origem || ''
+          if (origem !== userOrigemFilter) return false
+        }
+        if (tEnd) {
+          const e = u.endereco || {}
+          const addrStr = [e.rua, e.numero, e.bairro, e.cidade, e.estado, e.cep, e.complemento].filter(Boolean).join(' ').toLowerCase()
+          if (!addrStr.includes(tEnd)) return false
+        }
+        if (t && !u.nome?.toLowerCase().includes(t) && !u.telefone?.includes(t) && !(u.email || '').toLowerCase().includes(t)) return false
+        return true
+      })
+    }
+    return result.sort((a, b) => {
       let va, vb
       switch (userSort.field) {
         case 'nome': va = a.nome || ''; vb = b.nome || ''; return userSort.dir === 'asc' ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR')
@@ -1589,6 +1631,22 @@ export default function Admin({ produtos, onVoltar }) {
                       </button>
                     )}
                     {!editingUser && (
+                      <button className="admin-btn" style={{ background: '#25d366', color: 'white', borderColor: '#25d366' }}
+                        onClick={() => {
+                          const u = selectedUserDetail
+                          const phone = (u.telefone || '').replace(/\D/g, '')
+                          if (phone) {
+                            const nome = u.nome || 'Cliente'
+                            const msg = `🚚 *PASSANDO NA SUA CIDADE!* 🚚\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n━━━━━━━━━━━━━━━━━━\nEstamos passando na sua cidade! Aproveite para fazer seu pedido.\n🔗 Faça já seu pedido: ${window.location.origin}${window.location.pathname}`
+                            window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`, '_blank')
+                          } else {
+                            showToast('Usuário sem telefone', 'error')
+                          }
+                        }}>
+                        <i className="fa-brands fa-whatsapp"></i> WhatsApp
+                      </button>
+                    )}
+                    {!editingUser && (
                       <button className="admin-btn" style={{ background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)' }}
                         onClick={() => handleDeleteUser(selectedUserDetail)}>
                         <i className="fa-solid fa-trash-can"></i> Excluir
@@ -1688,6 +1746,11 @@ export default function Admin({ produtos, onVoltar }) {
                 <div style={{ background: '#f9fafb', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1.25rem', border: '1px solid var(--admin-border)' }}>
                   <h4 style={{ fontSize: '0.85rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                     <i className="fa-solid fa-location-dot"></i> Endereço
+                    {(() => {
+                      const ec = selectedUserDetail.endereco || {}
+                      const addr = buildAddressString(ec)
+                      return addr ? <button className="action-btn" style={{ marginLeft: 'auto', color: '#2563eb' }} title="Ver no Google Maps" onClick={() => openGoogleMaps(addr)}><i className="fa-solid fa-location-dot"></i></button> : null
+                    })()}
                   </h4>
                   {editingUser ? (
                     <AddressForm value={editUserData.endereco || {}} onChange={(a) => setEditUserData(p => ({ ...p, endereco: a }))} />
@@ -1841,12 +1904,28 @@ export default function Admin({ produtos, onVoltar }) {
                       Cidade {userSort.field === 'cidade' && <i className={`fa-solid fa-sort-${userSort.dir === 'asc' ? 'up' : 'down'}`}></i>}
                     </button>
                   </div>
+                  {selectedUserIds.size > 0 && (
+                    <button className="admin-btn" style={{ background: '#dc2626', color: 'white', borderColor: '#dc2626', fontSize: '0.78rem', padding: '0.4rem 0.7rem' }}
+                      onClick={() => openRoutePlanning(filteredUsuarios.filter(u => selectedUserIds.has(u.telefone || u.id)))}>
+                      <i className="fa-solid fa-route"></i> Traçar Rotas ({selectedUserIds.size})
+                    </button>
+                  )}
                 </div>
 
                 <div className="admin-table-wrap">
                     <table className="admin-table">
                       <thead>
                         <tr>
+                          <th style={{ width: '32px' }}>
+                            <input type="checkbox" checked={paginatedUsuarios.length > 0 && paginatedUsuarios.every(u => selectedUserIds.has(u.telefone || u.id))}
+                              onChange={e => {
+                                if (e.target.checked) {
+                                  setSelectedUserIds(new Set(paginatedUsuarios.map(u => u.telefone || u.id)))
+                                } else {
+                                  setSelectedUserIds(new Set())
+                                }
+                              }} />
+                          </th>
                           <th>Nome</th>
                           <th>Telefone</th>
                           <th>Email</th>
@@ -1858,53 +1937,83 @@ export default function Admin({ produtos, onVoltar }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {paginatedUsuarios.map(u => {
-                          const userOrders = orders.filter(o => o.customer?.telefone === u.telefone || o.user_id === u.id)
-                          const totalGasto = userOrders.reduce((s, o) => s + o.total, 0)
-                          const e = u.endereco || {}
-                          const endStr = [e.rua && `${e.rua}${e.numero ? `, ${e.numero}` : ''}`, e.bairro, e.cidade].filter(Boolean).join(', ') || '-'
-                          const origem = e.origem || '—'
-                          const origemColors = { 'BOT': '#8b5cf6', 'Registro do Site': '#16a34a', 'Admin': '#2563eb', 'Importado WhatsApp': '#d97706' }
-                          return (
-                            <tr key={u.id}>
-                              <td style={{ fontWeight: 600 }}>{u.nome}</td>
-                              <td>{u.telefone}</td>
-                              <td>{u.email || '-'}</td>
-                              <td>
-                                <span className="origem-badge" style={{ background: `${origemColors[origem] || '#6b7280'}18`, color: origemColors[origem] || '#6b7280', border: `1px solid ${origemColors[origem] || '#6b7280'}30` }}>
-                                  {origem === 'BOT' ? <i className="fa-solid fa-robot"></i> : origem === 'Registro do Site' ? <i className="fa-solid fa-globe"></i> : origem === 'Admin' ? <i className="fa-solid fa-user-tie"></i> : origem === 'Importado WhatsApp' ? <i className="fa-brands fa-whatsapp"></i> : <i className="fa-solid fa-circle-question"></i>}
-                                  {' '}{origem}
-                                </span>
-                              </td>
-                              <td style={{ fontSize: '0.78rem', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={endStr}>
-                                {endStr}
-                              </td>
-                              <td>{formatDate(u.created_at ? new Date(u.created_at).toISOString().split('T')[0] : (u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : ''))}</td>
-                              <td>
-                                <span className="cat-tag">{userOrders.length} pedidos</span>
-                                {userOrders.length > 0 && (
-                                  <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>
-                                    {formatPreco(totalGasto)}
-                                  </span>
-                                )}
-                              </td>
-                              <td>
-                                <div className="td-actions">
-                                  <button className="action-btn action-green" title="Ver detalhes do usuário" onClick={() => setSelectedUserDetail(u)}>
-                                    <i className="fa-solid fa-user"></i>
-                                  </button>
-                                  <button className="action-btn" title="Ver pedidos" onClick={() => { setSelectedUserEmail(u.email || u.telefone); setTab('pedidos') }}>
-                                    <i className="fa-solid fa-clipboard-list"></i>
-                                  </button>
-                                  <button className="action-btn" style={{ color: 'var(--danger)' }} title="Excluir usuário" onClick={() => handleDeleteUser(u)}>
-                                    <i className="fa-solid fa-trash-can"></i>
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                        {paginatedUsuarios.length === 0 && <tr><td colSpan="8" className="td-empty">Nenhum usuário encontrado</td></tr>}
+                         {paginatedUsuarios.map(u => {
+                           const uid = u.telefone || u.id
+                           const userOrders = orders.filter(o => o.customer?.telefone === u.telefone || o.user_id === u.id)
+                           const totalGasto = userOrders.reduce((s, o) => s + o.total, 0)
+                           const e = u.endereco || {}
+                           const endStr = [e.rua && `${e.rua}${e.numero ? `, ${e.numero}` : ''}`, e.bairro, e.cidade].filter(Boolean).join(', ') || '-'
+                           const origem = e.origem || '—'
+                           const origemColors = { 'BOT': '#8b5cf6', 'Registro do Site': '#16a34a', 'Admin': '#2563eb', 'Importado WhatsApp': '#d97706' }
+                           return (
+                             <tr key={uid}>
+                               <td>
+                                 <input type="checkbox" checked={selectedUserIds.has(uid)}
+                                   onChange={e => {
+                                     const next = new Set(selectedUserIds)
+                                     e.target.checked ? next.add(uid) : next.delete(uid)
+                                     setSelectedUserIds(next)
+                                   }} />
+                               </td>
+                               <td style={{ fontWeight: 600 }}>{u.nome}</td>
+                               <td>{u.telefone}</td>
+                               <td>{u.email || '-'}</td>
+                               <td>
+                                 <span className="origem-badge" style={{ background: `${origemColors[origem] || '#6b7280'}18`, color: origemColors[origem] || '#6b7280', border: `1px solid ${origemColors[origem] || '#6b7280'}30` }}>
+                                   {origem === 'BOT' ? <i className="fa-solid fa-robot"></i> : origem === 'Registro do Site' ? <i className="fa-solid fa-globe"></i> : origem === 'Admin' ? <i className="fa-solid fa-user-tie"></i> : origem === 'Importado WhatsApp' ? <i className="fa-brands fa-whatsapp"></i> : <i className="fa-solid fa-circle-question"></i>}
+                                   {' '}{origem}
+                                 </span>
+                               </td>
+                               <td style={{ fontSize: '0.78rem', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={endStr}>
+                                 {endStr}
+                               </td>
+                               <td>{formatDate(u.created_at ? new Date(u.created_at).toISOString().split('T')[0] : (u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : ''))}</td>
+                               <td>
+                                 <span className="cat-tag">{userOrders.length} pedidos</span>
+                                 {userOrders.length > 0 && (
+                                   <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>
+                                     {formatPreco(totalGasto)}
+                                   </span>
+                                 )}
+                               </td>
+                                <td style={{ position: 'relative' }}>
+                                  <div className="td-actions">
+                                    <button className="action-btn" style={{ color: '#2563eb' }} title="Ver no Google Maps" onClick={() => openGoogleMaps(buildAddressString(e))}>
+                                      <i className="fa-solid fa-location-dot"></i>
+                                    </button>
+                                    <button className="action-btn" style={{ color: '#25d366' }} title="Enviar WhatsApp"
+                                      onClick={() => setUserMsgMenu(userMsgMenu === u.telefone ? null : u.telefone)}>
+                                      <i className="fa-brands fa-whatsapp"></i>
+                                    </button>
+                                    <button className="action-btn action-green" title="Ver detalhes do usuário" onClick={() => setSelectedUserDetail(u)}>
+                                      <i className="fa-solid fa-user"></i>
+                                    </button>
+                                    <button className="action-btn" title="Ver pedidos" onClick={() => { setSelectedUserEmail(u.email || u.telefone); setTab('pedidos') }}>
+                                      <i className="fa-solid fa-clipboard-list"></i>
+                                    </button>
+                                    <button className="action-btn" style={{ color: 'var(--danger)' }} title="Excluir usuário" onClick={() => handleDeleteUser(u)}>
+                                      <i className="fa-solid fa-trash-can"></i>
+                                    </button>
+                                  </div>
+                                  {userMsgMenu === u.telefone && (
+                                    <div style={{ position: 'absolute', right: 0, top: '100%', zIndex: 100, background: 'white', border: '1px solid var(--admin-border)', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', minWidth: '200px', padding: '0.35rem', marginTop: '4px' }}>
+                                      {USER_MSG_TEMPLATES.map(t => (
+                                        <div key={t.key}
+                                          style={{ padding: '0.55rem 0.7rem', cursor: 'pointer', borderRadius: '8px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--admin-text)' }}
+                                          onClick={() => sendUserWhatsApp(u, t.key)}
+                                          onMouseEnter={e => e.currentTarget.style.background = '#f3f4f6'}
+                                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                          <i className={`fa-solid ${t.icon}`} style={{ width: '16px', color: '#25d366' }}></i>
+                                          {t.label}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                               </td>
+                             </tr>
+                           )
+                         })}
+                         {paginatedUsuarios.length === 0 && <tr><td colSpan="10" className="td-empty">Nenhum usuário encontrado</td></tr>}
                     </tbody>
                   </table>
                 </div>
