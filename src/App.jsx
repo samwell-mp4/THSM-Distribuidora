@@ -76,8 +76,8 @@ function App() {
     if (path.startsWith('/admin')) return 'admin'
     if (path.startsWith('/minha-conta')) return 'userdash'
     if (path.startsWith('/kit')) return 'kit'
-    if (path.startsWith('/catalogo')) return 'catalog'
-    return 'landing'
+    if (path.startsWith('/revender')) return 'landing'
+    return 'catalog'
   }, [])
 
   const [route, setRoute] = useState(getRouteFromHash)
@@ -524,7 +524,7 @@ function App() {
 
   // Landing page
   if (route === 'landing') {
-    return <LandingPage onVerCatalogo={() => navigate('/catalogo')} />
+    return <LandingPage onVerCatalogo={() => navigate('/')} />
   }
 
   // Kit view
