@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import './MapView.css'
 
-const GM_KEY = 'AIzaSyAfq_6M0nELuVLp3Vqz8RrFpyejRQbLJlE'
+const GM_KEY = 'AIzaSyDqitbcWIg-akmvbGdTrBWf_H7FZ8G3YaY'
 
 const CIDADE = {
   'belo horizonte': [-19.92, -43.94], 'contagem': [-19.93, -44.05], 'betim': [-19.97, -44.20],
