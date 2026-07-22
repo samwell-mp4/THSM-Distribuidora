@@ -3185,7 +3185,7 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
   const cartTotal = useMemo(() => cartItems.reduce((s, i) => s + i.preco * i.qty, 0), [cartItems])
 
   const addItem = (p) => {
-    setCart(prev => ({ ...prev, [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, qty: (prev[p.id]?.qty || 0) + 1, tipo: 'avista' } }))
+    setCart(prev => ({ ...prev, [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, qty: (prev[p.id]?.qty || 0) + 1, tipo: 'aprazo' } }))
   }
 
   const removeItem = (id) => {
@@ -3484,7 +3484,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
   const addItemToEdit = (p) => {
     setAddCart(prev => ({
       ...prev,
-      [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, tipo: 'avista', qty: (prev[p.id]?.qty || 0) + 1 }
+      [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, tipo: 'aprazo', qty: (prev[p.id]?.qty || 0) + 1 }
     }))
   }
 
@@ -3566,7 +3566,18 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
                 <div key={idx} className="detail-item" style={{ opacity: i.qty <= 0 ? 0.4 : 1 }}>
                   <div style={{ flex: 1 }}>
                     <span className="detail-item-name" style={{ textDecoration: i.qty <= 0 ? 'line-through' : 'none' }}>{i.nome}</span>
-                    <span className="detail-item-qty">{formatPreco(i.preco)}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.15rem' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--admin-text-sec)' }}>Preço:</span>
+                      <input type="number" step="0.01" min="0" value={i.preco}
+                        onChange={e => {
+                          const val = parseFloat(e.target.value)
+                          if (!isNaN(val) && val >= 0) {
+                            setEditedItems(prev => prev.map((item, ii) => ii === idx ? { ...item, preco: val } : item))
+                          }
+                        }}
+                        style={{ width: '80px', padding: '0.2rem 0.35rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', textAlign: 'right' }}
+                      />
+                    </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                     <span className={`split-badge ${i.tipo === 'avista' ? 'vista' : 'aprazo'}`}>
