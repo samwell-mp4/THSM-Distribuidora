@@ -565,6 +565,21 @@ export default function Admin({ produtos, onVoltar }) {
     sendStatusWebhook(updatedOrder, 'em-andamento')
   }
 
+  const updateOrderCustomer = (id, customerData) => {
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, customer: customerData } : o))
+    showToast('Dados do cliente atualizados no pedido!')
+  }
+
+  const cancelOrder = (id) => {
+    const order = orders.find(o => o.id === id)
+    if (!order) return
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'cancelado' } : o))
+    setFinancial(prev => prev.map(f => f.orderId === id ? { ...f, status: 'cancelado' } : f))
+    setShowOrderDetail(null)
+    showToast(`Pedido #${id} cancelado!`)
+    sendStatusWebhook(order, 'cancelado')
+  }
+
   const handleDeliveryFile = (e, type) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -594,6 +609,7 @@ export default function Admin({ produtos, onVoltar }) {
     }))
     const totalAvista = adjustedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
     const totalAprazo = adjustedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
+    const totalReembolso = order.items.reduce((s, i) => s + i.preco * (returnQuantities[i.id] || 0), 0)
     const updatedOrder = {
       ...order,
       items: adjustedItems,
@@ -602,21 +618,42 @@ export default function Admin({ produtos, onVoltar }) {
       total: totalAvista + totalAprazo,
       status: 'entregue',
       returnedItems,
+      totalReembolso,
       identityPhoto: identityPreview || order.identityPhoto || '',
       addressProof: addressPreview || order.addressProof || '',
       deliveredAt: Date.now()
     }
     setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o))
-    setFinancial(prev => prev.map(f => {
-      if (f.orderId !== orderId) return f
-      const item = order.items.find(i => f.id === orderId + '-' + i.id)
-      if (!item) return f
-      const returnedQty = returnQuantities[item.id] || 0
-      if (returnedQty >= item.qty) return { ...f, status: 'cancelado', paidDate: hoje() }
-      const remainingQty = item.qty - returnedQty
-      return { ...f, qty: remainingQty, value: item.preco * remainingQty, status: 'pago', paidDate: hoje() }
-    }))
-    showToast(`Pedido #${orderId} finalizado com devolução`)
+    // Sync financeiro: update existing, create for missing items
+    setFinancial(prev => {
+      const existing = prev.filter(f => f.orderId === orderId)
+      const existingIds = new Set(existing.map(f => f.id))
+      const newRecords = adjustedItems
+        .filter(i => !existingIds.has(orderId + '-' + i.id))
+        .map(i => ({
+          id: orderId + '-' + i.id,
+          orderId,
+          customerName: order.customer?.nome || '',
+          itemName: i.nome,
+          qty: i.qty,
+          value: i.preco * i.qty,
+          dueDate: hoje(),
+          paidDate: hoje(),
+          status: i.tipo === 'aprazo' ? 'pendente' : 'pago'
+        }))
+      const updated = prev.map(f => {
+        if (f.orderId !== orderId) return f
+        const item = order.items.find(i => f.id === orderId + '-' + i.id)
+        if (!item) return f
+        const returnedQty = returnQuantities[item.id] || 0
+        if (returnedQty >= item.qty) return { ...f, status: 'cancelado', paidDate: hoje() }
+        const remainingQty = item.qty - returnedQty
+        return { ...f, qty: remainingQty, value: item.preco * remainingQty, status: 'pago', paidDate: hoje() }
+      })
+      return [...updated, ...newRecords]
+    })
+    const refundMsg = totalReembolso > 0 ? ` — Reembolso: ${formatPreco(totalReembolso)}` : ''
+    showToast(`Pedido #${orderId} finalizado!${refundMsg}`)
     sendStatusWebhook(updatedOrder, 'entregue', { returnedItems })
     setShowDeliveryModal(null)
     setReturnQuantities({})
@@ -704,7 +741,8 @@ export default function Admin({ produtos, onVoltar }) {
 
   const filteredOrders = useMemo(() => {
     let result = orders
-    if (orderFilter !== 'todos') result = result.filter(o => o.status === orderFilter)
+    if (orderFilter === 'concluidos') result = result.filter(o => o.status === 'entregue' || o.status === 'cancelado')
+    else if (orderFilter !== 'todos') result = result.filter(o => o.status === orderFilter)
     if (selectedUserEmail) result = result.filter(o => o.customer?.email === selectedUserEmail)
     const t = orderSearch.toLowerCase().trim()
     if (t) result = result.filter(o =>
@@ -765,8 +803,12 @@ export default function Admin({ produtos, onVoltar }) {
     if (selectedIds.size === 0) { showToast('Selecione pelo menos um pedido', 'error'); return }
     if (action === 'delete' && !confirm(`Excluir ${selectedIds.size} pedido(s)?`)) return
     selectedIds.forEach(id => {
-      if (action === 'confirm') updateOrderStatus(id, 'confirmado')
-      else if (action === 'delete') {
+      const order = orders.find(o => o.id === id)
+      if (action === 'confirm') {
+        if (order?.status === 'pre-pedido') updateOrderStatus(id, 'pendente')
+        else if (order?.status === 'pendente') updateOrderStatus(id, 'confirmado')
+        else updateOrderStatus(id, 'confirmado')
+      } else if (action === 'delete') {
         setOrders(prev => prev.filter(o => o.id !== id))
         setFinancial(prev => prev.filter(f => f.orderId !== id))
       }
@@ -1270,6 +1312,7 @@ export default function Admin({ produtos, onVoltar }) {
                 { id: 'em-andamento', label: 'Em Andamento', count: orders.filter(o => o.status === 'em-andamento').length },
                 { id: 'em-rota', label: 'Em Rota', count: orders.filter(o => o.status === 'em-rota').length },
                 { id: 'entregue', label: 'Entregues', count: orders.filter(o => o.status === 'entregue').length },
+                { id: 'concluidos', label: 'Concluídos', count: orders.filter(o => o.status === 'entregue' || o.status === 'cancelado').length },
                 { id: 'cancelado', label: 'Cancelados', count: orders.filter(o => o.status === 'cancelado').length },
               ].map(t => (
                 <button key={t.id} className={`admin-tab ${orderFilter === t.id ? 'active' : ''}`} onClick={() => setOrderFilter(t.id)}>
@@ -1346,10 +1389,20 @@ export default function Admin({ produtos, onVoltar }) {
                           <button className="action-btn" title="Ver detalhes" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-eye"></i></button>
                           {o.status === 'pre-pedido' && <button className="action-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }} title="Revisar e pré-aprovar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-clipboard-check"></i></button>}
                           {o.status === 'pendente' && <button className="action-btn action-confirm" title="Editar/Confirmar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-pen"></i></button>}
+                          {o.status === 'em-andamento' && <button className="action-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }} title="Editar Itens" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-pen"></i></button>}
                           {o.status === 'confirmado' && <button className="action-btn action-deliver" title="Em Rota" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-truck"></i></button>}
                           {o.status === 'em-rota' && <button className="action-btn action-confirm" title="Finalizar Entrega" onClick={() => { setShowDeliveryModal(o); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview('') }}><i className="fa-solid fa-check"></i></button>}
                           {o.status === 'em-andamento' && (
                             <button className="action-btn action-deliver" title="Em Rota" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-truck"></i></button>
+                          )}
+                          {o.status === 'confirmado' && (
+                            <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Pendente" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-undo"></i></button>
+                          )}
+                          {o.status === 'em-andamento' && (
+                            <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Pendente" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-undo"></i></button>
+                          )}
+                          {o.status === 'em-rota' && (
+                            <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar" onClick={() => updateOrderStatus(o.id, o.preApprovedAt ? 'em-andamento' : 'confirmado')}><i className="fa-solid fa-undo"></i></button>
                           )}
                           <button className="action-btn action-delete" title="Excluir" onClick={() => deleteOrder(o.id)}><i className="fa-solid fa-trash"></i></button>
                         </div>
@@ -1744,6 +1797,29 @@ export default function Admin({ produtos, onVoltar }) {
                   )}
                 </div>
 
+                {/* Nível Card */}
+                <div style={{ background: '#f9fafb', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1.25rem', border: '1px solid var(--admin-border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                    <h4 style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <i className="fa-solid fa-star" style={{ color: '#f59e0b' }}></i> Nível do Cliente
+                    </h4>
+                  </div>
+                  {editingUser ? (
+                    <select value={editUserData.endereco?.nivel || ''} onChange={e => setEditUserData(p => ({ ...p, endereco: { ...(p.endereco || {}), nivel: e.target.value } }))}
+                      style={{ width: '100%', padding: '0.45rem 0.7rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.85rem' }}>
+                      <option value="">Selecionar nível...</option>
+                      <option value="primeiro-comprador">Primeiro Comprador</option>
+                      <option value="comprador-antigo">Comprador Antigo</option>
+                    </select>
+                  ) : (
+                    <p style={{ fontSize: '0.82rem' }}>
+                      {selectedUserDetail.endereco?.nivel === 'primeiro-comprador' ? <><span style={{ color: '#10b981', fontWeight: 600 }}>●</span> Primeiro Comprador</> :
+                       selectedUserDetail.endereco?.nivel === 'comprador-antigo' ? <><span style={{ color: '#8b5cf6', fontWeight: 600 }}>●</span> Comprador Antigo</> :
+                       <span style={{ color: 'var(--admin-text-sec)' }}>Nenhum nível definido</span>}
+                    </p>
+                  )}
+                </div>
+
                 {/* Address Card */}
                 <div style={{ background: '#f9fafb', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1.25rem', border: '1px solid var(--admin-border)' }}>
                   <h4 style={{ fontSize: '0.85rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -1932,6 +2008,7 @@ export default function Admin({ produtos, onVoltar }) {
                           <th>Telefone</th>
                           <th>Email</th>
                           <th>Origem</th>
+                          <th>Nível</th>
                           <th>Endereço</th>
                           <th>Cadastro</th>
                           <th>Pedidos</th>
@@ -1957,15 +2034,20 @@ export default function Admin({ produtos, onVoltar }) {
                                      setSelectedUserIds(next)
                                    }} />
                                </td>
-                               <td style={{ fontWeight: 600 }}>{u.nome}</td>
-                               <td>{u.telefone}</td>
-                               <td>{u.email || '-'}</td>
-                               <td>
-                                 <span className="origem-badge" style={{ background: `${origemColors[origem] || '#6b7280'}18`, color: origemColors[origem] || '#6b7280', border: `1px solid ${origemColors[origem] || '#6b7280'}30` }}>
-                                   {origem === 'BOT' ? <i className="fa-solid fa-robot"></i> : origem === 'Registro do Site' ? <i className="fa-solid fa-globe"></i> : origem === 'Admin' ? <i className="fa-solid fa-user-tie"></i> : origem === 'Importado WhatsApp' ? <i className="fa-brands fa-whatsapp"></i> : <i className="fa-solid fa-circle-question"></i>}
-                                   {' '}{origem}
-                                 </span>
-                               </td>
+                                <td style={{ fontWeight: 600 }}>{u.nome}</td>
+                                <td>{u.telefone}</td>
+                                <td>{u.email || '-'}</td>
+                                <td>
+                                  <span className="origem-badge" style={{ background: `${origemColors[origem] || '#6b7280'}18`, color: origemColors[origem] || '#6b7280', border: `1px solid ${origemColors[origem] || '#6b7280'}30` }}>
+                                    {origem === 'BOT' ? <i className="fa-solid fa-robot"></i> : origem === 'Registro do Site' ? <i className="fa-solid fa-globe"></i> : origem === 'Admin' ? <i className="fa-solid fa-user-tie"></i> : origem === 'Importado WhatsApp' ? <i className="fa-brands fa-whatsapp"></i> : <i className="fa-solid fa-circle-question"></i>}
+                                    {' '}{origem}
+                                  </span>
+                                </td>
+                                <td>
+                                  {u.endereco?.nivel === 'primeiro-comprador' ? <span style={{ color: '#10b981', fontWeight: 600, fontSize: '0.78rem' }}>Primeiro Comprador</span> :
+                                   u.endereco?.nivel === 'comprador-antigo' ? <span style={{ color: '#8b5cf6', fontWeight: 600, fontSize: '0.78rem' }}>Comprador Antigo</span> :
+                                   <span style={{ color: 'var(--admin-text-sec)', fontSize: '0.75rem' }}>—</span>}
+                                </td>
                                <td style={{ fontSize: '0.78rem', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={endStr}>
                                  {endStr}
                                </td>
@@ -2517,20 +2599,23 @@ export default function Admin({ produtos, onVoltar }) {
           onStatusChange={(s) => { updateOrderStatus(showOrderDetail.id, s); setShowOrderDetail(null) }}
           onPreApprovar={(rejectedIds, replacements) => preApprovarPedido(showOrderDetail.id, rejectedIds, replacements)}
           onOpenDelivery={(order) => { setShowDeliveryModal(order); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview('') }}
-          onEditAndConfirm={(editedItems) => {
+          onEditAndConfirm={(editedItems, currentStatus) => {
             const totalAvista = editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
             const totalAprazo = editedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
+            const newStatus = currentStatus === 'em-andamento' ? 'em-andamento' : 'confirmado'
             setOrders(prev => prev.map(o => o.id === showOrderDetail.id ? {
               ...o,
               items: editedItems,
               totalAvista,
               totalAprazo,
               total: totalAvista + totalAprazo,
-              status: 'confirmado'
+              status: newStatus
             } : o))
-            showToast(`Pedido #${showOrderDetail.id} atualizado e confirmado!`)
+            showToast(`Pedido #${showOrderDetail.id} atualizado${newStatus === 'confirmado' ? ' e confirmado' : ''}!`)
             setShowOrderDetail(null)
           }}
+          onUpdateCustomer={(id, customerData) => updateOrderCustomer(id, customerData)}
+          onCancelOrder={(id) => cancelOrder(id)}
         />
       )}
 
@@ -3295,7 +3380,7 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
 // =============================================
 // MODAL: ORDER DETAIL (with pre-pedido review + pendente edit)
 // =============================================
-function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange, onPreApprovar, onEditAndConfirm, onOpenDelivery }) {
+function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange, onPreApprovar, onEditAndConfirm, onOpenDelivery, onUpdateCustomer, onCancelOrder }) {
   const [rejectedItems, setRejectedItems] = useState(new Set())
   const [editMode, setEditMode] = useState(false)
   const [editedItems, setEditedItems] = useState(order.items.map(i => ({ ...i })))
@@ -3304,6 +3389,13 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
   const [preAddSearch, setPreAddSearch] = useState('')
   const [preAddCart, setPreAddCart] = useState({})
   const [preReplacements, setPreReplacements] = useState([])
+  const [customerEdit, setCustomerEdit] = useState(false)
+  const [editCustomer, setEditCustomer] = useState({
+    nome: order.customer?.nome || '',
+    email: order.customer?.email || '',
+    telefone: order.customer?.telefone || '',
+    endereco: { ...(order.customer?.endereco || {}) }
+  })
 
   const toggleReject = (idx) => {
     setRejectedItems(prev => {
@@ -3354,7 +3446,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
   const handleEditConfirm = () => {
     const validItems = editedItems.filter(i => i.qty > 0)
     if (validItems.length === 0) { return }
-    onEditAndConfirm(validItems)
+    onEditAndConfirm(validItems, order.status)
   }
 
   const editTotal = editedItems.filter(i => i.qty > 0).reduce((s, i) => s + i.preco * i.qty, 0)
@@ -3401,7 +3493,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
       <div className="admin-overlay" onClick={() => { setEditMode(false); setEditedItems(order.items.map(i => ({ ...i }))); setAddCart({}) }}>
         <div className="admin-modal admin-modal-lg" onClick={e => e.stopPropagation()} style={{ maxWidth: '550px' }}>
           <div className="admin-modal-header">
-            <h3><i className="fa-solid fa-pen"></i> Editar Itens — Pedido #{order.id.toString().slice(-6)}</h3>
+            <h3><i className="fa-solid fa-pen"></i> Editar Itens — Pedido #{order.id.toString().slice(-6)} {order.status === 'em-andamento' && <span className="status-tag status-em-andamento" style={{ fontSize: '0.7rem', verticalAlign: 'middle' }}>Em Andamento</span>}</h3>
             <button className="admin-modal-close" onClick={() => { setEditMode(false); setEditedItems(order.items.map(i => ({ ...i }))); setAddCart({}) }}><i className="fa-solid fa-xmark"></i></button>
           </div>
           <div className="admin-modal-body">
@@ -3479,7 +3571,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
             <div className="modal-actions">
               <button className="admin-btn admin-btn-sec" onClick={() => { setEditMode(false); setEditedItems(order.items.map(i => ({ ...i }))); setAddCart({}) }}>Cancelar</button>
               <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} disabled={editedItems.filter(i => i.qty > 0).length === 0} onClick={handleEditConfirm}>
-                <i className="fa-solid fa-check"></i> Salvar e Confirmar Pedido
+                <i className="fa-solid fa-check"></i> {order.status === 'em-andamento' ? 'Salvar Alterações' : 'Salvar e Confirmar Pedido'}
               </button>
             </div>
           </div>
@@ -3497,13 +3589,65 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
         </div>
         <div className="admin-modal-body">
           <div className="detail-section">
-            <h4>Cliente</h4>
-            <p><strong>Nome:</strong> {order.customer?.nome || '-'}</p>
-            <p><strong>Email:</strong> {order.customer?.email || '-'}</p>
-            <p><strong>Telefone:</strong> {order.customer?.telefone || '-'}</p>
-            <p><strong>Endereço:</strong> {order.customer?.endereco ? [order.customer.endereco.rua, order.customer.endereco.numero, order.customer.endereco.bairro, order.customer.endereco.cidade, order.customer.endereco.estado].filter(Boolean).join(', ') || '-' : '-'}</p>
-            {order.customer?.endereco?.cep && <p><strong>CEP:</strong> {order.customer.endereco.cep}</p>}
-            {order.customer?.endereco?.complemento && <p><strong>Complemento:</strong> {order.customer.endereco.complemento}</p>}
+            <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              Cliente
+              {!customerEdit && order.status === 'pre-pedido' && (
+                <button className="action-btn" title="Editar dados do cliente" onClick={() => setCustomerEdit(true)} style={{ color: '#2563eb', fontSize: '0.75rem', padding: '0.2rem 0.4rem' }}>
+                  <i className="fa-solid fa-pencil"></i>
+                </button>
+              )}
+            </h4>
+            {customerEdit ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div><strong style={{ fontSize: '0.78rem' }}>Nome:</strong>
+                  <input type="text" value={editCustomer.nome} onChange={e => setEditCustomer(p => ({ ...p, nome: e.target.value }))} style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', marginTop: '0.2rem' }} />
+                </div>
+                <div><strong style={{ fontSize: '0.78rem' }}>Email:</strong>
+                  <input type="email" value={editCustomer.email} onChange={e => setEditCustomer(p => ({ ...p, email: e.target.value }))} style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', marginTop: '0.2rem' }} />
+                </div>
+                <div><strong style={{ fontSize: '0.78rem' }}>Telefone:</strong>
+                  <input type="text" value={editCustomer.telefone} onChange={e => setEditCustomer(p => ({ ...p, telefone: e.target.value }))} style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', marginTop: '0.2rem' }} />
+                </div>
+                <div><strong style={{ fontSize: '0.78rem' }}>Rua:</strong>
+                  <input type="text" value={editCustomer.endereco.rua || ''} onChange={e => setEditCustomer(p => ({ ...p, endereco: { ...p.endereco, rua: e.target.value } }))} style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', marginTop: '0.2rem' }} />
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <div style={{ flex: 1 }}><strong style={{ fontSize: '0.78rem' }}>Número:</strong>
+                    <input type="text" value={editCustomer.endereco.numero || ''} onChange={e => setEditCustomer(p => ({ ...p, endereco: { ...p.endereco, numero: e.target.value } }))} style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', marginTop: '0.2rem' }} />
+                  </div>
+                  <div style={{ flex: 1 }}><strong style={{ fontSize: '0.78rem' }}>Bairro:</strong>
+                    <input type="text" value={editCustomer.endereco.bairro || ''} onChange={e => setEditCustomer(p => ({ ...p, endereco: { ...p.endereco, bairro: e.target.value } }))} style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', marginTop: '0.2rem' }} />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <div style={{ flex: 1 }}><strong style={{ fontSize: '0.78rem' }}>Cidade:</strong>
+                    <input type="text" value={editCustomer.endereco.cidade || ''} onChange={e => setEditCustomer(p => ({ ...p, endereco: { ...p.endereco, cidade: e.target.value } }))} style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', marginTop: '0.2rem' }} />
+                  </div>
+                  <div style={{ width: '70px' }}><strong style={{ fontSize: '0.78rem' }}>UF:</strong>
+                    <input type="text" value={editCustomer.endereco.estado || ''} onChange={e => setEditCustomer(p => ({ ...p, endereco: { ...p.endereco, estado: e.target.value } }))} style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', marginTop: '0.2rem' }} />
+                  </div>
+                </div>
+                <div><strong style={{ fontSize: '0.78rem' }}>CEP:</strong>
+                  <input type="text" value={editCustomer.endereco.cep || ''} onChange={e => setEditCustomer(p => ({ ...p, endereco: { ...p.endereco, cep: e.target.value } }))} style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', marginTop: '0.2rem' }} />
+                </div>
+                <div><strong style={{ fontSize: '0.78rem' }}>Complemento:</strong>
+                  <input type="text" value={editCustomer.endereco.complemento || ''} onChange={e => setEditCustomer(p => ({ ...p, endereco: { ...p.endereco, complemento: e.target.value } }))} style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', marginTop: '0.2rem' }} />
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.3rem' }}>
+                  <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem' }} onClick={() => { setCustomerEdit(false); setEditCustomer({ nome: order.customer?.nome || '', email: order.customer?.email || '', telefone: order.customer?.telefone || '', endereco: { ...(order.customer?.endereco || {}) } }) }}>Cancelar</button>
+                  <button className="admin-btn" style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem', background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} onClick={() => { onUpdateCustomer?.(order.id, editCustomer); setCustomerEdit(false) }}><i className="fa-solid fa-check"></i> Salvar Cliente</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <p><strong>Nome:</strong> {order.customer?.nome || '-'}</p>
+                <p><strong>Email:</strong> {order.customer?.email || '-'}</p>
+                <p><strong>Telefone:</strong> {order.customer?.telefone || '-'}</p>
+                <p><strong>Endereço:</strong> {order.customer?.endereco ? [order.customer.endereco.rua, order.customer.endereco.numero, order.customer.endereco.bairro, order.customer.endereco.cidade, order.customer.endereco.estado].filter(Boolean).join(', ') || '-' : '-'}</p>
+                {order.customer?.endereco?.cep && <p><strong>CEP:</strong> {order.customer.endereco.cep}</p>}
+                {order.customer?.endereco?.complemento && <p><strong>Complemento:</strong> {order.customer.endereco.complemento}</p>}
+              </>
+            )}
           </div>
 
           <div className="detail-section">
@@ -3665,9 +3809,9 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
           )}
 
           <div className="modal-actions">
-            {order.status === 'pendente' && (
+            {(order.status === 'pendente' || order.status === 'em-andamento') && (
               <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
-                onClick={() => setEditMode(true)}>
+                onClick={() => { setEditMode(true); setEditedItems(order.items.map(i => ({ ...i }))) }}>
                 <i className="fa-solid fa-pen"></i> Editar Itens
               </button>
             )}
@@ -3680,6 +3824,11 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
             {order.status === 'pendente' && (
               <button className="admin-btn admin-btn-primary" onClick={() => onStatusChange('confirmado')}>
                 <i className="fa-solid fa-check"></i> Confirmar (sem alterações)
+              </button>
+            )}
+            {(order.status === 'pre-pedido' || order.status === 'pendente' || order.status === 'confirmado' || order.status === 'em-andamento') && (
+              <button className="admin-btn" style={{ background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)' }} onClick={() => { if (confirm('Tem certeza que deseja cancelar esta comanda?')) { onCancelOrder?.(order.id) } }}>
+                <i className="fa-solid fa-ban"></i> Cancelar Comanda
               </button>
             )}
             {order.status === 'confirmado' && (
