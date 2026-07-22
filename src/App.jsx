@@ -94,6 +94,14 @@ function App() {
   }, [getRouteFromHash])
 
   useEffect(() => {
+    const onFocus = () => {
+      try { const d = JSON.parse(localStorage.getItem('thsm_admin_produtos')); if (d) setProdChangesApp(d) } catch {}
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const pid = params.get('pedido')
     const loginToken = params.get('login')

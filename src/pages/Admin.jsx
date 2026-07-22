@@ -937,10 +937,11 @@ export default function Admin({ produtos, onVoltar }) {
   // PRODUCTS
   // =============================================
   const updateProduct = (id, changes) => {
-    setProdChanges(prev => ({
-      ...prev,
-      [id]: { ...(prev[id] || {}), ...changes }
-    }))
+    setProdChanges(prev => {
+      const next = { ...prev, [id]: { ...(prev[id] || {}), ...changes } }
+      LS.set(STORAGE_PRODUCTS, next)
+      return next
+    })
     showToast('Produto atualizado!')
     if (editingProd) setEditingProd(null)
   }
