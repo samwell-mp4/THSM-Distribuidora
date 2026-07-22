@@ -537,7 +537,7 @@ export default function Admin({ produtos, onVoltar }) {
       totalAvista,
       totalAprazo,
       total: totalAvista + totalAprazo,
-      status: 'em-andamento',
+      status: 'pendente',
       preApprovedAt: now,
       rejectedItems: rejectedItemIds.length > 0 ? rejectedItemIds.map(idx => order.items[idx]) : []
     }
@@ -560,14 +560,27 @@ export default function Admin({ produtos, onVoltar }) {
       }
     })
     if (finRecords.length > 0) setFinancial(prev => [...finRecords, ...prev])
-    showToast(`Pedido #${orderId} pré-aprovado como "Em Andamento"`)
+    showToast(`Pedido #${orderId} revisado e enviado para "Pendente"`)
     setShowOrderDetail(null)
-    sendStatusWebhook(updatedOrder, 'em-andamento')
+    sendStatusWebhook(updatedOrder, 'pendente')
   }
 
-  const updateOrderCustomer = (id, customerData) => {
+  const updateOrderCustomer = async (id, customerData) => {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, customer: customerData } : o))
-    showToast('Dados do cliente atualizados no pedido!')
+    const order = orders.find(o => o.id === id)
+    if (order?.customer?.telefone) {
+      const existingUser = usuarios.find(u => u.telefone === order.customer.telefone)
+      if (existingUser) {
+        const saved = await upsertUser({
+          telefone: order.customer.telefone,
+          nome: customerData.nome,
+          email: customerData.email || '',
+          endereco: { ...(existingUser.endereco || {}), ...customerData.endereco, cpf: customerData.cpf || existingUser.endereco?.cpf || '' }
+        })
+        if (saved) setUsuarios(prev => prev.map(u => u.telefone === saved.telefone ? saved : u))
+      }
+    }
+    showToast('Dados do cliente atualizados!')
   }
 
   const cancelOrder = (id) => {
@@ -1387,7 +1400,7 @@ export default function Admin({ produtos, onVoltar }) {
                         <div className="td-actions">
                           <button className="action-btn action-green" title="Enviar WhatsApp" onClick={() => sendWhatsApp(o)}><i className="fa-brands fa-whatsapp"></i></button>
                           <button className="action-btn" title="Ver detalhes" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-eye"></i></button>
-                          {o.status === 'pre-pedido' && <button className="action-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }} title="Revisar e pré-aprovar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-clipboard-check"></i></button>}
+                          {o.status === 'pre-pedido' && <button className="action-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }} title="Revisar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-clipboard-check"></i></button>}
                           {o.status === 'pendente' && <button className="action-btn action-confirm" title="Editar/Confirmar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-pen"></i></button>}
                           {o.status === 'em-andamento' && <button className="action-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }} title="Editar Itens" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-pen"></i></button>}
                           {o.status === 'confirmado' && <button className="action-btn action-deliver" title="Em Rota" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-truck"></i></button>}
@@ -1764,6 +1777,22 @@ export default function Admin({ produtos, onVoltar }) {
                       </div>
                     </div>
                   </div>
+                  <div className="admin-card" style={{ padding: '1rem 1.25rem', borderLeft: '4px solid #dc2626' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626', fontSize: '1.1rem' }}>
+                        <i className="fa-solid fa-id-card"></i>
+                      </div>
+                      <div>
+                        {editingUser ? (
+                          <input type="text" value={editUserData.endereco?.cpf || ''} onChange={e => setEditUserData(p => ({ ...p, endereco: { ...(p.endereco || {}), cpf: e.target.value } }))}
+                            style={{ fontWeight: 700, fontSize: '0.95rem', border: '1px solid var(--admin-border)', borderRadius: '6px', padding: '0.25rem 0.5rem', width: '100%' }} placeholder="000.000.000-00" />
+                        ) : (
+                          <strong style={{ fontSize: '0.95rem' }}>{selectedUserDetail.endereco?.cpf || '-'}</strong>
+                        )}
+                        <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>CPF</span>
+                      </div>
+                    </div>
+                  </div>
                   <div className="admin-card" style={{ padding: '1rem 1.25rem', borderLeft: '4px solid #f59e0b' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                       <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#fffbeb', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b', fontSize: '1.1rem' }}>
@@ -1797,7 +1826,7 @@ export default function Admin({ produtos, onVoltar }) {
                   )}
                 </div>
 
-                {/* Nível Card */}
+                {/* Nível e Limites Card */}
                 <div style={{ background: '#f9fafb', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1.25rem', border: '1px solid var(--admin-border)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                     <h4 style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -1818,6 +1847,31 @@ export default function Admin({ produtos, onVoltar }) {
                        <span style={{ color: 'var(--admin-text-sec)' }}>Nenhum nível definido</span>}
                     </p>
                   )}
+                  <div style={{ marginTop: '0.75rem', borderTop: '1px solid var(--admin-border)', paddingTop: '0.75rem' }}>
+                    <h4 style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                      <i className="fa-solid fa-gavel" style={{ color: '#dc2626' }}></i> Limites
+                    </h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                      <div>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)', display: 'block', marginBottom: '0.2rem' }}>Limite de Pedidos</span>
+                        {editingUser ? (
+                          <input type="number" min="0" placeholder="Sem limite" value={editUserData.endereco?.limitePedidos ?? ''} onChange={e => setEditUserData(p => ({ ...p, endereco: { ...(p.endereco || {}), limitePedidos: e.target.value === '' ? null : Number(e.target.value) } }))}
+                            style={{ width: '100%', padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem' }} />
+                        ) : (
+                          <strong style={{ fontSize: '0.95rem' }}>{selectedUserDetail.endereco?.limitePedidos ?? '—'}</strong>
+                        )}
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)', display: 'block', marginBottom: '0.2rem' }}>Limite de Preço (R$)</span>
+                        {editingUser ? (
+                          <input type="number" min="0" step="0.01" placeholder="Sem limite" value={editUserData.endereco?.limitePreco ?? ''} onChange={e => setEditUserData(p => ({ ...p, endereco: { ...(p.endereco || {}), limitePreco: e.target.value === '' ? null : Number(e.target.value) } }))}
+                            style={{ width: '100%', padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem' }} />
+                        ) : (
+                          <strong style={{ fontSize: '0.95rem' }}>{selectedUserDetail.endereco?.limitePreco ? formatPreco(selectedUserDetail.endereco.limitePreco) : '—'}</strong>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Address Card */}
@@ -2007,11 +2061,13 @@ export default function Admin({ produtos, onVoltar }) {
                           <th>Nome</th>
                           <th>Telefone</th>
                           <th>Email</th>
+                          <th>CPF</th>
                           <th>Origem</th>
                           <th>Nível</th>
                           <th>Endereço</th>
                           <th>Cadastro</th>
                           <th>Pedidos</th>
+                          <th>Limites</th>
                           <th>Ações</th>
                         </tr>
                       </thead>
@@ -2037,6 +2093,7 @@ export default function Admin({ produtos, onVoltar }) {
                                 <td style={{ fontWeight: 600 }}>{u.nome}</td>
                                 <td>{u.telefone}</td>
                                 <td>{u.email || '-'}</td>
+                                <td style={{ fontSize: '0.78rem' }}>{u.endereco?.cpf || '-'}</td>
                                 <td>
                                   <span className="origem-badge" style={{ background: `${origemColors[origem] || '#6b7280'}18`, color: origemColors[origem] || '#6b7280', border: `1px solid ${origemColors[origem] || '#6b7280'}30` }}>
                                     {origem === 'BOT' ? <i className="fa-solid fa-robot"></i> : origem === 'Registro do Site' ? <i className="fa-solid fa-globe"></i> : origem === 'Admin' ? <i className="fa-solid fa-user-tie"></i> : origem === 'Importado WhatsApp' ? <i className="fa-brands fa-whatsapp"></i> : <i className="fa-solid fa-circle-question"></i>}
@@ -2052,15 +2109,20 @@ export default function Admin({ produtos, onVoltar }) {
                                  {endStr}
                                </td>
                                <td>{formatDate(u.created_at ? new Date(u.created_at).toISOString().split('T')[0] : (u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : ''))}</td>
-                               <td>
-                                 <span className="cat-tag">{userOrders.length} pedidos</span>
-                                 {userOrders.length > 0 && (
-                                   <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>
-                                     {formatPreco(totalGasto)}
-                                   </span>
-                                 )}
-                               </td>
-                                <td style={{ position: 'relative' }}>
+                                <td>
+                                  <span className="cat-tag">{userOrders.length} pedidos</span>
+                                  {userOrders.length > 0 && (
+                                    <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>
+                                      {formatPreco(totalGasto)}
+                                    </span>
+                                  )}
+                                </td>
+                                <td style={{ fontSize: '0.75rem' }}>
+                                  {u.endereco?.limitePedidos ? <span>P: {u.endereco.limitePedidos}</span> : null}
+                                  {u.endereco?.limitePreco ? <span>{u.endereco?.limitePedidos ? ' | ' : ''}R$: {formatPreco(u.endereco.limitePreco)}</span> : null}
+                                  {!u.endereco?.limitePedidos && !u.endereco?.limitePreco ? <span style={{ color: 'var(--admin-text-sec)' }}>—</span> : null}
+                                </td>
+                                 <td style={{ position: 'relative' }}>
                                   <div className="td-actions">
                                     <button className="action-btn" style={{ color: '#2563eb' }} title="Ver no Google Maps" onClick={() => openGoogleMaps(buildAddressString(e))}>
                                       <i className="fa-solid fa-location-dot"></i>
@@ -3394,6 +3456,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
     nome: order.customer?.nome || '',
     email: order.customer?.email || '',
     telefone: order.customer?.telefone || '',
+    cpf: order.customer?.cpf || '',
     endereco: { ...(order.customer?.endereco || {}) }
   })
 
@@ -3608,6 +3671,9 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
                 <div><strong style={{ fontSize: '0.78rem' }}>Telefone:</strong>
                   <input type="text" value={editCustomer.telefone} onChange={e => setEditCustomer(p => ({ ...p, telefone: e.target.value }))} style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', marginTop: '0.2rem' }} />
                 </div>
+                <div><strong style={{ fontSize: '0.78rem' }}>CPF:</strong>
+                  <input type="text" value={editCustomer.cpf} onChange={e => setEditCustomer(p => ({ ...p, cpf: e.target.value }))} style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', marginTop: '0.2rem' }} placeholder="000.000.000-00" />
+                </div>
                 <div><strong style={{ fontSize: '0.78rem' }}>Rua:</strong>
                   <input type="text" value={editCustomer.endereco.rua || ''} onChange={e => setEditCustomer(p => ({ ...p, endereco: { ...p.endereco, rua: e.target.value } }))} style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', marginTop: '0.2rem' }} />
                 </div>
@@ -3643,6 +3709,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
                 <p><strong>Nome:</strong> {order.customer?.nome || '-'}</p>
                 <p><strong>Email:</strong> {order.customer?.email || '-'}</p>
                 <p><strong>Telefone:</strong> {order.customer?.telefone || '-'}</p>
+                {order.customer?.cpf && <p><strong>CPF:</strong> {order.customer.cpf}</p>}
                 <p><strong>Endereço:</strong> {order.customer?.endereco ? [order.customer.endereco.rua, order.customer.endereco.numero, order.customer.endereco.bairro, order.customer.endereco.cidade, order.customer.endereco.estado].filter(Boolean).join(', ') || '-' : '-'}</p>
                 {order.customer?.endereco?.cep && <p><strong>CEP:</strong> {order.customer.endereco.cep}</p>}
                 {order.customer?.endereco?.complemento && <p><strong>Complemento:</strong> {order.customer.endereco.complemento}</p>}
@@ -3818,7 +3885,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
             {order.status === 'pre-pedido' && (
               <button className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }}
                 onClick={() => onPreApprovar([...rejectedItems], preReplacements)}>
-                <i className="fa-solid fa-clipboard-check"></i> Pré-aprovar
+                <i className="fa-solid fa-clipboard-check"></i> OK
               </button>
             )}
             {order.status === 'pendente' && (
