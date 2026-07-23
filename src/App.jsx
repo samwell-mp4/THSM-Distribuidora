@@ -498,7 +498,7 @@ function App() {
     const nome = order.customer?.nome || 'Cliente'
     const id = `#${order.id.toString().slice(-6)}`
     const statusLabel = order.status === 'pre-pedido' ? 'Pré-pedido Recebido' : 'Pedido Enviado'
-    return `🆕 *${statusLabel}* 🆕\n━━━━━━━━━━━━━━━━━━\n📋 Pedido: ${id}\n👤 Cliente: ${nome}\n━━━━━━━━━━━━━━━━━━\n${statusLabel} | Pedido Em Rota\n━━━━━━━━━━━━━━━━━━\n🔗 Acompanhe: ${link}`
+    return `🆕 *${statusLabel}* 🆕\n━━━━━━━━━━━━━━━━━━\n📋 Pedido: ${id}\n👤 Cliente: ${nome}\n━━━━━━━━━━━━━━━━━━\n${statusLabel}\n━━━━━━━━━━━━━━━━━━\n🔗 Acompanhe: ${link}`
   }
 
   const sendOrderWebhook = (order) => {
