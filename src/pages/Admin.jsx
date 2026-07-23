@@ -620,21 +620,26 @@ export default function Admin({ produtos, onVoltar }) {
   }
 
   const updateOrderCustomer = (id, customerData) => {
+    const telefone = customerData.telefone?.replace(/\D/g, '') || ''
     setOrders(prev => prev.map(o => o.id === id ? { ...o, customer: customerData } : o))
     setShowOrderDetail(prev => prev?.id === id ? { ...prev, customer: customerData } : prev)
-    const order = orders.find(o => o.id === id)
-    if (order?.customer?.telefone) {
-      const existingUser = usuarios.find(u => u.telefone === order.customer.telefone)
-      if (existingUser) {
-        upsertUser({
-          telefone: order.customer.telefone,
-          nome: customerData.nome,
-          email: customerData.email || '',
-          endereco: { ...(existingUser.endereco || {}), ...customerData.endereco, cpf: customerData.cpf || existingUser.endereco?.cpf || '' }
-        }).then(saved => {
-          if (saved) setUsuarios(prev => prev.map(u => u.telefone === saved.telefone ? saved : u))
-        })
-      }
+    if (telefone) {
+      const existingUser = usuarios.find(u => u.telefone === telefone)
+      upsertUser({
+        telefone,
+        nome: customerData.nome,
+        email: customerData.email || '',
+        endereco: { ...(existingUser?.endereco || {}), ...customerData.endereco, cpf: customerData.cpf || existingUser?.endereco?.cpf || '' }
+      }).then(saved => {
+        if (saved) {
+          setUsuarios(prev => prev.map(u => u.telefone === saved.telefone ? saved : u))
+          setOrders(prev => prev.map(o =>
+            o.customer?.telefone?.replace(/\D/g, '') === telefone
+              ? { ...o, customer: { ...o.customer, nome: customerData.nome } }
+              : o
+          ))
+        }
+      })
     }
     showToast('Dados do cliente atualizados!')
   }
