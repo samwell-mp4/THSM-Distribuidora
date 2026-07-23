@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import './Admin.css'
 import { supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser, deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads, upsertProducts } from '../lib/supabase'
 
-const STORAGE_ORDERS = 'thsm_admin_orders'
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
 const STORAGE_FINANCIAL = 'thsm_admin_financeiro'
 const STORAGE_CUSTOM_ROTAS = 'thsm_custom_rotas'
@@ -244,7 +243,7 @@ import MapView from '../components/MapView'
 export default function Admin({ produtos, onVoltar }) {
   const [tab, setTab] = useState(() => sessionStorage.getItem('thsm_admin_tab') || 'dashboard')
   useEffect(() => { sessionStorage.setItem('thsm_admin_tab', tab) }, [tab])
-  const [orders, setOrders] = useState(() => LS.get(STORAGE_ORDERS, []))
+  const [orders, setOrders] = useState([])
   const [prodChanges, setProdChanges] = useState(() => LS.get(STORAGE_PRODUCTS, {}))
   const [financial, setFinancial] = useState(() => LS.get(STORAGE_FINANCIAL, []))
   const [toast, setToast] = useState(null)
@@ -368,9 +367,7 @@ export default function Admin({ produtos, onVoltar }) {
     setUserMsgMenu(null)
   }
 
-  // Persist
   useEffect(() => {
-    LS.set(STORAGE_ORDERS, orders)
     if (orders.length > 0) upsertOrders(orders)
   }, [orders])
   useEffect(() => {
@@ -435,9 +432,7 @@ export default function Admin({ produtos, onVoltar }) {
           const map = new Map()
           o.forEach(ord => map.set(ord.id, ord))
           prev.forEach(ord => map.set(ord.id, ord))
-          const merged = Array.from(map.values())
-          LS.set(STORAGE_ORDERS, merged)
-          return merged
+          return Array.from(map.values())
         })
       }
       if (f.length) {
