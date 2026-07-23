@@ -569,12 +569,12 @@ export default function Admin({ produtos, onVoltar }) {
   }
 
   const updateOrderStatus = (id, status) => {
+    const order = orders.find(o => o.id === id)
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o))
     if (status === 'entregue') {
       setFinancial(prev => prev.map(f => f.orderId === id && f.status !== 'pago' ? { ...f, status: 'pago', paidDate: hoje() } : f))
     }
     showToast(`Pedido #${id} atualizado para "${status}"`)
-    const order = orders.find(o => o.id === id)
     if (order) sendStatusWebhook(order, status)
   }
 
@@ -624,19 +624,21 @@ export default function Admin({ produtos, onVoltar }) {
     sendStatusWebhook(updatedOrder, 'pendente')
   }
 
-  const updateOrderCustomer = async (id, customerData) => {
+  const updateOrderCustomer = (id, customerData) => {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, customer: customerData } : o))
+    setShowOrderDetail(prev => prev?.id === id ? { ...prev, customer: customerData } : prev)
     const order = orders.find(o => o.id === id)
     if (order?.customer?.telefone) {
       const existingUser = usuarios.find(u => u.telefone === order.customer.telefone)
       if (existingUser) {
-        const saved = await upsertUser({
+        upsertUser({
           telefone: order.customer.telefone,
           nome: customerData.nome,
           email: customerData.email || '',
           endereco: { ...(existingUser.endereco || {}), ...customerData.endereco, cpf: customerData.cpf || existingUser.endereco?.cpf || '' }
+        }).then(saved => {
+          if (saved) setUsuarios(prev => prev.map(u => u.telefone === saved.telefone ? saved : u))
         })
-        if (saved) setUsuarios(prev => prev.map(u => u.telefone === saved.telefone ? saved : u))
       }
     }
     showToast('Dados do cliente atualizados!')
