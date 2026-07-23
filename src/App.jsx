@@ -541,8 +541,6 @@ function App() {
       pre_approved_at: null,
       created_at: new Date().toISOString()
     }
-    const existing = JSON.parse(localStorage.getItem(LS_ORDERS) || '[]')
-    localStorage.setItem(LS_ORDERS, JSON.stringify([order, ...existing]))
     upsertOrder({ ...order, user_id: currentUser?.id || order.user_id })
     setCart({})
     setCheckout(null)
