@@ -423,8 +423,26 @@ export default function Admin({ produtos, onVoltar }) {
   useEffect(() => {
     setSyncingUsers(true)
     syncAllForAdmin().then(({ orders: o, financial: f, users: u, rotas: r, products: p }) => {
-      if (o.length) { LS.set(STORAGE_ORDERS, o); setOrders(o) }
-      if (f.length) { LS.set(STORAGE_FINANCIAL, f); setFinancial(f) }
+      if (o.length) {
+        setOrders(prev => {
+          const map = new Map()
+          o.forEach(ord => map.set(ord.id, ord))
+          prev.forEach(ord => map.set(ord.id, ord))
+          const merged = Array.from(map.values())
+          LS.set(STORAGE_ORDERS, merged)
+          return merged
+        })
+      }
+      if (f.length) {
+        setFinancial(prev => {
+          const map = new Map()
+          f.forEach(fin => map.set(fin.id, fin))
+          prev.forEach(fin => map.set(fin.id, fin))
+          const merged = Array.from(map.values())
+          LS.set(STORAGE_FINANCIAL, merged)
+          return merged
+        })
+      }
       LS.set('thsm_usuarios', u); setUsuarios(u)
       if (r.length) { setRotas(r) } else { fetchRotas() }
       if (p.length) {
@@ -4121,12 +4139,24 @@ function EditProductModal({ product, onSave, onClose }) {
       return saved[product.id] || product.variantes || {}
     } catch { return product.variantes || {} }
   })
+  const [newVarTypeName, setNewVarTypeName] = useState('')
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') setImagem(reader.result)
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
 
   const addVariantType = () => {
-    const name = prompt('Nome da variação (ex: Cor, Tamanho, Aroma):')
-    if (name && name.trim()) {
-      setVariantes(prev => ({ ...prev, [name.trim()]: [''] }))
-    }
+    const name = newVarTypeName.trim()
+    if (!name) return
+    setVariantes(prev => ({ ...prev, [name]: [''] }))
+    setNewVarTypeName('')
   }
 
   const removeVariantType = (key) => {
@@ -4134,6 +4164,16 @@ function EditProductModal({ product, onSave, onClose }) {
     setVariantes(prev => {
       const { [key]: _, ...rest } = prev
       return rest
+    })
+  }
+
+  const renameVariantType = (oldKey, newKey) => {
+    const trimmed = newKey.trim()
+    if (!trimmed || trimmed === oldKey) return
+    if (variantes[trimmed]) return
+    setVariantes(prev => {
+      const { [oldKey]: val, ...rest } = prev
+      return { ...rest, [trimmed]: val }
     })
   }
 
@@ -4176,81 +4216,135 @@ function EditProductModal({ product, onSave, onClose }) {
 
   return (
     <div className="admin-overlay" onClick={onClose}>
-      <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+      <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '550px' }}>
         <div className="admin-modal-header">
-          <h3><i className="fa-solid fa-pen"></i> Editar Produto</h3>
+          <h3><i className="fa-solid fa-pen"></i> {product._new ? 'Novo Produto' : 'Editar Produto'}</h3>
           <button className="admin-modal-close" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
         </div>
         <div className="admin-modal-body">
           <div className="form-group">
             <label>Nome do produto <span style={{color:'var(--danger)'}}>*</span></label>
-            <input type="text" value={nome} onChange={e => setNome(e.target.value)} />
+            <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Camiseta Masculina" />
           </div>
           <div className="form-row">
             <div className="form-group">
               <label>Preço (R$) <span style={{color:'var(--danger)'}}>*</span></label>
-              <input type="number" step="0.01" min="0" value={preco} onChange={e => setPreco(e.target.value)} />
+              <input type="number" step="0.01" min="0" value={preco} onChange={e => setPreco(e.target.value)} placeholder="0,00" />
             </div>
             <div className="form-group">
               <label>Estoque</label>
-              <input type="number" step="1" value={estoque} onChange={e => setEstoque(e.target.value)} />
+              <input type="number" step="1" value={estoque} onChange={e => setEstoque(e.target.value)} placeholder="0" />
             </div>
           </div>
+
           <div className="form-group">
-            <label>URL da Imagem</label>
-            <input type="text" value={imagem} onChange={e => setImagem(e.target.value)} />
-            {imagem && <img src={imagem} alt="" className="edit-preview" onError={e => e.target.style.display = 'none'} />}
+            <label>Imagem do Produto</label>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.4rem' }}>
+              <label className="admin-btn" style={{ cursor: 'pointer', fontSize: '0.78rem', padding: '0.35rem 0.75rem', background: '#f0f0f0', border: '1px solid var(--admin-border)', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                <i className="fa-solid fa-upload"></i> Upload
+                <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
+              </label>
+              <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>ou URL:</span>
+            </div>
+            <input type="text" value={imagem} onChange={e => setImagem(e.target.value)} placeholder="https://...png" />
+            {imagem && (
+              <div style={{ position: 'relative', display: 'inline-block', marginTop: '0.4rem' }}>
+                <img src={imagem} alt="" className="edit-preview" onError={e => e.target.style.display = 'none'} />
+                <button className="action-btn action-delete" style={{ position: 'absolute', top: '-6px', right: '-6px', width: '20px', height: '20px', borderRadius: '50%', fontSize: '0.65rem', display: imagem ? 'flex' : 'none' }} onClick={() => setImagem('')}>
+                  <i className="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+            )}
           </div>
+
           <div className="form-group">
             <label>Categoria</label>
-            <input type="text" value={categoria} onChange={e => setCategoria(e.target.value)} />
+            <input type="text" value={categoria} onChange={e => setCategoria(e.target.value)} placeholder="Ex: Masculino, Feminino, Acessórios" />
           </div>
           <div className="form-group">
             <label>Descrição</label>
-            <textarea rows="3" value={descricao} onChange={e => setDescricao(e.target.value)} style={{ width: '100%', padding: '0.5rem 0.65rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', resize: 'vertical', fontFamily: 'inherit' }} />
+            <textarea rows="3" value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descrição detalhada do produto..." style={{ width: '100%', padding: '0.5rem 0.65rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', resize: 'vertical', fontFamily: 'inherit' }} />
           </div>
 
           <div className="form-group" style={{ borderTop: '1px solid var(--admin-border)', paddingTop: '0.75rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-              <label style={{ margin: 0, fontWeight: 700 }}>Variações do Produto</label>
-              <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem', background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }} onClick={addVariantType}>
-                <i className="fa-solid fa-plus"></i> Adicionar Variação
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
+              <label style={{ margin: 0, fontWeight: 700, fontSize: '0.9rem' }}>
+                <i className="fa-solid fa-tags" style={{ color: '#8b5cf6' }}></i> Variações do Produto
+              </label>
+            </div>
+
+            {Object.keys(variantes).length > 0 && (
+              <div style={{ marginBottom: '0.75rem' }}>
+                {Object.entries(variantes).map(([type, options]) => (
+                  <div key={type} style={{ marginBottom: '0.65rem', padding: '0.65rem 0.75rem', background: '#f9fafb', borderRadius: '10px', border: '1px solid var(--admin-border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                      <input
+                        type="text"
+                        value={type}
+                        onChange={e => {
+                          const { [type]: val, ...rest } = variantes
+                          const key = e.target.value.trim()
+                          if (key) {
+                            setVariantes({ ...rest, [key]: val })
+                          } else {
+                            setVariantes({ ...rest, [type]: val })
+                          }
+                        }}
+                        style={{ fontWeight: 700, fontSize: '0.85rem', textTransform: 'uppercase', color: '#8b5cf6', border: '1px solid transparent', borderRadius: '4px', padding: '0.15rem 0.3rem', background: 'transparent', width: '140px' }}
+                        onFocus={e => { e.target.style.borderColor = '#d1d5db'; e.target.style.background = 'white' }}
+                        onBlur={e => { e.target.style.borderColor = 'transparent'; e.target.style.background = 'transparent' }}
+                      />
+                      <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--admin-text-sec)', background: '#e5e7eb', borderRadius: '10px', padding: '0.1rem 0.45rem' }}>{options.filter(o => o.trim()).length} opções</span>
+                        <button className="action-btn" style={{ color: '#059669', width: '24px', height: '24px' }} title="Adicionar opção" onClick={() => addVariantOption(type)}>
+                          <i className="fa-solid fa-plus"></i>
+                        </button>
+                        <button className="action-btn action-delete" style={{ width: '24px', height: '24px' }} title="Remover variação" onClick={() => removeVariantType(type)}>
+                          <i className="fa-solid fa-trash-can"></i>
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                      {options.map((opt, idx) => (
+                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.15rem', background: 'white', borderRadius: '8px', border: '1px solid var(--admin-border)', padding: '0.15rem 0.3rem 0.15rem 0.55rem' }}>
+                          <input
+                            type="text"
+                            value={opt}
+                            onChange={e => updateVariantOption(type, idx, e.target.value)}
+                            placeholder={`Opção ${idx + 1}`}
+                            style={{ width: '80px', padding: '0.25rem 0', border: 'none', fontSize: '0.82rem', background: 'transparent', outline: 'none' }}
+                          />
+                          {options.length > 1 && (
+                            <button className="action-btn action-delete" style={{ padding: '0.1rem', width: '18px', height: '18px' }} title="Remover" onClick={() => removeVariantOption(type, idx)}>
+                              <i className="fa-solid fa-xmark"></i>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+              <input
+                type="text"
+                value={newVarTypeName}
+                onChange={e => setNewVarTypeName(e.target.value)}
+                placeholder="Ex: Cor, Tamanho, Aroma..."
+                style={{ flex: 1, padding: '0.4rem 0.65rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.82rem' }}
+                onKeyDown={e => { if (e.key === 'Enter') addVariantType() }}
+              />
+              <button className="admin-btn" style={{ fontSize: '0.78rem', padding: '0.35rem 0.7rem', background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6', whiteSpace: 'nowrap' }} onClick={addVariantType} disabled={!newVarTypeName.trim()}>
+                <i className="fa-solid fa-plus"></i> Adicionar
               </button>
             </div>
             {Object.keys(variantes).length === 0 && (
-              <p style={{ fontSize: '0.82rem', color: 'var(--admin-text-sec)' }}>Nenhuma variação configurada. Adicione Cor, Tamanho, Aroma, etc.</p>
+              <p style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)', marginTop: '0.35rem' }}>
+                Digite o nome da variação acima (Cor, Tamanho, etc.) e clique em "Adicionar".
+              </p>
             )}
-            {Object.entries(variantes).map(([type, options]) => (
-              <div key={type} style={{ marginBottom: '0.75rem', padding: '0.6rem 0.75rem', background: '#f9fafb', borderRadius: '8px', border: '1px solid var(--admin-border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-                  <strong style={{ fontSize: '0.85rem', textTransform: 'uppercase', color: '#8b5cf6' }}>{type}</strong>
-                  <div style={{ display: 'flex', gap: '0.3rem' }}>
-                    <button className="action-btn" style={{ color: '#059669' }} title="Adicionar opção" onClick={() => addVariantOption(type)}>
-                      <i className="fa-solid fa-plus"></i>
-                    </button>
-                    <button className="action-btn action-delete" title="Remover variação" onClick={() => removeVariantType(type)}>
-                      <i className="fa-solid fa-trash-can"></i>
-                    </button>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                  {options.map((opt, idx) => (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                      <input
-                        type="text"
-                        value={opt}
-                        onChange={e => updateVariantOption(type, idx, e.target.value)}
-                        placeholder={`Opção ${idx + 1}`}
-                        style={{ width: '90px', padding: '0.25rem 0.4rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem' }}
-                      />
-                      <button className="action-btn action-delete" style={{ padding: '0.15rem' }} title="Remover" onClick={() => removeVariantOption(type, idx)}>
-                        <i className="fa-solid fa-xmark"></i>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
           </div>
 
           <div className="modal-actions">
