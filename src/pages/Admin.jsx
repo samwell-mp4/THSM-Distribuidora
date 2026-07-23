@@ -63,6 +63,10 @@ Em breve você receberá a confirmação.
 ━━━━━━━━━━━━━━━━━━
 📋 Pedido: ${id}
 👤 Cliente: ${nome}
+💳 Pagamento: ${msgPagamento}
+💰 Total: R$ ${order.total.toFixed(2)}
+━━━━━━━━━━━━━━━━━━
+${msgItems}
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pedido foi recebido com sucesso!
 Em breve confirmaremos seu pedido.
@@ -92,10 +96,13 @@ Olá ${nome}, seu pedido está em andamento e sendo preparado para entrega.
 ━━━━━━━━━━━━━━━━━━
 📋 Pedido: ${id}
 👤 Cliente: ${nome}
+💳 Pagamento: ${msgPagamento}
+💰 Total: R$ ${order.total.toFixed(2)}
+━━━━━━━━━━━━━━━━━━
+📦 *ITENS:*
+${msgItems}
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pedido saiu para entrega!
-Pelo link abaixo você pode informar o que deseja pagar e o que vai devolver.
-━━━━━━━━━━━━━━━━━━
 🔗 Acesse seu pedido: ${link}`,
 
     'entregue': extra.returnedItems?.length > 0
@@ -871,8 +878,8 @@ export default function Admin({ produtos, onVoltar }) {
       const order = orders.find(o => o.id === id)
       if (action === 'confirm') {
         if (order?.status === 'pre-pedido') updateOrderStatus(id, 'pendente')
-        else if (order?.status === 'pendente') updateOrderStatus(id, 'confirmado')
-        else updateOrderStatus(id, 'confirmado')
+        else if (order?.status === 'pendente') updateOrderStatus(id, 'em-rota')
+        else updateOrderStatus(id, 'em-rota')
       } else if (action === 'delete') {
         setOrders(prev => prev.filter(o => o.id !== id))
         setFinancial(prev => prev.filter(f => f.orderId !== id))
@@ -1376,8 +1383,6 @@ export default function Admin({ produtos, onVoltar }) {
                 { id: 'todos', label: 'Todos', count: orders.length },
                 { id: 'pre-pedido', label: 'Pré-Pedidos', count: orders.filter(o => o.status === 'pre-pedido').length },
                 { id: 'pendente', label: 'Pendentes', count: orders.filter(o => o.status === 'pendente').length },
-                { id: 'confirmado', label: 'Confirmados', count: orders.filter(o => o.status === 'confirmado').length },
-                { id: 'em-andamento', label: 'Em Andamento', count: orders.filter(o => o.status === 'em-andamento').length },
                 { id: 'em-rota', label: 'Em Rota', count: orders.filter(o => o.status === 'em-rota').length },
                 { id: 'entregue', label: 'Entregues', count: orders.filter(o => o.status === 'entregue').length },
                 { id: 'concluidos', label: 'Concluídos', count: orders.filter(o => o.status === 'entregue' || o.status === 'cancelado').length },
@@ -1456,21 +1461,11 @@ export default function Admin({ produtos, onVoltar }) {
                           <button className="action-btn action-green" title="Enviar WhatsApp" onClick={() => sendWhatsApp(o)}><i className="fa-brands fa-whatsapp"></i></button>
                           <button className="action-btn" title="Ver detalhes" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-eye"></i></button>
                           {o.status === 'pre-pedido' && <button className="action-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }} title="Revisar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-clipboard-check"></i></button>}
-                          {o.status === 'pendente' && <button className="action-btn action-confirm" title="Editar/Confirmar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-pen"></i></button>}
-                          {o.status === 'em-andamento' && <button className="action-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }} title="Editar Itens" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-pen"></i></button>}
-                          {o.status === 'confirmado' && <button className="action-btn action-deliver" title="Em Rota" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-truck"></i></button>}
+                          {o.status === 'pendente' && <button className="action-btn action-confirm" title="Editar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-pen"></i></button>}
+                          {o.status === 'pendente' && <button className="action-btn action-deliver" title="Em Rota" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-truck"></i></button>}
                           {o.status === 'em-rota' && <button className="action-btn action-confirm" title="Finalizar Entrega" onClick={() => { setShowDeliveryModal(o); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview('') }}><i className="fa-solid fa-check"></i></button>}
-                          {o.status === 'em-andamento' && (
-                            <button className="action-btn action-deliver" title="Em Rota" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-truck"></i></button>
-                          )}
-                          {o.status === 'confirmado' && (
-                            <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Pendente" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-undo"></i></button>
-                          )}
-                          {o.status === 'em-andamento' && (
-                            <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Pendente" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-undo"></i></button>
-                          )}
                           {o.status === 'em-rota' && (
-                            <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar" onClick={() => updateOrderStatus(o.id, o.preApprovedAt ? 'em-andamento' : 'confirmado')}><i className="fa-solid fa-undo"></i></button>
+                            <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Pendente" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-undo"></i></button>
                           )}
                           <button className="action-btn action-delete" title="Excluir" onClick={() => deleteOrder(o.id)}><i className="fa-solid fa-trash"></i></button>
                         </div>
@@ -2722,16 +2717,15 @@ export default function Admin({ produtos, onVoltar }) {
           onEditAndConfirm={(editedItems, currentStatus) => {
             const totalAvista = editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
             const totalAprazo = editedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
-            const newStatus = currentStatus === 'em-andamento' ? 'em-andamento' : 'confirmado'
             setOrders(prev => prev.map(o => o.id === showOrderDetail.id ? {
               ...o,
               items: editedItems,
               totalAvista,
               totalAprazo,
               total: totalAvista + totalAprazo,
-              status: newStatus
+              status: 'em-rota'
             } : o))
-            showToast(`Pedido #${showOrderDetail.id} atualizado${newStatus === 'confirmado' ? ' e confirmado' : ''}!`)
+            showToast(`Pedido #${showOrderDetail.id} atualizado e enviado para rota!`)
             setShowOrderDetail(null)
           }}
           onUpdateCustomer={(id, customerData) => updateOrderCustomer(id, customerData)}
@@ -3538,11 +3532,6 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
     })
   }
 
-  const diasEmAndamento = order.preApprovedAt
-    ? Math.floor((Date.now() - order.preApprovedAt) / (1000 * 60 * 60 * 24))
-    : 0
-  const podeFinalizar = diasEmAndamento >= 60
-
   const changeQty = (idx, delta) => {
     setEditedItems(prev => prev.map((item, i) => i === idx ? { ...item, qty: Math.max(0, item.qty + delta) } : item))
   }
@@ -3626,7 +3615,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
       <div className="admin-overlay" onClick={() => { setEditMode(false); setEditedItems(order.items.map(i => ({ ...i }))); setAddCart({}) }}>
         <div className="admin-modal admin-modal-lg" onClick={e => e.stopPropagation()} style={{ maxWidth: '550px' }}>
           <div className="admin-modal-header">
-            <h3><i className="fa-solid fa-pen"></i> Editar Itens — Pedido #{order.id.toString().slice(-6)} {order.status === 'em-andamento' && <span className="status-tag status-em-andamento" style={{ fontSize: '0.7rem', verticalAlign: 'middle' }}>Em Andamento</span>}</h3>
+            <h3><i className="fa-solid fa-pen"></i> Editar Itens — Pedido #{order.id.toString().slice(-6)}</h3>
             <button className="admin-modal-close" onClick={() => { setEditMode(false); setEditedItems(order.items.map(i => ({ ...i }))); setAddCart({}) }}><i className="fa-solid fa-xmark"></i></button>
           </div>
           <div className="admin-modal-body">
@@ -3715,7 +3704,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
             <div className="modal-actions">
               <button className="admin-btn admin-btn-sec" onClick={() => { setEditMode(false); setEditedItems(order.items.map(i => ({ ...i }))); setAddCart({}) }}>Cancelar</button>
               <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} disabled={editedItems.filter(i => i.qty > 0).length === 0} onClick={handleEditConfirm}>
-                <i className="fa-solid fa-check"></i> {order.status === 'em-andamento' ? 'Salvar Alterações' : 'Salvar e Confirmar Pedido'}
+                <i className="fa-solid fa-check"></i> Salvar e Enviar para Rota
               </button>
             </div>
           </div>
@@ -3888,25 +3877,6 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
             </div>
           )}
 
-          {order.status === 'em-andamento' && (
-            <div className="detail-section">
-              <h4><i className="fa-solid fa-clock"></i> Andamento</h4>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                <div style={{ flex: 1, height: '8px', background: '#e5e7eb', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.min(100, (diasEmAndamento / 60) * 100)}%`, height: '100%', background: podeFinalizar ? 'var(--success)' : '#8b5cf6', borderRadius: '4px', transition: 'width 0.3s' }}></div>
-                </div>
-                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: podeFinalizar ? 'var(--success)' : '#8b5cf6', whiteSpace: 'nowrap' }}>
-                  {diasEmAndamento}d / 60d
-                </span>
-              </div>
-              {!podeFinalizar && (
-                <p style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)', marginTop: '0.4rem' }}>
-                  <i className="fa-solid fa-info-circle"></i> Aguarde {60 - diasEmAndamento} dias para finalizar
-                </p>
-              )}
-            </div>
-          )}
-
           <div className="detail-section">
             <h4>Resumo</h4>
             <div className="detail-summary">
@@ -3957,7 +3927,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
           )}
 
           <div className="modal-actions">
-            {(order.status === 'pendente' || order.status === 'em-andamento') && (
+            {order.status === 'pendente' && (
               <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
                 onClick={() => { setEditMode(true); setEditedItems(order.items.map(i => ({ ...i }))) }}>
                 <i className="fa-solid fa-pen"></i> Editar Itens
@@ -3970,18 +3940,13 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
               </button>
             )}
             {order.status === 'pendente' && (
-              <button className="admin-btn admin-btn-primary" onClick={() => onStatusChange('confirmado')}>
-                <i className="fa-solid fa-check"></i> Confirmar (sem alterações)
+              <button className="admin-btn admin-btn-primary" onClick={() => onStatusChange('em-rota')}>
+                <i className="fa-solid fa-truck"></i> Em Rota
               </button>
             )}
-            {(order.status === 'pre-pedido' || order.status === 'pendente' || order.status === 'confirmado' || order.status === 'em-andamento') && (
+            {(order.status === 'pre-pedido' || order.status === 'pendente') && (
               <button className="admin-btn" style={{ background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)' }} onClick={() => { if (confirm('Tem certeza que deseja cancelar esta comanda?')) { onCancelOrder?.(order.id) } }}>
                 <i className="fa-solid fa-ban"></i> Cancelar Comanda
-              </button>
-            )}
-            {order.status === 'confirmado' && (
-              <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => onStatusChange('em-rota')}>
-                <i className="fa-solid fa-truck"></i> Em Rota
               </button>
             )}
             {order.returnedItems?.length > 0 && (
@@ -4017,11 +3982,6 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
             {order.status === 'em-rota' && (
               <button className="admin-btn admin-btn-primary" onClick={() => { onClose(); setTimeout(() => onOpenDelivery?.(order), 100) }}>
                 <i className="fa-solid fa-check"></i> Finalizar Pedido
-              </button>
-            )}
-            {order.status === 'em-andamento' && podeFinalizar && (
-              <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => onStatusChange('em-rota')}>
-                <i className="fa-solid fa-truck"></i> Em Rota
               </button>
             )}
             <button className="admin-btn admin-btn-sec" onClick={onClose}>Fechar</button>

@@ -497,10 +497,8 @@ function App() {
     const link = buildOrderLink(order.id)
     const nome = order.customer?.nome || 'Cliente'
     const id = `#${order.id.toString().slice(-6)}`
-    const msgItems = order.items.map(i => `  • ${i.nome} (${i.qty}x) — R$ ${i.preco.toFixed(2)}`).join('\n')
-    const msgPagamento = order.pagamento === 'aprazo' ? 'A Prazo' : 'À Vista'
-    const msgStatus = order.status === 'pendente' ? '✅ Aguardando confirmação' : order.status === 'pre-pedido' ? '⏳ Pré-pedido aguardando aprovação' : order.status
-    return `🆕 *NOVO PEDIDO* 🆕\n━━━━━━━━━━━━━━━━━━\n📋 Pedido: ${id}\n📅 Data: ${order.date}\n👤 Cliente: ${nome}\n📞 Telefone: ${order.customer?.telefone || '-'}\n📍 Endereço: ${order.customer?.endereco?.rua || '-'}, ${order.customer?.endereco?.numero || '-'} - ${order.customer?.endereco?.bairro || '-'}, ${order.customer?.endereco?.cidade || '-'}/${order.customer?.endereco?.estado || '-'}\n━━━━━━━━━━━━━━━━━━\n💳 Pagamento: ${msgPagamento}\n💰 Total: R$ ${order.total.toFixed(2)}\n━━━━━━━━━━━━━━━━━━\n📦 *ITENS:*\n${msgItems}\n━━━━━━━━━━━━━━━━━━\n📌 Status: ${msgStatus}\n🔗 Acesse o pedido: ${link}`
+    const statusLabel = order.status === 'pre-pedido' ? 'Pré-pedido Recebido' : 'Pedido Enviado'
+    return `🆕 *${statusLabel}* 🆕\n━━━━━━━━━━━━━━━━━━\n📋 Pedido: ${id}\n👤 Cliente: ${nome}\n━━━━━━━━━━━━━━━━━━\n${statusLabel} | Pedido Em Rota\n━━━━━━━━━━━━━━━━━━\n🔗 Acompanhe: ${link}`
   }
 
   const sendOrderWebhook = (order) => {
