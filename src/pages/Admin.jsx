@@ -117,7 +117,8 @@ ${order.items.map(i => `  • ${i.nome} (${i.qty}x) — R$ ${(i.preco * i.qty).t
 ${extra.returnedItems.map(i => `  • ${i.nome} (${i.returnedQty}x) — R$ ${(i.preco * (i.returnedQty || 0)).toFixed(2)}`).join('\n')}
 💰 Total cobrado: R$ ${order.total.toFixed(2)}
 ━━━━━━━━━━━━━━━━━━
-⚠️ *Importante:* Você tem até 24 horas para nos informar se houver algum item faltando ou com avaria.
+⚠️ *Importante:* Produtos embalados/lacrados não podem ser abertos. Não aceitamos devolução de produtos violados.
+Você tem até 24 horas para nos informar se houver algum item faltando ou com avaria.
 ━━━━━━━━━━━━━━━━━━
 Obrigado pela preferência! 🎉`
       : `✅ *PEDIDO ENTREGUE* ✅
@@ -127,7 +128,8 @@ Obrigado pela preferência! 🎉`
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pedido foi entregue com sucesso! 🎉
 ${order.items.length > 0 ? `📦 Itens:\n${order.items.map(i => `  • ${i.nome} (${i.qty}x) — R$ ${(i.preco * i.qty).toFixed(2)}`).join('\n')}\n` : ''}
-⚠️ *Importante:* Você tem até 24 horas para nos informar se houver algum item faltando ou com avaria.
+⚠️ *Importante:* Produtos embalados/lacrados não podem ser abertos. Não aceitamos devolução de produtos violados.
+Você tem até 24 horas para nos informar se houver algum item faltando ou com avaria.
 ━━━━━━━━━━━━━━━━━━
 Obrigado pela preferência!
 ━━━━━━━━━━━━━━━━━━
