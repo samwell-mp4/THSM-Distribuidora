@@ -212,17 +212,36 @@ export async function consumeLoginToken(token) {
   await supabase.from('login_tokens').update({ used: true }).eq('token', token)
   return data.telefone
 }
+// ---- PRODUCTS ----
+export async function getAllProducts() {
+  const { data } = await supabase.from('produtos').select('*')
+  return data || []
+}
+
+export async function upsertProducts(products) {
+  const records = Object.entries(products).map(([id, changes]) => ({
+    id: Number(id),
+    ...changes,
+    updated_at: new Date().toISOString()
+  }))
+  if (records.length === 0) return
+  const { error } = await supabase.from('produtos').upsert(records, { onConflict: 'id' })
+  if (error) console.error('Erro upsertProducts:', error)
+}
+
 export async function syncAllForAdmin() {
-  const [orders, financial, users, rotas] = await Promise.allSettled([
+  const [orders, financial, users, rotas, products] = await Promise.allSettled([
     getAllOrders(),
     getAllFinancial(),
     getAllUsers(),
-    getRotasContatos()
+    getRotasContatos(),
+    getAllProducts()
   ])
   return {
     orders: orders.status === 'fulfilled' ? orders.value : [],
     financial: financial.status === 'fulfilled' ? financial.value : [],
     users: users.status === 'fulfilled' ? users.value : [],
-    rotas: rotas.status === 'fulfilled' ? rotas.value : []
+    rotas: rotas.status === 'fulfilled' ? rotas.value : [],
+    products: products.status === 'fulfilled' ? products.value : []
   }
 }

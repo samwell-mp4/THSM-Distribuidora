@@ -200,6 +200,24 @@ function App() {
         }
       }
     }).catch(() => {})
+    supabase.from('produtos').select('*').then(({ data }) => {
+      if (data?.length) {
+        const fromDB = {}
+        data.forEach(prod => {
+          const override = {}
+          if (prod.preco !== null) override.preco = prod.preco
+          if (prod.estoque !== null) override.estoque = prod.estoque
+          if (prod.imagem !== null) override.imagem = prod.imagem
+          if (prod.categoria !== null) override.categoria = prod.categoria
+          if (Object.keys(override).length > 0) fromDB[prod.id] = override
+        })
+        setProdChangesApp(prev => {
+          const merged = { ...fromDB, ...prev }
+          localStorage.setItem('thsm_admin_produtos', JSON.stringify(merged))
+          return merged
+        })
+      }
+    }).catch(() => {})
   }, [])
 
   useEffect(() => {
