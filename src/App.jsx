@@ -31,7 +31,7 @@ function App() {
   const [toast, setToast] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
   const [checkout, setCheckout] = useState(null)
-  const [customer, setCustomer] = useState({ nome: '', email: '', telefone: '', senha: '', endereco: { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' } })
+  const [customer, setCustomer] = useState({ nome: '', email: '', telefone: '', senha: '', cpf: '', endereco: { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' } })
   const [pagamento, setPagamento] = useState('aprazo')
   const [showLogin, setShowLogin] = useState(false)
   const [loginEmail, setLoginEmail] = useState('')
@@ -436,6 +436,7 @@ function App() {
       telefone,
       nome: customer.nome,
       email: customer.email,
+      cpf: customer.cpf,
       endereco: { ...(customer.endereco || {}), senha: customer.senha, origem: 'Registro do Site' }
     }).select().single()
     if (error) { showToast('Erro ao criar cadastro', 'error'); return false }
@@ -531,7 +532,7 @@ function App() {
       id: Date.now(),
       user_id: currentUser?.id || null,
       date: new Date().toISOString().split('T')[0],
-      customer: { nome: customer.nome, email: customer.email, telefone: customer.telefone, endereco: customer.endereco },
+      customer: { nome: customer.nome, email: customer.email, telefone: customer.telefone, cpf: customer.cpf, endereco: customer.endereco },
       items,
       pagamento: 'aprazo',
       total_avista: 0,
@@ -961,6 +962,10 @@ function App() {
                   <input type="text" placeholder="(31) 99999-9999" value={customer.telefone} onChange={e => setCustomer({ ...customer, telefone: formatPhone(e.target.value) })} />
                 </div>
                 <div className="form-group">
+                  <label>CPF *</label>
+                  <input type="text" placeholder="000.000.000-00" value={customer.cpf} onChange={e => setCustomer({ ...customer, cpf: e.target.value })} />
+                </div>
+                <div className="form-group">
                   <label>Endereço de entrega</label>
                   <AddressForm value={customer.endereco} onChange={(addr) => setCustomer({ ...customer, endereco: addr })} />
                 </div>
@@ -971,7 +976,7 @@ function App() {
                   </div>
                 )}
                 <p className="info-msg"><i className="fa-solid fa-info-circle"></i> Ao continuar, você cria ou acessa sua conta automaticamente.</p>
-                <button className="btn-next" disabled={!customer.nome.trim() || !customer.email.trim() || !customer.telefone.trim()} onClick={() => { if (autoLoginOuRegistro()) setCheckout('payment') }}>
+                <button className="btn-next" disabled={!customer.nome.trim() || !customer.email.trim() || !customer.telefone.trim() || !customer.cpf.trim()} onClick={() => { if (autoLoginOuRegistro()) setCheckout('payment') }}>
                   Continuar <i className="fa-solid fa-arrow-right"></i>
                 </button>
               </div>
@@ -1013,6 +1018,7 @@ function App() {
                   <p><strong>Nome:</strong> {customer.nome}</p>
                   <p><strong>Email:</strong> {customer.email}</p>
                   <p><strong>Telefone:</strong> {customer.telefone}</p>
+                  <p><strong>CPF:</strong> {customer.cpf}</p>
                   {customer.endereco?.cidade && <p><strong>Endereço:</strong> {[customer.endereco.rua, customer.endereco.numero, customer.endereco.bairro, customer.endereco.cidade, customer.endereco.estado].filter(Boolean).join(', ')}</p>}
                 </div>
                 <div className="review-section">

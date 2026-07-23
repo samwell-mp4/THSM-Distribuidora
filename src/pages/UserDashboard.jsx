@@ -63,6 +63,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
   const [editNome, setEditNome] = useState('')
   const [editEmail, setEditEmail] = useState('')
   const [editTelefone, setEditTelefone] = useState('')
+  const [editCpf, setEditCpf] = useState('')
   const [editSenha, setEditSenha] = useState('')
   const [editEndereco, setEditEndereco] = useState({ cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
   const [savingProfile, setSavingProfile] = useState(false)
@@ -73,6 +74,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
     setEditNome(currentUser.nome || '')
     setEditEmail(currentUser.email || '')
     setEditTelefone(currentUser.telefone || '')
+    setEditCpf(currentUser.cpf || currentUser.endereco?.cpf || '')
     setEditSenha(currentUser.endereco?.senha || '')
     setEditEndereco({
       cep: currentUser.endereco?.cep || '',
@@ -86,7 +88,8 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
   }
 
   const saveProfile = async () => {
-    if (!editNome.trim()) { alert('Nome é obrigatorio'); return }
+    if (!editNome.trim()) { alert('Nome é obrigatório'); return }
+    if (!editCpf.trim()) { alert('CPF é obrigatório'); return }
     setSavingProfile(true)
     const updated = {
       ...currentUser,
@@ -94,6 +97,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
       nome: editNome.trim(),
       email: editEmail.trim(),
       telefone: editTelefone.replace(/\D/g, ''),
+      cpf: editCpf.trim(),
       endereco: { ...(currentUser.endereco || {}), ...editEndereco, senha: editSenha || currentUser.endereco?.senha || '' }
     }
     await upsertUser(updated)
@@ -832,6 +836,10 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
             <div className="form-group">
               <label>Telefone / WhatsApp</label>
               <input type="text" value={editTelefone} onChange={e => setEditTelefone(e.target.value)} placeholder={currentUser?.telefone || '(31) 99999-9999'} />
+            </div>
+            <div className="form-group">
+              <label>CPF *</label>
+              <input type="text" value={editCpf} onChange={e => setEditCpf(e.target.value)} placeholder={currentUser?.cpf || currentUser?.endereco?.cpf || '000.000.000-00'} />
             </div>
             <div className="form-group">
               <label>Senha</label>

@@ -10,7 +10,7 @@ const STEPS = [
 
 export default function LandingPage({ onVerCatalogo }) {
   const [step, setStep] = useState(1)
-  const [form, setForm] = useState({ nome: '', telefone: '', email: '' })
+  const [form, setForm] = useState({ nome: '', telefone: '', email: '', cpf: '' })
   const [endereco, setEndereco] = useState({ cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
   const [sent, setSent] = useState(false)
   const [sending, setSending] = useState(false)
@@ -45,7 +45,7 @@ export default function LandingPage({ onVerCatalogo }) {
     } catch {}
   }
 
-  const canStep1 = form.nome.trim().length >= 3 && form.telefone.replace(/\D/g, '').length >= 11
+  const canStep1 = form.nome.trim().length >= 3 && form.telefone.replace(/\D/g, '').length >= 11 && form.cpf.trim().length >= 11
   const canStep2 = endereco.cep && endereco.cidade && endereco.rua && endereco.numero
 
   const handleSubmit = async () => {
@@ -56,6 +56,7 @@ export default function LandingPage({ onVerCatalogo }) {
     const { error } = await supabase.from('leads').insert({
       nome: form.nome.trim(),
       telefone,
+      cpf: form.cpf.trim(),
       email: form.email.trim(),
       endereco: { ...endereco }
     })
@@ -140,6 +141,10 @@ export default function LandingPage({ onVerCatalogo }) {
                   <input type="text" placeholder="(31) 99999-9999" value={formatPhone(form.telefone)} onChange={e => update('telefone', e.target.value)} />
                 </div>
                 <div className="lp-field">
+                  <label>CPF *</label>
+                  <input type="text" placeholder="000.000.000-00" value={form.cpf} onChange={e => update('cpf', e.target.value)} />
+                </div>
+                <div className="lp-field">
                   <label>Email</label>
                   <input type="email" placeholder="seu@email.com" value={form.email} onChange={e => update('email', e.target.value)} />
                 </div>
@@ -204,6 +209,10 @@ export default function LandingPage({ onVerCatalogo }) {
                   <div className="lp-review-block">
                     <strong>Telefone</strong>
                     <span>{form.telefone}</span>
+                  </div>
+                  <div className="lp-review-block">
+                    <strong>CPF</strong>
+                    <span>{form.cpf}</span>
                   </div>
                   {form.email && (
                     <div className="lp-review-block">
