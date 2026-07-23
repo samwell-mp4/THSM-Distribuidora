@@ -316,6 +316,7 @@ export default function Admin({ produtos, onVoltar }) {
   const [kits, setKits] = useState(() => LS.get('thsm_kits', []))
   const [showKitModal, setShowKitModal] = useState(false)
   const [editingKit, setEditingKit] = useState(null)
+  const [newProducts, setNewProducts] = useState(() => LS.get('thsm_admin_new_products', []))
   const PROD_PER_PAGE = 20
 
   const showToast = (msg, type = 'success') => {
@@ -428,6 +429,7 @@ export default function Admin({ produtos, onVoltar }) {
       if (r.length) { setRotas(r) } else { fetchRotas() }
       if (p.length) {
         const fromDB = {}
+        const variantsDB = {}
         p.forEach(prod => {
           const override = {}
           if (prod.preco !== null) override.preco = prod.preco
@@ -435,7 +437,16 @@ export default function Admin({ produtos, onVoltar }) {
           if (prod.imagem !== null) override.imagem = prod.imagem
           if (prod.categoria !== null) override.categoria = prod.categoria
           if (Object.keys(override).length > 0) fromDB[prod.id] = override
+          if (prod.variantes && Object.keys(prod.variantes).length > 0) {
+            variantsDB[prod.id] = prod.variantes
+          }
         })
+        if (Object.keys(variantsDB).length > 0) {
+          try {
+            const existing = JSON.parse(localStorage.getItem('thsm_prod_variants') || '{}')
+            localStorage.setItem('thsm_prod_variants', JSON.stringify({ ...existing, ...variantsDB }))
+          } catch {}
+        }
         setProdChanges(prev => {
           const merged = { ...fromDB, ...prev }
           LS.set(STORAGE_PRODUCTS, merged)
@@ -452,12 +463,16 @@ export default function Admin({ produtos, onVoltar }) {
     if (rotas.length > 0 && !expandedRota) setExpandedRota(rotas[0].rota)
   }, [rotas, expandedRota])
 
+  useEffect(() => { LS.set('thsm_admin_new_products', newProducts) }, [newProducts])
+
   const produtosAtuais = useMemo(() => {
-    return produtos.map(p => ({
+    const base = produtos.map(p => ({
       ...p,
       ...(prodChanges[p.id] || {})
     }))
-  }, [produtos, prodChanges])
+    const news = newProducts.map(p => ({ ...p, ...(prodChanges[p.id] || {}) }))
+    return [...news, ...base]
+  }, [produtos, prodChanges, newProducts])
 
   // =============================================
   // ORDERS
@@ -885,7 +900,9 @@ export default function Admin({ produtos, onVoltar }) {
       msg += `\n\n📦 *ITENS DEVOLVIDOS:*\n`
       o.returnedItems.forEach(i => msg += `• ${i.nome} (${i.returnedQty}x) = ${formatPreco(i.preco * (i.returnedQty || 0))}\n`)
     }
-    window.open(`https://wa.me/5531998461300?text=${encodeURIComponent(msg)}`, '_blank')
+    const phone = (o.customer?.telefone || '5531998461300').replace(/\D/g, '')
+    const waNumber = phone.startsWith('55') ? phone : '55' + phone
+    window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`, '_blank')
   }
 
   // Stats
@@ -1458,6 +1475,9 @@ export default function Admin({ produtos, onVoltar }) {
                 <p className="admin-subtitle">{produtosAtuais.length} produtos cadastrados</p>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <button className="admin-btn" style={{ background: '#2563eb', color: 'white', borderColor: '#2563eb', fontSize: '0.78rem', padding: '0.35rem 0.7rem' }} onClick={() => setEditingProd({ id: Date.now(), nome: '', preco: 0, estoque: 0, imagem: '', categoria: '', descricao: '', variantes: {}, _new: true })}>
+                  <i className="fa-solid fa-plus"></i> Novo Produto
+                </button>
                 <button className="admin-btn" style={{ background: '#059669', color: 'white', borderColor: '#059669', fontSize: '0.78rem', padding: '0.35rem 0.7rem' }} onClick={() => { setEditingKit(null); setShowKitModal(true) }}>
                   <i className="fa-solid fa-toolbox"></i> Montar Kit
                 </button>
@@ -3095,7 +3115,19 @@ export default function Admin({ produtos, onVoltar }) {
       {editingProd && (
         <EditProductModal
           product={editingProd}
-          onSave={(changes) => updateProduct(editingProd.id, changes)}
+          onSave={(changes) => {
+            if (editingProd._new) {
+              const newId = editingProd.id
+              setNewProducts(prev => {
+                const exists = prev.find(p => p.id === newId)
+                if (exists) return prev.map(p => p.id === newId ? { ...p, ...changes, _new: true } : p)
+                return [{ ...changes, id: newId, _new: true }, ...prev]
+              })
+              setEditingProd(null)
+            } else {
+              updateProduct(editingProd.id, changes)
+            }
+          }}
           onClose={() => setEditingProd(null)}
         />
       )}
@@ -4082,22 +4114,81 @@ function EditProductModal({ product, onSave, onClose }) {
   const [estoque, setEstoque] = useState(String(product.estoque))
   const [imagem, setImagem] = useState(product.imagem || '')
   const [categoria, setCategoria] = useState(product.categoria)
+  const [descricao, setDescricao] = useState(product.descricao || '')
+  const [variantes, setVariantes] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('thsm_prod_variants') || '{}')
+      return saved[product.id] || product.variantes || {}
+    } catch { return product.variantes || {} }
+  })
+
+  const addVariantType = () => {
+    const name = prompt('Nome da variação (ex: Cor, Tamanho, Aroma):')
+    if (name && name.trim()) {
+      setVariantes(prev => ({ ...prev, [name.trim()]: [''] }))
+    }
+  }
+
+  const removeVariantType = (key) => {
+    if (!confirm(`Remover variação "${key}"?`)) return
+    setVariantes(prev => {
+      const { [key]: _, ...rest } = prev
+      return rest
+    })
+  }
+
+  const addVariantOption = (type) => {
+    setVariantes(prev => ({
+      ...prev,
+      [type]: [...(prev[type] || []), '']
+    }))
+  }
+
+  const updateVariantOption = (type, idx, value) => {
+    setVariantes(prev => ({
+      ...prev,
+      [type]: (prev[type] || []).map((v, i) => i === idx ? value : v)
+    }))
+  }
+
+  const removeVariantOption = (type, idx) => {
+    setVariantes(prev => ({
+      ...prev,
+      [type]: (prev[type] || []).filter((_, i) => i !== idx)
+    }))
+  }
+
+  const handleSave = () => {
+    if (!nome.trim() || preco === '' || isNaN(Number(preco))) return
+    const cleaned = {}
+    Object.entries(variantes).forEach(([k, v]) => {
+      const opts = v.filter(o => o.trim())
+      if (opts.length > 0) cleaned[k] = opts
+    })
+    try {
+      const all = JSON.parse(localStorage.getItem('thsm_prod_variants') || '{}')
+      if (Object.keys(cleaned).length > 0) all[product.id] = cleaned
+      else delete all[product.id]
+      localStorage.setItem('thsm_prod_variants', JSON.stringify(all))
+    } catch {}
+    onSave({ nome: nome.trim(), preco: Number(preco), estoque: Number(estoque), imagem, categoria, descricao, variantes: cleaned })
+  }
 
   return (
     <div className="admin-overlay" onClick={onClose}>
-      <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '450px' }}>
+      <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
         <div className="admin-modal-header">
           <h3><i className="fa-solid fa-pen"></i> Editar Produto</h3>
           <button className="admin-modal-close" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
         </div>
         <div className="admin-modal-body">
           <div className="form-group">
-            <label>Nome do produto</label>
+            <label>Nome do produto <span style={{color:'var(--danger)'}}>*</span></label>
             <input type="text" value={nome} onChange={e => setNome(e.target.value)} />
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label>Preço (R$)</label>
+              <label>Preço (R$) <span style={{color:'var(--danger)'}}>*</span></label>
               <input type="number" step="0.01" min="0" value={preco} onChange={e => setPreco(e.target.value)} />
             </div>
             <div className="form-group">
@@ -4114,9 +4205,57 @@ function EditProductModal({ product, onSave, onClose }) {
             <label>Categoria</label>
             <input type="text" value={categoria} onChange={e => setCategoria(e.target.value)} />
           </div>
+          <div className="form-group">
+            <label>Descrição</label>
+            <textarea rows="3" value={descricao} onChange={e => setDescricao(e.target.value)} style={{ width: '100%', padding: '0.5rem 0.65rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', resize: 'vertical', fontFamily: 'inherit' }} />
+          </div>
+
+          <div className="form-group" style={{ borderTop: '1px solid var(--admin-border)', paddingTop: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+              <label style={{ margin: 0, fontWeight: 700 }}>Variações do Produto</label>
+              <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem', background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }} onClick={addVariantType}>
+                <i className="fa-solid fa-plus"></i> Adicionar Variação
+              </button>
+            </div>
+            {Object.keys(variantes).length === 0 && (
+              <p style={{ fontSize: '0.82rem', color: 'var(--admin-text-sec)' }}>Nenhuma variação configurada. Adicione Cor, Tamanho, Aroma, etc.</p>
+            )}
+            {Object.entries(variantes).map(([type, options]) => (
+              <div key={type} style={{ marginBottom: '0.75rem', padding: '0.6rem 0.75rem', background: '#f9fafb', borderRadius: '8px', border: '1px solid var(--admin-border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                  <strong style={{ fontSize: '0.85rem', textTransform: 'uppercase', color: '#8b5cf6' }}>{type}</strong>
+                  <div style={{ display: 'flex', gap: '0.3rem' }}>
+                    <button className="action-btn" style={{ color: '#059669' }} title="Adicionar opção" onClick={() => addVariantOption(type)}>
+                      <i className="fa-solid fa-plus"></i>
+                    </button>
+                    <button className="action-btn action-delete" title="Remover variação" onClick={() => removeVariantType(type)}>
+                      <i className="fa-solid fa-trash-can"></i>
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                  {options.map((opt, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                      <input
+                        type="text"
+                        value={opt}
+                        onChange={e => updateVariantOption(type, idx, e.target.value)}
+                        placeholder={`Opção ${idx + 1}`}
+                        style={{ width: '90px', padding: '0.25rem 0.4rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem' }}
+                      />
+                      <button className="action-btn action-delete" style={{ padding: '0.15rem' }} title="Remover" onClick={() => removeVariantOption(type, idx)}>
+                        <i className="fa-solid fa-xmark"></i>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
           <div className="modal-actions">
             <button className="admin-btn admin-btn-sec" onClick={onClose}>Cancelar</button>
-            <button className="admin-btn admin-btn-primary" onClick={() => onSave({ nome, preco: Number(preco), estoque: Number(estoque), imagem, categoria })}>
+            <button className="admin-btn admin-btn-primary" disabled={!nome.trim() || preco === '' || isNaN(Number(preco))} onClick={handleSave}>
               <i className="fa-solid fa-check"></i> Salvar
             </button>
           </div>

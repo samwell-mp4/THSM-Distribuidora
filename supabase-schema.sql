@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS produtos (
   estoque integer,
   imagem text,
   categoria text,
+  variantes jsonb DEFAULT '{}'::jsonb,
   updated_at timestamptz DEFAULT now()
 );
 

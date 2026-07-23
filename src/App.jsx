@@ -65,6 +65,10 @@ function App() {
   const [prodChangesApp, setProdChangesApp] = useState(() => {
     try { return JSON.parse(localStorage.getItem('thsm_admin_produtos')) || {} } catch { return {} }
   })
+  const [prodVariants, setProdVariants] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('thsm_prod_variants')) || {} } catch { return {} }
+  })
+  const [selectedVariants, setSelectedVariants] = useState({})
   const ITEMS_PER_PAGE = 12
 
   const getRouteFromHash = useCallback(() => {
@@ -440,30 +444,38 @@ function App() {
     return true
   }
 
-  const addToCart = useCallback((p) => {
+  const getCartKey = (pId, variants) => {
+    if (!variants || Object.keys(variants).length === 0) return String(pId)
+    return `${pId}-${Object.values(variants).join('-')}`
+  }
+
+  const addToCart = useCallback((p, variantSelections) => {
+    const vSel = variantSelections || selectedVariants[p.id] || {}
+    const cartKey = getCartKey(p.id, vSel)
+    const variantLabel = Object.values(vSel).filter(Boolean).join(', ')
+    const displayName = variantLabel ? `${p.nome} (${variantLabel})` : p.nome
     setCart(prev => {
-      const id = p.id
-      const existing = prev[id]
+      const existing = prev[cartKey]
       if (existing) {
         if (existing.qty >= p.estoque && p.estoque > 0) { showToast('Estoque máximo atingido!', 'error'); return prev }
-        return { ...prev, [id]: { ...existing, qty: existing.qty + 1 } }
+        return { ...prev, [cartKey]: { ...existing, qty: existing.qty + 1 } }
       }
-      return { ...prev, [id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, qty: 1, estoque: p.estoque } }
+      return { ...prev, [cartKey]: { id: p.id, cartKey, nome: p.nome, displayName, preco: p.preco, imagem: p.imagem, qty: 1, estoque: p.estoque, variantes: vSel } }
     })
-    showToast(`${p.nome.substring(0, 40)} adicionado ao carrinho`)
-  }, [showToast])
+    showToast(`${displayName.substring(0, 40)} adicionado ao carrinho`)
+  }, [showToast, selectedVariants])
 
-  const removeFromCart = useCallback((id) => {
+  const removeFromCart = useCallback((cartKey) => {
     setCart(prev => {
-      const item = prev[id]
+      const item = prev[cartKey]
       if (!item) return prev
-      if (item.qty <= 1) { const { [id]: _, ...rest } = prev; return rest }
-      return { ...prev, [id]: { ...item, qty: item.qty - 1 } }
+      if (item.qty <= 1) { const { [cartKey]: _, ...rest } = prev; return rest }
+      return { ...prev, [cartKey]: { ...item, qty: item.qty - 1 } }
     })
   }, [])
 
-  const deleteFromCart = useCallback((id) => {
-    setCart(prev => { const { [id]: _, ...rest } = prev; return rest })
+  const deleteFromCart = useCallback((cartKey) => {
+    setCart(prev => { const { [cartKey]: _, ...rest } = prev; return rest })
   }, [])
 
   const iniciarCheckout = () => {
@@ -724,7 +736,12 @@ function App() {
                   <div className="card-body">
                     <h3 className="card-title" onClick={() => setSelected(p)}>{p.nome}</h3>
                     <div className="card-price">{formatPreco(p.preco)}</div>
-                    <button className={`btn-add ${cart[p.id] ? 'in-cart' : ''}`} onClick={() => addToCart(p)} disabled={p.estoque <= 0}>
+                    {prodVariants[p.id] && Object.keys(prodVariants[p.id]).length > 0 && (
+                      <div className="card-variants-hint" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.35rem', textAlign: 'center' }}>
+                        <i className="fa-solid fa-tag"></i> {Object.keys(prodVariants[p.id]).join(', ')}
+                      </div>
+                    )}
+                    <button className={`btn-add ${cart[p.id] ? 'in-cart' : ''}`} onClick={() => setSelected(p)} disabled={p.estoque <= 0}>
                       {cart[p.id] ? <><i className="fa-solid fa-check"></i> Adicionado</> : <><i className="fa-solid fa-plus"></i> Adicionar</>}
                     </button>
                   </div>
@@ -753,9 +770,9 @@ function App() {
 
       {/* PRODUCT MODAL */}
       {selected && (
-        <div className="overlay" onClick={() => setSelected(null)}>
+        <div className="overlay" onClick={() => { setSelected(null); setSelectedVariants(prev => { const { [selected.id]: _, ...rest } = prev; return rest }) }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setSelected(null)}><i className="fa-solid fa-xmark"></i></button>
+              <button className="modal-close" onClick={() => { setSelected(null); setSelectedVariants(prev => { const { [selected.id]: _, ...rest } = prev; return rest }) }}><i className="fa-solid fa-xmark"></i></button>
             <div className="modal-img">
               {selected.imagem && !imageErrors[selected.id] ? (
                 <img src={selected.imagem} alt={selected.nome} onError={() => handleImageError(selected.id)} />
@@ -776,6 +793,47 @@ function App() {
                 <div className="modal-desc">
                   <h4><i className="fa-solid fa-receipt"></i> Detalhes</h4>
                   <p>{selected.descricao}</p>
+                </div>
+              )}
+              {prodVariants[selected.id] && Object.keys(prodVariants[selected.id]).length > 0 && (
+                <div className="modal-variants" style={{ marginBottom: '0.75rem' }}>
+                  <h4 style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>
+                    <i className="fa-solid fa-tags"></i> Variações
+                  </h4>
+                  {Object.entries(prodVariants[selected.id]).map(([type, options]) => (
+                    <div key={type} style={{ marginBottom: '0.5rem' }}>
+                      <label style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: '0.25rem', textTransform: 'uppercase' }}>{type}</label>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                        {options.map(opt => {
+                          const current = selectedVariants[selected.id] || {}
+                          const isSelected = current[type] === opt
+                          return (
+                            <button
+                              key={opt}
+                              className={`variant-chip ${isSelected ? 'active' : ''}`}
+                              onClick={() => setSelectedVariants(prev => ({
+                                ...prev,
+                                [selected.id]: { ...(prev[selected.id] || {}), [type]: isSelected ? '' : opt }
+                              }))}
+                              style={{
+                                padding: '0.3rem 0.65rem',
+                                borderRadius: '20px',
+                                border: `2px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}`,
+                                background: isSelected ? 'var(--accent-bg)' : 'white',
+                                color: isSelected ? 'var(--accent)' : 'var(--text)',
+                                fontSize: '0.8rem',
+                                cursor: 'pointer',
+                                fontWeight: isSelected ? 700 : 400,
+                                transition: 'all 0.15s'
+                              }}
+                            >
+                              {opt}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
               <button className="btn-add modal-add" onClick={() => { addToCart(selected); setSelected(null) }} disabled={selected.estoque <= 0}>
@@ -804,26 +862,31 @@ function App() {
               <>
                 <div className="cart-items">
                   {cartItems.map(item => (
-                    <div key={item.id} className="cart-item">
+                    <div key={item.cartKey || item.id} className="cart-item">
                       <div className="cart-item-img">
                         {item.imagem && !imageErrors[item.id]
                           ? <img src={item.imagem} alt={item.nome} onError={() => handleImageError(item.id)} />
                           : <div className="cart-item-img-fallback"><i className="fa-solid fa-image"></i></div>}
                       </div>
                       <div className="cart-item-info">
-                        <p className="cart-item-name">{item.nome}</p>
+                        <p className="cart-item-name">{item.displayName || item.nome}</p>
+                        {item.variantes && Object.keys(item.variantes).length > 0 && (
+                          <p className="cart-item-variants" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                            {Object.entries(item.variantes).map(([k, v]) => `${k}: ${v}`).join(' | ')}
+                          </p>
+                        )}
                         <p className="cart-item-price">{formatPreco(item.preco)}</p>
                       </div>
                       <div className="cart-item-qty">
-                        <button className="qty-btn" onClick={() => removeFromCart(item.id)}><i className="fa-solid fa-minus"></i></button>
+                        <button className="qty-btn" onClick={() => removeFromCart(item.cartKey || item.id)}><i className="fa-solid fa-minus"></i></button>
                         <span>{item.qty}</span>
                         <button className="qty-btn" onClick={() => {
                           if (item.qty >= item.estoque && item.estoque > 0) { showToast('Estoque máximo!', 'error'); return }
-                          setCart(prev => ({ ...prev, [item.id]: { ...prev[item.id], qty: prev[item.id].qty + 1 } }))
+                          setCart(prev => ({ ...prev, [item.cartKey || item.id]: { ...prev[item.cartKey || item.id], qty: prev[item.cartKey || item.id].qty + 1 } }))
                         }}><i className="fa-solid fa-plus"></i></button>
                       </div>
                       <div className="cart-item-total">{formatPreco(item.preco * item.qty)}</div>
-                      <button className="cart-item-remove" onClick={() => deleteFromCart(item.id)}><i className="fa-solid fa-trash-can"></i></button>
+                      <button className="cart-item-remove" onClick={() => deleteFromCart(item.cartKey || item.id)}><i className="fa-solid fa-trash-can"></i></button>
                     </div>
                   ))}
                 </div>
@@ -960,8 +1023,8 @@ function App() {
                   <h4><i className="fa-solid fa-box"></i> Itens</h4>
                   {cartItems.map(item => {
                     return (
-                      <div key={item.id} className="review-item">
-                        <span className="review-item-name">{item.nome} <span className="review-item-qty">({item.qty}x)</span></span>
+                      <div key={item.cartKey || item.id} className="review-item">
+                        <span className="review-item-name">{(item.displayName || item.nome)} <span className="review-item-qty">({item.qty}x)</span></span>
                         <div className="review-item-right">
                           <span className="review-item-price">{formatPreco(item.preco * item.qty)}</span>
                           <span className="review-item-tag aprazo">A Prazo</span>

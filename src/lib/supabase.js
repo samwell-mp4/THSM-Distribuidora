@@ -219,11 +219,15 @@ export async function getAllProducts() {
 }
 
 export async function upsertProducts(products) {
-  const records = Object.entries(products).map(([id, changes]) => ({
-    id: Number(id),
-    ...changes,
-    updated_at: new Date().toISOString()
-  }))
+  const records = Object.entries(products).map(([id, changes]) => {
+    const { variantes, ...rest } = changes
+    return {
+      id: Number(id),
+      ...rest,
+      variantes: variantes || {},
+      updated_at: new Date().toISOString()
+    }
+  })
   if (records.length === 0) return
   const { error } = await supabase.from('produtos').upsert(records, { onConflict: 'id' })
   if (error) console.error('Erro upsertProducts:', error)

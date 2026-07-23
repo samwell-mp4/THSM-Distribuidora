@@ -990,6 +990,11 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
                   <div key={idx} className="detail-item" style={{ opacity: i.qty <= 0 ? 0.4 : 1 }}>
                     <div style={{ flex: 1 }}>
                       <span className="detail-item-name" style={{ textDecoration: i.qty <= 0 ? 'line-through' : 'none' }}>{i.nome}</span>
+                      {i.variantes && Object.keys(i.variantes).length > 0 && (
+                        <span className="detail-item-variants" style={{ display: 'block', fontSize: '0.72rem', color: 'var(--admin-text-sec)', marginTop: '2px' }}>
+                          {Object.entries(i.variantes).map(([k, v]) => `${k}: ${v}`).join(' | ')}
+                        </span>
+                      )}
                       <span className="detail-item-qty">{formatPreco(i.preco)}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
