@@ -573,14 +573,14 @@ export default function Admin({ produtos, onVoltar }) {
     sendStatusWebhook(order, order.status)
   }
 
-  const updateOrderStatus = (id, status) => {
+  const updateOrderStatus = (id, status, skipWebhook = false) => {
     const order = orders.find(o => o.id === id)
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o))
     if (status === 'entregue') {
       setFinancial(prev => prev.map(f => f.orderId === id && f.status !== 'pago' ? { ...f, status: 'pago', paidDate: hoje() } : f))
     }
     showToast(`Pedido #${id} atualizado para "${status}"`)
-    if (order) sendStatusWebhook(order, status)
+    if (order && !skipWebhook) sendStatusWebhook(order, status)
   }
 
   const preApprovarPedido = (orderId, rejectedItemIds, replacements = []) => {
@@ -889,7 +889,7 @@ export default function Admin({ produtos, onVoltar }) {
     selectedIds.forEach(id => {
       const order = orders.find(o => o.id === id)
       if (action === 'confirm') {
-        if (order?.status === 'pre-pedido') updateOrderStatus(id, 'pendente')
+        if (order?.status === 'pre-pedido') updateOrderStatus(id, 'pendente', true)
         else if (order?.status === 'pendente') updateOrderStatus(id, 'em-rota')
         else updateOrderStatus(id, 'em-rota')
       } else if (action === 'delete') {
