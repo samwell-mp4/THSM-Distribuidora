@@ -903,41 +903,7 @@ export default function Admin({ produtos, onVoltar }) {
   }
 
   const sendWhatsApp = (o) => {
-    const end = o.customer?.endereco
-    let msg = `🛒 *NOVO PEDIDO - THSM Distribuidora*\n\n`
-    msg += `👤 *Cliente:* ${o.customer?.nome || ''}\n`
-    msg += `📧 *Email:* ${o.customer?.email || ''}\n`
-    msg += `📞 *Telefone:* ${o.customer?.telefone || ''}\n`
-    if (end?.rua || end?.cidade) {
-      const parts = []
-      if (end.rua) parts.push(end.rua + (end.numero ? `, ${end.numero}` : ''))
-      if (end.bairro) parts.push(end.bairro)
-      const cityState = [end.cidade, end.estado].filter(Boolean).join('/')
-      if (cityState) parts.push(cityState)
-      if (end.complemento) parts.push(end.complemento)
-      if (end.cep) parts.push(`CEP: ${end.cep}`)
-      msg += `📍 *Endereço:* ${parts.join(', ')}\n`
-    }
-    msg += `─────────────────────\n\n`
-    const itensAvista = o.items.filter(i => i.tipo === 'avista')
-    const itensAprazo = o.items.filter(i => i.tipo === 'aprazo')
-    if (itensAvista.length) {
-      msg += `💵 *À VISTA:*\n`
-      itensAvista.forEach(i => msg += `• ${i.nome} (${i.qty}x) = ${formatPreco(i.preco * i.qty)}\n`)
-      msg += '\n'
-    }
-    if (itensAprazo.length) {
-      msg += `📋 *A PRAZO:*\n`
-      itensAprazo.forEach(i => msg += `• ${i.nome} (${i.qty}x) = ${formatPreco(i.preco * i.qty)}\n`)
-      msg += '\n'
-    }
-    msg += `─────────────────────\n`
-    msg += `💰 *Total geral: ${formatPreco(o.total)}*\n`
-    msg += `💳 *Pagamento:* ${o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}`
-    if (o.returnedItems?.length > 0) {
-      msg += `\n\n📦 *ITENS DEVOLVIDOS:*\n`
-      o.returnedItems.forEach(i => msg += `• ${i.nome} (${i.returnedQty}x) = ${formatPreco(i.preco * (i.returnedQty || 0))}\n`)
-    }
+    const msg = buildStatusWhatsApp(o, o.status)
     const phone = (o.customer?.telefone || '5531998461300').replace(/\D/g, '')
     const waNumber = phone.startsWith('55') ? phone : '55' + phone
     window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`, '_blank')
