@@ -101,7 +101,7 @@ Olá ${nome}, seu pedido está em andamento e sendo preparado para entrega.
 📦 *ITENS:*
 ${msgItems}
 ━━━━━━━━━━━━━━━━━━
-Olá ${nome}, seu pedido saiu para entrega!
+Olá ${nome}, seu pedido já foi separado. Só aguardar a entrega.
 🔗 Acesse seu pedido: ${link}`,
 
     'entregue': extra.returnedItems?.length > 0
