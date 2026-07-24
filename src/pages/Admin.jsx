@@ -8,6 +8,7 @@ const STORAGE_CUSTOM_ROTAS = 'thsm_custom_rotas'
 const WEBHOOK_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/novo-pedido'
 const LISTA_CONTATOS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/lista-contatos'
 const ALERTAR_ROTAS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/alertar-rotas'
+const WHATSAPP_FORCE_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/whatsapp-force'
 
 const LS = {
   get(key, def) {
@@ -904,9 +905,14 @@ export default function Admin({ produtos, onVoltar }) {
 
   const sendWhatsApp = (o) => {
     const msg = buildStatusWhatsApp(o, o.status)
-    const phone = (o.customer?.telefone || '5531998461300').replace(/\D/g, '')
-    const waNumber = phone.startsWith('55') ? phone : '55' + phone
-    window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`, '_blank')
+    const raw = (o.customer?.telefone || '').replace(/\D/g, '')
+    const telefone = raw.startsWith('55') ? raw : '55' + raw
+    if (!telefone) return
+    fetch(WHATSAPP_FORCE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telefone, message: msg })
+    }).catch(() => {})
   }
 
   // Stats
