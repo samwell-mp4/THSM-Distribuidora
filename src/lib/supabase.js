@@ -95,14 +95,17 @@ export async function deleteOrder(id) {
 }
 
 export async function deleteUserByTelefone(telefone) {
-  const { data: orders } = await supabase.from('pedidos').select('id').eq('user_id', telefone)
-  const orderIds = (orders || []).map(o => o.id)
-  if (orderIds.length > 0) {
-    await supabase.from('financeiro').delete().in('order_id', orderIds)
-    await supabase.from('pedidos').delete().in('id', orderIds)
+  const { data: user } = await supabase.from('usuarios').select('id').eq('telefone', telefone).single()
+  if (user) {
+    const { data: orders } = await supabase.from('pedidos').select('id').eq('user_id', user.id)
+    const orderIds = (orders || []).map(o => o.id)
+    if (orderIds.length > 0) {
+      await supabase.from('financeiro').delete().in('order_id', orderIds)
+      await supabase.from('pedidos').delete().in('id', orderIds)
+    }
   }
   const { error } = await supabase.from('usuarios').delete().eq('telefone', telefone)
-  return { error, deletedOrders: orderIds.length }
+  return { error, deletedOrders: 0 }
 }
 
 function fixOrder(row) {
