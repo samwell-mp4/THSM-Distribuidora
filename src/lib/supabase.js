@@ -13,9 +13,13 @@ function toDateInput(val) {
 
 // ---- USERS ----
 export async function upsertUser(user) {
-  const { data, error } = await supabase.from('usuarios').upsert(user, { onConflict: 'telefone' }).select().single()
+  const raw = (user.telefone || '').replace(/@.*$/, '').replace(/\D/g, '')
+  if (!raw) { console.error('upsertUser: telefone vazio'); return null }
+  const telefone = raw.startsWith('55') ? raw : '55' + raw
+  const clean = { ...user, telefone }
+  const { data, error } = await supabase.from('usuarios').upsert(clean, { onConflict: 'telefone' }).select().single()
   if (error) console.error('Erro upsertUser:', error)
-  return data || user
+  return data || clean
 }
 
 export async function findUserByPhone(telefone) {
