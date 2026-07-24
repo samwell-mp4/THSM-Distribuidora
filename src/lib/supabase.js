@@ -94,22 +94,14 @@ export async function upsertOrders(orders) {
 }
 
 export async function deleteOrder(id) {
-  await supabase.from('financeiro').delete().eq('order_id', id)
-  await supabase.from('pedidos').delete().eq('id', id)
+  const { error } = await supabase.rpc('admin_delete_order', { ord_id: id })
+  if (error) console.error('Erro deleteOrder:', error)
 }
 
 export async function deleteUserByTelefone(telefone) {
-  const { data: user } = await supabase.from('usuarios').select('id').eq('telefone', telefone).single()
-  if (user) {
-    const { data: orders } = await supabase.from('pedidos').select('id').eq('user_id', user.id)
-    const orderIds = (orders || []).map(o => o.id)
-    if (orderIds.length > 0) {
-      await supabase.from('financeiro').delete().in('order_id', orderIds)
-      await supabase.from('pedidos').delete().in('id', orderIds)
-    }
-  }
-  const { error } = await supabase.from('usuarios').delete().eq('telefone', telefone)
-  return { error, deletedOrders: 0 }
+  const { data, error } = await supabase.rpc('admin_delete_user', { user_phone: telefone })
+  if (error) console.error('Erro deleteUserByTelefone:', error)
+  return { error, deletedOrders: data === 'ok' ? 1 : 0 }
 }
 
 function fixOrder(row) {
@@ -136,7 +128,7 @@ export async function upsertFinancial(records) {
 }
 
 export async function deleteFinancialByOrder(orderId) {
-  await supabase.from('financeiro').delete().eq('order_id', orderId)
+  await supabase.rpc('admin_delete_order', { ord_id: orderId })
 }
 
 // ---- ROTAS ----

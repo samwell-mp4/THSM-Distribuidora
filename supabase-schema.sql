@@ -103,6 +103,37 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Admin: delete order bypassing RLS
+CREATE OR REPLACE FUNCTION admin_delete_order(ord_id bigint)
+RETURNS void
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  DELETE FROM financeiro WHERE order_id = ord_id;
+  DELETE FROM pedidos WHERE id = ord_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Admin: delete user by phone (with orders and financial)
+CREATE OR REPLACE FUNCTION admin_delete_user(user_phone text)
+RETURNS text
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  uid uuid;
+  deleted integer;
+BEGIN
+  SELECT id INTO uid FROM usuarios WHERE telefone = user_phone;
+  IF uid IS NULL THEN RETURN 'Usuario nao encontrado'; END IF;
+  DELETE FROM financeiro WHERE order_id IN (SELECT id FROM pedidos WHERE user_id = uid);
+  DELETE FROM pedidos WHERE user_id = uid;
+  DELETE FROM usuarios WHERE id = uid;
+  RETURN 'ok';
+END;
+$$ LANGUAGE plpgsql;
+
 -- Users: read own, admin reads all
 CREATE POLICY "Usuarios select own" ON usuarios
   FOR SELECT USING (
