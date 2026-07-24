@@ -503,6 +503,9 @@ function App() {
   }
 
   const sendOrderWebhook = (order) => {
+    const rawPhone = (order.customer?.telefone || '').replace(/\D/g, '')
+    const telefone = rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone
+    const customer = { ...order.customer, telefone }
     fetch(WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -517,7 +520,7 @@ function App() {
           total: order.total,
           totalAvista: order.totalAvista,
           totalAprazo: order.totalAprazo,
-          customer: order.customer,
+          customer,
           items: order.items.map(i => ({ nome: i.nome, qty: i.qty, preco: i.preco, tipo: i.tipo, foto: i.foto }))
         }
       })

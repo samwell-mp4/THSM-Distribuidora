@@ -151,6 +151,9 @@ Em caso de dúvidas, entre em contato conosco.
 function sendStatusWebhook(order, newStatus, extra = {}) {
   const whatsappMessage = buildStatusWhatsApp(order, newStatus, extra)
   const returnedItems = extra.returnedItems || order.returnedItems || []
+  const rawPhone = (order.customer?.telefone || '').replace(/\D/g, '')
+  const telefone = rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone
+  const customer = { ...order.customer, telefone }
   fetch(WEBHOOK_STATUS_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -165,7 +168,7 @@ function sendStatusWebhook(order, newStatus, extra = {}) {
         total: order.total,
         totalAvista: order.totalAvista,
         totalAprazo: order.totalAprazo,
-        customer: order.customer,
+        customer,
         items: order.items.map(i => ({ nome: i.nome, qty: i.qty, preco: i.preco, tipo: i.tipo })),
         ...(returnedItems.length > 0 ? { returnedItems: returnedItems.map(i => ({ nome: i.nome, returnedQty: i.returnedQty || i.qty, preco: i.preco })) } : {})
       }
@@ -226,7 +229,7 @@ function sendAlertRota(tipo, contatos, orders, customText = '') {
       pushName: c.pushName || c.nome || '',
       cidade: c.cidade || '',
       rota: c.rota || '',
-      telefone,
+      telefone: normalizedPhone,
       loginLink,
       whatsappMessage
     }
