@@ -912,7 +912,7 @@ export default function Admin({ produtos, onVoltar }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ telefone, message: msg })
-    }).catch(() => {})
+    }).then(() => showToast('WhatsApp enviado!', 'success')).catch(() => {})
   }
 
   // Stats
