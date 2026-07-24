@@ -892,6 +892,7 @@ export default function Admin({ produtos, onVoltar }) {
       } else if (action === 'delete') {
         setOrders(prev => prev.filter(o => o.id !== id))
         setFinancial(prev => prev.filter(f => f.orderId !== id))
+        supabaseDeleteOrder(id)
       }
     })
     if (action === 'delete') showToast(`${selectedIds.size} pedido(s) excluído(s)`)
