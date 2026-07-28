@@ -121,6 +121,9 @@ ${extra.returnedItems.map(i => `  • ${i.nome} (${i.returnedQty}x) — R$ ${(i.
 ⚠️ *Importante:* Produtos embalados/lacrados não podem ser abertos. Não aceitamos devolução de produtos violados.
 Você tem até 24 horas para nos informar se houver algum item faltando ou com avaria.
 ━━━━━━━━━━━━━━━━━━
+📲 *Confirme o recebimento:* Clique no link abaixo para visualizar sua comanda e confirmar os itens recebidos:
+${link}
+━━━━━━━━━━━━━━━━━━
 Obrigado pela preferência! 🎉`
       : `✅ *PEDIDO ENTREGUE* ✅
 ━━━━━━━━━━━━━━━━━━
@@ -132,9 +135,10 @@ ${order.items.length > 0 ? `📦 Itens:\n${order.items.map(i => `  • ${i.nome}
 ⚠️ *Importante:* Produtos embalados/lacrados não podem ser abertos. Não aceitamos devolução de produtos violados.
 Você tem até 24 horas para nos informar se houver algum item faltando ou com avaria.
 ━━━━━━━━━━━━━━━━━━
-Obrigado pela preferência!
+📲 *Confirme o recebimento:* Clique no link abaixo para visualizar sua comanda e confirmar os itens recebidos:
+${link}
 ━━━━━━━━━━━━━━━━━━
-🔗 Acompanhe: ${link}`,
+Obrigado pela preferência! 🎉`,
 
     'cancelado': `❌ *PEDIDO CANCELADO* ❌
 ━━━━━━━━━━━━━━━━━━
@@ -738,7 +742,7 @@ export default function Admin({ produtos, onVoltar }) {
       return [...updated, ...newRecords]
     })
     const refundMsg = totalReembolso > 0 ? ` — Reembolso: ${formatPreco(totalReembolso)}` : ''
-    showToast(`Pedido #${orderId} finalizado!${refundMsg}`)
+    showToast(`Pedido #${orderId} finalizado!${refundMsg} WhatsApp enviado para o cliente com link de confirmação.`)
     sendStatusWebhook(updatedOrder, 'entregue', { returnedItems })
     setShowDeliveryModal(null)
     setReturnQuantities({})
@@ -2702,15 +2706,16 @@ export default function Admin({ produtos, onVoltar }) {
           onEditAndConfirm={(editedItems, currentStatus) => {
             const totalAvista = editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
             const totalAprazo = editedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
+            const newStatus = currentStatus === 'em-rota' ? 'em-rota' : 'em-rota'
             setOrders(prev => prev.map(o => o.id === showOrderDetail.id ? {
               ...o,
               items: editedItems,
               totalAvista,
               totalAprazo,
               total: totalAvista + totalAprazo,
-              status: 'em-rota'
+              status: newStatus
             } : o))
-            showToast(`Pedido #${showOrderDetail.id} atualizado e enviado para rota!`)
+            showToast(`Pedido #${showOrderDetail.id} atualizado${currentStatus !== 'em-rota' ? ' e enviado para rota!' : ' com sucesso!'}`)
             setShowOrderDetail(null)
           }}
           onUpdateCustomer={(id, customerData) => updateOrderCustomer(id, customerData)}
@@ -2727,6 +2732,20 @@ export default function Admin({ produtos, onVoltar }) {
               <button className="admin-modal-close" onClick={() => setShowDeliveryModal(null)}><i className="fa-solid fa-xmark"></i></button>
             </div>
             <div className="admin-modal-body">
+              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '0.5rem 0.75rem', marginBottom: '0.75rem' }}>
+                <p style={{ fontSize: '0.78rem', color: '#1e40af', margin: 0 }}>
+                  <i className="fa-solid fa-info-circle"></i> Após finalizar, o cliente receberá um link no WhatsApp para confirmar a entrega.
+                </p>
+                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', marginTop: '0.35rem' }}>
+                  <input type="text" readOnly value={(() => { try { return buildOrderLink(showDeliveryModal.id) } catch { return '' } })()}
+                    style={{ flex: 1, fontSize: '0.7rem', padding: '0.2rem 0.35rem', borderRadius: '4px', border: '1px solid #bfdbfe', background: 'white', color: '#1e40af' }}
+                    onClick={e => e.target.select()} />
+                  <button className="admin-btn" style={{ fontSize: '0.65rem', padding: '0.2rem 0.4rem', background: '#2563eb', color: 'white', borderColor: '#2563eb' }}
+                    onClick={() => { navigator.clipboard?.writeText(buildOrderLink(showDeliveryModal.id)); alert('Link copiado!') }}>
+                    <i className="fa-solid fa-copy"></i>
+                  </button>
+                </div>
+              </div>
               <p style={{ fontSize: '0.85rem', color: 'var(--admin-text-sec)', marginBottom: '0.75rem' }}>
                 Informe a quantidade de itens <strong>devolvidos</strong> (não vendidos). Apenas os itens vendidos serão cobrados.
               </p>
@@ -3699,7 +3718,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
             <div className="modal-actions">
               <button className="admin-btn admin-btn-sec" onClick={() => { setEditMode(false); setEditedItems(order.items.map(i => ({ ...i }))); setAddCart({}) }}>Cancelar</button>
               <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} disabled={editedItems.filter(i => i.qty > 0).length === 0} onClick={handleEditConfirm}>
-                <i className="fa-solid fa-check"></i> Salvar e Enviar para Rota
+                <i className="fa-solid fa-check"></i> {order.status === 'em-rota' ? 'Salvar Alterações' : 'Salvar e Enviar para Rota'}
               </button>
             </div>
           </div>
@@ -3718,13 +3737,13 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
         <div className="admin-modal-body">
           <div className="detail-section">
             <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              Cliente
-              {!customerEdit && order.status === 'pre-pedido' && (
-                <button className="action-btn" title="Editar dados do cliente" onClick={() => setCustomerEdit(true)} style={{ color: '#2563eb', fontSize: '0.75rem', padding: '0.2rem 0.4rem' }}>
-                  <i className="fa-solid fa-pencil"></i>
-                </button>
-              )}
-            </h4>
+                Cliente
+                {!customerEdit && order.status !== 'entregue' && order.status !== 'cancelado' && (
+                  <button className="action-btn" title="Editar dados do cliente" onClick={() => setCustomerEdit(true)} style={{ color: '#2563eb', fontSize: '0.75rem', padding: '0.2rem 0.4rem' }}>
+                    <i className="fa-solid fa-pencil"></i>
+                  </button>
+                )}
+              </h4>
             {customerEdit ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 <div><strong style={{ fontSize: '0.78rem' }}>Nome:</strong>
@@ -3920,31 +3939,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
               ))}
             </div>
           )}
-
-          <div className="modal-actions">
-            {order.status === 'pendente' && (
-              <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
-                onClick={() => { setEditMode(true); setEditedItems(order.items.map(i => ({ ...i }))) }}>
-                <i className="fa-solid fa-pen"></i> Editar Itens
-              </button>
-            )}
-            {order.status === 'pre-pedido' && (
-              <button className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }}
-                onClick={() => onPreApprovar([...rejectedItems], preReplacements)}>
-                <i className="fa-solid fa-clipboard-check"></i> OK
-              </button>
-            )}
-            {order.status === 'pendente' && (
-              <button className="admin-btn admin-btn-primary" onClick={() => onStatusChange('em-rota')}>
-                <i className="fa-solid fa-truck"></i> Em Rota
-              </button>
-            )}
-            {(order.status === 'pre-pedido' || order.status === 'pendente') && (
-              <button className="admin-btn" style={{ background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)' }} onClick={() => { if (confirm('Tem certeza que deseja cancelar esta comanda?')) { onCancelOrder?.(order.id) } }}>
-                <i className="fa-solid fa-ban"></i> Cancelar Comanda
-              </button>
-            )}
-            {order.returnedItems?.length > 0 && (
+          {order.returnedItems?.length > 0 && (
             <div className="detail-section">
               <h4 style={{ color: 'var(--danger)' }}><i className="fa-solid fa-rotate-left"></i> Itens Devolvidos</h4>
               {order.returnedItems.map((i, idx) => (
@@ -3974,8 +3969,57 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
             </div>
           )}
 
+          {order.status !== 'cancelado' && (() => {
+            const link = buildOrderLink(order.id)
+            return (
+              <div className="detail-section" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '0.5rem 0.75rem' }}>
+                <h4 style={{ fontSize: '0.78rem', color: '#166534' }}><i className="fa-solid fa-link"></i> Link do Pedido</h4>
+                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                  <input type="text" readOnly value={link}
+                    style={{ flex: 1, fontSize: '0.72rem', padding: '0.25rem 0.4rem', borderRadius: '4px', border: '1px solid #bbf7d0', background: 'white', color: '#166534' }}
+                    onClick={e => e.target.select()} />
+                  <button className="admin-btn" style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem', background: '#166534', color: 'white', borderColor: '#166534' }}
+                    onClick={() => { navigator.clipboard?.writeText(link); alert('Link copiado para a área de transferência!') }}>
+                    <i className="fa-solid fa-copy"></i>
+                  </button>
+                </div>
+                <p style={{ fontSize: '0.7rem', color: '#166534', marginTop: '0.25rem' }}>
+                  <i className="fa-solid fa-info-circle"></i> Envie este link para o cliente acompanhar e confirmar a entrega
+                </p>
+              </div>
+            )
+          })()}
+
+          <div className="modal-actions">
+            {(order.status === 'pendente' || order.status === 'em-rota') && (
+              <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
+                onClick={() => { setEditMode(true); setEditedItems(order.items.map(i => ({ ...i }))) }}>
+                <i className="fa-solid fa-pen"></i> Editar Itens
+              </button>
+            )}
+            {order.status === 'pre-pedido' && (
+              <button className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }}
+                onClick={() => onPreApprovar([...rejectedItems], preReplacements)}>
+                <i className="fa-solid fa-clipboard-check"></i> OK
+              </button>
+            )}
+            {order.status === 'pendente' && (
+              <button className="admin-btn admin-btn-primary" onClick={() => onStatusChange('em-rota')}>
+                <i className="fa-solid fa-truck"></i> Em Rota
+              </button>
+            )}
+            {order.status !== 'entregue' && order.status !== 'cancelado' && (
+              <button className="admin-btn" style={{ background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)' }} onClick={() => { if (confirm('Tem certeza que deseja cancelar esta comanda?')) { onCancelOrder?.(order.id) } }}>
+                <i className="fa-solid fa-ban"></i> Cancelar Comanda
+              </button>
+            )}
             {order.status === 'em-rota' && (
-              <button className="admin-btn admin-btn-primary" onClick={() => { onClose(); setTimeout(() => onOpenDelivery?.(order), 100) }}>
+              <button className="admin-btn admin-btn-primary" onClick={() => {
+                if (confirm('Tem certeza que deseja finalizar este pedido?\n\nO cliente receberá uma mensagem no WhatsApp com o link para confirmar a entrega.')) {
+                  onClose()
+                  setTimeout(() => onOpenDelivery?.(order), 100)
+                }
+              }}>
                 <i className="fa-solid fa-check"></i> Finalizar Pedido
               </button>
             )}

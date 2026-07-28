@@ -809,6 +809,26 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
                     <i className="fa-solid fa-rotate-left"></i> Registrar Pagamento / Devolução
                   </button>
                 )}
+                {selectedOrder.status === 'entregue' && !selectedOrder.customerConfirmed && (
+                  <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }}
+                    onClick={() => {
+                      if (confirm('Confirma que recebeu todos os itens deste pedido?')) {
+                        const updatedOrders = allOrders.map(o => o.id === selectedOrder.id ? { ...o, customerConfirmed: true, customerConfirmedAt: Date.now() } : o)
+                        setAllOrders(updatedOrders)
+                        setLS(LS_ORDERS, updatedOrders)
+                        setSelectedOrder(prev => ({ ...prev, customerConfirmed: true, customerConfirmedAt: Date.now() }))
+                        upsertOrder({ ...selectedOrder, customerConfirmed: true, customerConfirmedAt: Date.now() })
+                        alert('Recebimento confirmado! Obrigado pela preferência.')
+                      }
+                    }}>
+                    <i className="fa-solid fa-check-circle"></i> Confirmar Recebimento
+                  </button>
+                )}
+                {selectedOrder.status === 'entregue' && selectedOrder.customerConfirmed && (
+                  <div style={{ padding: '0.5rem 0.75rem', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0', fontSize: '0.82rem', color: '#166534' }}>
+                    <i className="fa-solid fa-check-circle"></i> Recebimento confirmado em {selectedOrder.customerConfirmedAt ? new Date(selectedOrder.customerConfirmedAt).toLocaleDateString('pt-BR') : '-'}
+                  </div>
+                )}
                 <button className="admin-btn admin-btn-sec" onClick={() => setSelectedOrder(null)}>Fechar</button>
               </div>
             </div>
