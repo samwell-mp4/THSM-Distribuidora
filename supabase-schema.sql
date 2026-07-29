@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS rotas_contatos (
 CREATE TABLE IF NOT EXISTS produtos (
   id integer PRIMARY KEY,
   preco numeric(12,2),
+  preco_custo numeric(12,2),
   estoque integer,
   imagem text,
   categoria text,

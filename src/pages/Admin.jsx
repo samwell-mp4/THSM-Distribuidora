@@ -517,7 +517,7 @@ export default function Admin({ produtos, onVoltar }) {
     const totalAprazo = items.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
     const order = {
       id: Date.now(),
-      date: hoje(),
+      date: data.dataPedido || hoje(),
       customer: { nome: data.nome, telefone: data.telefone, cpf: data.cpf || '', endereco: data.endereco || { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' } },
       items,
       pagamento: data.pagamento,
@@ -555,7 +555,7 @@ export default function Admin({ produtos, onVoltar }) {
     // Create financial records for "a prazo" items
     const finRecords = items.filter(i => i.tipo === 'aprazo').map(i => {
       const dias = data.diasParaVencimento || 30
-      const due = new Date()
+      const due = new Date((data.dataPedido || hoje()) + 'T12:00:00')
       due.setDate(due.getDate() + dias)
       return {
         id: order.id + '-' + i.id,
@@ -564,6 +564,7 @@ export default function Admin({ produtos, onVoltar }) {
         itemName: i.nome,
         qty: i.qty,
         value: i.preco * i.qty,
+        precoCusto: (i.preco_custo || 0) * i.qty,
         dueDate: due.toISOString().split('T')[0],
         paidDate: null,
         status: 'pendente'
@@ -614,7 +615,7 @@ export default function Admin({ produtos, onVoltar }) {
     // Create financial records for approved a-prazo items
     const finRecords = remainingItems.filter(i => i.tipo === 'aprazo').map(i => {
       const dias = 60
-      const due = new Date()
+      const due = new Date((order.date || hoje()) + 'T12:00:00')
       due.setDate(due.getDate() + dias)
       return {
         id: orderId + '-' + i.id,
@@ -623,6 +624,7 @@ export default function Admin({ produtos, onVoltar }) {
         itemName: i.nome,
         qty: i.qty,
         value: i.preco * i.qty,
+        precoCusto: (i.preco_custo || 0) * i.qty,
         dueDate: due.toISOString().split('T')[0],
         paidDate: null,
         status: 'pendente'
@@ -726,6 +728,7 @@ export default function Admin({ produtos, onVoltar }) {
           itemName: i.nome,
           qty: i.qty,
           value: i.preco * i.qty,
+          precoCusto: (i.preco_custo || 0) * i.qty,
           dueDate: hoje(),
           paidDate: hoje(),
           status: i.tipo === 'aprazo' ? 'pendente' : 'pago'
@@ -737,7 +740,7 @@ export default function Admin({ produtos, onVoltar }) {
         const returnedQty = returnQuantities[item.id] || 0
         if (returnedQty >= item.qty) return { ...f, status: 'cancelado', paidDate: hoje() }
         const remainingQty = item.qty - returnedQty
-        return { ...f, qty: remainingQty, value: item.preco * remainingQty, status: 'pago', paidDate: hoje() }
+        return { ...f, qty: remainingQty, value: item.preco * remainingQty, precoCusto: (item.preco_custo || 0) * remainingQty, status: 'pago', paidDate: hoje() }
       })
       return [...updated, ...newRecords]
     })
@@ -1050,7 +1053,7 @@ export default function Admin({ produtos, onVoltar }) {
     setProdCart(prev => {
       const existing = prev[p.id]
       if (existing) return { ...prev, [p.id]: { ...existing, qty: existing.qty + 1 } }
-      return { ...prev, [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, tipo: 'aprazo', qty: 1 } }
+      return { ...prev, [p.id]: { id: p.id, nome: p.nome, preco: p.preco, preco_custo: p.preco_custo, imagem: p.imagem, tipo: 'aprazo', qty: 1 } }
     })
   }
 
@@ -1569,6 +1572,7 @@ export default function Admin({ produtos, onVoltar }) {
                       <div className="admin-prod-card-body">
                         <h3 className="admin-prod-card-title" onClick={() => setEditingProd(p)}>{p.nome}</h3>
                         <div className="admin-prod-card-price">{formatPreco(p.preco)}</div>
+                        {p.preco_custo != null && <div className="admin-prod-card-custo" style={{ fontSize: '0.72rem', color: 'var(--admin-text-sec)', marginTop: '0.15rem' }}>Custo: {formatPreco(p.preco_custo)}</div>}
                         <button className={`admin-prod-card-btn ${prodCart[p.id] ? 'in-cart' : ''}`} onClick={() => addToProdCart(p)} disabled={p.estoque <= 0}>
                           {prodCart[p.id] ? <><i className="fa-solid fa-check"></i> Adicionado</> : <><i className="fa-solid fa-plus"></i> Adicionar</>}
                         </button>
@@ -1608,6 +1612,7 @@ export default function Admin({ produtos, onVoltar }) {
                         <th style={{ cursor: 'pointer' }} onClick={() => toggleProdSort('nome')}>Produto {prodSortIcon('nome')}</th>
                         <th style={{ cursor: 'pointer' }} onClick={() => toggleProdSort('categoria')}>Categoria {prodSortIcon('categoria')}</th>
                         <th style={{ cursor: 'pointer' }} onClick={() => toggleProdSort('preco')}>Preço {prodSortIcon('preco')}</th>
+                        <th style={{ cursor: 'pointer' }}>Custo</th>
                         <th style={{ cursor: 'pointer' }} onClick={() => toggleProdSort('estoque')}>Estoque {prodSortIcon('estoque')}</th>
                         <th>Ações</th>
                       </tr>
@@ -1626,6 +1631,7 @@ export default function Admin({ produtos, onVoltar }) {
                           <td className="td-prod-name">{p.nome}</td>
                           <td><span className="cat-tag">{p.categoria}</span></td>
                           <td className="td-price">{formatPreco(p.preco)}</td>
+                          <td className="td-price" style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>{p.preco_custo ? formatPreco(p.preco_custo) : '-'}</td>
                           <td>
                             <span className={`stock-tag ${p.estoque > 0 ? 'in' : 'out'}`}>
                               {p.estoque > 0 ? `${p.estoque} un` : 'Indisponível'}
@@ -1646,7 +1652,7 @@ export default function Admin({ produtos, onVoltar }) {
                           </td>
                         </tr>
                       ))}
-                      {paginatedProds.length === 0 && <tr><td colSpan="7" className="td-empty">Nenhum produto encontrado</td></tr>}
+                      {paginatedProds.length === 0 && <tr><td colSpan="8" className="td-empty">Nenhum produto encontrado</td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -2619,6 +2625,7 @@ export default function Admin({ produtos, onVoltar }) {
                     <th>Item</th>
                     <th>Qtd</th>
                     <th>Valor</th>
+                    <th>Custo</th>
                     <th>Vencimento</th>
                     <th>Dias</th>
                     <th>Status</th>
@@ -2636,6 +2643,7 @@ export default function Admin({ produtos, onVoltar }) {
                         <td className="td-prod-name">{f.itemName}</td>
                         <td>{f.qty}</td>
                         <td className="td-price">{formatPreco(f.value)}</td>
+                        <td className="td-price" style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>{f.precoCusto ? formatPreco(f.precoCusto) : '-'}</td>
                         <td>{formatDate(f.dueDate)}</td>
                         <td>
                           {f.status === 'pago' ? (
@@ -2673,7 +2681,7 @@ export default function Admin({ produtos, onVoltar }) {
                       </tr>
                     )
                   })}
-                  {filteredFin.length === 0 && <tr><td colSpan="9" className="td-empty">Nenhum registro financeiro</td></tr>}
+                  {filteredFin.length === 0 && <tr><td colSpan="10" className="td-empty">Nenhum registro financeiro</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -3192,6 +3200,7 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
   const [endereco, setEndereco] = useState({ cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
   const [pagamento, setPagamento] = useState('avista')
   const [diasPrazo, setDiasPrazo] = useState(30)
+  const [dataPedido, setDataPedido] = useState(hoje())
   const [cart, setCart] = useState(() => {
     if (initialCart && Object.keys(initialCart).length > 0) {
       return Object.fromEntries(
@@ -3254,7 +3263,7 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
   const cartTotal = useMemo(() => cartItems.reduce((s, i) => s + i.preco * i.qty, 0), [cartItems])
 
   const addItem = (p) => {
-    setCart(prev => ({ ...prev, [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, qty: (prev[p.id]?.qty || 0) + 1, tipo: 'aprazo' } }))
+    setCart(prev => ({ ...prev, [p.id]: { id: p.id, nome: p.nome, preco: p.preco, preco_custo: p.preco_custo, imagem: p.imagem, qty: (prev[p.id]?.qty || 0) + 1, tipo: 'aprazo' } }))
   }
 
   const removeItem = (id) => {
@@ -3290,6 +3299,7 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
       telefone: normalizePhone(telefone),
       cpf: cpf.trim(),
       endereco,
+      dataPedido,
       pagamento: pagamento === 'misto' ? 'misto' : (pagamento === 'aprazo' ? 'aprazo' : 'avista'),
       items: cartItems.map(i => ({ ...i, tipo: pagamento === 'aprazo' ? 'aprazo' : (pagamento === 'avista' ? 'avista' : i.tipo) })),
       diasParaVencimento: (pagamento === 'aprazo' || pagamento === 'misto') ? diasPrazo : 0
@@ -3464,6 +3474,10 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
 
           {step === 3 && (
             <div className="modal-form">
+              <div className="form-group">
+                <label>Data do Pedido</label>
+                <input type="date" value={dataPedido} onChange={e => setDataPedido(e.target.value)} />
+              </div>
               <div className="payment-options-admin">
                 <label className={`pay-opt ${pagamento === 'avista' ? 'selected' : ''}`}>
                   <input type="radio" name="pag" value="avista" checked={pagamento === 'avista'} onChange={() => setPagamento('avista')} />
@@ -4128,6 +4142,7 @@ function KitModal({ produtos, kit, onSave, onClose }) {
 function EditProductModal({ product, onSave, onClose }) {
   const [nome, setNome] = useState(product.nome)
   const [preco, setPreco] = useState(String(product.preco))
+  const [precoCusto, setPrecoCusto] = useState(String(product.preco_custo ?? ''))
   const [estoque, setEstoque] = useState(String(product.estoque))
   const [imagem, setImagem] = useState(product.imagem || '')
   const [categoria, setCategoria] = useState(product.categoria)
@@ -4210,7 +4225,7 @@ function EditProductModal({ product, onSave, onClose }) {
       else delete all[product.id]
       localStorage.setItem('thsm_prod_variants', JSON.stringify(all))
     } catch {}
-    onSave({ nome: nome.trim(), preco: Number(preco), estoque: Number(estoque), imagem, categoria, descricao, variantes: cleaned })
+    onSave({ nome: nome.trim(), preco: Number(preco), preco_custo: precoCusto === '' ? null : Number(precoCusto), estoque: Number(estoque), imagem, categoria, descricao, variantes: cleaned })
   }
 
   return (
@@ -4229,6 +4244,10 @@ function EditProductModal({ product, onSave, onClose }) {
             <div className="form-group">
               <label>Preço (R$) <span style={{color:'var(--danger)'}}>*</span></label>
               <input type="number" step="0.01" min="0" value={preco} onChange={e => setPreco(e.target.value)} placeholder="0,00" />
+            </div>
+            <div className="form-group">
+              <label>Preço de Custo (R$)</label>
+              <input type="number" step="0.01" min="0" value={precoCusto} onChange={e => setPrecoCusto(e.target.value)} placeholder="0,00" />
             </div>
             <div className="form-group">
               <label>Estoque</label>
