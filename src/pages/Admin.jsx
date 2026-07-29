@@ -696,6 +696,34 @@ export default function Admin({ produtos, onVoltar }) {
     sendStatusWebhook(order, 'cancelado')
   }
 
+  const cloneOrder = (original) => {
+    const newId = Date.now()
+    const newOrder = {
+      ...original,
+      id: newId,
+      date: hoje(),
+      createdAt: Date.now(),
+      status: 'pendente',
+      preApprovedAt: null,
+      pre_approved_at: null
+    }
+    setOrders(prev => [newOrder, ...prev])
+    const finRecords = original.items.filter(i => i.tipo === 'aprazo').map(i => ({
+      id: newId + '-' + i.id,
+      orderId: newId,
+      customerName: original.customer?.nome || '',
+      itemName: i.nome,
+      qty: i.qty,
+      value: i.preco * i.qty,
+      precoCusto: (i.preco_custo || 0) * i.qty,
+      dueDate: (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0] })(),
+      paidDate: null,
+      status: 'pendente'
+    }))
+    if (finRecords.length > 0) setFinancial(prev => [...finRecords, ...prev])
+    showToast(`Pedido #${original.id} clonado como #${newId.toString().slice(-6)}!`)
+  }
+
   const handleDeliveryFile = (e, type) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -1485,6 +1513,7 @@ export default function Admin({ produtos, onVoltar }) {
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Pendente" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-undo"></i></button>
                           )}
                           <button className="action-btn action-delete" title="Excluir" onClick={() => deleteOrder(o.id)}><i className="fa-solid fa-trash"></i></button>
+                          <button className="action-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }} title="Clonar" onClick={() => cloneOrder(o)}><i className="fa-solid fa-copy"></i></button>
                         </div>
                       </td>
                     </tr>
