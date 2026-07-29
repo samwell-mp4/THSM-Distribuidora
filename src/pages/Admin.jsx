@@ -1512,7 +1512,7 @@ export default function Admin({ produtos, onVoltar }) {
                           {o.status === 'em-rota' && (
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Pendente" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-undo"></i></button>
                           )}
-                          {o.status === 'em-rota' && (() => {
+                          {(() => {
                             const e = o.customer?.endereco || {}
                             const parts = [e.rua, e.numero, e.bairro, e.cidade, e.estado, e.cep].filter(Boolean)
                             if (parts.length === 0) return null
