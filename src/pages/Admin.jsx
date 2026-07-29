@@ -531,12 +531,11 @@ export default function Admin({ produtos, onVoltar }) {
 
     // Upsert user to Supabase and update local list
     const existingUser = usuarios.find(u => u.telefone === data.telefone)
-    const mergedEndereco = { ...(existingUser?.endereco || {}), ...(data.endereco || {}), origem: existingUser?.endereco?.origem || 'Admin' }
+    const mergedEndereco = { ...(existingUser?.endereco || {}), ...(data.endereco || {}), cpf: data.cpf || existingUser?.endereco?.cpf || '', origem: existingUser?.endereco?.origem || 'Admin' }
     const savedUser = await upsertUser({
       telefone: data.telefone,
       nome: data.nome,
       email: data.email || '',
-      cpf: data.cpf || '',
       endereco: mergedEndereco
     })
     if (savedUser) {
@@ -3232,6 +3231,7 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
     setSelectedUser(u)
     setNome(u.nome || '')
     setTelefone(u.telefone || '')
+    setCpf(u.endereco?.cpf || '')
     setEndereco(u.endereco || { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
     setUserSearch('')
     setShowNewForm(false)
