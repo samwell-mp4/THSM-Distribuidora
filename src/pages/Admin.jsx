@@ -388,6 +388,16 @@ export default function Admin({ produtos, onVoltar }) {
     LS.set(STORAGE_PRODUCTS, prodChanges)
     if (Object.keys(prodChanges).length > 0) upsertProducts(prodChanges)
   }, [prodChanges])
+  useEffect(() => {
+    if (newProducts.length > 0) {
+      const obj = {}
+      newProducts.forEach(p => {
+        const { _new, ...clean } = p
+        obj[p.id] = clean
+      })
+      upsertProducts(obj)
+    }
+  }, [newProducts])
   useEffect(() => { LS.set(STORAGE_CUSTOM_ROTAS, customRotas) }, [customRotas])
   useEffect(() => {
     LS.set(STORAGE_FINANCIAL, financial)
@@ -464,17 +474,33 @@ export default function Admin({ produtos, onVoltar }) {
       if (p.length) {
         const fromDB = {}
         const variantsDB = {}
+        const prodIdsFromJSON = new Set(produtos.map(x => x.id))
+        const newsFromDB = []
         p.forEach(prod => {
+          if (!prodIdsFromJSON.has(prod.id)) {
+            newsFromDB.push({ id: prod.id, nome: prod.nome || '', preco: prod.preco || 0, estoque: prod.estoque || 0, imagem: prod.imagem || '', categoria: prod.categoria || '', descricao: '', variantes: prod.variantes || {} })
+          }
           const override = {}
           if (prod.preco !== null) override.preco = prod.preco
           if (prod.estoque !== null) override.estoque = prod.estoque
           if (prod.imagem !== null) override.imagem = prod.imagem
           if (prod.categoria !== null) override.categoria = prod.categoria
+          if (prod.preco_custo !== null) override.preco_custo = prod.preco_custo
           if (Object.keys(override).length > 0) fromDB[prod.id] = override
           if (prod.variantes && Object.keys(prod.variantes).length > 0) {
             variantsDB[prod.id] = prod.variantes
           }
         })
+        if (newsFromDB.length > 0) {
+          setNewProducts(prev => {
+            const map = new Map()
+            newsFromDB.forEach(np => map.set(np.id, np))
+            prev.forEach(np => map.set(np.id, np))
+            const merged = Array.from(map.values())
+            LS.set('thsm_admin_new_products', merged)
+            return merged
+          })
+        }
         if (Object.keys(variantsDB).length > 0) {
           try {
             const existing = JSON.parse(localStorage.getItem('thsm_prod_variants') || '{}')
