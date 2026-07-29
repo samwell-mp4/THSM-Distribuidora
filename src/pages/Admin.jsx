@@ -1512,6 +1512,13 @@ export default function Admin({ produtos, onVoltar }) {
                           {o.status === 'em-rota' && (
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Pendente" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-undo"></i></button>
                           )}
+                          {o.status === 'em-rota' && (() => {
+                            const e = o.customer?.endereco || {}
+                            const parts = [e.rua, e.numero, e.bairro, e.cidade, e.estado, e.cep].filter(Boolean)
+                            if (parts.length === 0) return null
+                            const url = 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(parts.join(', '))
+                            return <button className="action-btn" style={{ color: '#ea4335', borderColor: '#ea4335' }} title="Abrir no Maps" onClick={() => window.open(url, '_blank')}><i className="fa-solid fa-location-dot"></i></button>
+                          })()}
                           <button className="action-btn action-delete" title="Excluir" onClick={() => deleteOrder(o.id)}><i className="fa-solid fa-trash"></i></button>
                           <button className="action-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }} title="Clonar" onClick={() => cloneOrder(o)}><i className="fa-solid fa-copy"></i></button>
                         </div>
