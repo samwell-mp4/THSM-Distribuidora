@@ -537,12 +537,16 @@ export default function Admin({ produtos, onVoltar }) {
   // =============================================
   // ORDERS
   // =============================================
+  const [savingOrder, setSavingOrder] = useState(false)
   const addOrder = async (data) => {
+    if (savingOrder) return
+    setSavingOrder(true)
     const items = data.items
     const totalAvista = items.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
     const totalAprazo = items.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
-    const order = {
-      id: Date.now(),
+    const orderId = Date.now()
+    let order = {
+      id: orderId,
       date: data.dataPedido || hoje(),
       customer: { nome: data.nome, telefone: data.telefone, cpf: data.cpf || '', endereco: data.endereco || { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' } },
       items,
@@ -565,7 +569,9 @@ export default function Admin({ produtos, onVoltar }) {
       endereco: mergedEndereco
     })
     if (savedUser) {
-      order.user_id = savedUser.id
+      order = { ...order, user_id: savedUser.id }
+      setOrders(prev => prev.map(o => o.id === orderId ? order : o))
+      upsertOrder(order)
       setUsuarios(prev => {
         const idx = prev.findIndex(u => u.telefone === savedUser.telefone)
         if (idx >= 0) {
@@ -601,6 +607,7 @@ export default function Admin({ produtos, onVoltar }) {
 
     showToast('Pedido adicionado com sucesso!')
     setShowAddOrder(false)
+    setSavingOrder(false)
     sendStatusWebhook(order, order.status)
   }
 
@@ -3253,6 +3260,7 @@ export default function Admin({ produtos, onVoltar }) {
 function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSave, onClose }) {
   const [step, setStep] = useState(1)
   const [showNewForm, setShowNewForm] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [userSearch, setUserSearch] = useState('')
   const [selectedUser, setSelectedUser] = useState(null)
   const [nome, setNome] = useState('')
@@ -3355,7 +3363,8 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
   }
 
   const handleSave = () => {
-    if (cartItems.length === 0 || !nome.trim() || !telefone.trim() || !cpf.trim()) return
+    if (saving || cartItems.length === 0 || !nome.trim() || !telefone.trim() || !cpf.trim()) return
+    setSaving(true)
     onSave({
       nome: nome.trim(),
       telefone: normalizePhone(telefone),
@@ -3581,8 +3590,8 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
 
               <div className="modal-actions">
                 <button className="admin-btn admin-btn-sec" onClick={() => setStep(2)}><i className="fa-solid fa-arrow-left"></i> Voltar</button>
-                <button className="admin-btn admin-btn-primary btn-save-order" disabled={cartItems.length === 0} onClick={handleSave}>
-                  <i className="fa-solid fa-check"></i> Salvar Pedido
+                <button className="admin-btn admin-btn-primary btn-save-order" disabled={saving || cartItems.length === 0} onClick={handleSave}>
+                  {saving ? <><i className="fa-solid fa-spinner fa-spin"></i> Salvando...</> : <><i className="fa-solid fa-check"></i> Salvar Pedido</>}
                 </button>
               </div>
             </div>
