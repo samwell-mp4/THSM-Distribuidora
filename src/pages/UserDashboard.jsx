@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { supabase, upsertOrder, upsertFinancial, deleteOrder as supabaseDeleteOrder, upsertUser } from '../lib/supabase'
 import AddressForm from '../components/AddressForm'
 
@@ -91,29 +91,26 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
     if (!editNome.trim()) { alert('Nome é obrigatório'); return }
     if (!editCpf.trim()) { alert('CPF é obrigatório'); return }
     setSavingProfile(true)
-    const updated = {
-      ...currentUser,
-      id: currentUser.id,
-      nome: editNome.trim(),
-      email: editEmail.trim(),
-      telefone: editTelefone.replace(/\D/g, ''),
-      cpf: editCpf.trim(),
-      endereco: { ...(currentUser.endereco || {}), ...editEndereco, senha: editSenha || currentUser.endereco?.senha || '' }
-    }
-    await upsertUser(updated)
-    localStorage.setItem(LS_SESSAO, JSON.stringify(updated))
-    setSavingProfile(false)
-    alert('Dados salvos com sucesso!')
-  }
-
-  useEffect(() => {
-    if (initialOrderId) {
-      const order = allOrders.find(o => o.id === initialOrderId)
-      if (order && currentUser && (order.userId === currentUser.id || order.customer?.email === currentUser.email || order.customer?.telefone === currentUser.telefone)) {
-        setSelectedOrder(order)
+    try {
+      const updated = {
+        ...currentUser,
+        id: currentUser.id,
+        nome: editNome.trim(),
+        email: editEmail.trim(),
+        telefone: editTelefone.replace(/\D/g, ''),
+        cpf: editCpf.trim(),
+        endereco: { ...(currentUser.endereco || {}), ...editEndereco, senha: editSenha || currentUser.endereco?.senha || '' }
       }
+      await upsertUser(updated)
+      localStorage.setItem(LS_SESSAO, JSON.stringify(updated))
+      alert('Dados salvos com sucesso!')
+    } catch (e) {
+      console.error('Erro ao salvar perfil:', e)
+      alert('Erro ao salvar. Tente novamente.')
+    } finally {
+      setSavingProfile(false)
     }
-  }, [initialOrderId])
+  }
 
   const currentUser = useMemo(() => {
     try { const d = localStorage.getItem(LS_SESSAO); return d ? JSON.parse(d) : null } catch { return null }
@@ -121,6 +118,38 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
 
   const [allOrders, setAllOrders] = useState(() => getLS(LS_ORDERS))
   const [financial, setFinancial] = useState(() => getLS(LS_FINANCIAL))
+
+  // Order tracking link (?pedido=ID): load the order directly even if not logged in
+  const initialOrderHandled = useRef(false)
+  useEffect(() => {
+    if (!initialOrderId || initialOrderHandled.current) return
+    const order = allOrders.find(o => o.id === initialOrderId)
+    if (order) {
+      setSelectedOrder(order)
+      initialOrderHandled.current = true
+    }
+  }, [initialOrderId, allOrders])
+
+  useEffect(() => {
+    if (!initialOrderId || initialOrderHandled.current) return
+    supabase.from('pedidos').select('*').eq('id', initialOrderId).maybeSingle().then(async ({ data }) => {
+      if (!data) return
+      const order = data.data && typeof data.data === 'object' ? { ...data.data, user_id: data.user_id, status: data.status } : data
+      setAllOrders(prev => prev.some(o => o.id === order.id) ? prev : [order, ...prev])
+      const { data: finData } = await supabase.from('financeiro').select('*').eq('order_id', initialOrderId)
+      if (finData?.length) {
+        const records = finData.map(f => f.data || f)
+        setFinancial(prev => {
+          const map = new Map()
+          records.forEach(r => map.set(r.id, r))
+          prev.forEach(r => map.set(r.id, r))
+          const merged = Array.from(map.values())
+          setLS(LS_FINANCIAL, merged)
+          return merged
+        })
+      }
+    }).catch(e => console.error('Erro ao carregar pedido do link:', e))
+  }, [initialOrderId])
 
   useEffect(() => {
     if (!currentUser?.telefone) return
@@ -145,10 +174,20 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
     }).catch(() => {})
   }, [currentUser?.telefone])
 
+  const normPhone = (p) => (p || '').replace(/\D/g, '')
+
   const userOrders = useMemo(() => {
     if (!currentUser) return []
+    const userPhone = normPhone(currentUser.telefone)
+    const userEmail = (currentUser.email || '').toLowerCase().trim()
     return allOrders
-      .filter(o => o.userId === currentUser.id || (currentUser.email && o.customer?.email && o.customer.email === currentUser.email) || o.customer?.telefone === currentUser.telefone)
+      .filter(o => {
+        if (o.user_id != null && o.user_id === currentUser.id) return true
+        if (o.userId != null && o.userId === currentUser.id) return true
+        if (userEmail && o.customer?.email && (o.customer.email || '').toLowerCase().trim() === userEmail) return true
+        if (userPhone && normPhone(o.customer?.telefone) === userPhone) return true
+        return false
+      })
       .sort((a, b) => b.createdAt - a.createdAt)
   }, [allOrders, currentUser])
 
@@ -683,7 +722,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
             <div className="admin-modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
               {(() => {
                 const order = selectedOrder
-                const orderFin = userFinancial.filter(f => f.orderId === order.id)
+                const orderFin = financial.filter(f => f.orderId === order.id)
                 return (
                   <>
                     <div className="detail-section">

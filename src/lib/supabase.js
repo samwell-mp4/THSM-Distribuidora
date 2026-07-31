@@ -17,9 +17,14 @@ export async function upsertUser(user) {
   if (!raw) { console.error('upsertUser: telefone vazio'); return null }
   const telefone = raw.startsWith('55') ? raw : '55' + raw
   const clean = { ...user, telefone }
-  const { data, error } = await supabase.from('usuarios').upsert(clean, { onConflict: 'telefone' }).select().single()
-  if (error) console.error('Erro upsertUser:', error)
-  return data || clean
+  try {
+    const { data, error } = await supabase.from('usuarios').upsert(clean, { onConflict: 'telefone' }).select().single()
+    if (error) console.error('Erro upsertUser:', error)
+    return data || clean
+  } catch (e) {
+    console.error('Exceção upsertUser:', e)
+    return clean
+  }
 }
 
 export async function findUserByPhone(telefone) {
@@ -76,8 +81,12 @@ export async function upsertOrder(order) {
     created_at: toDateInput(order.created_at || order.createdAt),
     data: order
   }
-  const { error } = await supabase.from('pedidos').upsert(record, { onConflict: 'id' })
-  if (error) console.error('Erro upsertOrder:', error)
+  try {
+    const { error } = await supabase.from('pedidos').upsert(record, { onConflict: 'id' })
+    if (error) console.error('Erro upsertOrder:', error)
+  } catch (e) {
+    console.error('Exceção upsertOrder:', e)
+  }
 }
 
 export async function upsertOrders(orders) {
@@ -89,8 +98,12 @@ export async function upsertOrders(orders) {
     data: o
   }))
   if (records.length === 0) return
-  const { error } = await supabase.from('pedidos').upsert(records, { onConflict: 'id' })
-  if (error) console.error('Erro upsertOrders:', error)
+  try {
+    const { error } = await supabase.from('pedidos').upsert(records, { onConflict: 'id' })
+    if (error) console.error('Erro upsertOrders:', error)
+  } catch (e) {
+    console.error('Exceção upsertOrders:', e)
+  }
 }
 
 export async function deleteOrder(id) {
@@ -123,8 +136,12 @@ export async function upsertFinancial(records) {
     status: r.status || 'pendente',
     data: r
   }))
-  const { error } = await supabase.from('financeiro').upsert(mapped, { onConflict: 'id' })
-  if (error) console.error('Erro upsertFinancial:', error)
+  try {
+    const { error } = await supabase.from('financeiro').upsert(mapped, { onConflict: 'id' })
+    if (error) console.error('Erro upsertFinancial:', error)
+  } catch (e) {
+    console.error('Exceção upsertFinancial:', e)
+  }
 }
 
 export async function deleteFinancialByOrder(orderId) {

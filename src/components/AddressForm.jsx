@@ -50,7 +50,7 @@ export default function AddressForm({ value, onChange, showErrors }) {
   const required = { cep: !cep, cidade: !cidade, rua: !rua, numero: !numero }
 
   const emitChange = useCallback((updates) => {
-    onChange({ cep, estado, cidade, bairro, rua, numero, complemento, ...updates })
+    onChange({ cep: cep.replace(/\D/g, ''), estado, cidade, bairro, rua, numero, complemento, ...updates })
   }, [cep, estado, cidade, bairro, rua, numero, complemento, onChange])
 
   // Sync from value prop
@@ -95,19 +95,11 @@ export default function AddressForm({ value, onChange, showErrors }) {
         setCidade(novaCidade)
         setBairro(novoBairro)
         setRua(novaRua)
-        onChange({
-          cep: nums,
-          estado: novoEstado,
-          cidade: novaCidade,
-          bairro: novoBairro,
-          rua: novaRua,
-          numero,
-          complemento
-        })
+        emitChange({ cep: nums, estado: novoEstado, cidade: novaCidade, bairro: novoBairro, rua: novaRua })
         setLoadingCep(false)
       })
       .catch(() => { setCepError('Erro ao buscar CEP'); setLoadingCep(false) })
-  }, [cep, onChange])
+  }, [cep, emitChange])
 
   const handleCepBlur = () => {
     const nums = cep.replace(/\D/g, '')
@@ -130,7 +122,7 @@ export default function AddressForm({ value, onChange, showErrors }) {
               type="text"
               placeholder="_____-___"
               value={formatCep(cep)}
-              onChange={e => setCep(e.target.value)}
+              onChange={e => { setCep(e.target.value); emitChange({ cep: e.target.value }) }}
               onBlur={handleCepBlur}
               maxLength={9}
             />
@@ -152,7 +144,7 @@ export default function AddressForm({ value, onChange, showErrors }) {
       <div className="form-row">
         <div className="form-group">
           <label>Estado</label>
-          <select value={estado} onChange={e => { setEstado(e.target.value); setCidade('') }}>
+          <select value={estado} onChange={e => { setEstado(e.target.value); setCidade(''); emitChange({ estado: e.target.value, cidade: '' }) }}>
             <option value="">Selecione...</option>
             {ESTADOS_BR.map(e => (
               <option key={e.sigla} value={e.sigla}>{e.nome} ({e.sigla})</option>
@@ -161,7 +153,7 @@ export default function AddressForm({ value, onChange, showErrors }) {
         </div>
         <div className={`form-group ${showErrors && required.cidade ? 'field-error' : ''}`}>
           <label>Cidade <span className="required-star">*</span></label>
-          <select value={cidade} onChange={e => setCidade(e.target.value)} disabled={!estado || loadingCidades}>
+          <select value={cidade} onChange={e => { setCidade(e.target.value); emitChange({ cidade: e.target.value }) }} disabled={!estado || loadingCidades}>
             <option value="">{loadingCidades ? 'Carregando...' : 'Selecione...'}</option>
             {cidades.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
@@ -172,12 +164,12 @@ export default function AddressForm({ value, onChange, showErrors }) {
       <div className="form-row">
         <div className={`form-group ${showErrors && required.rua ? 'field-error' : ''}`} style={{ flex: 2 }}>
           <label>Logradouro <span className="required-star">*</span></label>
-          <input type="text" placeholder="Rua, Avenida..." value={rua} onChange={e => setRua(e.target.value)} />
+          <input type="text" placeholder="Rua, Avenida..." value={rua} onChange={e => { setRua(e.target.value); emitChange({ rua: e.target.value }) }} />
           {showErrors && required.rua && <span className="field-error-msg">Logradouro é obrigatório</span>}
         </div>
         <div className={`form-group ${showErrors && required.numero ? 'field-error' : ''}`} style={{ flex: 0.6 }}>
           <label>Número <span className="required-star">*</span></label>
-          <input type="text" placeholder="Nº" value={numero} onChange={e => setNumero(e.target.value)} />
+          <input type="text" placeholder="Nº" value={numero} onChange={e => { setNumero(e.target.value); emitChange({ numero: e.target.value }) }} />
           {showErrors && required.numero && <span className="field-error-msg">Número é obrigatório</span>}
         </div>
       </div>
@@ -185,11 +177,11 @@ export default function AddressForm({ value, onChange, showErrors }) {
       <div className="form-row">
         <div className="form-group" style={{ flex: 1.5 }}>
           <label>Bairro</label>
-          <input type="text" placeholder="Bairro" value={bairro} onChange={e => setBairro(e.target.value)} />
+          <input type="text" placeholder="Bairro" value={bairro} onChange={e => { setBairro(e.target.value); emitChange({ bairro: e.target.value }) }} />
         </div>
         <div className="form-group" style={{ flex: 1 }}>
           <label>Complemento</label>
-          <input type="text" placeholder="Apto, Bloco..." value={complemento} onChange={e => setComplemento(e.target.value)} />
+          <input type="text" placeholder="Apto, Bloco..." value={complemento} onChange={e => { setComplemento(e.target.value); emitChange({ complemento: e.target.value }) }} />
         </div>
       </div>
 

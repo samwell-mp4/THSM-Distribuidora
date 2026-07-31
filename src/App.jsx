@@ -352,6 +352,8 @@ function App() {
 
     const recoveryLink = `${window.location.origin}${window.location.pathname}?recover=${token}`
     const nome = user.nome || 'Cliente'
+    const userEmail = user.email || ''
+    const baseMsg = `Olá, ${nome}! Recebemos seu pedido de recuperação de senha.\n\nClique no link abaixo para definir uma nova senha:\n${recoveryLink}\n\nEste link é válido por 24 horas.`
 
     fetch(WEBHOOK_RECOVER_URL, {
       method: 'POST',
@@ -360,12 +362,15 @@ function App() {
         event: 'recuperar-senha',
         telefone,
         nome,
+        email: userEmail,
         recoveryLink,
-        whatsappMessage: `Olá, ${nome}! Recebemos seu pedido de recuperação de senha.\n\nClique no link abaixo para definir uma nova senha:\n${recoveryLink}\n\nEste link é válido por 24 horas.`
+        whatsappMessage: baseMsg,
+        emailSubject: 'Recuperação de senha - THSM Distribuidora',
+        emailMessage: userEmail ? baseMsg : ''
       })
     }).catch(() => {})
 
-    showToast('Link de recuperação enviado via WhatsApp!')
+    showToast(userEmail ? 'Link enviado por WhatsApp e e-mail!' : 'Link enviado via WhatsApp!')
     setShowForgotPassword(false)
     setForgotPhone('')
   }
@@ -399,50 +404,68 @@ function App() {
     const addr = addressRequiredEndereco
     if (!addr.cep || !addr.cidade || !addr.rua || !addr.numero) { showToast('Preencha CEP, cidade, rua e número', 'error'); return }
     setSavingAddress(true)
-    const updated = { ...currentUser, endereco: { ...(currentUser?.endereco || {}), ...addr } }
-    await upsertUser(updated)
-    setCurrentUser(updated)
-    setShowAddressRequired(false)
-    setSavingAddress(false)
-    showToast('Endereço salvo com sucesso!')
-    navigate('/')
+    try {
+      const updated = { ...currentUser, endereco: { ...(currentUser?.endereco || {}), ...addr } }
+      await upsertUser(updated)
+      setCurrentUser(updated)
+      setShowAddressRequired(false)
+      showToast('Endereço salvo com sucesso!')
+      navigate('/')
+    } catch (e) {
+      console.error('Erro ao salvar endereço:', e)
+      showToast('Erro ao salvar endereço', 'error')
+    } finally {
+      setSavingAddress(false)
+    }
   }
 
   const saveAddressEdit = async () => {
     const addr = addressEditEndereco
     if (!addr.cep || !addr.cidade || !addr.rua || !addr.numero) { showToast('Preencha CEP, cidade, rua e número', 'error'); return }
     setSavingAddress(true)
-    const updated = { ...currentUser, endereco: { ...(currentUser?.endereco || {}), ...addr } }
-    await upsertUser(updated)
-    setCurrentUser(updated)
-    setShowAddressEdit(false)
-    setSavingAddress(false)
-    showToast('Endereço atualizado!')
+    try {
+      const updated = { ...currentUser, endereco: { ...(currentUser?.endereco || {}), ...addr } }
+      await upsertUser(updated)
+      setCurrentUser(updated)
+      setShowAddressEdit(false)
+      showToast('Endereço atualizado!')
+    } catch (e) {
+      console.error('Erro ao salvar endereço:', e)
+      showToast('Erro ao salvar endereço', 'error')
+    } finally {
+      setSavingAddress(false)
+    }
   }
 
   const autoLoginOuRegistro = async () => {
     const raw = customer.telefone.replace(/\D/g, '')
     const telefone = raw.startsWith('55') ? raw : '55' + raw
-    if (!telefone) { showToast('Informe seu telefone', 'error'); return false }
+    if (!telefone) { showToast('Informe seu telefone', 'error'); return null }
     const existente = usuarios.find(u => u.telefone === telefone)
     if (existente) {
       const senha = existente.endereco?.senha
-      if (senha && customer.senha !== senha) { showToast('Senha incorreta', 'error'); return false }
+      if (senha && customer.senha !== senha) { showToast('Senha incorreta', 'error'); return null }
       setCurrentUser(existente)
-      return true
+      return existente
     }
-    if (!customer.senha) { showToast('Escolha uma senha', 'error'); return false }
-    const { data, error } = await supabase.from('usuarios').insert({
-      telefone,
-      nome: customer.nome,
-      email: customer.email,
-      cpf: customer.cpf,
-      endereco: { ...(customer.endereco || {}), senha: customer.senha, origem: 'Registro do Site' }
-    }).select().single()
-    if (error) { showToast('Erro ao criar cadastro', 'error'); return false }
-    setUsuarios(prev => [...prev, data])
-    setCurrentUser(data)
-    return true
+    if (!customer.senha) { showToast('Escolha uma senha', 'error'); return null }
+    try {
+      const { data, error } = await supabase.from('usuarios').insert({
+        telefone,
+        nome: customer.nome,
+        email: customer.email,
+        cpf: customer.cpf,
+        endereco: { ...(customer.endereco || {}), senha: customer.senha, origem: 'Registro do Site' }
+      }).select().single()
+      if (error) { showToast('Erro ao criar cadastro', 'error'); return null }
+      setUsuarios(prev => [...prev, data])
+      setCurrentUser(data)
+      return data
+    } catch (e) {
+      console.error('Erro autoLoginOuRegistro:', e)
+      showToast('Erro ao criar cadastro', 'error')
+      return null
+    }
   }
 
   const getCartKey = (pId, variants) => {
@@ -527,15 +550,18 @@ function App() {
     }).catch(() => {})
   }
 
-  const finalizarCheckout = () => {
-    if (!autoLoginOuRegistro()) { showToast('Erro ao identificar usuário', 'error'); return }
+  const finalizarCheckout = async () => {
+    const user = await autoLoginOuRegistro()
+    if (!user) { showToast('Erro ao identificar usuário', 'error'); return }
     const items = cartItems.map(i => ({ ...i, tipo: 'aprazo' }))
     const total = items.reduce((s, i) => s + i.preco * i.qty, 0)
+    const rawPhone = customer.telefone.replace(/\D/g, '')
+    const telefone = rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone
     const order = {
       id: Date.now(),
-      user_id: currentUser?.id || null,
+      user_id: user.id,
       date: new Date().toISOString().split('T')[0],
-      customer: { nome: customer.nome, email: customer.email, telefone: customer.telefone, cpf: customer.cpf, endereco: customer.endereco },
+      customer: { nome: customer.nome, email: customer.email, telefone, cpf: customer.cpf, endereco: customer.endereco },
       items,
       pagamento: 'aprazo',
       total_avista: 0,
@@ -545,7 +571,7 @@ function App() {
       pre_approved_at: null,
       created_at: new Date().toISOString()
     }
-    upsertOrder({ ...order, user_id: currentUser?.id || order.user_id })
+    await upsertOrder({ ...order, user_id: user.id })
     setCart({})
     setCheckout(null)
     showToast('Pedido enviado com sucesso!')
@@ -979,7 +1005,7 @@ function App() {
                   </div>
                 )}
                 <p className="info-msg"><i className="fa-solid fa-info-circle"></i> Ao continuar, você cria ou acessa sua conta automaticamente.</p>
-                <button className="btn-next" disabled={!customer.nome.trim() || !customer.email.trim() || !customer.telefone.trim() || !customer.cpf.trim()} onClick={() => { if (autoLoginOuRegistro()) setCheckout('payment') }}>
+                <button className="btn-next" disabled={!customer.nome.trim() || !customer.email.trim() || !customer.telefone.trim() || !customer.cpf.trim()} onClick={async () => { if (await autoLoginOuRegistro()) setCheckout('payment') }}>
                   Continuar <i className="fa-solid fa-arrow-right"></i>
                 </button>
               </div>

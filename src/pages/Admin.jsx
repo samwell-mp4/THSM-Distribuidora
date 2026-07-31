@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import './Admin.css'
-import { supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser, deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads, upsertProducts } from '../lib/supabase'
+import { supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser, deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads, upsertProducts, generateLoginToken } from '../lib/supabase'
 
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
 const STORAGE_FINANCIAL = 'thsm_admin_financeiro'
@@ -283,6 +283,8 @@ export default function Admin({ produtos, onVoltar }) {
   const [syncingUsers, setSyncingUsers] = useState(false)
   const [selectedUserEmail, setSelectedUserEmail] = useState(null)
   const [selectedUserDetail, setSelectedUserDetail] = useState(null)
+  const [recoverLinkUser, setRecoverLinkUser] = useState(null)
+  const [recoverLink, setRecoverLink] = useState('')
   const [editingUser, setEditingUser] = useState(false)
   const [editUserData, setEditUserData] = useState(null)
   const [userSearch, setUserSearch] = useState('')
@@ -820,6 +822,15 @@ export default function Admin({ produtos, onVoltar }) {
     setFinancial(prev => prev.filter(f => f.orderId !== id))
     supabaseDeleteOrder(id)
     showToast('Pedido excluído')
+  }
+
+  const gerarLinkRecuperacao = async (user) => {
+    const telefone = (user.telefone || '').replace(/\D/g, '')
+    if (!telefone || telefone.replace(/\D/g, '').length < 11) { showToast('Usuário sem telefone válido', 'error'); return }
+    const token = await generateLoginToken(telefone)
+    if (!token) { showToast('Erro ao gerar link de recuperação', 'error'); return }
+    setRecoverLink(`${window.location.origin}${window.location.pathname}?recover=${token}`)
+    setRecoverLinkUser(user)
   }
 
   const saveUserEdit = async () => {
@@ -1828,6 +1839,12 @@ export default function Admin({ produtos, onVoltar }) {
                           }
                         }}>
                         <i className="fa-brands fa-whatsapp"></i> WhatsApp
+                      </button>
+                    )}
+                    {!editingUser && (
+                      <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
+                        onClick={() => gerarLinkRecuperacao(selectedUserDetail)}>
+                        <i className="fa-solid fa-key"></i> Recuperar Senha
                       </button>
                     )}
                     {!editingUser && (
@@ -3245,6 +3262,42 @@ export default function Admin({ produtos, onVoltar }) {
                   setFinEdit(null)
                 }}>Salvar</button>
                 <button className="admin-btn admin-btn-sec" onClick={() => setFinEdit(null)}>Cancelar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RECOVER PASSWORD LINK MODAL */}
+      {recoverLinkUser && (
+        <div className="admin-overlay" onClick={() => setRecoverLinkUser(null)}>
+          <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+            <div className="admin-modal-header">
+              <h3><i className="fa-solid fa-key"></i> Link de Recuperação</h3>
+              <button className="admin-modal-close" onClick={() => setRecoverLinkUser(null)}><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <div className="admin-modal-body">
+              <p style={{ fontSize: '0.85rem', color: 'var(--admin-text-sec)', marginBottom: '0.75rem' }}>
+                Link gerado para <strong>{recoverLinkUser.nome}</strong> ({recoverLinkUser.telefone}). Válido por 24 horas.
+                {recoverLinkUser.email ? ` Também pode ser enviado por e-mail: ${recoverLinkUser.email}` : ''}
+              </p>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input type="text" readOnly value={recoverLink} style={{ flex: 1, padding: '0.5rem 0.65rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.78rem' }} />
+                <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.4rem 0.7rem', whiteSpace: 'nowrap' }}
+                  onClick={() => { navigator.clipboard?.writeText(recoverLink); showToast('Link copiado!') }}>
+                  <i className="fa-solid fa-copy"></i> Copiar
+                </button>
+              </div>
+              <div className="modal-actions" style={{ marginTop: '1rem' }}>
+                <button className="admin-btn admin-btn-sec" onClick={() => setRecoverLinkUser(null)}>Fechar</button>
+                <button className="admin-btn" style={{ background: '#25d366', color: 'white', borderColor: '#25d366' }}
+                  onClick={() => {
+                    const phone = (recoverLinkUser.telefone || '').replace(/\D/g, '')
+                    const msg = `Olá, ${recoverLinkUser.nome || 'Cliente'}! Clique no link abaixo para definir uma nova senha:\n${recoverLink}\n\nEste link é válido por 24 horas.`
+                    window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`, '_blank')
+                  }}>
+                  <i className="fa-brands fa-whatsapp"></i> Enviar no WhatsApp
+                </button>
               </div>
             </div>
           </div>
