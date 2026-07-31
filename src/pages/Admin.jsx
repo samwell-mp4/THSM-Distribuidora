@@ -279,6 +279,7 @@ export default function Admin({ produtos, onVoltar }) {
   const [addressPreview, setAddressPreview] = useState('')
   const [finFilter, setFinFilter] = useState('todos')
   const [finEdit, setFinEdit] = useState(null)
+  const [finView, setFinView] = useState('lista')
   const [usuarios, setUsuarios] = useState([])
   const [syncingUsers, setSyncingUsers] = useState(false)
   const [selectedUserEmail, setSelectedUserEmail] = useState(null)
@@ -557,7 +558,8 @@ export default function Admin({ produtos, onVoltar }) {
       totalAprazo,
       total: totalAvista + totalAprazo,
       status: 'pendente',
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      dataVencimento: data.dataVencimento || null
     }
     setOrders(prev => [order, ...prev])
 
@@ -587,9 +589,7 @@ export default function Admin({ produtos, onVoltar }) {
 
     // Create financial records for "a prazo" items
     const finRecords = items.filter(i => i.tipo === 'aprazo').map(i => {
-      const dias = data.diasParaVencimento || 30
-      const due = new Date((data.dataPedido || hoje()) + 'T12:00:00')
-      due.setDate(due.getDate() + dias)
+      const dueDate = data.dataVencimento || hoje()
       return {
         id: order.id + '-' + i.id,
         orderId: order.id,
@@ -598,7 +598,7 @@ export default function Admin({ produtos, onVoltar }) {
         qty: i.qty,
         value: i.preco * i.qty,
         precoCusto: (i.preco_custo || 0) * i.qty,
-        dueDate: due.toISOString().split('T')[0],
+        dueDate,
         paidDate: null,
         status: 'pendente'
       }
@@ -623,7 +623,7 @@ export default function Admin({ produtos, onVoltar }) {
     if (order && !skipWebhook) sendStatusWebhook(order, status)
   }
 
-  const preApprovarPedido = (orderId, rejectedItemIds, replacements = []) => {
+  const preApprovarPedido = (orderId, rejectedItemIds, replacements = [], dataVencimento = null) => {
     const order = orders.find(o => o.id === orderId)
     if (!order) return
     const rejected = new Set(rejectedItemIds)
@@ -643,14 +643,17 @@ export default function Admin({ produtos, onVoltar }) {
       total: totalAvista + totalAprazo,
       status: 'pendente',
       preApprovedAt: now,
+      dataVencimento: dataVencimento || order.dataVencimento || null,
       rejectedItems: rejectedItemIds.length > 0 ? rejectedItemIds.map(idx => order.items[idx]) : []
     }
     setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o))
     // Create financial records for approved a-prazo items
     const finRecords = remainingItems.filter(i => i.tipo === 'aprazo').map(i => {
-      const dias = 60
-      const due = new Date((order.date || hoje()) + 'T12:00:00')
-      due.setDate(due.getDate() + dias)
+      const dueDate = dataVencimento || (() => {
+        const d = new Date((order.date || hoje()) + 'T12:00:00')
+        d.setDate(d.getDate() + 60)
+        return d.toISOString().split('T')[0]
+      })()
       return {
         id: orderId + '-' + i.id,
         orderId,
@@ -659,7 +662,7 @@ export default function Admin({ produtos, onVoltar }) {
         qty: i.qty,
         value: i.preco * i.qty,
         precoCusto: (i.preco_custo || 0) * i.qty,
-        dueDate: due.toISOString().split('T')[0],
+        dueDate,
         paidDate: null,
         status: 'pendente'
       }
@@ -717,18 +720,22 @@ export default function Admin({ produtos, onVoltar }) {
       pre_approved_at: null
     }
     setOrders(prev => [newOrder, ...prev])
-    const finRecords = original.items.filter(i => i.tipo === 'aprazo').map(i => ({
-      id: newId + '-' + i.id,
-      orderId: newId,
-      customerName: original.customer?.nome || '',
-      itemName: i.nome,
-      qty: i.qty,
-      value: i.preco * i.qty,
-      precoCusto: (i.preco_custo || 0) * i.qty,
-      dueDate: (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0] })(),
-      paidDate: null,
-      status: 'pendente'
-    }))
+    const finRecords = original.items.filter(i => i.tipo === 'aprazo').map(i => {
+      const origFin = financial.find(f => f.id === original.id + '-' + i.id)
+      const dueDate = origFin?.dueDate || (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0] })()
+      return {
+        id: newId + '-' + i.id,
+        orderId: newId,
+        customerName: original.customer?.nome || '',
+        itemName: i.nome,
+        qty: i.qty,
+        value: i.preco * i.qty,
+        precoCusto: (i.preco_custo || 0) * i.qty,
+        dueDate,
+        paidDate: null,
+        status: 'pendente'
+      }
+    })
     if (finRecords.length > 0) setFinancial(prev => [...finRecords, ...prev])
     showToast(`Pedido #${original.id} clonado como #${newId.toString().slice(-6)}!`)
   }
@@ -2690,6 +2697,15 @@ export default function Admin({ produtos, onVoltar }) {
               </div>
             </div>
 
+            <div className="fin-view-toggle">
+              <button className={`admin-tab ${finView === 'lista' ? 'active' : ''}`} onClick={() => setFinView('lista')}>
+                <i className="fa-solid fa-table"></i> Lista
+              </button>
+              <button className={`admin-tab ${finView === 'calendario' ? 'active' : ''}`} onClick={() => setFinView('calendario')}>
+                <i className="fa-solid fa-calendar-days"></i> Calendário
+              </button>
+            </div>
+
             <div className="admin-tabs">
               {[
                 { id: 'todos', label: 'Todas', count: financial.length },
@@ -2702,74 +2718,78 @@ export default function Admin({ produtos, onVoltar }) {
               ))}
             </div>
 
-            <div className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Cliente</th>
-                    <th>Item</th>
-                    <th>Qtd</th>
-                    <th>Valor</th>
-                    <th>Custo</th>
-                    <th>Vencimento</th>
-                    <th>Dias</th>
-                    <th>Status</th>
-                    <th>Pagamento</th>
-                    <th>Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredFin.map(f => {
-                    const dias = diffDays(hoje(), f.dueDate)
-                    const atrasado = f.status === 'pendente' && dias > 0
-                    return (
-                      <tr key={f.id} className={atrasado ? 'row-overdue' : ''}>
-                        <td>{f.customerName}</td>
-                        <td className="td-prod-name">{f.itemName}</td>
-                        <td>{f.qty}</td>
-                        <td className="td-price">{formatPreco(f.value)}</td>
-                        <td className="td-price" style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>{f.precoCusto ? formatPreco(f.precoCusto) : '-'}</td>
-                        <td>{formatDate(f.dueDate)}</td>
-                        <td>
-                          {f.status === 'pago' ? (
-                            <span className="days-ok">Pago</span>
-                          ) : dias > 0 ? (
-                            <span className="days-overdue">+{dias} dias</span>
-                          ) : dias === 0 ? (
-                            <span className="days-today">Vence hoje</span>
-                          ) : (
-                            <span className="days-future">Faltam {Math.abs(dias)} dias</span>
-                          )}
-                        </td>
-                        <td>
-                          <span className={`status-tag ${atrasado ? 'status-atrasado' : f.status === 'pendente' ? 'status-pendente' : 'status-pago'}`}>
-                            {atrasado ? 'Atrasado' : f.status === 'pendente' ? 'Pendente' : 'Pago'}
-                          </span>
-                        </td>
-                        <td>
-                          {f.paidDate ? formatDate(f.paidDate) : '-'}
-                        </td>
-                        <td>
-                          <div className="td-actions">
-                            {f.status === 'pendente' && (
-                              <>
-                                <button className="action-btn action-confirm" title="Quitar" onClick={() => quitarFin(f.id)}>
-                                  <i className="fa-solid fa-check"></i>
-                                </button>
-                                <button className="action-btn" title="Editar vencimento" onClick={() => setFinEdit(f)}>
-                                  <i className="fa-solid fa-calendar"></i>
-                                </button>
-                              </>
+            {finView === 'calendario' && <FinCalendar financial={financial} />}
+
+            {finView === 'lista' && (
+              <div className="admin-table-wrap">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Cliente</th>
+                      <th>Item</th>
+                      <th>Qtd</th>
+                      <th>Valor</th>
+                      <th>Custo</th>
+                      <th>Vencimento</th>
+                      <th>Dias</th>
+                      <th>Status</th>
+                      <th>Pagamento</th>
+                      <th>Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredFin.map(f => {
+                      const dias = diffDays(hoje(), f.dueDate)
+                      const atrasado = f.status === 'pendente' && dias > 0
+                      return (
+                        <tr key={f.id} className={atrasado ? 'row-overdue' : ''}>
+                          <td>{f.customerName}</td>
+                          <td className="td-prod-name">{f.itemName}</td>
+                          <td>{f.qty}</td>
+                          <td className="td-price">{formatPreco(f.value)}</td>
+                          <td className="td-price" style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>{f.precoCusto ? formatPreco(f.precoCusto) : '-'}</td>
+                          <td>{formatDate(f.dueDate)}</td>
+                          <td>
+                            {f.status === 'pago' ? (
+                              <span className="days-ok">Pago</span>
+                            ) : dias > 0 ? (
+                              <span className="days-overdue">+{dias} dias</span>
+                            ) : dias === 0 ? (
+                              <span className="days-today">Vence hoje</span>
+                            ) : (
+                              <span className="days-future">Faltam {Math.abs(dias)} dias</span>
                             )}
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                  {filteredFin.length === 0 && <tr><td colSpan="10" className="td-empty">Nenhum registro financeiro</td></tr>}
-                </tbody>
-              </table>
-            </div>
+                          </td>
+                          <td>
+                            <span className={`status-tag ${atrasado ? 'status-atrasado' : f.status === 'pendente' ? 'status-pendente' : 'status-pago'}`}>
+                              {atrasado ? 'Atrasado' : f.status === 'pendente' ? 'Pendente' : 'Pago'}
+                            </span>
+                          </td>
+                          <td>
+                            {f.paidDate ? formatDate(f.paidDate) : '-'}
+                          </td>
+                          <td>
+                            <div className="td-actions">
+                              {f.status === 'pendente' && (
+                                <>
+                                  <button className="action-btn action-confirm" title="Quitar" onClick={() => quitarFin(f.id)}>
+                                    <i className="fa-solid fa-check"></i>
+                                  </button>
+                                  <button className="action-btn" title="Editar vencimento" onClick={() => setFinEdit(f)}>
+                                    <i className="fa-solid fa-calendar"></i>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                    {filteredFin.length === 0 && <tr><td colSpan="10" className="td-empty">Nenhum registro financeiro</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </main>
@@ -2794,7 +2814,7 @@ export default function Admin({ produtos, onVoltar }) {
           produtos={produtosAtuais}
           onClose={() => setShowOrderDetail(null)}
           onStatusChange={(s) => { updateOrderStatus(showOrderDetail.id, s); setShowOrderDetail(null) }}
-          onPreApprovar={(rejectedIds, replacements) => preApprovarPedido(showOrderDetail.id, rejectedIds, replacements)}
+          onPreApprovar={(rejectedIds, replacements, venc) => preApprovarPedido(showOrderDetail.id, rejectedIds, replacements, venc)}
           onOpenDelivery={(order) => { setShowDeliveryModal(order); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview('') }}
           onEditAndConfirm={(editedItems, currentStatus) => {
             const totalAvista = editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
@@ -3321,7 +3341,11 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
   const [cpf, setCpf] = useState('')
   const [endereco, setEndereco] = useState({ cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
   const [pagamento, setPagamento] = useState('avista')
-  const [diasPrazo, setDiasPrazo] = useState(30)
+  const [dataVencimento, setDataVencimento] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 30)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })
   const [dataPedido, setDataPedido] = useState(hoje())
   const [cart, setCart] = useState(() => {
     if (initialCart && Object.keys(initialCart).length > 0) {
@@ -3426,7 +3450,7 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
       dataPedido,
       pagamento: pagamento === 'misto' ? 'misto' : (pagamento === 'aprazo' ? 'aprazo' : 'avista'),
       items: cartItems.map(i => ({ ...i, tipo: pagamento === 'aprazo' ? 'aprazo' : (pagamento === 'avista' ? 'avista' : i.tipo) })),
-      diasParaVencimento: (pagamento === 'aprazo' || pagamento === 'misto') ? diasPrazo : 0
+      dataVencimento: (pagamento === 'aprazo' || pagamento === 'misto') ? dataVencimento : ''
     })
   }
 
@@ -3622,8 +3646,8 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
 
               {(pagamento === 'aprazo' || pagamento === 'misto') && (
                 <div className="form-group">
-                  <label>Dias para vencimento</label>
-                  <input type="number" min={1} max={365} value={diasPrazo} onChange={e => setDiasPrazo(Number(e.target.value))} />
+                  <label>Data de vencimento</label>
+                  <input type="date" value={dataVencimento} onChange={e => setDataVencimento(e.target.value)} />
                 </div>
               )}
 
@@ -3667,6 +3691,11 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
   const [preAddSearch, setPreAddSearch] = useState('')
   const [preAddCart, setPreAddCart] = useState({})
   const [preReplacements, setPreReplacements] = useState([])
+  const [preVencimento, setPreVencimento] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 60)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })
   const [customerEdit, setCustomerEdit] = useState(false)
   const [editCustomer, setEditCustomer] = useState({
     nome: order.customer?.nome || '',
@@ -3858,11 +3887,11 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
               <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} disabled={editedItems.filter(i => i.qty > 0).length === 0} onClick={handleEditConfirm}>
                 <i className="fa-solid fa-check"></i> {order.status === 'em-rota' ? 'Salvar Alterações' : 'Salvar e Enviar para Rota'}
               </button>
-            </div>
           </div>
         </div>
       </div>
-    )
+    </div>
+  )
   }
 
   return (
@@ -4128,6 +4157,16 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
             )
           })()}
 
+          {order.status === 'pre-pedido' && (
+            <div className="detail-section">
+              <label style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: '0.3rem' }}>
+                <i className="fa-solid fa-calendar-day"></i> Data de vencimento das contas a prazo
+              </label>
+              <input type="date" value={preVencimento} onChange={e => setPreVencimento(e.target.value)}
+                style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', background: 'var(--admin-bg)', color: 'var(--admin-text)' }} />
+            </div>
+          )}
+
           <div className="modal-actions">
             {(order.status === 'pendente' || order.status === 'em-rota') && (
               <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
@@ -4137,7 +4176,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
             )}
             {order.status === 'pre-pedido' && (
               <button className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }}
-                onClick={() => onPreApprovar([...rejectedItems], preReplacements)}>
+                onClick={() => onPreApprovar([...rejectedItems], preReplacements, preVencimento)}>
                 <i className="fa-solid fa-clipboard-check"></i> OK
               </button>
             )}
@@ -4496,6 +4535,90 @@ function EditProductModal({ product, onSave, onClose }) {
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// =============================================
+// FINANCE CALENDAR VIEW
+// =============================================
+function FinCalendar({ financial }) {
+  const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
+  const [selectedDay, setSelectedDay] = useState(null)
+  const todayStr = hoje()
+  const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+  const mStr = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`
+  const firstDow = month.getDay()
+  const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate()
+  const monthLabel = month.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  const cells = []
+  for (let i = 0; i < firstDow; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+  const billsFor = (day) => day ? financial.filter(f => f.dueDate === `${mStr}-${String(day).padStart(2, '0')}`) : []
+  const selectedBills = selectedDay ? financial.filter(f => f.dueDate === selectedDay) : []
+  const nav = (delta) => setMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + delta, 1))
+  const goToday = () => setMonth(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
+  return (
+    <div className="fin-calendar">
+      <div className="fin-cal-header">
+        <button className="admin-btn" onClick={() => nav(-1)}><i className="fa-solid fa-chevron-left"></i></button>
+        <strong>{monthLabel}</strong>
+        <button className="admin-btn" onClick={() => nav(1)}><i className="fa-solid fa-chevron-right"></i></button>
+        <button className="admin-btn admin-btn-sec cal-today-btn" onClick={goToday}>Hoje</button>
+      </div>
+      <div className="fin-cal-grid">
+        {weekdays.map(w => <div key={w} className="cal-weekday">{w}</div>)}
+        {cells.map((d, i) => {
+          if (!d) return <div key={'x' + i} className="cal-day cal-day-empty" />
+          const dayStr = `${mStr}-${String(d).padStart(2, '0')}`
+          const bills = billsFor(d)
+          const pend = bills.filter(b => b.status === 'pendente')
+          const pago = bills.filter(b => b.status === 'pago')
+          const overdue = pend.length > 0 && dayStr < todayStr
+          const hasPend = pend.length > 0
+          const isToday = dayStr === todayStr
+          const isSelected = selectedDay === dayStr
+          return (
+            <div
+              key={dayStr}
+              className={`cal-day ${isToday ? 'cal-today' : ''} ${overdue ? 'cal-overdue' : ''} ${hasPend && !overdue ? 'cal-has-pend' : ''} ${isSelected ? 'cal-selected' : ''}`}
+              onClick={() => setSelectedDay(isSelected ? null : dayStr)}
+            >
+              <span className="cal-day-num">{d}</span>
+              {bills.length > 0 && (
+                <div className="cal-day-info">
+                  {pend.length > 0 && <span className="cal-badge cal-badge-pend">{pend.length} devendo</span>}
+                  {pago.length > 0 && <span className="cal-badge cal-badge-paid">{pago.length} pago</span>}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <div className="fin-cal-legend">
+        <span><i className="legend-dot dot-overdue" /> Em atraso</span>
+        <span><i className="legend-dot dot-pend" /> Pendente</span>
+        <span><i className="legend-dot dot-paid" /> Pago</span>
+      </div>
+      <div className="cal-details">
+        <h4>{selectedDay ? formatDate(selectedDay) : 'Selecione um dia para ver as contas'}</h4>
+        {selectedDay && selectedBills.length === 0 && <p className="cal-no-bills">Nenhuma conta vence neste dia.</p>}
+        {selectedDay && selectedBills.map(f => {
+          const overdue = f.status === 'pendente' && f.dueDate < todayStr
+          return (
+            <div key={f.id} className="cal-detail-item">
+              <div className="cal-detail-info">
+                <strong>{f.customerName}</strong>
+                <span>{f.itemName} ({f.qty}x)</span>
+              </div>
+              <span className="cal-detail-value">{formatPreco(f.value)}</span>
+              <span className={`status-tag ${f.status === 'pago' ? 'status-pago' : f.status === 'cancelado' ? 'status-cancelado' : overdue ? 'status-atrasado' : 'status-pendente'}`}>
+                {f.status === 'pago' ? 'Pago' : f.status === 'cancelado' ? 'Cancelado' : overdue ? 'Atrasado' : 'Pendente'}
+              </span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
