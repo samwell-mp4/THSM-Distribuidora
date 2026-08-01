@@ -6,6 +6,8 @@ const STORAGE_PRODUCTS = 'thsm_admin_produtos'
 const STORAGE_FINANCIAL = 'thsm_admin_financeiro'
 const STORAGE_DESPESAS = 'thsm_admin_despesas'
 const STORAGE_CUSTOM_ROTAS = 'thsm_custom_rotas'
+const STORAGE_CUSTOM_CATS = 'thsm_custom_categorias'
+const STORAGE_CUSTOM_TIPOS = 'thsm_custom_despesa_tipos'
 const WEBHOOK_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/novo-pedido'
 const LISTA_CONTATOS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/lista-contatos'
 const ALERTAR_ROTAS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/alertar-rotas'
@@ -326,6 +328,8 @@ export default function Admin({ produtos, onVoltar }) {
   const [userMsgMenu, setUserMsgMenu] = useState(null)
   const USER_PAGE_SIZE = 50
   const [prodCatFilter, setProdCatFilter] = useState('TODOS')
+  const [customCategorias, setCustomCategorias] = useState(() => LS.get(STORAGE_CUSTOM_CATS, []))
+  const [customDespesaTipos, setCustomDespesaTipos] = useState(() => LS.get(STORAGE_CUSTOM_TIPOS, []))
   const [prodStockFilter, setProdStockFilter] = useState('todos')
   const [prodPriceRange, setProdPriceRange] = useState([0, 5000])
   const [prodSort, setProdSort] = useState({ field: 'nome', dir: 'asc' })
@@ -430,6 +434,8 @@ export default function Admin({ produtos, onVoltar }) {
     }
   }, [newProducts])
   useEffect(() => { LS.set(STORAGE_CUSTOM_ROTAS, customRotas) }, [customRotas])
+  useEffect(() => { LS.set(STORAGE_CUSTOM_CATS, customCategorias) }, [customCategorias])
+  useEffect(() => { LS.set(STORAGE_CUSTOM_TIPOS, customDespesaTipos) }, [customDespesaTipos])
   useEffect(() => {
     LS.set(STORAGE_FINANCIAL, financial)
     if (financial.length > 0) upsertFinancial(financial)
@@ -1122,7 +1128,22 @@ export default function Admin({ produtos, onVoltar }) {
     if (editingProd) setEditingProd(null)
   }
 
-  const categoriasProd = useMemo(() => ['TODOS', ...[...new Set(produtosAtuais.map(p => p.categoria).filter(Boolean))].sort()], [produtosAtuais])
+  const categoriasProd = useMemo(() => ['TODOS', ...[...new Set([...produtosAtuais.map(p => p.categoria), ...customCategorias].filter(Boolean))].sort()], [produtosAtuais, customCategorias])
+
+  const addCategoria = () => {
+    const nome = prompt('Nome da nova categoria:')
+    if (!nome || !nome.trim()) return
+    const cat = nome.trim()
+    setCustomCategorias(prev => prev.includes(cat) ? prev : [...prev, cat])
+    setProdCatFilter(cat)
+    showToast(`Categoria "${cat}" criada!`)
+  }
+
+  const addDespesaTipo = (tipo) => {
+    if (!tipo) return
+    setCustomDespesaTipos(prev => prev.includes(tipo) ? prev : [...prev, tipo])
+    showToast(`Tipo "${tipo}" criado!`)
+  }
 
   const filteredProds = useMemo(() => {
     const t = prodSearch.toLowerCase().trim()
@@ -1684,6 +1705,9 @@ export default function Admin({ produtos, onVoltar }) {
               <select value={prodCatFilter} onChange={e => setProdCatFilter(e.target.value)} style={{ padding: '0.45rem 0.7rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', background: 'white', cursor: 'pointer' }}>
                 {categoriasProd.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
+              <button className="admin-btn admin-btn-sec" title="Nova categoria" onClick={addCategoria} style={{ padding: '0.45rem 0.7rem', fontSize: '0.82rem' }}>
+                <i className="fa-solid fa-plus"></i> Nova
+              </button>
               <select value={prodStockFilter} onChange={e => setProdStockFilter(e.target.value)} style={{ padding: '0.45rem 0.7rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', background: 'white', cursor: 'pointer' }}>
                 <option value="todos">Todos os estoques</option>
                 <option value="in">Em estoque</option>
@@ -3579,6 +3603,8 @@ export default function Admin({ produtos, onVoltar }) {
       {showDespesaModal && (
         <DespesaModal
           despesa={editingDespesa}
+          customTipos={customDespesaTipos}
+          onAddTipo={addDespesaTipo}
           onSave={saveDespesa}
           onClose={() => { setShowDespesaModal(false); setEditingDespesa(null) }}
         />
@@ -4926,13 +4952,19 @@ function FinCalendar({ financial }) {
 // =============================================
 // MODAL: DESPESA (expense)
 // =============================================
-function DespesaModal({ despesa, onSave, onClose }) {
+function DespesaModal({ despesa, customTipos = [], onAddTipo, onSave, onClose }) {
   const [tipo, setTipo] = useState(despesa?.tipo || 'Alimentação')
   const [descricao, setDescricao] = useState(despesa?.descricao || '')
   const [value, setValue] = useState(despesa ? String(despesa.value) : '')
   const [dueDate, setDueDate] = useState(despesa?.dueDate || hoje())
   const [paymentMethod, setPaymentMethod] = useState(despesa?.paymentMethod || 'pix')
   const [status, setStatus] = useState(despesa?.status || 'pendente')
+
+  const tiposDisponiveis = useMemo(() => {
+    const merged = [...new Set([...DESPESA_TIPOS, ...customTipos])]
+    if (tipo && !merged.includes(tipo)) merged.push(tipo)
+    return merged
+  }, [customTipos, tipo])
 
   const handleSave = () => {
     const val = Number(value)
@@ -4950,9 +4982,21 @@ function DespesaModal({ despesa, onSave, onClose }) {
         <div className="admin-modal-body">
           <div className="form-group">
             <label>Tipo de despesa</label>
-            <select value={tipo} onChange={e => setTipo(e.target.value)}>
-              {DESPESA_TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
+            <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+              <select value={tipo} onChange={e => setTipo(e.target.value)} style={{ flex: 1 }}>
+                {tiposDisponiveis.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <button type="button" className="admin-btn admin-btn-sec" style={{ padding: '0.45rem 0.7rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} onClick={() => {
+                const nome = prompt('Nome do novo tipo de despesa:')
+                if (nome && nome.trim()) {
+                  const n = nome.trim()
+                  setTipo(n)
+                  if (onAddTipo) onAddTipo(n)
+                }
+              }}>
+                <i className="fa-solid fa-plus"></i> Novo
+              </button>
+            </div>
           </div>
           <div className="form-group">
             <label>Descrição</label>
