@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS produtos (
 
 ALTER TABLE produtos ADD COLUMN IF NOT EXISTS nome text DEFAULT '';
 ALTER TABLE produtos ADD COLUMN IF NOT EXISTS descricao text DEFAULT '';
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS variantes jsonb DEFAULT '{}'::jsonb;
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco_custo numeric(12,2);
 ALTER TABLE produtos ALTER COLUMN id TYPE bigint;
 
 -- 5b. DESPESAS (expense records)
