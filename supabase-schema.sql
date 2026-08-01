@@ -153,88 +153,110 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Users: read own, admin reads all
+DROP POLICY IF EXISTS "Usuarios select own" ON usuarios;
 CREATE POLICY "Usuarios select own" ON usuarios
   FOR SELECT USING (
     telefone = COALESCE(nullif(current_setting('app.user_phone', true), ''), 'nobody')
     OR current_setting('app.is_admin', true) = 'true'
   );
 
+DROP POLICY IF EXISTS "Usuarios insert" ON usuarios;
 CREATE POLICY "Usuarios insert" ON usuarios
   FOR INSERT WITH CHECK (true);
 
 -- Pedidos: user sees own, admin sees all
+DROP POLICY IF EXISTS "Pedidos select own" ON pedidos;
 CREATE POLICY "Pedidos select own" ON pedidos
   FOR SELECT USING (
     user_id IN (SELECT id FROM usuarios WHERE telefone = COALESCE(nullif(current_setting('app.user_phone', true), ''), 'nobody'))
     OR current_setting('app.is_admin', true) = 'true'
   );
 
+DROP POLICY IF EXISTS "Pedidos insert" ON pedidos;
 CREATE POLICY "Pedidos insert" ON pedidos
   FOR INSERT WITH CHECK (
     current_setting('app.is_admin', true) = 'true'
     OR user_id IN (SELECT id FROM usuarios WHERE telefone = COALESCE(nullif(current_setting('app.user_phone', true), ''), 'nobody'))
   );
 
+DROP POLICY IF EXISTS "Pedidos update" ON pedidos;
 CREATE POLICY "Pedidos update" ON pedidos
   FOR UPDATE USING (current_setting('app.is_admin', true) = 'true');
 
 -- Financeiro: user sees own, admin sees all
+DROP POLICY IF EXISTS "Financeiro select own" ON financeiro;
 CREATE POLICY "Financeiro select own" ON financeiro
   FOR SELECT USING (
     order_id IN (SELECT id FROM pedidos WHERE user_id IN (SELECT id FROM usuarios WHERE telefone = COALESCE(nullif(current_setting('app.user_phone', true), ''), 'nobody')))
     OR current_setting('app.is_admin', true) = 'true'
   );
 
+DROP POLICY IF EXISTS "Financeiro insert" ON financeiro;
 CREATE POLICY "Financeiro insert" ON financeiro
   FOR INSERT WITH CHECK (current_setting('app.is_admin', true) = 'true');
 
+DROP POLICY IF EXISTS "Financeiro update" ON financeiro;
 CREATE POLICY "Financeiro update" ON financeiro
   FOR UPDATE USING (current_setting('app.is_admin', true) = 'true');
 
+DROP POLICY IF EXISTS "Financeiro delete" ON financeiro;
 CREATE POLICY "Financeiro delete" ON financeiro
   FOR DELETE USING (current_setting('app.is_admin', true) = 'true');
 
 -- Rotas: admin only
+DROP POLICY IF EXISTS "Rotas admin all" ON rotas_contatos;
 CREATE POLICY "Rotas admin all" ON rotas_contatos
   FOR ALL USING (current_setting('app.is_admin', true) = 'true');
 
+DROP POLICY IF EXISTS "Rotas select all" ON rotas_contatos;
 CREATE POLICY "Rotas select all" ON rotas_contatos
   FOR SELECT USING (true);
 
 -- Produtos: all can read, admin writes
+DROP POLICY IF EXISTS "Produtos select all" ON produtos;
 CREATE POLICY "Produtos select all" ON produtos
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Produtos admin all" ON produtos;
 CREATE POLICY "Produtos admin all" ON produtos
   FOR ALL USING (current_setting('app.is_admin', true) = 'true');
 
 -- Despesas: admin only (full access)
+DROP POLICY IF EXISTS "Despesas select admin" ON despesas;
 CREATE POLICY "Despesas select admin" ON despesas
   FOR SELECT USING (current_setting('app.is_admin', true) = 'true');
 
+DROP POLICY IF EXISTS "Despesas insert admin" ON despesas;
 CREATE POLICY "Despesas insert admin" ON despesas
   FOR INSERT WITH CHECK (current_setting('app.is_admin', true) = 'true');
 
+DROP POLICY IF EXISTS "Despesas update admin" ON despesas;
 CREATE POLICY "Despesas update admin" ON despesas
   FOR UPDATE USING (current_setting('app.is_admin', true) = 'true');
 
+DROP POLICY IF EXISTS "Despesas delete admin" ON despesas;
 CREATE POLICY "Despesas delete admin" ON despesas
   FOR DELETE USING (current_setting('app.is_admin', true) = 'true');
 
 -- Login tokens: anon can insert (recovery flow), select/update by token only
+DROP POLICY IF EXISTS "Login tokens insert" ON login_tokens;
 CREATE POLICY "Login tokens insert" ON login_tokens
   FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Login tokens select" ON login_tokens;
 CREATE POLICY "Login tokens select" ON login_tokens
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Login tokens update" ON login_tokens;
 CREATE POLICY "Login tokens update" ON login_tokens
   FOR UPDATE USING (true);
 
 -- Leads: anon can insert, admin can select all
+DROP POLICY IF EXISTS "Leads insert" ON leads;
 CREATE POLICY "Leads insert" ON leads
   FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Leads select" ON leads;
 CREATE POLICY "Leads select" ON leads
   FOR SELECT USING (current_setting('app.is_admin', true) = 'true');
 
