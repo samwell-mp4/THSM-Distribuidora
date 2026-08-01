@@ -1130,15 +1130,6 @@ export default function Admin({ produtos, onVoltar }) {
 
   const categoriasProd = useMemo(() => ['TODOS', ...[...new Set([...produtosAtuais.map(p => p.categoria), ...customCategorias].filter(Boolean))].sort()], [produtosAtuais, customCategorias])
 
-  const addCategoria = () => {
-    const nome = prompt('Nome da nova categoria:')
-    if (!nome || !nome.trim()) return
-    const cat = nome.trim()
-    setCustomCategorias(prev => prev.includes(cat) ? prev : [...prev, cat])
-    setProdCatFilter(cat)
-    showToast(`Categoria "${cat}" criada!`)
-  }
-
   const addDespesaTipo = (tipo) => {
     if (!tipo) return
     setCustomDespesaTipos(prev => prev.includes(tipo) ? prev : [...prev, tipo])
@@ -1702,12 +1693,22 @@ export default function Admin({ produtos, onVoltar }) {
                 <i className="fa-solid fa-search"></i>
                 <input type="text" placeholder="Buscar produto..." value={prodSearch} onChange={e => setProdSearch(e.target.value)} style={{ width: '100%' }} />
               </div>
-              <select value={prodCatFilter} onChange={e => setProdCatFilter(e.target.value)} style={{ padding: '0.45rem 0.7rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', background: 'white', cursor: 'pointer' }}>
+              <select value={prodCatFilter} onChange={e => {
+                if (e.target.value === '__nova__') {
+                  const nome = prompt('Nome da nova categoria:')
+                  if (nome && nome.trim()) {
+                    const cat = nome.trim()
+                    setCustomCategorias(prev => prev.includes(cat) ? prev : [...prev, cat])
+                    setProdCatFilter(cat)
+                    showToast(`Categoria "${cat}" criada!`)
+                  }
+                  return
+                }
+                setProdCatFilter(e.target.value)
+              }} style={{ padding: '0.45rem 0.7rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', background: 'white', cursor: 'pointer' }}>
                 {categoriasProd.map(c => <option key={c} value={c}>{c}</option>)}
+                <option value="__nova__">＋ Nova categoria...</option>
               </select>
-              <button className="admin-btn admin-btn-sec" title="Nova categoria" onClick={addCategoria} style={{ padding: '0.45rem 0.7rem', fontSize: '0.82rem' }}>
-                <i className="fa-solid fa-plus"></i> Nova
-              </button>
               <select value={prodStockFilter} onChange={e => setProdStockFilter(e.target.value)} style={{ padding: '0.45rem 0.7rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', background: 'white', cursor: 'pointer' }}>
                 <option value="todos">Todos os estoques</option>
                 <option value="in">Em estoque</option>
@@ -4982,21 +4983,21 @@ function DespesaModal({ despesa, customTipos = [], onAddTipo, onSave, onClose })
         <div className="admin-modal-body">
           <div className="form-group">
             <label>Tipo de despesa</label>
-            <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-              <select value={tipo} onChange={e => setTipo(e.target.value)} style={{ flex: 1 }}>
-                {tiposDisponiveis.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-              <button type="button" className="admin-btn admin-btn-sec" style={{ padding: '0.45rem 0.7rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }} onClick={() => {
+            <select value={tipo} onChange={e => {
+              if (e.target.value === '__nova__') {
                 const nome = prompt('Nome do novo tipo de despesa:')
                 if (nome && nome.trim()) {
                   const n = nome.trim()
                   setTipo(n)
                   if (onAddTipo) onAddTipo(n)
                 }
-              }}>
-                <i className="fa-solid fa-plus"></i> Novo
-              </button>
-            </div>
+                return
+              }
+              setTipo(e.target.value)
+            }}>
+              {tiposDisponiveis.map(t => <option key={t} value={t}>{t}</option>)}
+              <option value="__nova__">＋ Novo tipo...</option>
+            </select>
           </div>
           <div className="form-group">
             <label>Descrição</label>
