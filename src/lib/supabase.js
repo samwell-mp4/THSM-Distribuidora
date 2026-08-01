@@ -130,7 +130,9 @@ export async function getAllFinancial() {
 
 export async function upsertFinancial(records) {
   if (records.length === 0) return
-  const mapped = records.map(r => ({
+  const seen = new Map()
+  records.forEach(r => seen.set(r.id, r))
+  const mapped = [...seen.values()].map(r => ({
     id: r.id,
     order_id: r.orderId || r.order_id,
     status: r.status || 'pendente',
@@ -242,7 +244,9 @@ export async function getAllDespesas() {
 
 export async function upsertDespesas(records) {
   if (records.length === 0) return
-  const mapped = records.map(r => ({
+  const seen = new Map()
+  records.forEach(r => seen.set(r.id, r))
+  const mapped = [...seen.values()].map(r => ({
     id: r.id,
     status: r.status || 'pendente',
     data: r

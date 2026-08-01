@@ -17,7 +17,9 @@ const LS = {
   get(key, def) {
     try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : def } catch { return def }
   },
-  set(key, val) { localStorage.setItem(key, JSON.stringify(val)) }
+  set(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)) } catch (e) { console.warn('LS.set quota/falha:', key, e) }
+  }
 }
 
 function formatPreco(v) {
