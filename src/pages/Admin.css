@@ -773,6 +773,58 @@
   margin-top: 1rem;
 }
 
+/* PAYMENT CHIPS */
+.pag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 20px;
+  border: 1px solid var(--admin-border);
+  background: var(--admin-card);
+  color: var(--admin-text);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.pag-chip:hover { border-color: var(--accent); }
+
+.pag-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* PAYMENT BADGE (tables) */
+.pag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pag-badge-pix { background: rgba(22,163,74,0.12); color: #15803d; }
+.pag-badge-dinheiro { background: rgba(245,158,11,0.12); color: #b45309; }
+.pag-badge-cartao { background: rgba(37,99,235,0.12); color: #1d4ed8; }
+
+/* DESPESA TYPE BADGE */
+.despesa-tipo {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 20px;
+  background: rgba(139,92,246,0.12);
+  color: #7c3aed;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* ADD PRODUCT LIST */
 .add-prod-list {
   max-height: 280px;

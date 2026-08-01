@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import './Admin.css'
-import { supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser, deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads, upsertProducts, generateLoginToken } from '../lib/supabase'
+import { supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser, deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads, upsertProducts, upsertDespesas, generateLoginToken } from '../lib/supabase'
 
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
 const STORAGE_FINANCIAL = 'thsm_admin_financeiro'
+const STORAGE_DESPESAS = 'thsm_admin_despesas'
 const STORAGE_CUSTOM_ROTAS = 'thsm_custom_rotas'
 const WEBHOOK_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/novo-pedido'
 const LISTA_CONTATOS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/lista-contatos'
@@ -39,6 +40,24 @@ const WEBHOOK_STATUS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypan
 
 function buildOrderLink(orderId) {
   return `${window.location.origin}${window.location.pathname}?pedido=${orderId}`
+}
+
+const PAG_METHODS = {
+  pix: { label: 'Pix', icon: 'fa-qrcode' },
+  dinheiro: { label: 'Dinheiro', icon: 'fa-money-bill-wave' },
+  cartao: { label: 'Cartão', icon: 'fa-credit-card' },
+  'pix+dinheiro': { label: 'Pix + Dinheiro', icon: 'fa-arrows-left-right' },
+  'pix+cartao': { label: 'Pix + Cartão', icon: 'fa-arrows-left-right' },
+  'cartao+dinheiro': { label: 'Cartão + Dinheiro', icon: 'fa-arrows-left-right' }
+}
+
+const PAG_SINGLE = ['pix', 'dinheiro', 'cartao']
+
+const DESPESA_TIPOS = ['Alimentação', 'Combustível', 'Transporte', 'Material', 'Energia', 'Água', 'Internet', 'Aluguel', 'Salários', 'Impostos', 'Marketing', 'Manutenção', 'Embalagens', 'Outros']
+
+function formatPagamento(m) {
+  if (!m) return null
+  return PAG_METHODS[m] || null
 }
 
 function buildStatusWhatsApp(order, newStatus, extra = {}) {
@@ -280,6 +299,15 @@ export default function Admin({ produtos, onVoltar }) {
   const [finFilter, setFinFilter] = useState('todos')
   const [finEdit, setFinEdit] = useState(null)
   const [finView, setFinView] = useState('lista')
+  const [finTab, setFinTab] = useState('receber')
+  const [despesas, setDespesas] = useState(() => LS.get(STORAGE_DESPESAS, []))
+  const [despesaFilter, setDespesaFilter] = useState('todas')
+  const [showDespesaModal, setShowDespesaModal] = useState(false)
+  const [editingDespesa, setEditingDespesa] = useState(null)
+  const [quitarFinTarget, setQuitarFinTarget] = useState(null)
+  const [quitarPayment, setQuitarPayment] = useState('pix')
+  const [deliveryPayment, setDeliveryPayment] = useState('pix')
+  const [deliverySplits, setDeliverySplits] = useState({ pix: '', dinheiro: '', cartao: '' })
   const [usuarios, setUsuarios] = useState([])
   const [syncingUsers, setSyncingUsers] = useState(false)
   const [selectedUserEmail, setSelectedUserEmail] = useState(null)
@@ -406,6 +434,10 @@ export default function Admin({ produtos, onVoltar }) {
     LS.set(STORAGE_FINANCIAL, financial)
     if (financial.length > 0) upsertFinancial(financial)
   }, [financial])
+  useEffect(() => {
+    LS.set(STORAGE_DESPESAS, despesas)
+    if (despesas.length > 0) upsertDespesas(despesas)
+  }, [despesas])
 
   const fetchRotas = useCallback(async () => {
     setRotasLoading(true)
@@ -453,7 +485,7 @@ export default function Admin({ produtos, onVoltar }) {
 
   useEffect(() => {
     setSyncingUsers(true)
-    syncAllForAdmin().then(({ orders: o, financial: f, users: u, rotas: r, products: p }) => {
+    syncAllForAdmin().then(({ orders: o, financial: f, users: u, rotas: r, products: p, despesas: d }) => {
       if (o.length) {
         setOrders(prev => {
           const map = new Map()
@@ -469,6 +501,16 @@ export default function Admin({ produtos, onVoltar }) {
           prev.forEach(fin => map.set(fin.id, fin))
           const merged = Array.from(map.values())
           LS.set(STORAGE_FINANCIAL, merged)
+          return merged
+        })
+      }
+      if (d.length) {
+        setDespesas(prev => {
+          const map = new Map()
+          d.forEach(des => map.set(des.id, des))
+          prev.forEach(des => map.set(des.id, des))
+          const merged = Array.from(map.values())
+          LS.set(STORAGE_DESPESAS, merged)
           return merged
         })
       }
@@ -781,7 +823,9 @@ export default function Admin({ produtos, onVoltar }) {
       totalReembolso,
       identityPhoto: identityPreview || order.identityPhoto || '',
       addressProof: addressPreview || order.addressProof || '',
-      deliveredAt: Date.now()
+      deliveredAt: Date.now(),
+      paymentMethod: deliveryPayment,
+      paymentSplits: deliverySplits
     }
     setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o))
     // Sync financeiro: update existing, create for missing items
@@ -800,7 +844,8 @@ export default function Admin({ produtos, onVoltar }) {
           precoCusto: (i.preco_custo || 0) * i.qty,
           dueDate: hoje(),
           paidDate: hoje(),
-          status: i.tipo === 'aprazo' ? 'pendente' : 'pago'
+          status: i.tipo === 'aprazo' ? 'pendente' : 'pago',
+          paymentMethod: deliveryPayment
         }))
       const updated = prev.map(f => {
         if (f.orderId !== orderId) return f
@@ -809,7 +854,7 @@ export default function Admin({ produtos, onVoltar }) {
         const returnedQty = returnQuantities[item.id] || 0
         if (returnedQty >= item.qty) return { ...f, status: 'cancelado', paidDate: hoje() }
         const remainingQty = item.qty - returnedQty
-        return { ...f, qty: remainingQty, value: item.preco * remainingQty, precoCusto: (item.preco_custo || 0) * remainingQty, status: 'pago', paidDate: hoje() }
+        return { ...f, qty: remainingQty, value: item.preco * remainingQty, precoCusto: (item.preco_custo || 0) * remainingQty, status: 'pago', paidDate: hoje(), paymentMethod: deliveryPayment }
       })
       return [...updated, ...newRecords]
     })
@@ -1077,7 +1122,7 @@ export default function Admin({ produtos, onVoltar }) {
     if (editingProd) setEditingProd(null)
   }
 
-  const categoriasProd = useMemo(() => ['TODOS', ...[...new Set(produtos.map(p => p.categoria))].sort()], [produtos])
+  const categoriasProd = useMemo(() => ['TODOS', ...[...new Set(produtosAtuais.map(p => p.categoria).filter(Boolean))].sort()], [produtosAtuais])
 
   const filteredProds = useMemo(() => {
     const t = prodSearch.toLowerCase().trim()
@@ -1219,15 +1264,53 @@ export default function Admin({ produtos, onVoltar }) {
     return { pendente, pago, atrasado }
   }, [financial])
 
+  const filteredDespesas = useMemo(() => {
+    if (despesaFilter === 'todas') return despesas
+    return despesas.filter(d => d.status === despesaFilter)
+  }, [despesas, despesaFilter])
+
+  const despesasPendentes = useMemo(() => despesas.filter(d => d.status === 'pendente').reduce((s, d) => s + d.value, 0), [despesas])
+
   const quitarFin = (id) => {
-    setFinancial(prev => prev.map(f => f.id === id ? { ...f, status: 'pago', paidDate: hoje() } : f))
+    const target = financial.find(f => f.id === id)
+    if (!target) return
+    setQuitarPayment('pix')
+    setQuitarFinTarget(target)
+  }
+
+  const confirmQuitarFin = () => {
+    if (!quitarFinTarget) return
+    setFinancial(prev => prev.map(f => f.id === quitarFinTarget.id ? { ...f, status: 'pago', paidDate: hoje(), paymentMethod: quitarPayment || f.paymentMethod } : f))
     showToast('Conta marcada como paga!')
-    setFinEdit(null)
+    setQuitarFinTarget(null)
   }
 
   const updateDueDate = (id, newDate) => {
     setFinancial(prev => prev.map(f => f.id === id ? { ...f, dueDate: newDate } : f))
     showToast('Vencimento atualizado!')
+  }
+
+  const saveDespesa = (data) => {
+    if (editingDespesa) {
+      setDespesas(prev => prev.map(d => d.id === editingDespesa.id ? { ...d, ...data } : d))
+      showToast('Despesa atualizada!')
+    } else {
+      setDespesas(prev => [{ ...data, id: Date.now(), status: data.status || 'pendente', paidDate: data.status === 'pago' ? hoje() : null, createdAt: Date.now() }, ...prev])
+      showToast('Despesa adicionada!')
+    }
+    setShowDespesaModal(false)
+    setEditingDespesa(null)
+  }
+
+  const quitarDespesa = (id) => {
+    setDespesas(prev => prev.map(d => d.id === id ? { ...d, status: 'pago', paidDate: hoje() } : d))
+    showToast('Despesa marcada como paga!')
+  }
+
+  const deleteDespesa = (id) => {
+    if (!confirm('Excluir esta despesa?')) return
+    setDespesas(prev => prev.filter(d => d.id !== id))
+    showToast('Despesa excluída')
   }
 
   // =============================================
@@ -1533,7 +1616,7 @@ export default function Admin({ produtos, onVoltar }) {
                           {o.status === 'pre-pedido' && <button className="action-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }} title="Revisar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-clipboard-check"></i></button>}
                           {o.status === 'pendente' && <button className="action-btn action-confirm" title="Editar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-pen"></i></button>}
                           {o.status === 'pendente' && <button className="action-btn action-deliver" title="Em Rota" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-truck"></i></button>}
-                          {o.status === 'em-rota' && <button className="action-btn action-confirm" title="Finalizar Entrega" onClick={() => { setShowDeliveryModal(o); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview('') }}><i className="fa-solid fa-check"></i></button>}
+                          {o.status === 'em-rota' && <button className="action-btn action-confirm" title="Finalizar Entrega" onClick={() => { setShowDeliveryModal(o); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview(''); setDeliveryPayment('pix'); setDeliverySplits({ pix: '', dinheiro: '', cartao: '' }) }}><i className="fa-solid fa-check"></i></button>}
                           {o.status === 'em-rota' && (
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Pendente" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-undo"></i></button>
                           )}
@@ -2695,99 +2778,202 @@ export default function Admin({ produtos, onVoltar }) {
                   <span>Recebido</span>
                 </div>
               </div>
+              <div className="admin-card card-purple">
+                <i className="fa-solid fa-receipt"></i>
+                <div>
+                  <strong>{formatPreco(despesasPendentes)}</strong>
+                  <span>Despesas a pagar</span>
+                </div>
+              </div>
             </div>
 
             <div className="fin-view-toggle">
-              <button className={`admin-tab ${finView === 'lista' ? 'active' : ''}`} onClick={() => setFinView('lista')}>
-                <i className="fa-solid fa-table"></i> Lista
+              <button className={`admin-tab ${finTab === 'receber' ? 'active' : ''}`} onClick={() => setFinTab('receber')}>
+                <i className="fa-solid fa-money-bill-trend-up"></i> Contas a Receber
               </button>
-              <button className={`admin-tab ${finView === 'calendario' ? 'active' : ''}`} onClick={() => setFinView('calendario')}>
-                <i className="fa-solid fa-calendar-days"></i> Calendário
+              <button className={`admin-tab ${finTab === 'despesas' ? 'active' : ''}`} onClick={() => setFinTab('despesas')}>
+                <i className="fa-solid fa-receipt"></i> Despesas
               </button>
             </div>
 
-            <div className="admin-tabs">
-              {[
-                { id: 'todos', label: 'Todas', count: financial.length },
-                { id: 'pendente', label: 'Pendentes', count: financial.filter(f => f.status === 'pendente').length },
-                { id: 'pago', label: 'Pagas', count: financial.filter(f => f.status === 'pago').length },
-              ].map(t => (
-                <button key={t.id} className={`admin-tab ${finFilter === t.id ? 'active' : ''}`} onClick={() => setFinFilter(t.id)}>
-                  {t.label} {t.count > 0 && <span className="tab-count">{t.count}</span>}
-                </button>
-              ))}
-            </div>
+            {finTab === 'receber' && (
+              <>
+                <div className="fin-view-toggle">
+                  <button className={`admin-tab ${finView === 'lista' ? 'active' : ''}`} onClick={() => setFinView('lista')}>
+                    <i className="fa-solid fa-table"></i> Lista
+                  </button>
+                  <button className={`admin-tab ${finView === 'calendario' ? 'active' : ''}`} onClick={() => setFinView('calendario')}>
+                    <i className="fa-solid fa-calendar-days"></i> Calendário
+                  </button>
+                </div>
 
-            {finView === 'calendario' && <FinCalendar financial={financial} />}
+                <div className="admin-tabs">
+                  {[
+                    { id: 'todos', label: 'Todas', count: financial.length },
+                    { id: 'pendente', label: 'Pendentes', count: financial.filter(f => f.status === 'pendente').length },
+                    { id: 'pago', label: 'Pagas', count: financial.filter(f => f.status === 'pago').length },
+                  ].map(t => (
+                    <button key={t.id} className={`admin-tab ${finFilter === t.id ? 'active' : ''}`} onClick={() => setFinFilter(t.id)}>
+                      {t.label} {t.count > 0 && <span className="tab-count">{t.count}</span>}
+                    </button>
+                  ))}
+                </div>
 
-            {finView === 'lista' && (
-              <div className="admin-table-wrap">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Cliente</th>
-                      <th>Item</th>
-                      <th>Qtd</th>
-                      <th>Valor</th>
-                      <th>Custo</th>
-                      <th>Vencimento</th>
-                      <th>Dias</th>
-                      <th>Status</th>
-                      <th>Pagamento</th>
-                      <th>Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredFin.map(f => {
-                      const dias = diffDays(hoje(), f.dueDate)
-                      const atrasado = f.status === 'pendente' && dias > 0
-                      return (
-                        <tr key={f.id} className={atrasado ? 'row-overdue' : ''}>
-                          <td>{f.customerName}</td>
-                          <td className="td-prod-name">{f.itemName}</td>
-                          <td>{f.qty}</td>
-                          <td className="td-price">{formatPreco(f.value)}</td>
-                          <td className="td-price" style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>{f.precoCusto ? formatPreco(f.precoCusto) : '-'}</td>
-                          <td>{formatDate(f.dueDate)}</td>
-                          <td>
-                            {f.status === 'pago' ? (
-                              <span className="days-ok">Pago</span>
-                            ) : dias > 0 ? (
-                              <span className="days-overdue">+{dias} dias</span>
-                            ) : dias === 0 ? (
-                              <span className="days-today">Vence hoje</span>
-                            ) : (
-                              <span className="days-future">Faltam {Math.abs(dias)} dias</span>
-                            )}
-                          </td>
-                          <td>
-                            <span className={`status-tag ${atrasado ? 'status-atrasado' : f.status === 'pendente' ? 'status-pendente' : 'status-pago'}`}>
-                              {atrasado ? 'Atrasado' : f.status === 'pendente' ? 'Pendente' : 'Pago'}
-                            </span>
-                          </td>
-                          <td>
-                            {f.paidDate ? formatDate(f.paidDate) : '-'}
-                          </td>
-                          <td>
-                            <div className="td-actions">
-                              {f.status === 'pendente' && (
-                                <>
-                                  <button className="action-btn action-confirm" title="Quitar" onClick={() => quitarFin(f.id)}>
+                {finView === 'calendario' && <FinCalendar financial={financial} />}
+
+                {finView === 'lista' && (
+                  <div className="admin-table-wrap">
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>Cliente</th>
+                          <th>Item</th>
+                          <th>Qtd</th>
+                          <th>Valor</th>
+                          <th>Custo</th>
+                          <th>Vencimento</th>
+                          <th>Dias</th>
+                          <th>Status</th>
+                          <th>Forma</th>
+                          <th>Pagamento</th>
+                          <th>Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredFin.map(f => {
+                          const dias = diffDays(hoje(), f.dueDate)
+                          const atrasado = f.status === 'pendente' && dias > 0
+                          const pm = formatPagamento(f.paymentMethod)
+                          return (
+                            <tr key={f.id} className={atrasado ? 'row-overdue' : ''}>
+                              <td>{f.customerName}</td>
+                              <td className="td-prod-name">{f.itemName}</td>
+                              <td>{f.qty}</td>
+                              <td className="td-price">{formatPreco(f.value)}</td>
+                              <td className="td-price" style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>{f.precoCusto ? formatPreco(f.precoCusto) : '-'}</td>
+                              <td>{formatDate(f.dueDate)}</td>
+                              <td>
+                                {f.status === 'pago' ? (
+                                  <span className="days-ok">Pago</span>
+                                ) : dias > 0 ? (
+                                  <span className="days-overdue">+{dias} dias</span>
+                                ) : dias === 0 ? (
+                                  <span className="days-today">Vence hoje</span>
+                                ) : (
+                                  <span className="days-future">Faltam {Math.abs(dias)} dias</span>
+                                )}
+                              </td>
+                              <td>
+                                <span className={`status-tag ${atrasado ? 'status-atrasado' : f.status === 'pendente' ? 'status-pendente' : 'status-pago'}`}>
+                                  {atrasado ? 'Atrasado' : f.status === 'pendente' ? 'Pendente' : 'Pago'}
+                                </span>
+                              </td>
+                              <td>
+                                {pm ? <span className="pag-badge"><i className={`fa-solid ${pm.icon}`}></i> {pm.label}</span> : '-'}
+                              </td>
+                              <td>
+                                {f.paidDate ? formatDate(f.paidDate) : '-'}
+                              </td>
+                              <td>
+                                <div className="td-actions">
+                                  {f.status === 'pendente' && (
+                                    <>
+                                      <button className="action-btn action-confirm" title="Quitar" onClick={() => quitarFin(f.id)}>
+                                        <i className="fa-solid fa-check"></i>
+                                      </button>
+                                      <button className="action-btn" title="Editar vencimento" onClick={() => setFinEdit(f)}>
+                                        <i className="fa-solid fa-calendar"></i>
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                        {filteredFin.length === 0 && <tr><td colSpan="11" className="td-empty">Nenhum registro financeiro</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+
+            {finTab === 'despesas' && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
+                  <button className="admin-btn" style={{ background: '#059669', color: 'white', borderColor: '#059669' }} onClick={() => { setEditingDespesa(null); setShowDespesaModal(true) }}>
+                    <i className="fa-solid fa-plus"></i> Nova Despesa
+                  </button>
+                </div>
+
+                <div className="admin-tabs">
+                  {[
+                    { id: 'todas', label: 'Todas', count: despesas.length },
+                    { id: 'pendente', label: 'Pendentes', count: despesas.filter(d => d.status === 'pendente').length },
+                    { id: 'pago', label: 'Pagas', count: despesas.filter(d => d.status === 'pago').length },
+                  ].map(t => (
+                    <button key={t.id} className={`admin-tab ${despesaFilter === t.id ? 'active' : ''}`} onClick={() => setDespesaFilter(t.id)}>
+                      {t.label} {t.count > 0 && <span className="tab-count">{t.count}</span>}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="admin-table-wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Tipo</th>
+                        <th>Descrição</th>
+                        <th>Valor</th>
+                        <th>Vencimento</th>
+                        <th>Forma</th>
+                        <th>Status</th>
+                        <th>Pagamento</th>
+                        <th>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredDespesas.map(d => {
+                        const atrasado = d.status === 'pendente' && diffDays(d.dueDate, hoje()) > 0
+                        const pm = formatPagamento(d.paymentMethod)
+                        return (
+                          <tr key={d.id} className={atrasado ? 'row-overdue' : ''}>
+                            <td><span className="despesa-tipo">{d.tipo}</span></td>
+                            <td className="td-prod-name">{d.descricao || '-'}</td>
+                            <td className="td-price">{formatPreco(d.value)}</td>
+                            <td>{formatDate(d.dueDate)}</td>
+                            <td>
+                              {pm ? <span className="pag-badge"><i className={`fa-solid ${pm.icon}`}></i> {pm.label}</span> : '-'}
+                            </td>
+                            <td>
+                              <span className={`status-tag ${atrasado ? 'status-atrasado' : d.status === 'pendente' ? 'status-pendente' : 'status-pago'}`}>
+                                {atrasado ? 'Atrasado' : d.status === 'pendente' ? 'Pendente' : 'Pago'}
+                              </span>
+                            </td>
+                            <td>{d.paidDate ? formatDate(d.paidDate) : '-'}</td>
+                            <td>
+                              <div className="td-actions">
+                                {d.status === 'pendente' && (
+                                  <button className="action-btn action-confirm" title="Quitar" onClick={() => quitarDespesa(d.id)}>
                                     <i className="fa-solid fa-check"></i>
                                   </button>
-                                  <button className="action-btn" title="Editar vencimento" onClick={() => setFinEdit(f)}>
-                                    <i className="fa-solid fa-calendar"></i>
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                    {filteredFin.length === 0 && <tr><td colSpan="10" className="td-empty">Nenhum registro financeiro</td></tr>}
-                  </tbody>
-                </table>
+                                )}
+                                <button className="action-btn" title="Editar" onClick={() => { setEditingDespesa(d); setShowDespesaModal(true) }}>
+                                  <i className="fa-solid fa-pen"></i>
+                                </button>
+                                <button className="action-btn action-delete" title="Excluir" onClick={() => deleteDespesa(d.id)}>
+                                  <i className="fa-solid fa-trash-can"></i>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                      {filteredDespesas.length === 0 && <tr><td colSpan="8" className="td-empty">Nenhuma despesa cadastrada</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
@@ -2815,7 +3001,7 @@ export default function Admin({ produtos, onVoltar }) {
           onClose={() => setShowOrderDetail(null)}
           onStatusChange={(s) => { updateOrderStatus(showOrderDetail.id, s); setShowOrderDetail(null) }}
           onPreApprovar={(rejectedIds, replacements, venc) => preApprovarPedido(showOrderDetail.id, rejectedIds, replacements, venc)}
-          onOpenDelivery={(order) => { setShowDeliveryModal(order); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview('') }}
+          onOpenDelivery={(order) => { setShowDeliveryModal(order); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview(''); setDeliveryPayment('pix'); setDeliverySplits({ pix: '', dinheiro: '', cartao: '' }) }}
           onEditAndConfirm={(editedItems, currentStatus) => {
             const totalAvista = editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
             const totalAprazo = editedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
@@ -2913,6 +3099,40 @@ export default function Admin({ produtos, onVoltar }) {
                   </div>
                 )
               })()}
+
+              {/* Payment method */}
+              <div style={{ marginBottom: '1rem' }}>
+                <p style={{ fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.5rem' }}>
+                  <i className="fa-solid fa-credit-card"></i> Forma de pagamento do cliente
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  {Object.entries(PAG_METHODS).map(([id, conf]) => (
+                    <button key={id} type="button"
+                      className={`pag-chip ${deliveryPayment === id ? 'active' : ''}`}
+                      onClick={() => { setDeliveryPayment(id); setDeliverySplits({ pix: '', dinheiro: '', cartao: '' }) }}>
+                      <i className={`fa-solid ${conf.icon}`}></i> {conf.label}
+                    </button>
+                  ))}
+                </div>
+                {deliveryPayment.includes('+') && (
+                  <div style={{ marginTop: '0.5rem', background: '#f9fafb', borderRadius: '8px', padding: '0.5rem 0.75rem' }}>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)', marginBottom: '0.4rem' }}>
+                      <i className="fa-solid fa-arrows-left-right"></i> Divida o valor pago em cada forma:
+                    </p>
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                      {deliveryPayment.split('+').map(m => (
+                        <div key={m} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <span style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>{PAG_METHODS[m].label}:</span>
+                          <input type="number" min="0" step="0.01" placeholder="0,00"
+                            value={deliverySplits[m] || ''}
+                            onChange={e => setDeliverySplits(prev => ({ ...prev, [m]: e.target.value }))}
+                            style={{ width: '90px', padding: '0.25rem 0.35rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.82rem' }} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Document upload (optional) */}
               <div style={{ marginBottom: '1rem' }}>
@@ -3244,6 +3464,7 @@ export default function Admin({ produtos, onVoltar }) {
       {editingProd && (
         <EditProductModal
           product={editingProd}
+          categorias={categoriasProd.filter(c => c !== 'TODOS')}
           onSave={(changes) => {
             if (editingProd._new) {
               const newId = editingProd.id
@@ -3286,6 +3507,48 @@ export default function Admin({ produtos, onVoltar }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL QUITAR CONTA (payment method) */}
+      {quitarFinTarget && (
+        <div className="admin-overlay" onClick={() => setQuitarFinTarget(null)}>
+          <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px' }}>
+            <div className="admin-modal-header">
+              <h3><i className="fa-solid fa-check-circle"></i> Quitar Conta</h3>
+              <button className="admin-modal-close" onClick={() => setQuitarFinTarget(null)}><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <div className="admin-modal-body">
+              <p style={{ marginBottom: '0.75rem', fontSize: '0.85rem', color: 'var(--admin-text-sec)' }}>
+                {quitarFinTarget.customerName} - {quitarFinTarget.itemName} - <strong style={{ color: 'var(--admin-text)' }}>{formatPreco(quitarFinTarget.value)}</strong>
+              </p>
+              <div className="form-group">
+                <label>Forma de pagamento</label>
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                  {PAG_SINGLE.map(m => (
+                    <button key={m} type="button" className={`pag-chip ${quitarPayment === m ? 'active' : ''}`} onClick={() => setQuitarPayment(m)}>
+                      <i className={`fa-solid ${PAG_METHODS[m].icon}`}></i> {PAG_METHODS[m].label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="modal-actions" style={{ marginTop: '1rem' }}>
+                <button className="admin-btn admin-btn-sec" onClick={() => setQuitarFinTarget(null)}>Cancelar</button>
+                <button className="admin-btn admin-btn-primary" onClick={confirmQuitarFin}>
+                  <i className="fa-solid fa-check"></i> Confirmar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DESPESA */}
+      {showDespesaModal && (
+        <DespesaModal
+          despesa={editingDespesa}
+          onSave={saveDespesa}
+          onClose={() => { setShowDespesaModal(false); setEditingDespesa(null) }}
+        />
       )}
 
       {/* RECOVER PASSWORD LINK MODAL */}
@@ -4302,7 +4565,7 @@ function KitModal({ produtos, kit, onSave, onClose }) {
 // =============================================
 // MODAL: EDIT PRODUCT
 // =============================================
-function EditProductModal({ product, onSave, onClose }) {
+function EditProductModal({ product, categorias = [], onSave, onClose }) {
   const [nome, setNome] = useState(product.nome)
   const [preco, setPreco] = useState(String(product.preco))
   const [precoCusto, setPrecoCusto] = useState(String(product.preco_custo ?? ''))
@@ -4440,7 +4703,10 @@ function EditProductModal({ product, onSave, onClose }) {
 
           <div className="form-group">
             <label>Categoria</label>
-            <input type="text" value={categoria} onChange={e => setCategoria(e.target.value)} placeholder="Ex: Masculino, Feminino, Acessórios" />
+            <input type="text" value={categoria} onChange={e => setCategoria(e.target.value)} placeholder="Ex: Masculino, Feminino, Acessórios" list="thsm-categorias" />
+            <datalist id="thsm-categorias">
+              {categorias.map(c => <option key={c} value={c} />)}
+            </datalist>
           </div>
           <div className="form-group">
             <label>Descrição</label>
@@ -4619,6 +4885,83 @@ function FinCalendar({ financial }) {
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+// =============================================
+// MODAL: DESPESA (expense)
+// =============================================
+function DespesaModal({ despesa, onSave, onClose }) {
+  const [tipo, setTipo] = useState(despesa?.tipo || 'Alimentação')
+  const [descricao, setDescricao] = useState(despesa?.descricao || '')
+  const [value, setValue] = useState(despesa ? String(despesa.value) : '')
+  const [dueDate, setDueDate] = useState(despesa?.dueDate || hoje())
+  const [paymentMethod, setPaymentMethod] = useState(despesa?.paymentMethod || 'pix')
+  const [status, setStatus] = useState(despesa?.status || 'pendente')
+
+  const handleSave = () => {
+    const val = Number(value)
+    if (!tipo.trim() || isNaN(val) || val <= 0) return
+    onSave({ tipo: tipo.trim(), descricao: descricao.trim(), value: val, dueDate, paymentMethod, status })
+  }
+
+  return (
+    <div className="admin-overlay" onClick={onClose}>
+      <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+        <div className="admin-modal-header">
+          <h3><i className="fa-solid fa-receipt"></i> {despesa ? 'Editar Despesa' : 'Nova Despesa'}</h3>
+          <button className="admin-modal-close" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
+        </div>
+        <div className="admin-modal-body">
+          <div className="form-group">
+            <label>Tipo de despesa</label>
+            <select value={tipo} onChange={e => setTipo(e.target.value)}>
+              {DESPESA_TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Descrição</label>
+            <input type="text" value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Ex: Abastecimento do caminhão, compra de embalagens..." />
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Valor (R$) <span style={{ color: 'var(--danger)' }}>*</span></label>
+              <input type="number" step="0.01" min="0" value={value} onChange={e => setValue(e.target.value)} placeholder="0,00" />
+            </div>
+            <div className="form-group">
+              <label>Vencimento</label>
+              <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+            </div>
+          </div>
+          <div className="form-group">
+            <label>Forma de pagamento</label>
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+              {PAG_SINGLE.map(m => (
+                <button key={m} type="button" className={`pag-chip ${paymentMethod === m ? 'active' : ''}`} onClick={() => setPaymentMethod(m)}>
+                  <i className={`fa-solid ${PAG_METHODS[m].icon}`}></i> {PAG_METHODS[m].label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="form-group">
+            <label>Status</label>
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+              {[['pendente', 'Pendente'], ['pago', 'Pago']].map(([v, l]) => (
+                <button key={v} type="button" className={`pag-chip ${status === v ? 'active' : ''}`} onClick={() => setStatus(v)}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="modal-actions">
+            <button className="admin-btn admin-btn-sec" onClick={onClose}>Cancelar</button>
+            <button className="admin-btn admin-btn-primary" disabled={!value || isNaN(Number(value)) || Number(value) <= 0 || !tipo.trim()} onClick={handleSave}>
+              <i className="fa-solid fa-check"></i> Salvar
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )

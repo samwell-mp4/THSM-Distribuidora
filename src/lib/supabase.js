@@ -234,6 +234,27 @@ export async function getAllProducts() {
   return data || []
 }
 
+// ---- DESPESAS ----
+export async function getAllDespesas() {
+  const data = await paginateAll('despesas')
+  return (data || []).map(f => f.data || f)
+}
+
+export async function upsertDespesas(records) {
+  if (records.length === 0) return
+  const mapped = records.map(r => ({
+    id: r.id,
+    status: r.status || 'pendente',
+    data: r
+  }))
+  try {
+    const { error } = await supabase.from('despesas').upsert(mapped, { onConflict: 'id' })
+    if (error) console.error('Erro upsertDespesas:', error)
+  } catch (e) {
+    console.error('Exceção upsertDespesas:', e)
+  }
+}
+
 export async function upsertProducts(products) {
   const records = Object.entries(products).map(([id, changes]) => {
     const { variantes, ...rest } = changes
@@ -250,18 +271,20 @@ export async function upsertProducts(products) {
 }
 
 export async function syncAllForAdmin() {
-  const [orders, financial, users, rotas, products] = await Promise.allSettled([
+  const [orders, financial, users, rotas, products, despesas] = await Promise.allSettled([
     getAllOrders(),
     getAllFinancial(),
     getAllUsers(),
     getRotasContatos(),
-    getAllProducts()
+    getAllProducts(),
+    getAllDespesas()
   ])
   return {
     orders: orders.status === 'fulfilled' ? orders.value : [],
     financial: financial.status === 'fulfilled' ? financial.value : [],
     users: users.status === 'fulfilled' ? users.value : [],
     rotas: rotas.status === 'fulfilled' ? rotas.value : [],
-    products: products.status === 'fulfilled' ? products.value : []
+    products: products.status === 'fulfilled' ? products.value : [],
+    despesas: despesas.status === 'fulfilled' ? despesas.value : []
   }
 }

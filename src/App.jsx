@@ -65,6 +65,7 @@ function App() {
   const [prodChangesApp, setProdChangesApp] = useState(() => {
     try { return JSON.parse(localStorage.getItem('thsm_admin_produtos')) || {} } catch { return {} }
   })
+  const [dbNewProducts, setDbNewProducts] = useState([])
   const [prodVariants, setProdVariants] = useState(() => {
     try { return JSON.parse(localStorage.getItem('thsm_prod_variants')) || {} } catch { return {} }
   })
@@ -97,13 +98,50 @@ function App() {
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [getRouteFromHash])
 
+  const fetchProductsDB = useCallback(() => {
+    supabase.from('produtos').select('*').then(({ data }) => {
+      if (!data?.length) return
+      const baseIds = new Set(produtos.map(p => p.id))
+      const fromDB = {}
+      const news = []
+      data.forEach(prod => {
+        if (!baseIds.has(prod.id)) {
+          news.push({
+            id: prod.id,
+            nome: prod.nome || '',
+            preco: prod.preco ?? 0,
+            estoque: prod.estoque ?? 0,
+            imagem: prod.imagem || '',
+            categoria: prod.categoria || '',
+            descricao: prod.descricao || '',
+            variantes: prod.variantes || {},
+            preco_custo: prod.preco_custo ?? null
+          })
+        }
+        const override = {}
+        if (prod.preco !== null) override.preco = prod.preco
+        if (prod.estoque !== null) override.estoque = prod.estoque
+        if (prod.imagem !== null) override.imagem = prod.imagem
+        if (prod.categoria !== null) override.categoria = prod.categoria
+        if (Object.keys(override).length > 0) fromDB[prod.id] = override
+      })
+      setDbNewProducts(news)
+      setProdChangesApp(prev => {
+        const merged = { ...fromDB, ...prev }
+        localStorage.setItem('thsm_admin_produtos', JSON.stringify(merged))
+        return merged
+      })
+    }).catch(() => {})
+  }, [])
+
   useEffect(() => {
     const onFocus = () => {
       try { const d = JSON.parse(localStorage.getItem('thsm_admin_produtos')); if (d) setProdChangesApp(d) } catch {}
+      fetchProductsDB()
     }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
-  }, [])
+  }, [fetchProductsDB])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -204,24 +242,8 @@ function App() {
         }
       }
     }).catch(() => {})
-    supabase.from('produtos').select('*').then(({ data }) => {
-      if (data?.length) {
-        const fromDB = {}
-        data.forEach(prod => {
-          const override = {}
-          if (prod.preco !== null) override.preco = prod.preco
-          if (prod.estoque !== null) override.estoque = prod.estoque
-          if (prod.imagem !== null) override.imagem = prod.imagem
-          if (prod.categoria !== null) override.categoria = prod.categoria
-          if (Object.keys(override).length > 0) fromDB[prod.id] = override
-        })
-        setProdChangesApp(prev => {
-          const merged = { ...fromDB, ...prev }
-          localStorage.setItem('thsm_admin_produtos', JSON.stringify(merged))
-          return merged
-        })
-      }
-    }).catch(() => {})
+    fetchProductsDB()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -240,9 +262,10 @@ function App() {
   }, [])
 
   const produtosMerged = useMemo(() => {
-    if (Object.keys(prodChangesApp).length === 0) return produtos
-    return produtos.map(p => ({ ...p, ...(prodChangesApp[p.id] || {}) }))
-  }, [produtos, prodChangesApp])
+    const overridden = produtos.map(p => ({ ...p, ...(prodChangesApp[p.id] || {}) }))
+    const news = dbNewProducts.map(p => ({ ...p, ...(prodChangesApp[p.id] || {}) }))
+    return [...news, ...overridden]
+  }, [produtos, prodChangesApp, dbNewProducts])
 
   const categorias = useMemo(() => ['TODOS', ...[...new Set(produtosMerged.map(p => p.categoria))].sort()], [produtosMerged])
 
@@ -262,7 +285,7 @@ function App() {
         default: return a.nome.localeCompare(b.nome, 'pt-BR')
       }
     })
-  }, [search, categoria, priceRange, onlyInStock, sortBy])
+  }, [search, categoria, priceRange, onlyInStock, sortBy, produtosMerged])
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE)
   const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
@@ -441,10 +464,21 @@ function App() {
     const raw = customer.telefone.replace(/\D/g, '')
     const telefone = raw.startsWith('55') ? raw : '55' + raw
     if (!telefone) { showToast('Informe seu telefone', 'error'); return null }
-    const existente = usuarios.find(u => u.telefone === telefone)
+
+    // Já logado na sessão atual: usa a conta direto sem pedir senha de novo
+    if (currentUser && currentUser.telefone === telefone) {
+      return currentUser
+    }
+
+    let existente = usuarios.find(u => u.telefone === telefone)
+    if (!existente) {
+      const { data } = await supabase.from('usuarios').select('*').eq('telefone', telefone).maybeSingle()
+      if (data) existente = data
+    }
     if (existente) {
       const senha = existente.endereco?.senha
       if (senha && customer.senha !== senha) { showToast('Senha incorreta', 'error'); return null }
+      setUsuarios(prev => prev.some(u => u.telefone === existente.telefone) ? prev : [...prev, existente])
       setCurrentUser(existente)
       return existente
     }
