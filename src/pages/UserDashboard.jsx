@@ -29,7 +29,7 @@ function getLS(key) {
 }
 
 function setLS(key, data) {
-  localStorage.setItem(key, JSON.stringify(data))
+  try { localStorage.setItem(key, JSON.stringify(data)) } catch (e) { console.warn('setLS falha:', key, e) }
 }
 
 export default function UserDashboard({ produtos = [], onVoltar, initialOrderId }) {
@@ -102,7 +102,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
         endereco: { ...(currentUser.endereco || {}), ...editEndereco, senha: editSenha || currentUser.endereco?.senha || '' }
       }
       await upsertUser(updated)
-      localStorage.setItem(LS_SESSAO, JSON.stringify(updated))
+      setLS(LS_SESSAO, updated)
       alert('Dados salvos com sucesso!')
     } catch (e) {
       console.error('Erro ao salvar perfil:', e)
@@ -290,8 +290,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
     setLS(LS_ORDERS, updatedOrders)
     setFinancial(updatedFinancial)
     setLS(LS_FINANCIAL, updatedFinancial)
-    upsertOrder(updatedOrders.find(o => o.id === showUserDelivery.id))
-    upsertFinancial(updatedFinancial)
+    upsertOrder(updatedOrders.find(o => o.id === showUserDelivery.id)).then(() => upsertFinancial(updatedFinancial)).catch(() => upsertFinancial(updatedFinancial))
     setTimeout(() => {
       setFinalizing(false)
       setShowUserDelivery(null)

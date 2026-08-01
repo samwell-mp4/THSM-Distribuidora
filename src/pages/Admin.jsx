@@ -440,8 +440,15 @@ export default function Admin({ produtos, onVoltar }) {
   useEffect(() => { LS.set(STORAGE_CUSTOM_TIPOS, customDespesaTipos) }, [customDespesaTipos])
   useEffect(() => {
     LS.set(STORAGE_FINANCIAL, financial)
-    if (financial.length > 0) upsertFinancial(financial)
-  }, [financial])
+    if (financial.length > 0) {
+      const doUpsert = () => upsertFinancial(financial)
+      if (orders.length > 0) {
+        upsertOrders(orders).then(doUpsert).catch(doUpsert)
+      } else {
+        doUpsert()
+      }
+    }
+  }, [financial, orders])
   useEffect(() => {
     LS.set(STORAGE_DESPESAS, despesas)
     if (despesas.length > 0) upsertDespesas(despesas)

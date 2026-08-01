@@ -17,6 +17,10 @@ const WEBHOOK_RECOVER_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypa
 const ADMIN_USER = 'thsmadmin'
 const ADMIN_PASS = 'th2026smdistribuidora!'
 
+function safeSetItem(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)) } catch (e) { console.warn('safeSetItem falha:', key, e) }
+}
+
 function App() {
   const [search, setSearch] = useState('')
   const [categoria, setCategoria] = useState('TODOS')
@@ -128,7 +132,7 @@ function App() {
       setDbNewProducts(news)
       setProdChangesApp(prev => {
         const merged = { ...fromDB, ...prev }
-        localStorage.setItem('thsm_admin_produtos', JSON.stringify(merged))
+        safeSetItem('thsm_admin_produtos', merged)
         return merged
       })
     }).catch(() => {})
@@ -174,7 +178,7 @@ function App() {
             user = data
             setUsuarios(prev => {
               const merged = [...prev.filter(u => u.telefone !== data.telefone), data]
-              localStorage.setItem(LS_USUARIOS, JSON.stringify(merged))
+              safeSetItem(LS_USUARIOS, merged)
               return merged
             })
           }
@@ -214,7 +218,7 @@ function App() {
   const loginAdmin = () => {
     if (adminUser === ADMIN_USER && adminPass === ADMIN_PASS) {
       const auth = { loggedIn: true, timestamp: Date.now() }
-      localStorage.setItem(LS_ADMIN, JSON.stringify(auth))
+      safeSetItem(LS_ADMIN, auth)
       setAdminAuth(auth)
       setShowAdminLogin(false)
       setAdminUser('')
@@ -227,12 +231,12 @@ function App() {
 
   // Auth
 
-  useEffect(() => { localStorage.setItem(LS_USUARIOS, JSON.stringify(usuarios)) }, [usuarios])
-  useEffect(() => { if (currentUser) localStorage.setItem(LS_SESSAO, JSON.stringify(currentUser)); else localStorage.removeItem(LS_SESSAO) }, [currentUser])
+  useEffect(() => { safeSetItem(LS_USUARIOS, usuarios) }, [usuarios])
+  useEffect(() => { if (currentUser) safeSetItem(LS_SESSAO, currentUser); else localStorage.removeItem(LS_SESSAO) }, [currentUser])
   useEffect(() => {
     supabase.from('usuarios').select('*').then(({ data }) => {
       if (data?.length) {
-        localStorage.setItem(LS_USUARIOS, JSON.stringify(data))
+        safeSetItem(LS_USUARIOS, data)
         setUsuarios(data)
         const session = localStorage.getItem(LS_SESSAO)
         if (session) {
