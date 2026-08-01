@@ -2555,6 +2555,33 @@
   display: flex;
   gap: 0.35rem;
   margin-bottom: 0.85rem;
+  background: #eef0f4;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  padding: 0.3rem;
+  width: fit-content;
+}
+
+.fin-view-toggle .admin-tab {
+  border: none;
+  background: transparent;
+  border-radius: 9px;
+  padding: 0.45rem 1rem;
+  font-weight: 600;
+  color: var(--admin-text-sec);
+  transition: all 0.15s;
+}
+
+.fin-view-toggle .admin-tab:hover {
+  color: var(--admin-text);
+  border: none;
+}
+
+.fin-view-toggle .admin-tab.active {
+  background: white;
+  color: var(--accent);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+  border: none;
 }
 
 .fin-calendar {
@@ -2764,4 +2791,353 @@
   .cal-badge { font-size: 0.52rem; padding: 0.05rem 0.2rem; }
   .cal-day-num { font-size: 0.72rem; }
   .fin-calendar { padding: 0.6rem; }
+}
+
+/* ==========================================
+   FINANCEIRO REDESIGN
+   ========================================== */
+.fin-section .admin-subtitle {
+  margin-top: 0.15rem;
+}
+
+.fin-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.fin-header h1 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.fin-header h1::before {
+  content: '\f155';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  font-size: 1.25rem;
+  color: var(--accent);
+}
+
+.fin-header-badge {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(37,99,235,0.12), rgba(139,92,246,0.12));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+/* Summary cards */
+.fin-cards {
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.4rem;
+}
+
+.fin-cards .admin-card {
+  position: relative;
+  overflow: hidden;
+  padding: 1.25rem 1.25rem 1.05rem;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.fin-cards .admin-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.09);
+}
+
+.fin-cards .admin-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 14px 14px 0 0;
+}
+
+.fin-cards .admin-card.card-red::after { background: linear-gradient(90deg, #ef4444, #f87171); }
+.fin-cards .admin-card.card-yellow::after { background: linear-gradient(90deg, #d97706, #fbbf24); }
+.fin-cards .admin-card.card-green::after { background: linear-gradient(90deg, #16a34a, #4ade80); }
+.fin-cards .admin-card.card-purple::after { background: linear-gradient(90deg, #7c3aed, #a78bfa); }
+
+.fin-cards .admin-card i {
+  width: 42px;
+  height: 42px;
+  font-size: 1.2rem;
+  border-radius: 12px;
+}
+
+.fin-cards .admin-card strong {
+  font-size: 1.3rem;
+  letter-spacing: -0.4px;
+}
+
+.fin-cards .admin-card span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Filter tabs pill style */
+.fin-tabs {
+  margin-bottom: 1rem;
+}
+
+.fin-tabs .admin-tab {
+  border-radius: 50px;
+  padding: 0.4rem 0.95rem;
+}
+
+.fin-tabs .admin-tab.active {
+  box-shadow: 0 2px 8px rgba(37,99,235,0.25);
+}
+
+/* Toolbar for despesas */
+.fin-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.85rem;
+}
+
+.fin-toolbar-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--admin-text);
+}
+
+.fin-toolbar-title i {
+  color: var(--accent);
+}
+
+.fin-btn-new {
+  background: linear-gradient(135deg, #059669, #10b981);
+  color: white;
+  border: none;
+  padding: 0.5rem 1.1rem;
+  border-radius: 10px;
+  font-weight: 600;
+  box-shadow: 0 3px 10px rgba(5,150,105,0.3);
+  transition: all 0.15s;
+}
+
+.fin-btn-new:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(5,150,105,0.4);
+}
+
+/* Table card wrapper */
+.fin-table-card {
+  background: white;
+  border: 1px solid var(--admin-border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.fin-table-card .admin-table-wrap {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.fin-table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.9rem 1.1rem;
+  background: linear-gradient(180deg, #f9fafb, #f4f6f9);
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.fin-table-header > span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--admin-text);
+}
+
+.fin-table-header > span:first-child i {
+  color: var(--accent);
+}
+
+.fin-table-total {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  font-size: 0.75rem;
+  color: var(--admin-text-sec);
+}
+
+.fin-table-total strong {
+  font-size: 1rem;
+  color: var(--accent);
+  letter-spacing: -0.3px;
+}
+
+/* Table enhancements within finance */
+.fin-table-card .admin-table thead th {
+  font-size: 0.68rem;
+  letter-spacing: 0.6px;
+  padding: 0.75rem 0.9rem;
+  background: #f8fafc;
+}
+
+.fin-table-card .admin-table tbody tr {
+  transition: background 0.12s;
+}
+
+.fin-table-card .admin-table tbody tr:nth-child(even) {
+  background: #fafbfc;
+}
+
+.fin-table-card .admin-table tbody tr:hover {
+  background: #f0f7ff;
+}
+
+.fin-table-card .admin-table td {
+  padding: 0.7rem 0.9rem;
+}
+
+/* Tfoot total */
+.fin-tfoot td {
+  padding: 0.7rem 0.9rem;
+  background: #f8fafc;
+  border-top: 1px solid var(--admin-border);
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.fin-tfoot .td-price {
+  font-size: 0.95rem;
+  color: var(--accent);
+}
+
+/* Status tags refined */
+.fin-table-card .status-tag {
+  padding: 0.22rem 0.6rem;
+  font-size: 0.68rem;
+  border: 1px solid transparent;
+}
+
+.fin-table-card .status-pendente {
+  border-color: rgba(217,119,6,0.25);
+}
+
+.fin-table-card .status-pago {
+  border-color: rgba(22,163,74,0.25);
+}
+
+.fin-table-card .status-atrasado {
+  border-color: rgba(220,38,38,0.25);
+}
+
+/* Payment badge refined */
+.fin-table-card .pag-badge {
+  padding: 0.22rem 0.6rem;
+  font-size: 0.68rem;
+  border: 1px solid transparent;
+}
+
+.fin-table-card .pag-badge-pix { border-color: rgba(22,163,74,0.25); }
+.fin-table-card .pag-badge-dinheiro { border-color: rgba(245,158,11,0.3); }
+.fin-table-card .pag-badge-cartao { border-color: rgba(37,99,235,0.25); }
+
+/* Despesa tipo refined */
+.fin-table-card .despesa-tipo {
+  padding: 0.22rem 0.6rem;
+  font-size: 0.68rem;
+  border: 1px solid rgba(139,92,246,0.25);
+}
+
+/* Day badges in table */
+.fin-table-card .days-overdue,
+.fin-table-card .days-today,
+.fin-table-card .days-future,
+.fin-table-card .days-ok {
+  padding: 0.2rem 0.5rem;
+  border-radius: 50px;
+  background: rgba(0,0,0,0.04);
+}
+
+/* Action buttons refined */
+.fin-table-card .td-actions .action-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  background: #f3f4f6;
+  border: 1px solid var(--admin-border);
+  transition: all 0.12s;
+}
+
+.fin-table-card .td-actions .action-btn:hover {
+  background: white;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.fin-table-card .td-actions .action-confirm {
+  background: rgba(22,163,74,0.1);
+  color: #16a34a;
+  border-color: rgba(22,163,74,0.2);
+}
+
+.fin-table-card .td-actions .action-confirm:hover {
+  background: #16a34a;
+  color: white;
+  border-color: #16a34a;
+}
+
+.fin-table-card .td-actions .action-delete:hover {
+  background: var(--danger);
+  color: white;
+  border-color: var(--danger);
+}
+
+/* Calendar card match */
+.fin-section .fin-calendar {
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  margin-bottom: 1.25rem;
+}
+
+@media (max-width: 768px) {
+  .fin-header h1 { font-size: 1.25rem; }
+  .fin-cards { grid-template-columns: repeat(2, 1fr); }
+  .fin-cards .admin-card { padding: 1rem; }
+  .fin-cards .admin-card strong { font-size: 1.05rem; }
+  .fin-cards .admin-card i { width: 36px; height: 36px; font-size: 1rem; }
+  .fin-view-toggle { width: 100%; }
+  .fin-view-toggle .admin-tab { flex: 1; justify-content: center; }
+  .fin-table-header { padding: 0.75rem 0.9rem; }
+}
+
+@media (max-width: 480px) {
+  .fin-cards { grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+  .fin-cards .admin-card { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+  .fin-toolbar { flex-direction: column; align-items: stretch; }
+  .fin-btn-new { justify-content: center; }
+  .fin-header-badge { display: none; }
 }

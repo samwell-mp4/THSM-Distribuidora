@@ -1271,6 +1271,9 @@ export default function Admin({ produtos, onVoltar }) {
 
   const despesasPendentes = useMemo(() => despesas.filter(d => d.status === 'pendente').reduce((s, d) => s + d.value, 0), [despesas])
 
+  const finTotalFiltered = useMemo(() => filteredFin.reduce((s, f) => s + f.value, 0), [filteredFin])
+  const despesasTotalFiltered = useMemo(() => filteredDespesas.reduce((s, d) => s + d.value, 0), [filteredDespesas])
+
   const quitarFin = (id) => {
     const target = financial.find(f => f.id === id)
     if (!target) return
@@ -2752,11 +2755,18 @@ export default function Admin({ produtos, onVoltar }) {
         )}
 
         {tab === 'financeiro' && (
-          <div className="admin-section">
-            <h1>Financeiro</h1>
-            <p className="admin-subtitle">Controle de contas a prazo e recebimentos</p>
+          <div className="admin-section fin-section">
+            <div className="fin-header">
+              <div>
+                <h1>Financeiro</h1>
+                <p className="admin-subtitle">Controle de contas a prazo e recebimentos</p>
+              </div>
+              <div className="fin-header-badge">
+                <i className="fa-solid fa-chart-line"></i>
+              </div>
+            </div>
 
-            <div className="admin-cards">
+            <div className="admin-cards fin-cards">
               <div className="admin-card card-red">
                 <i className="fa-solid fa-exclamation-triangle"></i>
                 <div>
@@ -2787,7 +2797,7 @@ export default function Admin({ produtos, onVoltar }) {
               </div>
             </div>
 
-            <div className="fin-view-toggle">
+            <div className="fin-view-toggle fin-segmented">
               <button className={`admin-tab ${finTab === 'receber' ? 'active' : ''}`} onClick={() => setFinTab('receber')}>
                 <i className="fa-solid fa-money-bill-trend-up"></i> Contas a Receber
               </button>
@@ -2798,7 +2808,7 @@ export default function Admin({ produtos, onVoltar }) {
 
             {finTab === 'receber' && (
               <>
-                <div className="fin-view-toggle">
+                <div className="fin-view-toggle fin-segmented">
                   <button className={`admin-tab ${finView === 'lista' ? 'active' : ''}`} onClick={() => setFinView('lista')}>
                     <i className="fa-solid fa-table"></i> Lista
                   </button>
@@ -2807,7 +2817,7 @@ export default function Admin({ produtos, onVoltar }) {
                   </button>
                 </div>
 
-                <div className="admin-tabs">
+                <div className="admin-tabs fin-tabs">
                   {[
                     { id: 'todos', label: 'Todas', count: financial.length },
                     { id: 'pendente', label: 'Pendentes', count: financial.filter(f => f.status === 'pendente').length },
@@ -2822,24 +2832,29 @@ export default function Admin({ produtos, onVoltar }) {
                 {finView === 'calendario' && <FinCalendar financial={financial} />}
 
                 {finView === 'lista' && (
-                  <div className="admin-table-wrap">
-                    <table className="admin-table">
-                      <thead>
-                        <tr>
-                          <th>Cliente</th>
-                          <th>Item</th>
-                          <th>Qtd</th>
-                          <th>Valor</th>
-                          <th>Custo</th>
-                          <th>Vencimento</th>
-                          <th>Dias</th>
-                          <th>Status</th>
-                          <th>Forma</th>
-                          <th>Pagamento</th>
-                          <th>Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                  <div className="fin-table-card">
+                    <div className="fin-table-header">
+                      <span><i className="fa-solid fa-list-ul"></i> Contas a Receber</span>
+                      <span className="fin-table-total"><strong>{formatPreco(finTotalFiltered)}</strong> <small>{filteredFin.length} registro(s)</small></span>
+                    </div>
+                    <div className="admin-table-wrap">
+                      <table className="admin-table">
+                        <thead>
+                          <tr>
+                            <th>Cliente</th>
+                            <th>Item</th>
+                            <th>Qtd</th>
+                            <th>Valor</th>
+                            <th>Custo</th>
+                            <th>Vencimento</th>
+                            <th>Dias</th>
+                            <th>Status</th>
+                            <th>Forma</th>
+                            <th>Pagamento</th>
+                            <th>Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
                         {filteredFin.map(f => {
                           const dias = diffDays(hoje(), f.dueDate)
                           const atrasado = f.status === 'pendente' && dias > 0
@@ -2893,7 +2908,15 @@ export default function Admin({ produtos, onVoltar }) {
                         })}
                         {filteredFin.length === 0 && <tr><td colSpan="11" className="td-empty">Nenhum registro financeiro</td></tr>}
                       </tbody>
+                      <tfoot className="fin-tfoot">
+                        <tr>
+                          <td colSpan="3">Total</td>
+                          <td className="td-price">{formatPreco(finTotalFiltered)}</td>
+                          <td colSpan="7"></td>
+                        </tr>
+                      </tfoot>
                     </table>
+                  </div>
                   </div>
                 )}
               </>
@@ -2901,13 +2924,14 @@ export default function Admin({ produtos, onVoltar }) {
 
             {finTab === 'despesas' && (
               <div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
-                  <button className="admin-btn" style={{ background: '#059669', color: 'white', borderColor: '#059669' }} onClick={() => { setEditingDespesa(null); setShowDespesaModal(true) }}>
+                <div className="fin-toolbar">
+                  <span className="fin-toolbar-title"><i className="fa-solid fa-receipt"></i> Despesas</span>
+                  <button className="admin-btn fin-btn-new" onClick={() => { setEditingDespesa(null); setShowDespesaModal(true) }}>
                     <i className="fa-solid fa-plus"></i> Nova Despesa
                   </button>
                 </div>
 
-                <div className="admin-tabs">
+                <div className="admin-tabs fin-tabs">
                   {[
                     { id: 'todas', label: 'Todas', count: despesas.length },
                     { id: 'pendente', label: 'Pendentes', count: despesas.filter(d => d.status === 'pendente').length },
@@ -2919,6 +2943,7 @@ export default function Admin({ produtos, onVoltar }) {
                   ))}
                 </div>
 
+                <div className="fin-table-card">
                 <div className="admin-table-wrap">
                   <table className="admin-table">
                     <thead>
@@ -2972,7 +2997,15 @@ export default function Admin({ produtos, onVoltar }) {
                       })}
                       {filteredDespesas.length === 0 && <tr><td colSpan="8" className="td-empty">Nenhuma despesa cadastrada</td></tr>}
                     </tbody>
+                    <tfoot className="fin-tfoot">
+                      <tr>
+                        <td colSpan="2">Total</td>
+                        <td className="td-price">{formatPreco(despesasTotalFiltered)}</td>
+                        <td colSpan="5"></td>
+                      </tr>
+                    </tfoot>
                   </table>
+                </div>
                 </div>
               </div>
             )}
