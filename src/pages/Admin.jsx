@@ -3523,6 +3523,11 @@ export default function Admin({ produtos, onVoltar }) {
         <EditProductModal
           product={editingProd}
           categorias={categoriasProd.filter(c => c !== 'TODOS')}
+          onAddCategoria={(nome) => {
+            if (!nome) return
+            setCustomCategorias(prev => prev.includes(nome) ? prev : [...prev, nome])
+            showToast(`Categoria "${nome}" criada!`)
+          }}
           onSave={(changes) => {
             if (editingProd._new) {
               const newId = editingProd.id
@@ -4625,7 +4630,7 @@ function KitModal({ produtos, kit, onSave, onClose }) {
 // =============================================
 // MODAL: EDIT PRODUCT
 // =============================================
-function EditProductModal({ product, categorias = [], onSave, onClose }) {
+function EditProductModal({ product, categorias = [], onAddCategoria, onSave, onClose }) {
   const [nome, setNome] = useState(product.nome)
   const [preco, setPreco] = useState(String(product.preco))
   const [precoCusto, setPrecoCusto] = useState(String(product.preco_custo ?? ''))
@@ -4763,10 +4768,25 @@ function EditProductModal({ product, categorias = [], onSave, onClose }) {
 
           <div className="form-group">
             <label>Categoria</label>
-            <input type="text" value={categoria} onChange={e => setCategoria(e.target.value)} placeholder="Ex: Masculino, Feminino, Acessórios" list="thsm-categorias" />
-            <datalist id="thsm-categorias">
-              {categorias.map(c => <option key={c} value={c} />)}
-            </datalist>
+            <select
+              value={categoria}
+              onChange={e => {
+                if (e.target.value === '__nova__') {
+                  const nome = prompt('Nome da nova categoria:')
+                  if (nome && nome.trim()) {
+                    const n = nome.trim()
+                    setCategoria(n)
+                    if (onAddCategoria) onAddCategoria(n)
+                  }
+                  return
+                }
+                setCategoria(e.target.value)
+              }}
+            >
+              {categoria && !categorias.includes(categoria) && <option value={categoria}>{categoria}</option>}
+              {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+              <option value="__nova__">＋ Nova categoria...</option>
+            </select>
           </div>
           <div className="form-group">
             <label>Descrição</label>
