@@ -47,9 +47,11 @@ CREATE TABLE IF NOT EXISTS rotas_contatos (
   created_at timestamptz DEFAULT now()
 );
 
--- 5. PRODUTOS (overrides for static catalog)
+-- 5. PRODUTOS (overrides for static catalog + new products)
 CREATE TABLE IF NOT EXISTS produtos (
-  id integer PRIMARY KEY,
+  id bigint PRIMARY KEY,
+  nome text DEFAULT '',
+  descricao text DEFAULT '',
   preco numeric(12,2),
   preco_custo numeric(12,2),
   estoque integer,
@@ -58,6 +60,20 @@ CREATE TABLE IF NOT EXISTS produtos (
   variantes jsonb DEFAULT '{}'::jsonb,
   updated_at timestamptz DEFAULT now()
 );
+
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS nome text DEFAULT '';
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS descricao text DEFAULT '';
+ALTER TABLE produtos ALTER COLUMN id TYPE bigint;
+
+-- 5b. DESPESAS (expense records)
+CREATE TABLE IF NOT EXISTS despesas (
+  id bigint PRIMARY KEY,
+  status text DEFAULT 'pendente',
+  data jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_despesas_status ON despesas(status);
 
 -- 6. LOGIN TOKENS (for auto-login links)
 CREATE TABLE IF NOT EXISTS login_tokens (
@@ -93,6 +109,7 @@ ALTER TABLE pedidos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE financeiro ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rotas_contatos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE produtos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE despesas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE login_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
 
@@ -190,6 +207,19 @@ CREATE POLICY "Produtos select all" ON produtos
 
 CREATE POLICY "Produtos admin all" ON produtos
   FOR ALL USING (current_setting('app.is_admin', true) = 'true');
+
+-- Despesas: admin only (full access)
+CREATE POLICY "Despesas select admin" ON despesas
+  FOR SELECT USING (current_setting('app.is_admin', true) = 'true');
+
+CREATE POLICY "Despesas insert admin" ON despesas
+  FOR INSERT WITH CHECK (current_setting('app.is_admin', true) = 'true');
+
+CREATE POLICY "Despesas update admin" ON despesas
+  FOR UPDATE USING (current_setting('app.is_admin', true) = 'true');
+
+CREATE POLICY "Despesas delete admin" ON despesas
+  FOR DELETE USING (current_setting('app.is_admin', true) = 'true');
 
 -- Login tokens: anon can insert (recovery flow), select/update by token only
 CREATE POLICY "Login tokens insert" ON login_tokens
