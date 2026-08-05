@@ -312,6 +312,7 @@ export default function Admin({ produtos, onVoltar }) {
   const [quitarPayment, setQuitarPayment] = useState('pix')
   const [deliveryPayment, setDeliveryPayment] = useState('pix')
   const [deliverySplits, setDeliverySplits] = useState({ pix: '', dinheiro: '', cartao: '' })
+  const [deliveryDiscount, setDeliveryDiscount] = useState('')
   const [usuarios, setUsuarios] = useState([])
   const [syncingUsers, setSyncingUsers] = useState(false)
   const [selectedUserEmail, setSelectedUserEmail] = useState(null)
@@ -826,13 +827,31 @@ export default function Admin({ produtos, onVoltar }) {
     }))
     const totalAvista = adjustedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
     const totalAprazo = adjustedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
+    const totalBase = totalAvista + totalAprazo
+    const desconto = Math.max(0, Math.min(Number(deliveryDiscount) || 0, totalBase))
+    const totalCobrar = totalBase - desconto
+    const discountAlloc = {}
+    if (desconto > 0) {
+      let remaining = desconto
+      adjustedItems.forEach((i, idx) => {
+        const value = i.preco * i.qty
+        if (idx === adjustedItems.length - 1) {
+          discountAlloc[i.id] = remaining
+        } else {
+          const d = Math.min(remaining, Math.round((value / totalBase) * desconto * 100) / 100)
+          discountAlloc[i.id] = d
+          remaining = Math.round((remaining - d) * 100) / 100
+        }
+      })
+    }
     const totalReembolso = order.items.reduce((s, i) => s + i.preco * (returnQuantities[i.id] || 0), 0)
     const updatedOrder = {
       ...order,
       items: adjustedItems,
       totalAvista,
       totalAprazo,
-      total: totalAvista + totalAprazo,
+      total: totalCobrar,
+      desconto,
       status: 'entregue',
       returnedItems,
       totalReembolso,
@@ -855,7 +874,7 @@ export default function Admin({ produtos, onVoltar }) {
           customerName: order.customer?.nome || '',
           itemName: i.nome,
           qty: i.qty,
-          value: i.preco * i.qty,
+          value: i.preco * i.qty - (discountAlloc[i.id] || 0),
           precoCusto: (i.preco_custo || 0) * i.qty,
           dueDate: hoje(),
           paidDate: hoje(),
@@ -869,16 +888,18 @@ export default function Admin({ produtos, onVoltar }) {
         const returnedQty = returnQuantities[item.id] || 0
         if (returnedQty >= item.qty) return { ...f, status: 'cancelado', paidDate: hoje() }
         const remainingQty = item.qty - returnedQty
-        return { ...f, qty: remainingQty, value: item.preco * remainingQty, precoCusto: (item.preco_custo || 0) * remainingQty, status: 'pago', paidDate: hoje(), paymentMethod: deliveryPayment }
+        return { ...f, qty: remainingQty, value: item.preco * remainingQty - (discountAlloc[item.id] || 0), precoCusto: (item.preco_custo || 0) * remainingQty, status: 'pago', paidDate: hoje(), paymentMethod: deliveryPayment }
       })
       return [...updated, ...newRecords]
     })
     const refundMsg = totalReembolso > 0 ? ` — Reembolso: ${formatPreco(totalReembolso)}` : ''
-    showToast(`Pedido #${orderId} finalizado!${refundMsg} WhatsApp enviado para o cliente com link de confirmação.`)
+    const discountMsg = desconto > 0 ? ` — Desconto: ${formatPreco(desconto)}` : ''
+    showToast(`Pedido #${orderId} finalizado!${refundMsg}${discountMsg} WhatsApp enviado para o cliente com link de confirmação.`)
     sendStatusWebhook(updatedOrder, 'entregue', { returnedItems })
     setShowDeliveryModal(null)
     setReturnQuantities({})
     setPayQuantities({})
+    setDeliveryDiscount('')
     setIdentityPreview('')
     setAddressPreview('')
   }
@@ -971,7 +992,7 @@ export default function Admin({ produtos, onVoltar }) {
 
   const filteredOrders = useMemo(() => {
     let result = orders
-    if (orderFilter === 'concluidos') result = result.filter(o => o.status === 'entregue' || o.status === 'cancelado')
+    if (orderFilter === 'concluidos') result = result.filter(o => o.status === 'entregue')
     else if (orderFilter !== 'todos') result = result.filter(o => o.status === orderFilter)
     if (selectedUserEmail) result = result.filter(o => o.customer?.email === selectedUserEmail)
     const t = orderSearch.toLowerCase().trim()
@@ -1562,7 +1583,7 @@ export default function Admin({ produtos, onVoltar }) {
                 { id: 'pendente', label: 'Pendentes', count: orders.filter(o => o.status === 'pendente').length },
                 { id: 'em-rota', label: 'Em Rota', count: orders.filter(o => o.status === 'em-rota').length },
                 { id: 'entregue', label: 'Entregues', count: orders.filter(o => o.status === 'entregue').length },
-                { id: 'concluidos', label: 'Concluídos', count: orders.filter(o => o.status === 'entregue' || o.status === 'cancelado').length },
+                { id: 'concluidos', label: 'Concluídos', count: orders.filter(o => o.status === 'entregue').length },
                 { id: 'cancelado', label: 'Cancelados', count: orders.filter(o => o.status === 'cancelado').length },
               ].map(t => (
                 <button key={t.id} className={`admin-tab ${orderFilter === t.id ? 'active' : ''}`} onClick={() => setOrderFilter(t.id)}>
@@ -1640,7 +1661,7 @@ export default function Admin({ produtos, onVoltar }) {
                           {o.status === 'pre-pedido' && <button className="action-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }} title="Revisar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-clipboard-check"></i></button>}
                           {o.status === 'pendente' && <button className="action-btn action-confirm" title="Editar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-pen"></i></button>}
                           {o.status === 'pendente' && <button className="action-btn action-deliver" title="Em Rota" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-truck"></i></button>}
-                          {o.status === 'em-rota' && <button className="action-btn action-confirm" title="Finalizar Entrega" onClick={() => { setShowDeliveryModal(o); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview(''); setDeliveryPayment('pix'); setDeliverySplits({ pix: '', dinheiro: '', cartao: '' }) }}><i className="fa-solid fa-check"></i></button>}
+                          {o.status === 'em-rota' && <button className="action-btn action-confirm" title="Finalizar Entrega" onClick={() => { setShowDeliveryModal(o); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview(''); setDeliveryPayment('pix'); setDeliverySplits({ pix: '', dinheiro: '', cartao: '' }); setDeliveryDiscount('') }}><i className="fa-solid fa-check"></i></button>}
                           {o.status === 'em-rota' && (
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Pendente" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-undo"></i></button>
                           )}
@@ -3068,7 +3089,7 @@ export default function Admin({ produtos, onVoltar }) {
           onClose={() => setShowOrderDetail(null)}
           onStatusChange={(s) => { updateOrderStatus(showOrderDetail.id, s); setShowOrderDetail(null) }}
           onPreApprovar={(rejectedIds, replacements, venc) => preApprovarPedido(showOrderDetail.id, rejectedIds, replacements, venc)}
-          onOpenDelivery={(order) => { setShowDeliveryModal(order); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview(''); setDeliveryPayment('pix'); setDeliverySplits({ pix: '', dinheiro: '', cartao: '' }) }}
+          onOpenDelivery={(order) => { setShowDeliveryModal(order); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview(''); setDeliveryPayment('pix'); setDeliverySplits({ pix: '', dinheiro: '', cartao: '' }); setDeliveryDiscount('') }}
           onEditAndConfirm={(editedItems, currentStatus) => {
             const totalAvista = editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
             const totalAprazo = editedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
@@ -3148,7 +3169,8 @@ export default function Admin({ produtos, onVoltar }) {
               {(() => {
                 const totalOriginal = showDeliveryModal.items.reduce((s, i) => s + i.preco * i.qty, 0)
                 const totalDevolvido = showDeliveryModal.items.reduce((s, i) => s + i.preco * (returnQuantities[i.id] || 0), 0)
-                const totalCobrar = totalOriginal - totalDevolvido
+                const desconto = Math.max(0, Math.min(Number(deliveryDiscount) || 0, totalOriginal - totalDevolvido))
+                const totalCobrar = totalOriginal - totalDevolvido - desconto
                 return (
                   <div style={{ background: '#f9fafb', borderRadius: '10px', padding: '0.75rem 1rem', marginBottom: '1rem', marginTop: '0.75rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.25rem' }}>
@@ -3159,6 +3181,26 @@ export default function Admin({ produtos, onVoltar }) {
                       <span><i className="fa-solid fa-rotate-left"></i> Total devolvido</span>
                       <span style={{ fontWeight: 700 }}>{formatPreco(totalDevolvido)}</span>
                     </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.6rem', marginTop: '0.35rem', paddingTop: '0.35rem' }}>
+                      <span style={{ fontSize: '0.82rem', color: 'var(--admin-text-sec)' }}>
+                        <i className="fa-solid fa-percent"></i> Desconto (R$)
+                      </span>
+                      <input type="number" min="0" step="0.01" placeholder="0,00" autoComplete="off"
+                        value={deliveryDiscount}
+                        onChange={e => {
+                          const raw = e.target.value
+                          if (raw === '') { setDeliveryDiscount(''); return }
+                          const num = Number(raw)
+                          if (!isNaN(num)) setDeliveryDiscount(num < 0 ? '0' : String(num))
+                        }}
+                        style={{ width: '110px', padding: '0.3rem 0.4rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', textAlign: 'right' }} />
+                    </div>
+                    {desconto > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginTop: '0.25rem', color: 'var(--preco-desconto, var(--success))' }}>
+                        <span>Desconto aplicado</span>
+                        <span style={{ fontWeight: 700 }}>- {formatPreco(desconto)}</span>
+                      </div>
+                    )}
                     <div style={{ borderTop: '1px solid var(--admin-border)', marginTop: '0.35rem', paddingTop: '0.35rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
                       <span style={{ fontWeight: 700 }}>Total a cobrar</span>
                       <span style={{ fontWeight: 800, color: totalCobrar > 0 ? 'var(--accent)' : 'var(--success)' }}>{formatPreco(totalCobrar)}</span>
