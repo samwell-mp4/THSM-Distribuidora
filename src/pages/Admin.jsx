@@ -319,6 +319,8 @@ export default function Admin({ produtos, onVoltar }) {
   const [selectedUserDetail, setSelectedUserDetail] = useState(null)
   const [recoverLinkUser, setRecoverLinkUser] = useState(null)
   const [recoverLink, setRecoverLink] = useState('')
+  const [pwTarget, setPwTarget] = useState(null)
+  const [pwNew, setPwNew] = useState('')
   const [editingUser, setEditingUser] = useState(false)
   const [editUserData, setEditUserData] = useState(null)
   const [userSearch, setUserSearch] = useState('')
@@ -941,6 +943,27 @@ export default function Admin({ produtos, onVoltar }) {
       showToast('Usuário atualizado com sucesso!')
     } else {
       showToast('Erro ao salvar usuário', 'error')
+    }
+  }
+
+  const mudarSenha = async () => {
+    if (!pwTarget) return
+    const nova = (pwNew || '').trim()
+    if (nova.length < 3) { showToast('A senha deve ter pelo menos 3 caracteres', 'error'); return }
+    const saved = await upsertUser({
+      telefone: pwTarget.telefone,
+      nome: pwTarget.nome,
+      email: pwTarget.email || '',
+      endereco: { ...(pwTarget.endereco || {}), senha: nova }
+    })
+    if (saved) {
+      setUsuarios(prev => prev.map(u => u.telefone === saved.telefone ? saved : u))
+      if (selectedUserDetail?.telefone === saved.telefone) setSelectedUserDetail(saved)
+      setPwTarget(null)
+      setPwNew('')
+      showToast(`Senha de ${saved.nome} alterada com sucesso!`)
+    } else {
+      showToast('Erro ao alterar a senha', 'error')
     }
   }
 
@@ -2101,9 +2124,15 @@ export default function Admin({ produtos, onVoltar }) {
                       <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>Deixe vazio para manter</span>
                     </div>
                   ) : (
-                    <p style={{ fontSize: '0.82rem', color: 'var(--admin-text-sec)' }}>
-                      {selectedUserDetail.endereco?.senha ? '••••••••' : 'Nenhuma senha definida'}
-                    </p>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem' }}>
+                      <p style={{ fontSize: '0.82rem', color: 'var(--admin-text-sec)', margin: 0 }}>
+                        {selectedUserDetail.endereco?.senha ? '••••••••' : 'Nenhuma senha definida'}
+                      </p>
+                      <button className="admin-btn" style={{ fontSize: '0.78rem', padding: '0.4rem 0.75rem', background: '#f59e0b', color: 'white', borderColor: '#f59e0b', whiteSpace: 'nowrap' }}
+                        onClick={() => { setPwTarget(selectedUserDetail); setPwNew('') }}>
+                        <i className="fa-solid fa-key"></i> Mudar Senha
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -3696,6 +3725,34 @@ export default function Admin({ produtos, onVoltar }) {
                     window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`, '_blank')
                   }}>
                   <i className="fa-brands fa-whatsapp"></i> Enviar no WhatsApp
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CHANGE PASSWORD MODAL */}
+      {pwTarget && (
+        <div className="admin-overlay" onClick={() => { setPwTarget(null); setPwNew('') }}>
+          <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px' }}>
+            <div className="admin-modal-header">
+              <h3><i className="fa-solid fa-lock"></i> Mudar Senha</h3>
+              <button className="admin-modal-close" onClick={() => { setPwTarget(null); setPwNew('') }}><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <div className="admin-modal-body">
+              <p style={{ fontSize: '0.85rem', color: 'var(--admin-text-sec)', marginBottom: '0.9rem' }}>
+                Definir nova senha para <strong>{pwTarget.nome}</strong> ({pwTarget.telefone}).
+              </p>
+              <div className="form-group">
+                <label>Nova senha</label>
+                <input type="text" autoFocus value={pwNew} onChange={e => setPwNew(e.target.value)} placeholder="Digite a nova senha"
+                  onKeyDown={e => { if (e.key === 'Enter') mudarSenha() }} />
+              </div>
+              <div className="modal-actions">
+                <button className="admin-btn admin-btn-sec" onClick={() => { setPwTarget(null); setPwNew('') }}>Cancelar</button>
+                <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={mudarSenha}>
+                  <i className="fa-solid fa-check"></i> Salvar Senha
                 </button>
               </div>
             </div>
