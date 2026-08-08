@@ -306,7 +306,8 @@ function App() {
   const cartCount = useMemo(() => cartItems.reduce((s, i) => s + i.qty, 0), [cartItems])
 
   const [priceMin, priceMax] = useMemo(() => {
-    const prices = produtosMerged.map(p => p.preco)
+    const prices = produtosMerged.map(p => Number(p.preco) || 0)
+    if (prices.length === 0) return [0, 0]
     return [Math.floor(Math.min(...prices)), Math.ceil(Math.max(...prices))]
   }, [produtosMerged])
 
@@ -685,7 +686,7 @@ function App() {
               <div className="user-menu">
                 <button className="user-btn" onClick={() => navigate('/minha-conta')} title="Meus Pedidos">
                   <i className="fa-solid fa-user"></i>
-                  <span className="user-name">{currentUser.nome.split(' ')[0]}</span>
+                  <span className="user-name">{(currentUser.nome || 'Usuário').split(' ')[0]}</span>
                 </button>
                 <button className="user-logout" onClick={logout} title="Sair">
                   <i className="fa-solid fa-right-from-bracket"></i>
@@ -1049,8 +1050,8 @@ function App() {
                   <input type="text" placeholder="(31) 99999-9999" value={customer.telefone} onChange={e => setCustomer({ ...customer, telefone: formatPhone(e.target.value) })} />
                 </div>
                 <div className="form-group">
-                  <label>Email * <small>(usado para identificar sua conta)</small></label>
-                  <input type="text" inputMode="email" placeholder="seu@email.com" value={customer.email} onChange={e => setCustomer({ ...customer, email: e.target.value })} disabled={!!currentUser} />
+                  <label>Email <small>(opcional, para identificar sua conta)</small></label>
+                  <input type="text" inputMode="email" placeholder="seu@email.com" value={customer.email} onChange={e => setCustomer({ ...customer, email: e.target.value })} disabled={!!currentUser?.email} />
                 </div>
                 <div className="form-group">
                   <label>Endereço de entrega</label>
@@ -1063,7 +1064,7 @@ function App() {
                   </div>
                 )}
                 <p className="info-msg"><i className="fa-solid fa-info-circle"></i> Ao continuar, você cria ou acessa sua conta automaticamente.</p>
-                <button className="btn-next" disabled={!customer.nome.trim() || !customer.email.trim() || !customer.telefone.trim() || !customer.cpf.trim()} onClick={async () => { if (await autoLoginOuRegistro()) setCheckout('payment') }}>
+                <button className="btn-next" disabled={!customer.nome.trim() || !customer.telefone.trim() || !customer.cpf.trim()} onClick={async () => { if (await autoLoginOuRegistro()) setCheckout('payment') }}>
                   Continuar <i className="fa-solid fa-arrow-right"></i>
                 </button>
               </div>
