@@ -1,8 +1,9 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import './Admin.css'
 import { supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser, deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads, upsertProducts, upsertDespesas, generateLoginToken } from '../lib/supabase'
 
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
+const STORAGE_ORDERS = 'thsm_admin_orders'
 const STORAGE_FINANCIAL = 'thsm_admin_financeiro'
 const STORAGE_DESPESAS = 'thsm_admin_despesas'
 const STORAGE_CUSTOM_ROTAS = 'thsm_custom_rotas'
@@ -290,7 +291,7 @@ import MapView from '../components/MapView'
 export default function Admin({ produtos, onVoltar }) {
   const [tab, setTab] = useState(() => sessionStorage.getItem('thsm_admin_tab') || 'dashboard')
   useEffect(() => { sessionStorage.setItem('thsm_admin_tab', tab) }, [tab])
-  const [orders, setOrders] = useState([])
+  const [orders, setOrders] = useState(() => LS.get(STORAGE_ORDERS, []))
   const [prodChanges, setProdChanges] = useState(() => LS.get(STORAGE_PRODUCTS, {}))
   const [financial, setFinancial] = useState(() => LS.get(STORAGE_FINANCIAL, []))
   const [toast, setToast] = useState(null)
@@ -327,7 +328,7 @@ export default function Admin({ produtos, onVoltar }) {
   const [deliveryPaid, setDeliveryPaid] = useState('')
   const [deliveryDataInicio, setDeliveryDataInicio] = useState(() => hoje())
   const [deliveryDataVenc, setDeliveryDataVenc] = useState('')
-  const [usuarios, setUsuarios] = useState([])
+  const [usuarios, setUsuarios] = useState(() => LS.get('thsm_usuarios', []))
   const [syncingUsers, setSyncingUsers] = useState(false)
   const [selectedUserEmail, setSelectedUserEmail] = useState(null)
   const [selectedUserDetail, setSelectedUserDetail] = useState(null)
@@ -435,12 +436,20 @@ export default function Admin({ produtos, onVoltar }) {
     setUserMsgMenu(null)
   }
 
+  const firstOrdersSync = useRef(true)
+  const firstProdsSync = useRef(true)
   useEffect(() => {
-    if (orders.length > 0) upsertOrders(orders)
+    if (orders.length === 0) return
+    if (firstOrdersSync.current) { firstOrdersSync.current = false; return }
+    const t = setTimeout(() => { upsertOrders(orders) }, 900)
+    return () => clearTimeout(t)
   }, [orders])
   useEffect(() => {
     LS.set(STORAGE_PRODUCTS, prodChanges)
-    if (Object.keys(prodChanges).length > 0) upsertProducts(prodChanges)
+    if (Object.keys(prodChanges).length === 0) return
+    if (firstProdsSync.current) { firstProdsSync.current = false; return }
+    const t = setTimeout(() => upsertProducts(prodChanges), 700)
+    return () => clearTimeout(t)
   }, [prodChanges])
   useEffect(() => {
     if (newProducts.length > 0) {
@@ -456,15 +465,20 @@ export default function Admin({ produtos, onVoltar }) {
   useEffect(() => { LS.set(STORAGE_CUSTOM_CATS, customCategorias) }, [customCategorias])
   useEffect(() => { LS.set(STORAGE_CUSTOM_TIPOS, customDespesaTipos) }, [customDespesaTipos])
   useEffect(() => {
+    LS.set(STORAGE_ORDERS, orders)
+  }, [orders])
+  useEffect(() => {
     LS.set(STORAGE_FINANCIAL, financial)
-    if (financial.length > 0) {
+    if (financial.length === 0) return
+    const t = setTimeout(() => {
       const doUpsert = () => upsertFinancial(financial)
       if (orders.length > 0) {
         upsertOrders(orders).then(doUpsert).catch(doUpsert)
       } else {
         doUpsert()
       }
-    }
+    }, 1400)
+    return () => clearTimeout(t)
   }, [financial, orders])
   useEffect(() => {
     LS.set(STORAGE_DESPESAS, despesas)
@@ -560,7 +574,7 @@ export default function Admin({ produtos, onVoltar }) {
           const override = {}
           if (prod.preco !== null) override.preco = prod.preco
           if (prod.estoque !== null) override.estoque = prod.estoque
-          if (prod.imagem !== null) override.imagem = prod.imagem
+          if (prod.imagem !== null && typeof prod.imagem === 'string' && !prod.imagem.startsWith('data:') && prod.imagem.length < 2048) override.imagem = prod.imagem
           if (prod.categoria !== null) override.categoria = prod.categoria
           if (prod.preco_custo !== null) override.preco_custo = prod.preco_custo
           if (Object.keys(override).length > 0) fromDB[prod.id] = override
@@ -586,7 +600,14 @@ export default function Admin({ produtos, onVoltar }) {
         }
         setProdChanges(prev => {
           const merged = { ...fromDB, ...prev }
-          LS.set(STORAGE_PRODUCTS, merged)
+          const novoJson = JSON.stringify(merged)
+          if (novoJson.length > 400000) {
+            const compact = {}
+            Object.entries(merged).forEach(([id, o]) => { if (o.imagem && o.imagem.startsWith('data:')) o = { ...o, imagem: '' }; compact[id] = o })
+            LS.set(STORAGE_PRODUCTS, compact)
+          } else {
+            LS.set(STORAGE_PRODUCTS, merged)
+          }
           return merged
         })
       }

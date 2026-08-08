@@ -107,7 +107,7 @@ function App() {
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [getRouteFromHash])
 
-  const fetchProductsDB = useCallback(() => {
+const fetchProductsDB = useCallback(() => {
     supabase.from('produtos').select('*').then(({ data }) => {
       if (!data?.length) return
       const baseIds = new Set(produtos.map(p => p.id))
@@ -130,14 +130,21 @@ function App() {
         const override = {}
         if (prod.preco !== null) override.preco = prod.preco
         if (prod.estoque !== null) override.estoque = prod.estoque
-        if (prod.imagem !== null) override.imagem = prod.imagem
+        if (prod.imagem !== null && typeof prod.imagem === 'string' && !prod.imagem.startsWith('data:') && prod.imagem.length < 2048) override.imagem = prod.imagem
         if (prod.categoria !== null) override.categoria = prod.categoria
         if (Object.keys(override).length > 0) fromDB[prod.id] = override
       })
       setDbNewProducts(news)
       setProdChangesApp(prev => {
         const merged = { ...fromDB, ...prev }
-        safeSetItem('thsm_admin_produtos', merged)
+        const novoJson = JSON.stringify(merged)
+        if (novoJson.length > 400000) {
+          const compact = {}
+          Object.entries(merged).forEach(([id, o]) => { if (o.imagem && o.imagem.startsWith('data:')) o = { ...o, imagem: '' }; compact[id] = o })
+          safeSetItem('thsm_admin_produtos', compact)
+        } else {
+          safeSetItem('thsm_admin_produtos', merged)
+        }
         return merged
       })
     }).catch(() => {})
@@ -151,6 +158,22 @@ function App() {
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [fetchProductsDB])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('thsm_admin_produtos')
+      if (raw && raw.length > 500000) {
+        const obj = JSON.parse(raw)
+        const compact = {}
+        Object.entries(obj).forEach(([id, o]) => {
+          if (o && typeof o === 'object' && o.imagem && o.imagem.startsWith('data:')) o = { ...o, imagem: '' }
+          compact[id] = o
+        })
+        localStorage.removeItem('thsm_admin_produtos')
+        localStorage.setItem('thsm_admin_produtos', JSON.stringify(compact))
+      }
+    } catch {}
+  }, [])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)

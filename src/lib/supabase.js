@@ -89,21 +89,27 @@ export async function upsertOrder(order) {
   }
 }
 
+async function upsertChunked(table, records, mapFn) {
+  if (records.length === 0) return
+  const seen = new Map()
+  records.forEach(r => seen.set(r.id, r))
+  const mapped = [...seen.values()].map(mapFn)
+  const CHUNK = 200
+  for (let i = 0; i < mapped.length; i += CHUNK) {
+    const slice = mapped.slice(i, i + CHUNK)
+    const { error } = await supabase.from(table).upsert(slice, { onConflict: 'id' })
+    if (error) console.error(`Erro upsert ${table}:`, error)
+  }
+}
+
 export async function upsertOrders(orders) {
-  const records = orders.map(o => ({
+  await upsertChunked('pedidos', orders, o => ({
     id: o.id,
     user_id: o.user_id || o.userId || null,
     status: o.status || 'pendente',
     created_at: toDateInput(o.created_at || o.createdAt),
     data: o
   }))
-  if (records.length === 0) return
-  try {
-    const { error } = await supabase.from('pedidos').upsert(records, { onConflict: 'id' })
-    if (error) console.error('Erro upsertOrders:', error)
-  } catch (e) {
-    console.error('Exceção upsertOrders:', e)
-  }
 }
 
 export async function deleteOrder(id) {
@@ -129,21 +135,12 @@ export async function getAllFinancial() {
 }
 
 export async function upsertFinancial(records) {
-  if (records.length === 0) return
-  const seen = new Map()
-  records.forEach(r => seen.set(r.id, r))
-  const mapped = [...seen.values()].map(r => ({
+  await upsertChunked('financeiro', records, r => ({
     id: r.id,
-    order_id: r.orderId || r.order_id,
+    order_id: r.orderId || r.order_id || null,
     status: r.status || 'pendente',
     data: r
   }))
-  try {
-    const { error } = await supabase.from('financeiro').upsert(mapped, { onConflict: 'id' })
-    if (error) console.error('Erro upsertFinancial:', error)
-  } catch (e) {
-    console.error('Exceção upsertFinancial:', e)
-  }
 }
 
 export async function deleteFinancialByOrder(orderId) {
