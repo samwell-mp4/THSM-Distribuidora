@@ -1022,6 +1022,21 @@ export default function Admin({ produtos, onVoltar }) {
     showToast(`${count} senha(s) gerada(s) com sucesso!`)
   }
 
+  const definirSenhasTodos = async () => {
+    if (!confirm('Definir a senha 1234 para TODOS os usuários?\n\nIsso sobrescreve qualquer senha atual.')) return
+    if (usuarios.length === 0) { showToast('Nenhum usuário cadastrado', 'warning'); return }
+    let count = 0
+    for (const u of usuarios) {
+      const endereco = { ...(u.endereco || {}), senha: '1234' }
+      const saved = await upsertUser({ telefone: u.telefone, nome: u.nome, email: u.email || '', endereco })
+      if (saved) {
+        setUsuarios(prev => prev.map(x => x.telefone === saved.telefone ? saved : x))
+        count++
+      }
+    }
+    showToast(`${count} senha(s) definida(s) para 1234!`)
+  }
+
   const handleDeleteUser = async (user) => {
     if (!confirm(`Tem certeza que deseja excluir "${user.nome}" (${user.telefone})?\n\nIsso também excluirá todos os pedidos e financeiro deste usuário.`)) return
     const { error, deletedOrders } = await deleteUserByTelefone(user.telefone)
@@ -2420,6 +2435,10 @@ export default function Admin({ produtos, onVoltar }) {
                     <button className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6', fontSize: '0.82rem', padding: '0.45rem 0.85rem' }}
                       onClick={gerarSenhasUsuarios}>
                       <i className="fa-solid fa-key"></i> Gerar Senhas
+                    </button>
+                    <button className="admin-btn" style={{ background: '#dc2626', color: 'white', borderColor: '#dc2626', fontSize: '0.82rem', padding: '0.45rem 0.85rem' }}
+                      onClick={definirSenhasTodos}>
+                      <i className="fa-solid fa-lock"></i> Senha = 1234
                     </button>
                   </div>
                 </div>

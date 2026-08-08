@@ -118,24 +118,49 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
 
   const [allOrders, setAllOrders] = useState(() => getLS(LS_ORDERS))
   const [financial, setFinancial] = useState(() => getLS(LS_FINANCIAL))
+  const [orderAccessMsg, setOrderAccessMsg] = useState('')
 
-  // Order tracking link (?pedido=ID): load the order directly even if not logged in
+  const normPhone = (p) => (p || '').replace(/\D/g, '')
+
+  const belongsToUser = (o) => o && currentUser && (
+    (o.user_id != null && o.user_id === currentUser.id) ||
+    (o.userId != null && o.userId === currentUser.id) ||
+    normPhone(o.customer?.telefone) === normPhone(currentUser.telefone)
+  )
+
+  // Order tracking link (?pedido=ID): load the order directly (only da própria conta)
   const initialOrderHandled = useRef(false)
   useEffect(() => {
     if (!initialOrderId || initialOrderHandled.current) return
     const order = allOrders.find(o => o.id === initialOrderId)
-    if (order) {
+    if (!order) return
+    initialOrderHandled.current = true
+    if (belongsToUser(order)) {
       setSelectedOrder(order)
-      initialOrderHandled.current = true
+    } else {
+      setOrderAccessMsg('Este pedido não pertence à conta logada. Entre com a conta que fez o pedido para acompanhá-lo.')
     }
-  }, [initialOrderId, allOrders])
+  }, [initialOrderId, allOrders, currentUser])
 
   useEffect(() => {
     if (!initialOrderId || initialOrderHandled.current) return
     supabase.from('pedidos').select('*').eq('id', initialOrderId).maybeSingle().then(async ({ data }) => {
-      if (!data) return
+      if (!data) {
+        setOrderAccessMsg('Pedido não encontrado ou ainda não registrado.')
+        initialOrderHandled.current = true
+        return
+      }
       const order = data.data && typeof data.data === 'object' ? { ...data.data, user_id: data.user_id, status: data.status } : data
       setAllOrders(prev => prev.some(o => o.id === order.id) ? prev : [order, ...prev])
+      if (currentUser) {
+        if (belongsToUser(order)) {
+          setSelectedOrder(order)
+          initialOrderHandled.current = true
+        } else {
+          setOrderAccessMsg('Este pedido não pertence à conta logada. Confira se você está com a conta correta.')
+          initialOrderHandled.current = true
+        }
+      }
       const { data: finData } = await supabase.from('financeiro').select('*').eq('order_id', initialOrderId)
       if (finData?.length) {
         const records = finData.map(f => f.data || f)
@@ -149,7 +174,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
         })
       }
     }).catch(e => console.error('Erro ao carregar pedido do link:', e))
-  }, [initialOrderId])
+  }, [initialOrderId, currentUser])
 
   useEffect(() => {
     if (!currentUser?.telefone) return
@@ -173,8 +198,6 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
       })
     }).catch(() => {})
   }, [currentUser?.telefone])
-
-  const normPhone = (p) => (p || '').replace(/\D/g, '')
 
   const userOrders = useMemo(() => {
     if (!currentUser) return []
@@ -471,6 +494,13 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
                 <p className="admin-subtitle">Acompanhe todos os seus pedidos</p>
               </div>
             </div>
+            {orderAccessMsg && (
+              <div style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: '10px', padding: '0.75rem 1rem', marginBottom: '0.9rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <i className="fa-solid fa-triangle-exclamation"></i>
+                <div style={{ flex: 1 }}>{orderAccessMsg}</div>
+                <button onClick={() => setOrderAccessMsg('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#b91c1c', fontSize: '1rem' }}><i className="fa-solid fa-xmark"></i></button>
+              </div>
+            )}
             <div className="admin-cards">
               <div className="admin-card card-blue">
                 <i className="fa-solid fa-shopping-bag"></i>

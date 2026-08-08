@@ -23,10 +23,8 @@ app.post('/api/criar-usuario', async (req, res) => {
     const { data: existing } = await supabase.from('usuarios').select('endereco').eq('telefone', telefone).maybeSingle()
     const existingSenha = existing?.endereco?.senha || ''
 
-    // Generate password: FirstName + last 4 digits of phone
-    const primeiroNome = (nome.split(' ')[0] || '').trim()
-    const ultimos4 = telefone.slice(-4)
-    const senha = existingSenha || `${primeiroNome}${ultimos4}`
+    // Generate password: padrao unico 1234
+    const senha = existingSenha || '1234'
 
     const endereco = {
       ...(existing?.endereco || {}),

@@ -61,6 +61,10 @@ function App() {
   const [adminAuth, setAdminAuth] = useState(() => {
     try { const d = localStorage.getItem(LS_ADMIN); return d ? JSON.parse(d) : null } catch { return null }
   })
+  const [forceOrderLogin, setForceOrderLogin] = useState(false)
+  const [showNomeObrigatorio, setShowNomeObrigatorio] = useState(false)
+  const [nomeObrigatorioValue, setNomeObrigatorioValue] = useState('')
+  const [savingNome, setSavingNome] = useState(false)
   const [usuarios, setUsuarios] = useState(() => {
     try { return JSON.parse(localStorage.getItem(LS_USUARIOS)) || [] } catch { return [] }
   })
@@ -208,10 +212,15 @@ function App() {
 
     if (pid) {
       setInitialOrderId(Number(pid))
+      try { localStorage.removeItem(LS_SESSAO) } catch {}
+      setCurrentUser(null)
+      setForceOrderLogin(true)
       const url = new URL(window.location)
       url.searchParams.delete('pedido')
       window.history.replaceState({}, '', url)
-      if (route !== 'userdash') navigate('/minha-conta')
+      navigate('/')
+      showToast('Faça login para ver seu pedido')
+      setTimeout(() => setShowLogin(true), 150)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -234,6 +243,40 @@ function App() {
 
   useEffect(() => { safeSetItem(LS_USUARIOS, usuarios) }, [usuarios])
   useEffect(() => { if (currentUser) safeSetItem(LS_SESSAO, currentUser); else localStorage.removeItem(LS_SESSAO) }, [currentUser])
+
+  useEffect(() => {
+    if (!currentUser) return
+    const nome = (currentUser.nome || '').trim()
+    if (!nome || /^usu?[áa]rios?$/i.test(nome)) {
+      setNomeObrigatorioValue(currentUser.nome || '')
+      setShowNomeObrigatorio(true)
+    }
+  }, [currentUser])
+
+  const salvarNomeObrigatorio = async () => {
+    const nomeTxt = nomeObrigatorioValue.trim()
+    if (nomeTxt.length < 2 || /^usu?[áa]rios?$/i.test(nomeTxt)) { showToast('Informe seu nome completo', 'error'); return }
+    if (!currentUser) return
+    setSavingNome(true)
+    try {
+      const atualizado = { ...currentUser, nome: nomeTxt }
+      setCurrentUser(atualizado)
+      setUsuarios(prev => prev.some(u => u.telefone === atualizado.telefone) ? prev.map(u => u.telefone === atualizado.telefone ? atualizado : u) : [atualizado, ...prev])
+      await upsertUser({
+        telefone: atualizado.telefone,
+        nome: nomeTxt,
+        email: atualizado.email || '',
+        endereco: { ...(atualizado.endereco || {}), senha: atualizado.endereco?.senha || '', cpf: atualizado.cpf || atualizado.endereco?.cpf || '' }
+      })
+      setShowNomeObrigatorio(false)
+      showToast('Nome atualizado com sucesso!')
+    } catch (e) {
+      console.error('Erro ao salvar nome:', e)
+      showToast('Erro ao salvar nome', 'error')
+    } finally {
+      setSavingNome(false)
+    }
+  }
   useEffect(() => {
     supabase.from('usuarios').select('*').then(({ data }) => {
       if (data?.length) {
@@ -324,6 +367,10 @@ function App() {
     setLoginEmail('')
     setLoginSenha('')
     showToast(`Bem-vindo, ${user.nome}!`)
+    if (forceOrderLogin) {
+      setForceOrderLogin(false)
+      navigate('/minha-conta')
+    }
     const addr = user.endereco || {}
     if (!addr.cep || !addr.cidade || !addr.rua || !addr.numero) {
       setAddressRequiredEndereco({ cep: addr.cep || '', estado: addr.estado || '', cidade: addr.cidade || '', bairro: addr.bairro || '', rua: addr.rua || '', numero: addr.numero || '', complemento: addr.complemento || '' })
@@ -347,11 +394,15 @@ function App() {
     if (error) { showToast('Erro ao cadastrar', 'error'); return }
     setUsuarios(prev => [...prev, data])
     setCurrentUser(data)
-    setShowLogin(false)
+setShowLogin(false)
     setLoginEmail('')
     setLoginSenha('')
     setLoginNome('')
     showToast('Conta criada com sucesso!')
+    if (forceOrderLogin) {
+      setForceOrderLogin(false)
+      navigate('/minha-conta')
+    }
     const addr = data.endereco || {}
     if (!addr.cep || !addr.cidade || !addr.rua || !addr.numero) {
       setAddressRequiredEndereco({ cep: addr.cep || '', estado: addr.estado || '', cidade: addr.cidade || '', bairro: addr.bairro || '', rua: addr.rua || '', numero: addr.numero || '', complemento: addr.complemento || '' })
@@ -1277,6 +1328,35 @@ function App() {
               <button className="btn-next" style={{ width: '100%', marginTop: '0.5rem' }} disabled={!recoverNewPassword || recoverNewPassword.length < 3} onClick={saveNewPassword}>
                 <i className="fa-solid fa-check"></i> Salvar Nova Senha
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NOME OBRIGATÓRIO MODAL */}
+      {showNomeObrigatorio && currentUser && (
+        <div className="overlay">
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px' }}>
+            <div className="modal-body">
+              <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+                <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--warning-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem' }}>
+                  <i className="fa-solid fa-user-pen" style={{ fontSize: '1.4rem', color: 'var(--warning)' }}></i>
+                </div>
+                <h2 style={{ fontSize: '1.1rem', marginBottom: '0.25rem' }}>Atualize seu nome</h2>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Para continuar, informe seu nome completo.</p>
+              </div>
+              <div className="form-group" style={{ textAlign: 'left' }}>
+                <label>Nome completo *</label>
+                <input type="text" autoFocus placeholder="Seu nome completo" value={nomeObrigatorioValue} onChange={e => setNomeObrigatorioValue(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && nomeObrigatorioValue.trim().length >= 2 && !/^usu?[áa]rios?$/i.test(nomeObrigatorioValue.trim())) salvarNomeObrigatorio() }} />
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.25rem' }}>
+                <button className="btn-next" style={{ flex: 1, justifyContent: 'center' }}
+                  disabled={savingNome || nomeObrigatorioValue.trim().length < 2 || /^usu?[áa]rios?$/i.test(nomeObrigatorioValue.trim())}
+                  onClick={salvarNomeObrigatorio}>
+                  {savingNome ? <><i className="fa-solid fa-spinner fa-spin"></i> Salvando...</> : <><i className="fa-solid fa-check"></i> Salvar Nome</>}
+                </button>
+              </div>
             </div>
           </div>
         </div>
