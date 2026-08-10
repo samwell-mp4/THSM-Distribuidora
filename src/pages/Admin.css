@@ -1141,14 +1141,17 @@
    ========================================== */
 .admin-bottom-nav {
   display: none;
-  position: sticky;
+  position: fixed;
+  left: 0;
+  right: 0;
   bottom: 0;
   z-index: 100;
   background: white;
   border-top: 1px solid var(--admin-border);
-  padding: 0.25rem 0;
+  padding: 0.25rem 0.15rem;
   justify-content: space-around;
   box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
+  gap: 0.1rem;
 }
 
 .admin-bottom-item {
@@ -1187,6 +1190,80 @@
   border-radius: 50px;
   min-width: 16px;
   text-align: center;
+}
+
+/* MOBILE MENU DRAWER */
+.admin-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(15, 23, 42, 0.45);
+  display: none;
+}
+.admin-drawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(310px, 82vw);
+  background: white;
+  box-shadow: 4px 0 24px rgba(0,0,0,0.18);
+  display: flex;
+  flex-direction: column;
+  animation: drawerIn 0.22s ease;
+  overflow-y: auto;
+}
+@keyframes drawerIn {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+.admin-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--admin-border);
+  position: sticky;
+  top: 0;
+  background: white;
+}
+.admin-drawer-header strong {
+  font-size: 0.9rem;
+  color: var(--admin-text);
+}
+.admin-drawer-body {
+  padding: 0.6rem 0.75rem 1.25rem;
+}
+.admin-drawer-group-label {
+  display: block;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--admin-text-sec);
+  margin: 0.6rem 0 0.25rem;
+}
+.admin-bottom-item.admin-drawer-item {
+  flex-direction: row;
+  justify-content: flex-start;
+  width: 100%;
+  gap: 0.6rem;
+  padding: 0.55rem 0.5rem;
+  font-size: 0.8rem;
+  border-radius: 8px;
+  text-align: left;
+}
+.admin-bottom-item.admin-drawer-item i {
+  font-size: 0.9rem;
+  width: 20px;
+  text-align: center;
+}
+.admin-bottom-item.admin-drawer-item.active {
+  background: color-mix(in srgb, var(--accent) 10%, white);
+}
+.admin-drawer-overlay .admin-bottom-badge {
+  position: static;
+  margin-left: auto;
 }
 
 /* ==========================================
@@ -1327,8 +1404,10 @@
   .admin-card strong { font-size: 0.95rem; }
   .admin-header-row { flex-direction: column; gap: 0.5rem; }
 
-  /* Bottom nav (UserDashboard only) */
+  /* Bottom nav (mobile) */
   .admin-bottom-nav { display: flex; }
+  .admin-drawer-overlay { display: block; }
+  .admin-hidden-under-768 { display: none; }
 
   /* Table -> cards on mobile */
   .admin-table-wrap { overflow-x: visible; }
@@ -2157,6 +2236,21 @@
 .admin-badge.in { background: #d1fae5; color: #059669; }
 .admin-badge.low { background: #fef3c7; color: #d97706; }
 .admin-badge.out { background: #fee2e2; color: #dc2626; }
+.admin-badge.nodev { background: #fee2e2; color: #dc2626; border: 1px solid #dc2626; }
+
+.prod-nodev-tag {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.12rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #dc2626;
+  vertical-align: middle;
+}
 
 .admin-prod-card-cat {
   position: absolute;
@@ -3558,4 +3652,196 @@
   .rep-sidebar-item.active { border-color: transparent; }
   .rep-kpis { grid-template-columns: repeat(2, 1fr); }
   .rep-hb-label { width: 90px; }
+}
+
+/* ==========================================
+   SEM DEVOLUÇÃO REPORT MODAL
+   ========================================== */
+.semdev-modal {
+  max-width: 1100px !important;
+  width: 95% !important;
+  max-height: 92vh !important;
+}
+
+.semdev-overlay {
+  display: flex;
+}
+
+.semdev-summary {
+  font-size: 0.82rem;
+  color: var(--admin-text-sec);
+  margin-bottom: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  background: #f8fafc;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+}
+
+.semdev-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.semdev-group {
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: white;
+}
+
+.semdev-group-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.85rem;
+  background: #f8fafc;
+  cursor: pointer;
+  user-select: none;
+}
+
+.semdev-group-head:hover {
+  background: #f1f5f9;
+}
+
+.semdev-caret {
+  color: var(--admin-text-sec);
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+
+.semdev-caret.open {
+  transform: rotate(90deg);
+}
+
+.semdev-group-ident {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.semdev-group-cliente {
+  font-weight: 700;
+  color: var(--admin-text);
+}
+
+.semdev-group-meta {
+  font-size: 0.72rem;
+  color: var(--admin-text-sec);
+}
+
+.semdev-table {
+  border: none;
+  border-top: 1px solid var(--admin-border);
+}
+
+.semdev-table th {
+  padding: 0.45rem 0.75rem !important;
+  font-size: 0.7rem !important;
+}
+
+.semdev-table td {
+  padding: 0.45rem 0.75rem !important;
+}
+
+@media (max-width: 1024px) and (min-width: 701px) {
+  .semdev-modal {
+    max-width: 95vw !important;
+    width: 95% !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .semdev-overlay {
+    padding: 0.5rem;
+    align-items: flex-start;
+    overflow-y: auto;
+  }
+  .semdev-modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 96vh !important;
+    margin: 0;
+  }
+  .semdev-modal .admin-modal-header {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .semdev-modal .admin-modal-header h3 {
+    font-size: 0.9rem;
+  }
+  .semdev-group-head {
+    padding: 0.55rem 0.65rem;
+  }
+  .semdev-group-meta {
+    font-size: 0.68rem;
+  }
+  .semdev-table th,
+  .semdev-table td {
+    padding: 0.5rem 0.65rem !important;
+  }
+  .semdev-summary {
+    font-size: 0.75rem;
+    padding: 0.5rem 0.65rem;
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  .semdev-modal,
+  .semdev-modal * {
+    visibility: visible !important;
+  }
+  .semdev-modal {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+  }
+  .admin-modal-header,
+  .modal-actions {
+    display: none !important;
+  }
+  .semdev-print-header {
+    display: block !important;
+    margin-bottom: 0.75rem;
+  }
+  .semdev-print-header h2 {
+    margin: 0 0 0.2rem;
+    font-size: 1.1rem;
+    color: #000;
+  }
+  .semdev-print-header p {
+    margin: 0;
+    font-size: 0.75rem;
+    color: #333;
+  }
+  .semdev-group {
+    break-inside: avoid;
+  }
+  .semdev-group-head {
+    background: #eee !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .admin-table.semdev-table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  .admin-table.semdev-table th,
+  .admin-table.semdev-table td {
+    color: #000 !important;
+    border: 1px solid #ccc !important;
+  }
+  .semdev-print-hide {
+    display: none !important;
+  }
 }

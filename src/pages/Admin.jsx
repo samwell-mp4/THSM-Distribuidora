@@ -353,6 +353,7 @@ import CentralAnalise from '../components/CentralAnalise'
 export default function Admin({ produtos, onVoltar }) {
   const [tab, setTab] = useState(() => sessionStorage.getItem('thsm_admin_tab') || 'dashboard')
   useEffect(() => { sessionStorage.setItem('thsm_admin_tab', tab) }, [tab])
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [orders, setOrders] = useState(() => LS.get(STORAGE_ORDERS, []))
   const [prodChanges, setProdChanges] = useState(() => LS.get(STORAGE_PRODUCTS, {}))
   const [financial, setFinancial] = useState(() => LS.get(STORAGE_FINANCIAL, []))
@@ -444,6 +445,8 @@ export default function Admin({ produtos, onVoltar }) {
   const [dashCustomEnd, setDashCustomEnd] = useState('')
   const [orderPage, setOrderPage] = useState(1)
   const ORDER_PAGE_SIZE = 50
+  const [semDevReport, setSemDevReport] = useState(null)
+  const [semDevGroups, setSemDevGroups] = useState({})
   const [rotas, setRotas] = useState([])
   const [rotasLoading, setRotasLoading] = useState(false)
   const [importingRotas, setImportingRotas] = useState(false)
@@ -754,7 +757,7 @@ export default function Admin({ produtos, onVoltar }) {
         const newsFromDB = []
         p.forEach(prod => {
           if (!prodIdsFromJSON.has(prod.id)) {
-            newsFromDB.push({ id: prod.id, nome: prod.nome || '', preco: prod.preco || 0, estoque: prod.estoque || 0, imagem: prod.imagem || '', categoria: prod.categoria || '', descricao: '', variantes: prod.variantes || {} })
+            newsFromDB.push({ id: prod.id, nome: prod.nome || '', preco: prod.preco || 0, estoque: prod.estoque || 0, imagem: prod.imagem || '', categoria: prod.categoria || '', descricao: '', variantes: prod.variantes || {}, semDevolucao: !!prod.semDevolucao })
           }
           const override = {}
           if (prod.preco !== null) override.preco = prod.preco
@@ -1363,8 +1366,8 @@ export default function Admin({ produtos, onVoltar }) {
   }
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === paginatedOrders.length) setSelectedIds(new Set())
-    else setSelectedIds(new Set(paginatedOrders.map(o => o.id)))
+    if (selectedIds.size === filteredOrders.length) setSelectedIds(new Set())
+    else setSelectedIds(new Set(filteredOrders.map(o => o.id)))
   }
 
   const toggleSelect = (id) => {
@@ -1391,6 +1394,52 @@ export default function Admin({ produtos, onVoltar }) {
       }
     })
     if (action === 'delete') showToast(`${selectedIds.size} pedido(s) excluído(s)`)
+    setSelectedIds(new Set())
+  }
+
+  const gerarRelatorioSemDevolucao = () => {
+    if (selectedIds.size === 0) { showToast('Selecione pelo menos um pedido', 'error'); return }
+    const norm = (v) => (v || '').toString().toLowerCase().replace(/[^a-z0-9]/g, '')
+    const isNoDevName = (nome) => {
+      const n = norm(nome).replace(/sem/, ' devol')
+      return norm(nome).includes('semdevolu') || norm(nome).includes('sem-devolu') || norm(nome).includes('sem devolu') || norm(nome).includes('s/devolu')
+    }
+    const rows = []
+    selectedIds.forEach(id => {
+      const order = orders.find(o => o.id === id)
+      if (!order) return
+      ;(order.items || []).forEach(i => {
+        const prodAtual = produtosAtuais.find(p => p.id === i.id || p.id === String(i.id) || norm(p.nome) === norm(i.nome))
+        const semDev = i.semDevolucao || prodAtual?.semDevolucao || isNoDevName(i.nome)
+        if (semDev) {
+          rows.push({
+            orderId: id,
+            cliente: order.customer?.nome || '-',
+            telefone: order.customer?.telefone || '-',
+            cidade: order.customer?.endereco?.cidade || '',
+            produto: i.nome,
+            qty: i.qty || 1,
+            valor: (i.preco || 0) * (i.qty || 1),
+            data: order.date || ''
+          })
+        }
+      })
+    })
+    if (rows.length === 0) {
+      showToast('Nenhum produto SEM DEVOLUÇÃO nos pedidos selecionados', 'error')
+      return
+    }
+    const groupsMap = {}
+    rows.forEach(r => {
+      const key = (r.telefone || r.cliente || 'sem-contato').trim()
+      if (!groupsMap[key]) groupsMap[key] = { cliente: r.cliente, telefone: r.telefone, cidade: r.cidade, rows: [] }
+      groupsMap[key].rows.push(r)
+    })
+    const groups = Object.values(groupsMap)
+    const expand = {}
+    groups.forEach((g, idx) => { expand[idx] = true })
+    setSemDevGroups(expand)
+    setSemDevReport({ rows, groups, total: rows.reduce((s, r) => s + r.valor, 0), geradoEm: new Date().toLocaleString('pt-BR') })
     setSelectedIds(new Set())
   }
 
@@ -1620,7 +1669,7 @@ export default function Admin({ produtos, onVoltar }) {
     setProdCart(prev => {
       const existing = prev[p.id]
       if (existing) return { ...prev, [p.id]: { ...existing, qty: existing.qty + 1 } }
-      return { ...prev, [p.id]: { id: p.id, nome: p.nome, preco: p.preco, preco_custo: p.preco_custo, imagem: p.imagem, tipo: 'aprazo', qty: 1 } }
+      return { ...prev, [p.id]: { id: p.id, nome: p.nome, preco: p.preco, preco_custo: p.preco_custo, imagem: p.imagem, tipo: 'aprazo', qty: 1, semDevolucao: !!p.semDevolucao } }
     })
   }
 
@@ -1667,6 +1716,12 @@ export default function Admin({ produtos, onVoltar }) {
     } else if (action === 'estoque') {
       setShowBulkStock(true)
       return
+    } else if (action === 'semdev') {
+      const allOn = [...prodSelectedIds].every(id => produtosAtuais.find(p => p.id === id)?.semDevolucao)
+      const target = !allOn
+      if (!confirm(`Marcar ${prodSelectedIds.size} produto(s) como ${target ? 'SEM DEVOLUÇÃO' : 'COM devolução'}?`)) return
+      prodSelectedIds.forEach(id => updateProduct(id, { semDevolucao: target }))
+      showToast(`${prodSelectedIds.size} produto(s) marcados como ${target ? 'SEM DEVOLUÇÃO' : 'COM devolução'}`)
     }
     setProdSelectedIds(new Set())
   }
@@ -1898,6 +1953,31 @@ export default function Admin({ produtos, onVoltar }) {
     { id: 'mapa', icon: 'fa-map', label: 'Mapa' },
     { id: 'analises', icon: 'fa-chart-pie', label: 'Análises' },
   ]
+
+  // Injects data-label into .admin-table cells (used by mobile card layout)
+  useEffect(() => {
+    const labelTables = () => {
+      document.querySelectorAll('.admin table.admin-table, .admin .admin-table').forEach(table => {
+        const thead = table.querySelector('thead')
+        if (!thead) return
+        const headers = [...thead.querySelectorAll('th')].map(th => th.textContent.trim())
+        table.querySelectorAll('tbody tr').forEach(row => {
+          const cells = [...row.querySelectorAll('td')]
+          cells.forEach((td, idx) => {
+            if (td.dataset.label) return
+            const label = headers[idx]
+            if (label) td.dataset.label = label
+          })
+        })
+      })
+    }
+    labelTables()
+    const root = document.querySelector('.admin')
+    if (!root) return
+    const mo = new MutationObserver(labelTables)
+    mo.observe(root, { childList: true, subtree: true })
+    return () => mo.disconnect()
+  }, [])
 
   return (
     <div className="admin">
@@ -2166,6 +2246,9 @@ export default function Admin({ produtos, onVoltar }) {
                   <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)' }} onClick={() => bulkAction('delete')}>
                     <i className="fa-solid fa-trash"></i> Excluir
                   </button>
+                  <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', background: '#dc2626', color: 'white', borderColor: '#dc2626' }} onClick={gerarRelatorioSemDevolucao}>
+                    <i className="fa-solid fa-file-lines"></i> Relatório Sem Devolução
+                  </button>
                   <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem' }} onClick={() => setSelectedIds(new Set())}>
                     <i className="fa-solid fa-xmark"></i> Limpar
                   </button>
@@ -2178,7 +2261,7 @@ export default function Admin({ produtos, onVoltar }) {
                 <thead>
                   <tr>
                     <th style={{ width: '36px' }}>
-                      <input type="checkbox" checked={paginatedOrders.length > 0 && selectedIds.size === paginatedOrders.length} onChange={toggleSelectAll} style={{ cursor: 'pointer', width: '15px', height: '15px' }} />
+                      <input type="checkbox" checked={filteredOrders.length > 0 && selectedIds.size === filteredOrders.length} onChange={toggleSelectAll} style={{ cursor: 'pointer', width: '15px', height: '15px' }} />
                     </th>
                     <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('cliente')}>Cliente {sortIcon('cliente')}</th>
                     <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('telefone')}>Telefone {sortIcon('telefone')}</th>
@@ -2239,6 +2322,13 @@ export default function Admin({ produtos, onVoltar }) {
                 </tbody>
               </table>
             </div>
+            {totalOrderPages > 1 && (
+              <div className="admin-pagination" style={{ marginTop: '0.75rem' }}>
+                <button disabled={orderPage === 1} onClick={() => setOrderPage(p => p - 1)}><i className="fa-solid fa-chevron-left"></i></button>
+                <span>{orderPage} de {totalOrderPages}</span>
+                <button disabled={orderPage === totalOrderPages} onClick={() => setOrderPage(p => p + 1)}><i className="fa-solid fa-chevron-right"></i></button>
+              </div>
+            )}
           </div>
         )}
 
@@ -2325,6 +2415,9 @@ export default function Admin({ produtos, onVoltar }) {
                 <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', background: '#10b981', color: 'white', borderColor: '#10b981' }} onClick={() => bulkProdAction('estoque')}>
                   <i className="fa-solid fa-warehouse"></i> Definir Estoque
                 </button>
+                <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', background: '#dc2626', color: 'white', borderColor: '#dc2626' }} onClick={() => bulkProdAction('semdev')}>
+                  <i className="fa-solid fa-ban"></i> Sem Devolução
+                </button>
                 <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }} onClick={() => setProdSelectedIds(new Set())}>
                   <i className="fa-solid fa-xmark"></i> Limpar
                 </button>
@@ -2350,6 +2443,7 @@ export default function Admin({ produtos, onVoltar }) {
                           {p.estoque <= 0 ? <span className="admin-badge out">Indisponível</span>
                             : p.estoque <= 5 ? <span className="admin-badge low">Últimas {p.estoque}</span>
                             : <span className="admin-badge in">Disponível</span>}
+                          {p.semDevolucao && <span className="admin-badge nodev">SEM DEVOLUÇÃO</span>}
                         </div>
                         <div className="admin-prod-card-cat">{p.categoria}</div>
                       </div>
@@ -2420,7 +2514,7 @@ export default function Admin({ produtos, onVoltar }) {
                               {p.imagem ? <img src={p.imagem} alt={p.nome} /> : <i className="fa-solid fa-image"></i>}
                             </div>
                           </td>
-                          <td className="td-prod-name">{p.nome}</td>
+<td className="td-prod-name">{p.nome}{p.semDevolucao && <span className="prod-nodev-tag">SEM DEVOLUÇÃO</span>}</td>
                           <td><span className="cat-tag">{p.categoria}</span></td>
                           <td className="td-price">{formatPreco(p.preco)}</td>
                           <td className="td-price" style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>{p.preco_custo ? formatPreco(p.preco_custo) : '-'}</td>
@@ -3733,6 +3827,78 @@ export default function Admin({ produtos, onVoltar }) {
         />
       )}
 
+      {semDevReport && (
+        <div className="admin-overlay semdev-overlay" onClick={() => setSemDevReport(null)}>
+          <div className="admin-modal semdev-modal" onClick={e => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h3><i className="fa-solid fa-file-lines"></i> Relatório SEM DEVOLUÇÃO</h3>
+              <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', background: '#dc2626', color: 'white', borderColor: '#dc2626' }} onClick={() => window.print()}>
+                  <i className="fa-solid fa-print"></i> Imprimir / PDF
+                </button>
+                <button className="admin-modal-close" onClick={() => setSemDevReport(null)}><i className="fa-solid fa-xmark"></i></button>
+              </div>
+            </div>
+            <div className="admin-modal-body">
+              <div className="semdev-print-header" style={{ display: 'none' }}>
+                <h2>Relatório SEM DEVOLUÇÃO</h2>
+                <p>Gerado em {semDevReport.geradoEm} · Total {formatPreco(semDevReport.total)}</p>
+              </div>
+              <p className="semdev-summary">
+                Gerado em {semDevReport.geradoEm} · {semDevReport.rows.length} item(ns) · <strong>{semDevReport.groups.length} cliente(s)</strong> · Total {formatPreco(semDevReport.total)}
+              </p>
+              <div className="semdev-groups">
+                {semDevReport.groups.map((g, gi) => (
+                  <div key={gi} className={`semdev-group ${semDevGroups[gi] ? 'open' : ''}`}>
+                    <div className="semdev-group-head" onClick={() => setSemDevGroups(prev => ({ ...prev, [gi]: !prev[gi] }))}>
+                      <i className={`fa-solid fa-caret-right semdev-caret ${semDevGroups[gi] ? 'open' : ''}`}></i>
+                      <div className="semdev-group-ident">
+                        <span className="semdev-group-cliente">{g.cliente || '—'}</span>
+                        <span className="semdev-group-meta">{g.telefone || '-'}{g.cidade ? ` · ${g.cidade}` : ''} · {g.rows.length} item(ns) · {formatPreco(g.rows.reduce((s, r) => s + r.valor, 0))}</span>
+                      </div>
+                    </div>
+                    {semDevGroups[gi] && (
+                      <table className="admin-table semdev-table">
+                        <thead>
+                          <tr>
+                            <th>Produto</th>
+                            <th>Qtd</th>
+                            <th>Data</th>
+                            <th>Valor</th>
+                            <th className="semdev-print-hide" style={{ width: '60px' }}>Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {g.rows.map((r, i) => (
+                            <tr key={i}>
+                              <td>{r.produto}</td>
+                              <td>{r.qty}</td>
+                              <td>{r.data ? formatDate(r.data) : '-'}</td>
+                              <td className="td-price">{formatPreco(r.valor)}</td>
+                              <td className="semdev-print-hide">
+                                <button className="action-btn" title="Ver pedido original" onClick={() => { const o = orders.find(ord => ord.id === r.orderId); if (o) { setSemDevReport(null); setShowOrderDetail(o) } }}>
+                                  <i className="fa-solid fa-eye"></i>
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="modal-actions" style={{ marginTop: '0.75rem' }}>
+                <button className="admin-btn admin-btn-sec" onClick={() => setSemDevReport(null)}>Fechar</button>
+                <button className="admin-btn" style={{ background: '#dc2626', color: 'white', borderColor: '#dc2626' }} onClick={() => window.print()}>
+                  <i className="fa-solid fa-print"></i> Imprimir / PDF
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL ORDER DETAIL */}
       {showOrderDetail && (
         <OrderDetailModal
@@ -4539,6 +4705,52 @@ export default function Admin({ produtos, onVoltar }) {
                 <button className="admin-btn admin-btn-sec" onClick={() => { setPwTarget(null); setPwNew('') }}>Cancelar</button>
                 <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={mudarSenha}>
                   <i className="fa-solid fa-check"></i> Salvar Senha
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MOBILE BOTTOM NAV */}
+      <nav className="admin-bottom-nav">
+        {sidebar.filter(s => ['dashboard', 'pedidos', 'produtos', 'financeiro', 'usuarios'].includes(s.id)).map(s => (
+          <button key={s.id} className={`admin-bottom-item ${tab === s.id ? 'active' : ''}`} onClick={() => setTab(s.id)}>
+            <i className={`fa-solid ${s.icon}`}></i>
+            <span>{s.label}</span>
+            {s.count > 0 && <span className="admin-bottom-badge">{s.count}</span>}
+          </button>
+        ))}
+        <button className={`admin-bottom-item ${mobileMenuOpen ? 'active' : ''}`} onClick={() => setMobileMenuOpen(true)}>
+          <i className="fa-solid fa-bars"></i>
+          <span>Mais</span>
+        </button>
+      </nav>
+
+      {/* MOBILE MENU DRAWER */}
+      {mobileMenuOpen && (
+        <div className="admin-drawer-overlay" onClick={() => setMobileMenuOpen(false)}>
+          <div className="admin-drawer" onClick={e => e.stopPropagation()}>
+            <div className="admin-drawer-header">
+              <strong>THSM Admin</strong>
+              <button className="admin-modal-close" onClick={() => setMobileMenuOpen(false)}><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <div className="admin-drawer-body">
+              <div className="admin-drawer-group">
+                <span className="admin-drawer-group-label">Navegação</span>
+                {sidebar.map(s => (
+                  <button key={s.id} className={`admin-bottom-item admin-drawer-item ${tab === s.id ? 'active' : ''}`} onClick={() => { setTab(s.id); setMobileMenuOpen(false) }}>
+                    <i className={`fa-solid ${s.icon}`}></i>
+                    <span>{s.label}</span>
+                    {s.count > 0 && <span className="admin-bottom-badge">{s.count}</span>}
+                  </button>
+                ))}
+              </div>
+              <div className="admin-drawer-group">
+                <span className="admin-drawer-group-label">Conta</span>
+                <button className="admin-bottom-item admin-drawer-item" onClick={onVoltar}>
+                  <i className="fa-solid fa-arrow-left"></i>
+                  <span>Voltar ao Catálogo</span>
                 </button>
               </div>
             </div>
@@ -5906,7 +6118,7 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
   const cartTotal = useMemo(() => cartItems.reduce((s, i) => s + i.preco * i.qty, 0), [cartItems])
 
   const addItem = (p) => {
-    setCart(prev => ({ ...prev, [p.id]: { id: p.id, nome: p.nome, preco: p.preco, preco_custo: p.preco_custo, imagem: p.imagem, qty: (prev[p.id]?.qty || 0) + 1, tipo: 'aprazo' } }))
+    setCart(prev => ({ ...prev, [p.id]: { id: p.id, nome: p.nome, preco: p.preco, preco_custo: p.preco_custo, imagem: p.imagem, qty: (prev[p.id]?.qty || 0) + 1, tipo: 'aprazo', semDevolucao: !!p.semDevolucao } }))
   }
 
   const removeItem = (id) => {
@@ -6237,7 +6449,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
   const addItemToEdit = (p) => {
     setAddCart(prev => ({
       ...prev,
-      [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, tipo: 'aprazo', qty: (prev[p.id]?.qty || 0) + 1 }
+      [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, tipo: 'aprazo', qty: (prev[p.id]?.qty || 0) + 1, semDevolucao: !!p.semDevolucao }
     }))
   }
 
@@ -6543,7 +6755,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
                             <button className="qty-btn-sm" onClick={() => addToPreReplacement(p)}><i className="fa-solid fa-plus"></i></button>
                           </div>
                         ) : (
-                          <button className="add-prod-add" style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }} onClick={() => { setPreAddCart({ [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, tipo: 'aprazo', qty: 1 } }) }}>
+                          <button className="add-prod-add" style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }} onClick={() => { setPreAddCart({ [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, tipo: 'aprazo', qty: 1, semDevolucao: !!p.semDevolucao } }) }}>
                             <i className="fa-solid fa-plus"></i> Substituto
                           </button>
                         )}
@@ -6824,6 +7036,7 @@ function EditProductModal({ product, categorias = [], onAddCategoria, onSave, on
       return saved[product.id] || product.variantes || {}
     } catch { return product.variantes || {} }
   })
+  const [semDevolucao, setSemDevolucao] = useState(!!product.semDevolucao)
   const [newVarTypeName, setNewVarTypeName] = useState('')
 
   const handleImageUpload = (e) => {
@@ -6896,7 +7109,7 @@ function EditProductModal({ product, categorias = [], onAddCategoria, onSave, on
       else delete all[product.id]
       localStorage.setItem('thsm_prod_variants', JSON.stringify(all))
     } catch {}
-    onSave({ nome: nome.trim(), preco: Number(preco), preco_custo: precoCusto === '' ? null : Number(precoCusto), estoque: Number(estoque), imagem, categoria, descricao, variantes: cleaned })
+    onSave({ nome: nome.trim(), preco: Number(preco), preco_custo: precoCusto === '' ? null : Number(precoCusto), estoque: Number(estoque), imagem, categoria, descricao, variantes: cleaned, semDevolucao })
   }
 
   return (
@@ -6967,6 +7180,22 @@ function EditProductModal({ product, categorias = [], onAddCategoria, onSave, on
               {categorias.map(c => <option key={c} value={c}>{c}</option>)}
               <option value="__nova__">＋ Nova categoria...</option>
             </select>
+          </div>
+          <div className="form-group">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', background: semDevolucao ? '#fef2f2' : '#f0fdf4', border: `1px solid ${semDevolucao ? '#fecaca' : '#bbf7d0'}`, borderRadius: '8px', padding: '0.6rem 0.75rem' }}>
+              <div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: semDevolucao ? '#b91c1c' : '#15803d' }}>
+                  {semDevolucao ? 'Sem devolução' : 'Com devolução'}
+                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-sec)', marginTop: '0.1rem' }}>
+                  {semDevolucao ? 'Cliente confirma que não há troca/devolução no checkout' : 'Produto aceita troca/devolução'}
+                </div>
+              </div>
+              <label className="stock-toggle" style={{ margin: 0 }}>
+                <input type="checkbox" checked={semDevolucao} onChange={e => setSemDevolucao(e.target.checked)} />
+                <span className="toggle-track"></span>
+              </label>
+            </div>
           </div>
           <div className="form-group">
             <label>Descrição</label>

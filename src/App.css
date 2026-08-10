@@ -2042,6 +2042,7 @@ input, select { font-family: inherit; }
 }
 
 .review-item {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2092,6 +2093,95 @@ input, select { font-family: inherit; }
 .review-item-tag.aprazo {
   background: var(--warning-bg);
   color: var(--warning);
+}
+
+.review-item-nodev {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 0.12rem 0.4rem;
+  border-radius: 4px;
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.badge.nodev {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+.modal-nodev {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  margin-bottom: 0.75rem;
+}
+
+.modal-nodev strong {
+  font-size: 0.82rem;
+}
+
+.modal-nodev span {
+  flex-basis: 100%;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.checkout-nodev {
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  background: var(--danger-bg);
+  padding: 0.65rem 0.75rem;
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.checkout-nodev-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  color: var(--danger);
+}
+
+.checkout-nodev-warn strong {
+  font-size: 0.85rem;
+}
+
+.checkout-nodev-warn span {
+  flex-basis: 100%;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.checkout-nodev-confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.checkout-nodev-confirm input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--danger);
 }
 
 .review-payment {

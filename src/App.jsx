@@ -37,6 +37,7 @@ function App() {
   const [checkout, setCheckout] = useState(null)
   const [customer, setCustomer] = useState({ nome: '', email: '', telefone: '', senha: '', cpf: '', endereco: { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' } })
   const [pagamento, setPagamento] = useState('aprazo')
+  const [confirmaSemDevolucao, setConfirmaSemDevolucao] = useState(false)
   const [showLogin, setShowLogin] = useState(false)
   const [loginEmail, setLoginEmail] = useState('')
   const [loginSenha, setLoginSenha] = useState('')
@@ -124,7 +125,8 @@ const fetchProductsDB = useCallback(() => {
             categoria: prod.categoria || '',
             descricao: prod.descricao || '',
             variantes: prod.variantes || {},
-            preco_custo: prod.preco_custo ?? null
+            preco_custo: prod.preco_custo ?? null,
+            semDevolucao: !!prod.semDevolucao
           })
         }
         const override = {}
@@ -370,6 +372,7 @@ const fetchProductsDB = useCallback(() => {
   const cartItems = useMemo(() => Object.values(cart).filter(i => i.qty > 0), [cart])
   const cartTotal = useMemo(() => cartItems.reduce((s, i) => s + i.preco * i.qty, 0), [cartItems])
   const cartCount = useMemo(() => cartItems.reduce((s, i) => s + i.qty, 0), [cartItems])
+  const hasSemDevolucao = useMemo(() => cartItems.some(i => i.semDevolucao), [cartItems])
 
   const [priceMin, priceMax] = useMemo(() => {
     const prices = produtosMerged.map(p => Number(p.preco) || 0)
@@ -616,7 +619,7 @@ setShowLogin(false)
         if (existing.qty >= p.estoque && p.estoque > 0) { showToast('Estoque máximo atingido!', 'error'); return prev }
         return { ...prev, [cartKey]: { ...existing, qty: existing.qty + 1 } }
       }
-      return { ...prev, [cartKey]: { id: p.id, cartKey, nome: p.nome, displayName, preco: p.preco, imagem: p.imagem, qty: 1, estoque: p.estoque, variantes: vSel } }
+      return { ...prev, [cartKey]: { id: p.id, cartKey, nome: p.nome, displayName, preco: p.preco, imagem: p.imagem, qty: 1, estoque: p.estoque, variantes: vSel, semDevolucao: !!p.semDevolucao } }
     })
     showToast(`${displayName.substring(0, 40)} adicionado ao carrinho`)
   }, [showToast, selectedVariants])
@@ -644,6 +647,7 @@ setShowLogin(false)
       endereco: currentUser?.endereco || { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' }
     })
     setPagamento('aprazo')
+    setConfirmaSemDevolucao(false)
     setCheckout(currentUser ? 'payment' : 'info')
     setCartOpen(false)
   }
@@ -889,6 +893,7 @@ setShowLogin(false)
                       {p.estoque <= 0 ? <span className="badge out">Indisponível</span>
                         : p.estoque <= 5 ? <span className="badge low">Últimas {p.estoque}</span>
                         : <span className="badge in">Disponível</span>}
+                      {p.semDevolucao && <span className="badge nodev">SEM DEVOLUÇÃO</span>}
                     </div>
                     <div className="card-cat-tag">{p.categoria}</div>
                   </div>
@@ -948,6 +953,13 @@ setShowLogin(false)
                   ? <span className="stock-ok"><i className="fa-solid fa-circle-check"></i> {selected.estoque} em estoque</span>
                   : <span className="stock-no"><i className="fa-solid fa-circle-xmark"></i> Indisponível</span>}
               </div>
+              {selected.semDevolucao && (
+                <div className="modal-nodev">
+                  <i className="fa-solid fa-triangle-exclamation"></i>
+                  <strong>SEM DEVOLUÇÃO</strong>
+                  <span>Este produto não possui troca nem devolução.</span>
+                </div>
+              )}
               {selected.descricao && (
                 <div className="modal-desc">
                   <h4><i className="fa-solid fa-receipt"></i> Detalhes</h4>
@@ -1070,7 +1082,7 @@ setShowLogin(false)
                             <span className="cart-related-price">{formatPreco(p.preco)}</span>
                           </div>
                           <button className="cart-related-add" onClick={() => {
-                            setCart(prev => ({ ...prev, [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, foto: p.foto, estoque: p.estoque, categoria: p.categoria, qty: 1 } }))
+                            setCart(prev => ({ ...prev, [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, foto: p.foto, estoque: p.estoque, categoria: p.categoria, semDevolucao: !!p.semDevolucao, qty: 1 } }))
                             showToast(`${p.nome} adicionado ao carrinho!`, 'success')
                           }}><i className="fa-solid fa-plus"></i></button>
                         </div>
@@ -1193,9 +1205,23 @@ setShowLogin(false)
                           <span className="review-item-price">{formatPreco(item.preco * item.qty)}</span>
                           <span className="review-item-tag aprazo">A Prazo</span>
                         </div>
+                        {item.semDevolucao && <span className="review-item-nodev">SEM DEVOLUÇÃO</span>}
                       </div>
                     )
                   })}
+                  {hasSemDevolucao && (
+                    <div className="checkout-nodev">
+                      <div className="checkout-nodev-warn">
+                        <i className="fa-solid fa-triangle-exclamation"></i>
+                        <strong>Alguns itens são SEM DEVOLUÇÃO</strong>
+                        <span>Produtos marcados com "Sem Devolução" não possuem troca nem reembolso após a compra.</span>
+                      </div>
+                      <label className="checkout-nodev-confirm">
+                        <input type="checkbox" checked={confirmaSemDevolucao} onChange={e => setConfirmaSemDevolucao(e.target.checked)} />
+                        <span>Estou ciente e aceito que esses produtos não têm devolução.</span>
+                      </label>
+                    </div>
+                  )}
                 </div>
                 <div className="review-section">
                   <h4><i className="fa-solid fa-credit-card"></i> Pagamento</h4>
@@ -1211,7 +1237,7 @@ setShowLogin(false)
                 </div>
                 <div className="checkout-nav">
                   <button className="btn-back" onClick={() => setCheckout('payment')}><i className="fa-solid fa-arrow-left"></i> Voltar</button>
-                  <button className="btn-next" onClick={finalizarCheckout}>
+                  <button className="btn-next" onClick={finalizarCheckout} disabled={hasSemDevolucao && !confirmaSemDevolucao}>
                     <i className="fa-solid fa-check"></i> Confirmar Pedido
                   </button>
                 </div>
