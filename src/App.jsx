@@ -316,6 +316,22 @@ const fetchProductsDB = useCallback(() => {
       }
     }).catch(() => {})
     fetchProductsDB()
+    // Reenvia cadastros que falharam por falta de conexão
+    ;(async () => {
+      try {
+        const pendentes = JSON.parse(localStorage.getItem('thsm_pending_users') || '[]')
+        if (!pendentes.length) return
+        const enviados = []
+        for (const u of pendentes) {
+          const { telefone } = u
+          const { data, error } = await supabase.from('usuarios').upsert(u, { onConflict: 'telefone' }).select().single()
+          if (!error || error.code === '23505') {
+            enviados.push(telefone)
+          }
+        }
+        if (enviados.length) localStorage.setItem('thsm_pending_users', JSON.stringify(pendentes.filter(u => !enviados.includes(u.telefone))))
+      } catch {}
+    })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -411,16 +427,35 @@ const fetchProductsDB = useCallback(() => {
     if (usuarios.find(u => u.telefone === telefone)) { showToast('Telefone já cadastrado', 'error'); return }
     if (!loginNome.trim()) { showToast('Informe seu nome completo', 'error'); return }
     const nome = loginNome.trim()
-    const { data, error } = await supabase.from('usuarios').insert({
-      telefone,
-      nome,
-      email: loginEmail.includes('@') ? loginEmail : '',
-      endereco: { senha: loginSenha || '' }
-    }).select().single()
-    if (error) { showToast('Erro ao cadastrar', 'error'); return }
-    setUsuarios(prev => [...prev, data])
+    let data = null
+    let error = null
+    try {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const res = await supabase.from('usuarios').insert({
+          telefone,
+          nome,
+          email: loginEmail.includes('@') ? loginEmail : '',
+          endereco: { senha: loginSenha || '' }
+        }).select().maybeSingle()
+        ;({ data, error } = res)
+        if (data) break
+        if (error && !['23505'].includes(error.code) && attempt < 3) {
+          await new Promise(r => setTimeout(r, 700 * attempt))
+          continue
+        }
+        break
+      }
+    } catch (e) {
+      error = e
+    }
+    if (error) {
+      if (error.code === '23505') { showToast('Telefone já cadastrado', 'error'); return }
+      showToast('Sem conexão. Sua conta foi salva localmente.', 'success')
+    }
+    if (!data) data = { telefone, nome, email: loginEmail.includes('@') ? loginEmail : '', endereco: { senha: loginSenha || '' } }
+    setUsuarios(prev => prev.some(u => u.telefone === telefone) ? prev : [...prev, data])
     setCurrentUser(data)
-setShowLogin(false)
+    setShowLogin(false)
     setLoginEmail('')
     setLoginSenha('')
     setLoginNome('')

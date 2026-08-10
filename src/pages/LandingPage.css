@@ -7,10 +7,8 @@
 .lp-hero {
   position: relative;
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
+  overflow: visible;
+  display: block;
 }
 
 .lp-hero-bg {
@@ -35,9 +33,14 @@
   z-index: 1;
   max-width: 720px;
   width: 100%;
+  min-height: 100vh;
+  margin: 0 auto;
   padding: 3rem 1.5rem;
   text-align: center;
   color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .lp-badge {
@@ -280,6 +283,20 @@
 
 .lp-actions .lp-btn {
   flex: 1;
+}
+
+.lp-error {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  margin-top: 0.85rem;
+  text-align: left;
 }
 
 .lp-review {
@@ -545,9 +562,9 @@
 
 /* ========== RESPONSIVE ========== */
 @media (max-width: 640px) {
-  .lp-hero-content {
-    padding: 2rem 1rem;
-  }
+.lp-hero-content {
+  padding: 2rem 1rem 3.5rem;
+}
 
   .lp-stats {
     gap: 1.5rem;

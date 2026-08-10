@@ -17,14 +17,25 @@ export async function upsertUser(user) {
   if (!raw) { console.error('upsertUser: telefone vazio'); return null }
   const telefone = raw.startsWith('55') ? raw : '55' + raw
   const clean = { ...user, telefone }
+  let lastError = null
   try {
-    const { data, error } = await supabase.from('usuarios').upsert(clean, { onConflict: 'telefone' }).select().single()
-    if (error) console.error('Erro upsertUser:', error)
-    return data || clean
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const { data, error } = await supabase.from('usuarios').upsert(clean, { onConflict: 'telefone' }).select().single()
+      if (!error) return data || clean
+      lastError = error
+      if (attempt < 3) await new Promise(r => setTimeout(r, 600 * attempt))
+    }
   } catch (e) {
-    console.error('Exceção upsertUser:', e)
-    return clean
+    lastError = e
   }
+  console.error('Erro upsertUser:', lastError)
+  // Sem rede: guarda pendente para reprocessar quando voltar
+  try {
+    const pendentes = JSON.parse(localStorage.getItem('thsm_pending_users') || '[]')
+    pendentes.push({ ...clean, savedAt: Date.now() })
+    localStorage.setItem('thsm_pending_users', JSON.stringify(pendentes))
+  } catch {}
+  return clean
 }
 
 export async function findUserByPhone(telefone) {

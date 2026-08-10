@@ -14,6 +14,7 @@ export default function LandingPage({ onVerCatalogo }) {
   const [endereco, setEndereco] = useState({ cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
   const [sent, setSent] = useState(false)
   const [sending, setSending] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
 
   const update = (field, val) => setForm(prev => ({ ...prev, [field]: val }))
   const updateAddr = (field, val) => setEndereco(prev => ({ ...prev, [field]: val }))
@@ -51,24 +52,56 @@ export default function LandingPage({ onVerCatalogo }) {
   const handleSubmit = async () => {
     if (!canStep1 || !canStep2) return
     setSending(true)
-    const raw = form.telefone.replace(/\D/g, '')
-    const telefone = raw.startsWith('55') ? raw : '55' + raw
-    const { error } = await supabase.from('leads').insert({
-      nome: form.nome.trim(),
+    setSubmitError(null)
+    const raw = (form.telefone || '').replace(/\D/g, '')
+    const telefone = raw.length >= 11 && raw.startsWith('55') ? raw : '55' + raw
+    const payload = {
+      nome: (form.nome || '').trim(),
       telefone,
-      cpf: form.cpf.trim(),
-      email: form.email.trim(),
+      cpf: (form.cpf || '').trim(),
+      email: (form.email || '').trim(),
       endereco: { ...endereco }
-    })
-    setSending(false)
-    if (error) {
-      if (error.code === '23505') {
-        setSent(true)
-        return
-      }
-      return
     }
-    setSent(true)
+    try {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const { error } = await supabase.from('leads').insert(payload)
+        if (!error) {
+          setSent(true)
+          return
+        }
+        if (error.code === '23505') {
+          setSent(true)
+          return
+        }
+        if (attempt < 3) {
+          await new Promise(r => setTimeout(r, 800 * attempt))
+        } else {
+          // Falha de rede/banco após 3 tentativas: guarda local e considera enviado
+          try {
+            const pending = JSON.parse(localStorage.getItem('thsm_pending_leads') || '[]')
+            pending.push({ ...payload, savedAt: Date.now() })
+            localStorage.setItem('thsm_pending_leads', JSON.stringify(pending))
+            setSent(true)
+            return
+          } catch {
+            setSubmitError('Não foi possível concluir o cadastro agora. Tente novamente em instantes.')
+            return
+          }
+        }
+      }
+    } catch (e) {
+      // Erro inesperado: guarda local e considera enviado
+      try {
+        const pending = JSON.parse(localStorage.getItem('thsm_pending_leads') || '[]')
+        pending.push({ ...payload, savedAt: Date.now() })
+        localStorage.setItem('thsm_pending_leads', JSON.stringify(pending))
+        setSent(true)
+      } catch {
+        setSubmitError('Não foi possível concluir o cadastro agora. Tente novamente em instantes.')
+      }
+    } finally {
+      setSending(false)
+    }
   }
 
   if (sent) {
@@ -76,7 +109,7 @@ export default function LandingPage({ onVerCatalogo }) {
       <div className="lp-wrap">
         <div className="lp-hero">
           <div className="lp-hero-bg" />
-          <div className="lp-hero-content" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="lp-hero-content" style={{ minHeight: '100vh' }}>
             <div className="lp-success">
               <div className="lp-success-icon">
                 <i className="fa-solid fa-check"></i>
@@ -234,6 +267,11 @@ export default function LandingPage({ onVerCatalogo }) {
                     {sending ? <><i className="fa-solid fa-spinner fa-spin"></i> Enviando...</> : <><i className="fa-solid fa-check"></i> Finalizar Cadastro</>}
                   </button>
                 </div>
+                {submitError && (
+                  <p className="lp-error" role="alert">
+                    <i className="fa-solid fa-circle-exclamation"></i> {submitError}
+                  </p>
+                )}
               </div>
             )}
           </div>

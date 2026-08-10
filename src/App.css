@@ -1018,11 +1018,13 @@ input, select { font-family: inherit; }
   height: 100%;
   background: rgba(0,0,0,0.45);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 1000;
   padding: 1rem;
   animation: fadeIn 0.2s;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -1037,6 +1039,7 @@ input, select { font-family: inherit; }
   position: relative;
   box-shadow: var(--shadow-lg);
   animation: modalSlide 0.25s;
+  margin: auto 0;
 }
 
 @keyframes modalSlide {
@@ -1607,6 +1610,9 @@ input, select { font-family: inherit; }
   .modal-body { padding: 0.85rem; }
   .modal-body h2 { font-size: 1rem; }
   .modal-price { font-size: 1.2rem; }
+
+  .overlay { align-items: center; padding: 0.75rem; }
+  .modal { max-height: 92vh; }
 
   .cart-drawer { width: 100vw; }
 

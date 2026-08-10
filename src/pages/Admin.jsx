@@ -802,6 +802,19 @@ export default function Admin({ produtos, onVoltar }) {
     }).catch(e => { console.error('syncAllForAdmin error:', e) })
       .finally(() => setSyncingUsers(false))
     getAllLeads().then(setLeads).catch(() => {})
+    // Reenvia leads salvos localmente (fallback quando site ficou offline)
+    ;(async () => {
+      try {
+        const pendentes = JSON.parse(localStorage.getItem('thsm_pending_leads') || '[]')
+        if (!pendentes.length) return
+        const enviados = []
+        for (const lead of pendentes) {
+          const { error } = await supabase.from('leads').insert(lead)
+          if (!error || error.code === '23505') enviados.push(lead)
+        }
+        if (enviados.length) localStorage.setItem('thsm_pending_leads', JSON.stringify(pendentes.filter(p => !enviados.includes(p))))
+      } catch {}
+    })()
   }, [])
 
   // Auto-expand first rota when rotas load
