@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import './Admin.css'
-import { supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser, deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads, upsertProducts, upsertDespesas, generateLoginToken } from '../lib/supabase'
+import { supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser,
+  deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads,
+  upsertProducts, upsertDespesas, generateLoginToken, getAllRotaEdits, upsertRotaEdits, deleteRotaEdit as supabaseDeleteRotaEdit } from '../lib/supabase'
 
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
 const STORAGE_ORDERS = 'thsm_admin_orders'
@@ -51,6 +53,12 @@ function diffDays(a, b) {
   return Math.floor((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / (1000 * 60 * 60 * 24))
 }
 
+function normalizePhone(v) {
+  const nums = String(v || '').replace(/\D/g, '')
+  if (!nums) return ''
+  return nums.startsWith('55') ? nums : '55' + nums
+}
+
 const WEBHOOK_STATUS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/novo-pedido'
 
 function buildOrderLink(orderId) {
@@ -73,6 +81,59 @@ const DESPESA_TIPOS = ['Alimentação', 'Combustível', 'Transporte', 'Material'
 function formatPagamento(m) {
   if (!m) return null
   return PAG_METHODS[m] || null
+}
+
+function inPeriod(date, period, month, rangeStart, rangeEnd) {
+  if (!date) return period === 'all'
+  if (period === 'month') return String(date).startsWith(month || '')
+  if (period === 'range') {
+    const okStart = !rangeStart || date >= rangeStart
+    const okEnd = !rangeEnd || date <= rangeEnd
+    return okStart && okEnd
+  }
+  return true
+}
+
+function PeriodFilter({ period, onChange, month, onMonth, rangeStart, onRangeStart, rangeEnd, onRangeEnd, label = 'Filtro' }) {
+  const [open, setOpen] = useState(false)
+  const opts = [
+    { id: 'all', label: 'Período total' },
+    { id: 'month', label: 'Por mês' },
+    { id: 'range', label: 'Por data' },
+  ]
+  return (
+    <div style={{ position: 'relative' }}>
+      <button className="admin-btn" style={{ fontSize: '0.78rem', padding: '0.35rem 0.6rem', borderColor: period !== 'all' ? 'var(--accent)' : undefined, color: period !== 'all' ? 'var(--accent)' : undefined, fontWeight: period !== 'all' ? 700 : 400 }} onClick={() => setOpen(v => !v)}>
+        <i className="fa-solid fa-calendar-days"></i> {label}
+        {period !== 'all' && <span style={{ marginLeft: '0.3rem', background: 'var(--accent)', color: 'white', borderRadius: '10px', padding: '0.05rem 0.4rem', fontSize: '0.7rem' }}>1</span>}
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 60, minWidth: '230px', background: 'white', border: '1px solid var(--admin-border)', borderRadius: '10px', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', padding: '0.6rem' }}>
+          {opts.map(o => (
+            <label key={o.id} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.3rem 0.2rem', cursor: 'pointer', fontSize: '0.8rem' }}>
+              <input type="radio" name={`pf-${label}`} checked={period === o.id} onChange={() => { onChange(o.id); setOpen(false) }} style={{ cursor: 'pointer' }} />
+              {o.label}
+            </label>
+          ))}
+          {period === 'month' && (
+            <input type="month" value={month} onChange={e => onMonth(e.target.value)} style={{ width: '100%', marginTop: '0.4rem', padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.8rem' }} />
+          )}
+          {period === 'range' && (
+            <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.4rem', alignItems: 'center', fontSize: '0.78rem' }}>
+              <input type="date" value={rangeStart} onChange={e => onRangeStart(e.target.value)} style={{ flex: 1, minWidth: 0, padding: '0.3rem 0.4rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem' }} />
+              <span style={{ color: 'var(--admin-text-sec)' }}>—</span>
+              <input type="date" value={rangeEnd} onChange={e => onRangeEnd(e.target.value)} style={{ flex: 1, minWidth: 0, padding: '0.3rem 0.4rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem' }} />
+            </div>
+          )}
+          {period !== 'all' && (
+            <button className="admin-btn admin-btn-sec" style={{ width: '100%', marginTop: '0.4rem', fontSize: '0.75rem', padding: '0.3rem 0.5rem' }} onClick={() => { onChange('all'); onRangeStart(''); onRangeEnd(''); onMonth(''); setOpen(false) }}>
+              <i className="fa-solid fa-xmark"></i> Limpar filtro
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function buildStatusWhatsApp(order, newStatus, extra = {}) {
@@ -287,6 +348,7 @@ function sendAlertRota(tipo, contatos, orders, customText = '') {
 
 import AddressForm from '../components/AddressForm'
 import MapView from '../components/MapView'
+import CentralAnalise from '../components/CentralAnalise'
 
 export default function Admin({ produtos, onVoltar }) {
   const [tab, setTab] = useState(() => sessionStorage.getItem('thsm_admin_tab') || 'dashboard')
@@ -315,8 +377,16 @@ export default function Admin({ produtos, onVoltar }) {
   const [finEdit, setFinEdit] = useState(null)
   const [finView, setFinView] = useState('lista')
   const [finTab, setFinTab] = useState('receber')
+  const [finPeriod, setFinPeriod] = useState('all')
+  const [finPeriodMonth, setFinPeriodMonth] = useState(hoje().slice(0, 7))
+  const [finRangeStart, setFinRangeStart] = useState('')
+  const [finRangeEnd, setFinRangeEnd] = useState('')
   const [despesas, setDespesas] = useState(() => LS.get(STORAGE_DESPESAS, []))
   const [despesaFilter, setDespesaFilter] = useState('todas')
+  const [despPeriod, setDespPeriod] = useState('all')
+  const [despPeriodMonth, setDespPeriodMonth] = useState(hoje().slice(0, 7))
+  const [despRangeStart, setDespRangeStart] = useState('')
+  const [despRangeEnd, setDespRangeEnd] = useState('')
   const [showDespesaModal, setShowDespesaModal] = useState(false)
   const [editingDespesa, setEditingDespesa] = useState(null)
   const [quitarFinTarget, setQuitarFinTarget] = useState(null)
@@ -364,7 +434,14 @@ export default function Admin({ produtos, onVoltar }) {
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [orderDateStart, setOrderDateStart] = useState('')
   const [orderDateEnd, setOrderDateEnd] = useState('')
+  const [orderDueStart, setOrderDueStart] = useState('')
+  const [orderDueEnd, setOrderDueEnd] = useState('')
   const [orderCityFilter, setOrderCityFilter] = useState('TODAS')
+  const [orderRoutesSelected, setOrderRoutesSelected] = useState(() => new Set())
+  const [showOrderRouteFilter, setShowOrderRouteFilter] = useState(false)
+  const [dashPeriod, setDashPeriod] = useState('month')
+  const [dashCustomStart, setDashCustomStart] = useState('')
+  const [dashCustomEnd, setDashCustomEnd] = useState('')
   const [orderPage, setOrderPage] = useState(1)
   const ORDER_PAGE_SIZE = 50
   const [rotas, setRotas] = useState([])
@@ -375,6 +452,7 @@ export default function Admin({ produtos, onVoltar }) {
   const [filterCidade, setFilterCidade] = useState('TODAS')
   const [filterRota, setFilterRota] = useState('TODAS')
   const [filterRotaSearch, setFilterRotaSearch] = useState('')
+  const [filterTipo, setFilterTipo] = useState('TODOS')
   const [customMsgRota, setCustomMsgRota] = useState(null)
   const [customMsgText, setCustomMsgText] = useState('')
   const [showNewRota, setShowNewRota] = useState(false)
@@ -387,7 +465,10 @@ export default function Admin({ produtos, onVoltar }) {
   const [editContactName, setEditContactName] = useState('')
   const [editContactPhone, setEditContactPhone] = useState('')
   const [editContactCity, setEditContactCity] = useState('')
+  const [rotaContactModal, setRotaContactModal] = useState(null)
+  const [showRestoreRota, setShowRestoreRota] = useState(null)
   const [customRotas, setCustomRotas] = useState(() => LS.get(STORAGE_CUSTOM_ROTAS, []))
+  const [rotaEdits, setRotaEdits] = useState(() => LS.get('thsm_rota_edits', []))
   const [kits, setKits] = useState(() => LS.get('thsm_kits', []))
   const [showKitModal, setShowKitModal] = useState(false)
   const [editingKit, setEditingKit] = useState(null)
@@ -529,9 +610,113 @@ export default function Admin({ produtos, onVoltar }) {
     }
   }, [])
 
+  const rotaEditForAdd = (rota, jid) => rotaEdits.find(e =>
+    e.acao === 'adicionar' && e.rota === rota && (
+      (jid && e.contato?.remoteJid === jid) ||
+      (e.contato?.telefone && normalizePhone(e.contato.telefone) === normalizePhone(String(jid || '').replace(/@.*/, '')))
+    )
+  )
+
+  const addRotaEdit = (rota, acao, contato) => {
+    setRotaEdits(prev => [...prev, { id: Date.now() + Math.floor(Math.random() * 1000), rota, acao, contato, created_at: new Date().toISOString() }])
+  }
+
+  const removeRotaEdit = (id) => {
+    setRotaEdits(prev => prev.filter(e => e.id !== id))
+    supabaseDeleteRotaEdit(id)
+  }
+
+  const confirmRotaContact = ({ rota, mode, oldContact, novoNome, novoTelefone, novoCidade, custom }) => {
+    const nums = novoTelefone.replace(/\D/g, '')
+    const normalized = nums.startsWith('55') ? nums : '55' + nums
+    const jid = oldContact?.remoteJid || `${normalized}@s.whatsapp.net`
+    if (custom) {
+      setCustomRotas(prev => prev.map(cr => {
+        if (cr.rota !== rota) return cr
+        if (mode === 'add') {
+          return { ...cr, cidades: [{ ...(cr.cidades[0] || { cidade: 'Personalizado', contatos: [] }), cidade: novoCidade || 'Personalizado', contatos: [...(cr.cidades[0]?.contatos || []), { remoteJid: `${normalized}@s.whatsapp.net`, pushName: novoNome, nome: novoNome, cidade: novoCidade || 'Personalizado' }] }, ...cr.cidades.slice(1)] }
+        }
+        return {
+          ...cr,
+          cidades: cr.cidades.map(cid => ({
+            ...cid,
+            contatos: cid.contatos.map(x => x.remoteJid === jid ? {
+              ...x,
+              pushName: novoNome || x.pushName,
+              nome: novoNome || x.nome,
+              remoteJid: `${normalized}@s.whatsapp.net`,
+              telefone: normalized,
+              cidade: novoCidade || x.cidade
+            } : x)
+          }))
+        }
+      }))
+    } else if (mode === 'edit') {
+      const existingAdd = rotaEditForAdd(rota, jid)
+      if (existingAdd) {
+        setRotaEdits(prev => prev.map(e => e.id === existingAdd.id
+          ? { ...e, contato: { ...e.contato, nome: novoNome, telefone: normalized, pushName: novoNome, remoteJid: `${normalized}@s.whatsapp.net`, cidade: novoCidade } }
+          : e))
+      } else {
+        const oldTel = normalizePhone((oldContact?.remoteJid || oldContact?.telefone || '').replace(/@.*/, ''))
+        addRotaEdit(rota, 'remover', { nome: oldContact?.pushName || '', telefone: oldTel, remoteJid: oldContact?.remoteJid })
+        addRotaEdit(rota, 'adicionar', { nome: novoNome, telefone: normalized, pushName: novoNome, remoteJid: `${normalized}@s.whatsapp.net`, cidade: novoCidade })
+      }
+    } else {
+      addRotaEdit(rota, 'adicionar', { nome: novoNome, telefone: normalized, pushName: novoNome, remoteJid: `${normalized}@s.whatsapp.net`, cidade: novoCidade })
+    }
+    showToast(`${mode === 'edit' ? 'Contato atualizado' : 'Contato adicionado'} à rota "${rota}"`)
+    setRotaContactModal(null)
+  }
+
+  const confirmRotaRemove = (rota, contato, custom) => {
+    if (!confirm(`Remover ${contato.pushName || 'contato'} da rota "${rota}"?`)) return
+    if (custom) {
+      setCustomRotas(prev => prev.map(cr => cr.rota === rota ? { ...cr, cidades: cr.cidades.map(cid => ({ ...cid, contatos: cid.contatos.filter(x => x.remoteJid !== contato.remoteJid) })).filter(cid => cid.contatos.length > 0) } : cr).filter(cr => cr.cidades.length > 0))
+    } else {
+      const tel = normalizePhone((contato.remoteJid || contato.telefone || '').replace(/@.*/, ''))
+      const existingAdd = rotaEditForAdd(rota, contato.remoteJid)
+      if (existingAdd) removeRotaEdit(existingAdd.id)
+      else addRotaEdit(rota, 'remover', { nome: contato.pushName || '', telefone: tel, remoteJid: contato.remoteJid })
+    }
+    showToast('Contato removido da rota')
+  }
+
+  const confirmRotaEdit = (rota, contato, custom) => {
+    if (custom) {
+      setEditCustomContact({ contato, rotaName: rota })
+      setEditContactName(contato.pushName || contato.nome || '')
+      setEditContactPhone((contato.remoteJid || '').replace(/@.*/, '').replace(/\D/g, ''))
+      setEditContactCity(contato.cidade || '')
+    } else {
+      setRotaContactModal({
+        rota,
+        mode: 'edit',
+        contato,
+        custom: false,
+        nomeState: contato.pushName || contato.nome || '',
+        phoneState: (contato.remoteJid || '').replace(/@.*/, '').replace(/\D/g, ''),
+        cityState: contato.cidade || ''
+      })
+    }
+  }
+
+  useEffect(() => {
+    if (rotaEdits.length > 0) upsertRotaEdits(rotaEdits)
+  }, [rotaEdits])
+  useEffect(() => { LS.set('thsm_rota_edits', rotaEdits) }, [rotaEdits])
+
   useEffect(() => {
     setSyncingUsers(true)
-    syncAllForAdmin().then(({ orders: o, financial: f, users: u, rotas: r, products: p, despesas: d }) => {
+    syncAllForAdmin().then(({ orders: o, financial: f, users: u, rotas: r, products: p, despesas: d, rotaEdits: re }) => {
+      if (re.length) setRotaEdits(prev => {
+        const map = new Map()
+        re.forEach(edit => map.set(edit.id, edit))
+        prev.forEach(edit => map.set(edit.id, edit))
+        const merged = Array.from(map.values())
+        LS.set('thsm_rota_edits', merged)
+        return merged
+      })
       if (o.length) {
         setOrders(prev => {
           const map = new Map()
@@ -654,7 +839,9 @@ export default function Admin({ produtos, onVoltar }) {
       total: totalAvista + totalAprazo,
       status: data.status || 'pendente',
       createdAt: Date.now(),
-      dataVencimento: data.dataVencimento || null
+      dataVencimento: data.dataVencimento || null,
+      deliveredAt: data.status === 'entregue' ? Date.now() : null,
+      deliveryDataInicio: data.status === 'entregue' ? (data.dataPedido || hoje()) : null
     }
     setOrders(prev => [order, ...prev])
 
@@ -685,6 +872,7 @@ export default function Admin({ produtos, onVoltar }) {
     // Create financial records for "a prazo" items
     const finRecords = items.filter(i => i.tipo === 'aprazo').map(i => {
       const dueDate = data.dataVencimento || hoje()
+      const concluido = order.status === 'entregue'
       return {
         id: order.id + '-' + i.id,
         orderId: order.id,
@@ -694,8 +882,8 @@ export default function Admin({ produtos, onVoltar }) {
         value: i.preco * i.qty,
         precoCusto: (i.preco_custo || 0) * i.qty,
         dueDate,
-        paidDate: null,
-        status: 'pendente'
+        paidDate: concluido ? hoje() : null,
+        status: concluido ? 'pago' : 'pendente'
       }
     })
     if (finRecords.length > 0) {
@@ -710,7 +898,7 @@ export default function Admin({ produtos, onVoltar }) {
 
   const updateOrderStatus = (id, status, skipWebhook = false) => {
     const order = orders.find(o => o.id === id)
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o))
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status, deliveredAt: status === 'entregue' ? Date.now() : o.deliveredAt } : o))
     if (status === 'entregue') {
       setFinancial(prev => prev.map(f => f.orderId === id && f.status !== 'pago' ? { ...f, status: 'pago', paidDate: hoje() } : f))
     }
@@ -1102,6 +1290,26 @@ export default function Admin({ produtos, onVoltar }) {
       .sort((a, b) => (b.createdAt || b.date || 0) - (a.createdAt || a.date || 0))
   }, [orders, selectedUserDetail])
 
+  const rotaDeTelefone = useMemo(() => {
+    const map = {}
+    rotas.forEach(r => {
+      const phone = normalizePhone((r.remoteJid || '').replace(/@.*/, ''))
+      if (phone) map[phone] = r.rota || 'Sem rota'
+    })
+    usuarios.forEach(u => {
+      const phone = normalizePhone(u.telefone)
+      if (phone && u.endereco?.rota) map[phone] = u.endereco.rota
+    })
+    return map
+  }, [rotas, usuarios])
+
+  const rotaDeOrder = (o) => {
+    const phone = normalizePhone(o.customer?.telefone)
+    return phone ? (rotaDeTelefone[phone] || 'Sem rota') : 'Sem rota'
+  }
+
+  const getOrderDue = (o) => o.dataVencimento || financial.find(f => f.orderId === o.id)?.dueDate || ''
+
   const filteredOrders = useMemo(() => {
     let result = orders
     if (orderFilter === 'concluidos') result = result.filter(o => o.status === 'entregue')
@@ -1115,7 +1323,12 @@ export default function Admin({ produtos, onVoltar }) {
     )
     if (orderDateStart) result = result.filter(o => (o.date || '') >= orderDateStart)
     if (orderDateEnd) result = result.filter(o => (o.date || '') <= orderDateEnd)
+    if (orderDueStart) result = result.filter(o => (getOrderDue(o) || '') >= orderDueStart)
+    if (orderDueEnd) result = result.filter(o => (getOrderDue(o) || '') <= orderDueEnd)
     if (orderCityFilter !== 'TODAS') result = result.filter(o => o.customer?.endereco?.cidade === orderCityFilter)
+    if (orderRoutesSelected.size > 0) {
+      result = result.filter(o => orderRoutesSelected.has(rotaDeOrder(o)))
+    }
     result = [...result].sort((a, b) => {
       let va, vb
       switch (orderSort.field) {
@@ -1129,7 +1342,7 @@ export default function Admin({ produtos, onVoltar }) {
       }
     })
     return result
-  }, [orders, orderFilter, selectedUserEmail, orderSearch, orderSort, orderDateStart, orderDateEnd, orderCityFilter])
+  }, [orders, orderFilter, selectedUserEmail, orderSearch, orderSort, orderDateStart, orderDateEnd, orderDueStart, orderDueEnd, orderCityFilter, orderRoutesSelected, rotaDeTelefone, financial])
 
   const paginatedOrders = useMemo(() => {
     const start = (orderPage - 1) * ORDER_PAGE_SIZE
@@ -1138,7 +1351,7 @@ export default function Admin({ produtos, onVoltar }) {
 
   const totalOrderPages = useMemo(() => Math.ceil(filteredOrders.length / ORDER_PAGE_SIZE), [filteredOrders])
 
-  useEffect(() => { setOrderPage(1) }, [orderSearch, orderFilter, orderDateStart, orderDateEnd, orderCityFilter, selectedUserEmail])
+  useEffect(() => { setOrderPage(1) }, [orderSearch, orderFilter, orderDateStart, orderDateEnd, orderDueStart, orderDueEnd, orderCityFilter, selectedUserEmail])
 
   const toggleSort = (field) => {
     setOrderSort(prev => prev.field === field ? { field, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { field, dir: 'asc' })
@@ -1207,6 +1420,53 @@ export default function Admin({ produtos, onVoltar }) {
     const recebido = financial.filter(f => f.status === 'pago').reduce((s, f) => s + f.value, 0)
     return { total, pendentes, prePedidos, confirmados, emAndamento, entregues, faturamento, aReceber, recebido }
   }, [orders, financial])
+
+  // Filtro de período do Dashboard
+  const dashRange = useMemo(() => {
+    const h = hoje()
+    const d = new Date(h + 'T12:00:00')
+    if (dashPeriod === 'day') return [h, h]
+    if (dashPeriod === 'month') {
+      const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+      const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+      const end = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+      return [start, end]
+    }
+    if (dashPeriod === 'year') return [`${d.getFullYear()}-01-01`, `${d.getFullYear()}-12-31`]
+    if (dashPeriod === 'custom' && dashCustomStart && dashCustomEnd) return [dashCustomStart, dashCustomEnd]
+    return [null, null]
+  }, [dashPeriod, dashCustomStart, dashCustomEnd])
+
+  const dashStats = useMemo(() => {
+    const [start, end] = dashRange
+    const inRange = (dt) => {
+      if (!dt) return false
+      if (start && end) return dt >= start && dt <= end
+      if (start) return dt >= start
+      if (end) return dt <= end
+      return true
+    }
+    const ordersIn = orders.filter(o => inRange(o.date || ''))
+    const total = ordersIn.length
+    const pendentes = ordersIn.filter(o => o.status === 'pendente').length
+    const entregues = ordersIn.filter(o => o.status === 'entregue').length
+    const faturamento = ordersIn.filter(o => o.status !== 'cancelado').reduce((s, o) => s + (o.total || 0), 0)
+    const aReceber = financial.filter(f => f.status === 'pendente' && inRange(f.dueDate || '')).reduce((s, f) => s + (f.value || 0), 0)
+    const recebido = financial.filter(f => f.status === 'pago' && inRange(f.paidDate || '')).reduce((s, f) => s + (f.value || 0), 0)
+    return { total, pendentes, entregues, faturamento, aReceber, recebido }
+  }, [orders, financial, dashRange])
+
+  const dashLastOrders = useMemo(() => {
+    const [start, end] = dashRange
+    const inRange = (dt) => {
+      if (!dt) return false
+      if (start && end) return dt >= start && dt <= end
+      if (start) return dt >= start
+      if (end) return dt <= end
+      return true
+    }
+    return orders.filter(o => inRange(o.date || '')).slice(0, 8)
+  }, [orders, dashRange])
 
   // Métricas das comandas concluídas
   const concluidosStats = useMemo(() => {
@@ -1437,9 +1697,11 @@ export default function Admin({ produtos, onVoltar }) {
   // FINANCIAL
   // =============================================
   const filteredFin = useMemo(() => {
-    if (finFilter === 'todos') return financial
-    return financial.filter(f => f.status === finFilter)
-  }, [financial, finFilter])
+    let result = financial
+    if (finFilter !== 'todos') result = result.filter(f => f.status === finFilter)
+    result = result.filter(f => inPeriod(f.dueDate, finPeriod, finPeriodMonth, finRangeStart, finRangeEnd))
+    return result
+  }, [financial, finFilter, finPeriod, finPeriodMonth, finRangeStart, finRangeEnd])
 
   const finTotal = useMemo(() => {
     const pendente = financial.filter(f => f.status === 'pendente').reduce((s, f) => s + f.value, 0)
@@ -1449,9 +1711,11 @@ export default function Admin({ produtos, onVoltar }) {
   }, [financial])
 
   const filteredDespesas = useMemo(() => {
-    if (despesaFilter === 'todas') return despesas
-    return despesas.filter(d => d.status === despesaFilter)
-  }, [despesas, despesaFilter])
+    let result = despesas
+    if (despesaFilter !== 'todas') result = result.filter(d => d.status === despesaFilter)
+    result = result.filter(d => inPeriod(d.dueDate, despPeriod, despPeriodMonth, despRangeStart, despRangeEnd))
+    return result
+  }, [despesas, despesaFilter, despPeriod, despPeriodMonth, despRangeStart, despRangeEnd])
 
   const despesasPendentes = useMemo(() => despesas.filter(d => d.status === 'pendente').reduce((s, d) => s + d.value, 0), [despesas])
 
@@ -1525,11 +1789,59 @@ export default function Admin({ produtos, onVoltar }) {
         })
       })
     })
+    // Aplica edições persistidas (adicionar/remover) sobre as rotas sincronizadas do webhook
+    rotaEdits.forEach(e => {
+      const rotaKey = e.rota
+      if (e.acao === 'remover') {
+        const g = groups[rotaKey]
+        if (!g) return
+        const jid = e.contato?.remoteJid
+        const tel = normalizePhone(e.contato?.telefone)
+        Object.keys(g.cidades).forEach(k => {
+          g.cidades[k].contatos = g.cidades[k].contatos.filter(ct => {
+            if (jid && ct.remoteJid && ct.remoteJid === jid) return false
+            if (tel && ct.remoteJid) {
+              const ctTel = normalizePhone((ct.remoteJid || '').replace(/@.*/, ''))
+              if (ctTel && ctTel === tel) return false
+            }
+            if (tel && ct.telefone && normalizePhone(ct.telefone) === tel) return false
+            return true
+          })
+          if (g.cidades[k].contatos.length === 0) delete g.cidades[k]
+        })
+      } else if (e.acao === 'adicionar') {
+        if (!groups[rotaKey]) groups[rotaKey] = { rota: rotaKey, cidades: {}, total: 0, _edited: true }
+        const cidadeKey = e.contato?.cidade || 'Personalizado'
+        if (!groups[rotaKey].cidades[cidadeKey]) groups[rotaKey].cidades[cidadeKey] = { cidade: cidadeKey, contatos: [] }
+        const tel = normalizePhone(e.contato?.telefone)
+        const jid = e.contato?.remoteJid
+        const exists = groups[rotaKey].cidades[cidadeKey].contatos.some(ct => {
+          if (jid && ct.remoteJid && ct.remoteJid === jid) return true
+          if (tel && ct.remoteJid && normalizePhone((ct.remoteJid || '').replace(/@.*/, '')) === tel) return true
+          if (tel && ct.telefone && normalizePhone(ct.telefone) === tel) return true
+          return false
+        })
+        if (!exists) {
+          const jidFinal = jid || (tel ? `${tel}@s.whatsapp.net` : '')
+          groups[rotaKey].cidades[cidadeKey].contatos.push({
+            remoteJid: jidFinal,
+            pushName: e.contato?.pushName || e.contato?.nome || 'Contato',
+            nome: e.contato?.nome || e.contato?.pushName || '',
+            telefone: tel,
+            cidade: cidadeKey,
+            rota: rotaKey,
+            profilePicture: '',
+            _edited: true
+          })
+        }
+      }
+    })
+    Object.values(groups).forEach(g => { g.total = Object.values(g.cidades).reduce((s, c) => s + c.contatos.length, 0) })
     return Object.values(groups).map(g => ({
       ...g,
       cidades: Object.values(g.cidades).sort((a, b) => a.cidade.localeCompare(b.cidade, 'pt-BR'))
     }))
-  }, [rotas])
+  }, [rotas, customRotas, rotaEdits])
 
   const cidadesRotas = useMemo(() => {
     const cidades = [...new Set(rotas.map(r => r.cidade).filter(Boolean))]
@@ -1537,9 +1849,23 @@ export default function Admin({ produtos, onVoltar }) {
   }, [rotas])
 
   const rotasUnicas = useMemo(() => {
-    const rotasList = [...new Set(rotas.map(r => r.rota).filter(Boolean))]
+    const rotasList = [...new Set([...rotas.map(r => r.rota), ...customRotas.map(cr => cr.rota), ...rotaEdits.map(e => e.acao === 'adicionar' ? e.rota : null)].filter(Boolean))]
     return ['TODAS', ...rotasList.sort((a, b) => a.localeCompare(b, 'pt-BR'))]
-  }, [rotas])
+  }, [rotas, customRotas, rotaEdits])
+
+  const clientPhones = useMemo(() => {
+    const set = new Set()
+    usuarios.forEach(u => {
+      const phone = normalizePhone(String(u.telefone || ''))
+      if (phone) set.add(phone)
+    })
+    return set
+  }, [usuarios])
+
+  const isClienteContato = (ct) => {
+    const phone = normalizePhone(String(ct.remoteJid || ct.telefone || '').replace(/@.*/, ''))
+    return phone ? clientPhones.has(phone) : false
+  }
 
   const rotasFiltradas = useMemo(() => {
     let result = rotasAgrupadas
@@ -1570,6 +1896,7 @@ export default function Admin({ produtos, onVoltar }) {
     { id: 'usuarios', icon: 'fa-users', label: 'Usuários', count: usuarios.length },
     { id: 'leads', icon: 'fa-file-pen', label: 'Inscrições', count: leads.length },
     { id: 'mapa', icon: 'fa-map', label: 'Mapa' },
+    { id: 'analises', icon: 'fa-chart-pie', label: 'Análises' },
   ]
 
   return (
@@ -1615,46 +1942,67 @@ export default function Admin({ produtos, onVoltar }) {
             <h1>Dashboard</h1>
             <p className="admin-subtitle">Resumo geral do sistema</p>
 
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+              {[
+                { id: 'day', label: 'Dia' },
+                { id: 'month', label: 'Mês' },
+                { id: 'year', label: 'Ano' },
+                { id: 'all', label: 'Todo período' },
+                { id: 'custom', label: 'Personalizado' },
+              ].map(p => (
+                <button key={p.id} className={`admin-tab ${dashPeriod === p.id ? 'active' : ''}`} onClick={() => setDashPeriod(p.id)}>
+                  {p.label}
+                </button>
+              ))}
+              {dashPeriod === 'custom' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>
+                  <input type="date" value={dashCustomStart} onChange={e => setDashCustomStart(e.target.value)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', maxWidth: '130px' }} />
+                  <span>—</span>
+                  <input type="date" value={dashCustomEnd} onChange={e => setDashCustomEnd(e.target.value)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', maxWidth: '130px' }} />
+                </div>
+              )}
+            </div>
+
             <div className="admin-cards">
               <div className="admin-card card-blue">
                 <i className="fa-solid fa-shopping-bag"></i>
                 <div>
-                  <strong>{stats.total}</strong>
+                  <strong>{dashStats.total}</strong>
                   <span>Total de Pedidos</span>
                 </div>
               </div>
               <div className="admin-card card-yellow">
                 <i className="fa-solid fa-hourglass-half"></i>
                 <div>
-                  <strong>{stats.pendentes}</strong>
+                  <strong>{dashStats.pendentes}</strong>
                   <span>Pendentes</span>
                 </div>
               </div>
               <div className="admin-card card-green">
                 <i className="fa-solid fa-check-circle"></i>
                 <div>
-                  <strong>{stats.entregues}</strong>
+                  <strong>{dashStats.entregues}</strong>
                   <span>Entregues</span>
                 </div>
               </div>
               <div className="admin-card card-purple">
                 <i className="fa-solid fa-dollar-sign"></i>
                 <div>
-                  <strong>{formatPreco(stats.faturamento)}</strong>
+                  <strong>{formatPreco(dashStats.faturamento)}</strong>
                   <span>Faturamento Total</span>
                 </div>
               </div>
               <div className="admin-card card-red">
                 <i className="fa-solid fa-clock"></i>
                 <div>
-                  <strong>{formatPreco(stats.aReceber)}</strong>
+                  <strong>{formatPreco(dashStats.aReceber)}</strong>
                   <span>A Receber (Prazo)</span>
                 </div>
               </div>
               <div className="admin-card card-teal">
                 <i className="fa-solid fa-sack-dollar"></i>
                 <div>
-                  <strong>{formatPreco(stats.recebido)}</strong>
+                  <strong>{formatPreco(dashStats.recebido)}</strong>
                   <span>Recebido (Prazo)</span>
                 </div>
               </div>
@@ -1676,7 +2024,7 @@ export default function Admin({ produtos, onVoltar }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.slice(0, 8).map(o => (
+                  {dashLastOrders.map(o => (
                     <tr key={o.id}>
                       <td>#{o.id.toString().slice(-6)}</td>
                       <td>{o.customer.nome}</td>
@@ -1687,7 +2035,7 @@ export default function Admin({ produtos, onVoltar }) {
                       <td><span className={`status-tag status-${o.status}`}>{o.status}</span></td>
                     </tr>
                   ))}
-                  {orders.length === 0 && <tr><td colSpan="7" className="td-empty">Nenhum pedido ainda</td></tr>}
+                  {dashLastOrders.length === 0 && <tr><td colSpan="7" className="td-empty">Nenhum pedido no período</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -1768,9 +2116,47 @@ export default function Admin({ produtos, onVoltar }) {
                 <span>—</span>
                 <input type="date" value={orderDateEnd} onChange={e => setOrderDateEnd(e.target.value)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', maxWidth: '130px' }} />
               </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>
+                <span>Vencimento:</span>
+                <input type="date" value={orderDueStart} onChange={e => setOrderDueStart(e.target.value)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', maxWidth: '130px' }} />
+                <span>—</span>
+                <input type="date" value={orderDueEnd} onChange={e => setOrderDueEnd(e.target.value)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', maxWidth: '130px' }} />
+              </div>
               <select value={orderCityFilter} onChange={e => setOrderCityFilter(e.target.value)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', background: 'white', cursor: 'pointer', maxWidth: '150px' }}>
                 {cidadesOrders.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setShowOrderRouteFilter(v => !v)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.35rem 0.6rem', borderRadius: '6px', border: `1px solid ${orderRoutesSelected.size > 0 ? 'var(--accent)' : 'var(--admin-border)'}`, fontSize: '0.78rem', background: orderRoutesSelected.size > 0 ? 'var(--accent-bg)' : 'white', color: orderRoutesSelected.size > 0 ? 'var(--accent)' : 'var(--admin-text)', cursor: 'pointer', fontWeight: orderRoutesSelected.size > 0 ? 700 : 400 }}>
+                  <i className="fa-solid fa-route"></i>
+                  {orderRoutesSelected.size > 0 ? `${orderRoutesSelected.size} rota(s)` : 'Rotas'}
+                  <i className="fa-solid fa-chevron-down" style={{ fontSize: '0.6rem' }}></i>
+                </button>
+                {showOrderRouteFilter && (
+                  <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 60, minWidth: '220px', maxHeight: '300px', overflowY: 'auto', background: 'white', border: '1px solid var(--admin-border)', borderRadius: '10px', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', padding: '0.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--admin-text-sec)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Filtrar por rota</span>
+                      <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: '0.72rem', fontWeight: 600 }} onClick={() => setOrderRoutesSelected(new Set())}>Limpar</button>
+                    </div>
+                    {[...rotasUnicas.filter(r => r !== 'TODAS'), 'Sem rota'].map(r => {
+                      const checked = orderRoutesSelected.has(r)
+                      return (
+                        <label key={r} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.3rem 0.4rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }}>
+                          <input type="checkbox" checked={checked}
+                            onChange={() => setOrderRoutesSelected(prev => {
+                              const next = new Set(prev)
+                              if (next.has(r)) next.delete(r); else next.add(r)
+                              return next
+                            })}
+                            style={{ cursor: 'pointer', width: '14px', height: '14px' }} />
+                          <span>{r}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
               {selectedIds.size > 0 && (
                 <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)', fontWeight: 600 }}>{selectedIds.size} selecionado(s)</span>
@@ -1824,8 +2210,12 @@ export default function Admin({ produtos, onVoltar }) {
                           <button className="action-btn action-green" title="Enviar WhatsApp" onClick={() => sendWhatsApp(o)}><i className="fa-brands fa-whatsapp"></i></button>
                           <button className="action-btn" title="Ver detalhes" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-eye"></i></button>
                           {o.status === 'pre-pedido' && <button className="action-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }} title="Revisar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-clipboard-check"></i></button>}
+                          {o.status === 'pre-pedido' && <button className="action-btn action-confirm" title="Confirmar (Próxima etapa)" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-check"></i></button>}
                           {o.status === 'pendente' && <button className="action-btn action-confirm" title="Editar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-pen"></i></button>}
-                          {o.status === 'pendente' && <button className="action-btn action-deliver" title="Em Rota" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-truck"></i></button>}
+                          {o.status === 'pendente' && <button className="action-btn action-deliver" title="Em Rota (Próxima etapa)" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-truck"></i></button>}
+                          {o.status === 'em-rota' && (
+                            <button className="action-btn action-confirm" title="Concluir (Próxima etapa)" onClick={() => updateOrderStatus(o.id, 'entregue')}><i className="fa-solid fa-check-double"></i></button>
+                          )}
                           {o.status === 'em-rota' && (
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Pendente" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-undo"></i></button>
                           )}
@@ -2720,6 +3110,20 @@ export default function Admin({ produtos, onVoltar }) {
           </div>
         )}
 
+        {/* ANÁLISES */}
+        {tab === 'analises' && (
+          <div className="admin-section" style={{ minHeight: '100vh' }}>
+            <CentralAnalise
+              orders={orders}
+              financial={financial}
+              despesas={despesas}
+              produtos={produtosAtuais}
+              usuarios={usuarios}
+              onBack={() => setTab('dashboard')}
+            />
+          </div>
+        )}
+
         {/* ROTAS */}
         {tab === 'rotas' && (
           <div className="admin-section">
@@ -2832,6 +3236,14 @@ export default function Admin({ produtos, onVoltar }) {
                       {rotasUnicas.filter(r => r !== 'TODAS').map(r => <option key={r} value={r}>{r}</option>)}
                     </select>
                   </div>
+                  <div className="rota-select-wrap">
+                    <i className="fa-solid fa-user-tag"></i>
+                    <select value={filterTipo} onChange={e => setFilterTipo(e.target.value)}>
+                      <option value="TODOS">Todos os contatos</option>
+                      <option value="cliente">Clientes</option>
+                      <option value="lead">Leads</option>
+                    </select>
+                  </div>
                   <div className="rota-search-box">
                     <i className="fa-solid fa-search"></i>
                     <input type="text" placeholder="Buscar rota, cidade ou contato..." value={filterRotaSearch} onChange={e => setFilterRotaSearch(e.target.value)} />
@@ -2850,11 +3262,17 @@ export default function Admin({ produtos, onVoltar }) {
                   <div className="rota-grid">
                     {rotasFiltradas.map((grupo) => {
                       const isExpanded = expandedRota === grupo.rota
-                      const cidadesVisiveis = filterCidade === 'TODAS'
+                      let cidadesVisiveis = filterCidade === 'TODAS'
                         ? grupo.cidades
                         : grupo.cidades.filter(c => c.cidade === filterCidade)
+                      if (filterTipo !== 'TODOS') {
+                        cidadesVisiveis = cidadesVisiveis
+                          .map(c => ({ ...c, contatos: c.contatos.filter(ct => filterTipo === 'cliente' ? isClienteContato(ct) : !isClienteContato(ct)) }))
+                          .filter(c => c.contatos.length > 0)
+                      }
                       const totalVisivel = cidadesVisiveis.reduce((s, c) => s + c.contatos.length, 0)
                       const allContatos = cidadesVisiveis.flatMap(c => c.contatos)
+                      const removedEdits = rotaEdits.filter(e => e.rota === grupo.rota && e.acao === 'remover')
                       return (
                         <div key={grupo.rota} className={`rota-card ${isExpanded ? 'expanded' : ''}`}>
                           <div className="rota-card-main" onClick={() => setExpandedRota(isExpanded ? null : grupo.rota)}>
@@ -2874,21 +3292,6 @@ export default function Admin({ produtos, onVoltar }) {
                                   <i className="fa-solid fa-city"></i> {cidadesVisiveis.length} {cidadesVisiveis.length === 1 ? 'cidade' : 'cidades'}
                                 </span>
             </div>
-
-            {totalOrderPages > 1 && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '1rem 0', fontSize: '0.85rem' }}>
-                <button className="admin-btn admin-btn-sec" style={{ padding: '0.35rem 0.75rem', fontSize: '0.82rem' }} disabled={orderPage <= 1} onClick={() => setOrderPage(p => Math.max(1, p - 1))}>
-                  <i className="fa-solid fa-chevron-left"></i> Anterior
-                </button>
-                <span style={{ color: 'var(--admin-text-sec)' }}>
-                  Página {orderPage} de {totalOrderPages} ({filteredOrders.length} pedidos)
-                </span>
-                <button className="admin-btn admin-btn-sec" style={{ padding: '0.35rem 0.75rem', fontSize: '0.82rem' }} disabled={orderPage >= totalOrderPages} onClick={() => setOrderPage(p => Math.min(totalOrderPages, p + 1))}>
-                  Próxima <i className="fa-solid fa-chevron-right"></i>
-                </button>
-              </div>
-            )}
-          </div>
                             <div className="rota-card-actions">
                               <button className="rota-map-btn" title="Ver no Google Maps" onClick={e => { e.stopPropagation(); window.open(`https://www.google.com/maps/search/${encodeURIComponent(grupo.rota)}`, '_blank') }}>
                                 <i className="fa-solid fa-map-location-dot"></i>
@@ -2906,6 +3309,16 @@ export default function Admin({ produtos, onVoltar }) {
                                 <i className="fa-solid fa-pen"></i>
                                 <span>Custom</span>
                               </button>
+                              <button className="rota-map-btn" style={{ background: '#0ea5e9', color: 'white', borderColor: '#0ea5e9' }} title="Adicionar contato à rota" onClick={e => { e.stopPropagation(); setRotaContactModal({ rota: grupo.rota, mode: 'add', custom: !!grupo._custom }) }}>
+                                <i className="fa-solid fa-user-plus"></i>
+                                <span>Adicionar</span>
+                              </button>
+                              {removedEdits.length > 0 && (
+                                <button className="rota-map-btn" style={{ background: '#f97316', color: 'white', borderColor: '#f97316' }} title="Restaurar contatos removidos desta rota" onClick={e => { e.stopPropagation(); setShowRestoreRota(grupo.rota) }}>
+                                  <i className="fa-solid fa-rotate-left"></i>
+                                  <span>Restaurar ({removedEdits.length})</span>
+                                </button>
+                              )}
                               {grupo._custom && (
                                 <button className="rota-map-btn" style={{ background: '#dc2626', color: 'white', borderColor: '#dc2626' }} title="Excluir rota" onClick={e => { e.stopPropagation(); if (confirm(`Excluir rota "${grupo.rota}"?`)) { setCustomRotas(prev => prev.filter(cr => cr.rota !== grupo.rota)); showToast(`Rota "${grupo.rota}" excluída`) } }}>
                                   <i className="fa-solid fa-trash"></i>
@@ -2916,6 +3329,7 @@ export default function Admin({ produtos, onVoltar }) {
                                 <i className={`fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
                               </span>
                             </div>
+                          </div>
                           </div>
 
                           {/* Subcategory badges */}
@@ -2949,6 +3363,9 @@ export default function Admin({ produtos, onVoltar }) {
                                         <div className="rota-contact-info">
                                           <span className="rota-contact-name">{ct.pushName || 'Sem nome'}</span>
                                           <span className="rota-contact-phone">{ct.remoteJid?.replace(/@.*/, '')}</span>
+                                          <span className={`rota-contato-tipo ${isClienteContato(ct) ? 'rota-tipo-cliente' : 'rota-tipo-lead'}`}>
+                                            <i className={`fa-solid ${isClienteContato(ct) ? 'fa-user-check' : 'fa-user-plus'}`}></i> {isClienteContato(ct) ? 'Cliente' : 'Lead'}
+                                          </span>
                                         </div>
                                         <button
                                           className="rota-whatsapp-btn"
@@ -2960,14 +3377,25 @@ export default function Admin({ produtos, onVoltar }) {
                                         >
                                           <i className="fa-brands fa-whatsapp"></i>
                                         </button>
-                                        {grupo._custom && (
+                                        {grupo._custom ? (
                                           <>
                                             <button className="rota-whatsapp-btn" style={{ background: 'var(--accent)', borderColor: 'var(--accent)' }} title="Editar"
-                                              onClick={e => { e.stopPropagation(); setEditCustomContact({ contato: ct, rotaName: grupo.rota }); setEditContactName(ct.pushName || ''); setEditContactPhone((ct.remoteJid || '').replace(/@.*/, '').replace(/\D/g, '')); setEditContactCity(ct.cidade || '') }}>
+                                              onClick={e => { e.stopPropagation(); confirmRotaEdit(grupo.rota, ct, true) }}>
                                               <i className="fa-solid fa-pen" style={{ fontSize: '0.65rem' }}></i>
                                             </button>
                                             <button className="rota-whatsapp-btn" style={{ background: '#dc2626', borderColor: '#dc2626' }} title="Remover"
-                                              onClick={e => { e.stopPropagation(); if (confirm(`Remover ${ct.pushName || 'contato'} da rota "${grupo.rota}"?`)) { setCustomRotas(prev => prev.map(cr => cr.rota === grupo.rota ? { ...cr, cidades: cr.cidades.map(cid => ({ ...cid, contatos: cid.contatos.filter(x => x.remoteJid !== ct.remoteJid) })).filter(cid => cid.contatos.length > 0) } : cr).filter(cr => cr.cidades.length > 0)); showToast('Contato removido') } }}>
+                                              onClick={e => { e.stopPropagation(); confirmRotaRemove(grupo.rota, ct, true) }}>
+                                              <i className="fa-solid fa-trash" style={{ fontSize: '0.65rem' }}></i>
+                                            </button>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <button className="rota-whatsapp-btn" style={{ background: 'var(--accent)', borderColor: 'var(--accent)' }} title="Editar"
+                                              onClick={e => { e.stopPropagation(); confirmRotaEdit(grupo.rota, ct, false) }}>
+                                              <i className="fa-solid fa-pen" style={{ fontSize: '0.65rem' }}></i>
+                                            </button>
+                                            <button className="rota-whatsapp-btn" style={{ background: '#dc2626', borderColor: '#dc2626' }} title="Remover"
+                                              onClick={e => { e.stopPropagation(); confirmRotaRemove(grupo.rota, ct, false) }}>
                                               <i className="fa-solid fa-trash" style={{ fontSize: '0.65rem' }}></i>
                                             </button>
                                           </>
@@ -3050,6 +3478,9 @@ export default function Admin({ produtos, onVoltar }) {
               <button className={`admin-tab ${finTab === 'despesas' ? 'active' : ''}`} onClick={() => setFinTab('despesas')}>
                 <i className="fa-solid fa-receipt"></i> Despesas
               </button>
+              <button className={`admin-tab ${finTab === 'relatorios' ? 'active' : ''}`} onClick={() => setFinTab('relatorios')}>
+                <i className="fa-solid fa-chart-simple"></i> Relatórios
+              </button>
             </div>
 
             {finTab === 'receber' && (
@@ -3075,7 +3506,21 @@ export default function Admin({ produtos, onVoltar }) {
                   ))}
                 </div>
 
-                {finView === 'calendario' && <FinCalendar financial={financial} />}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.6rem' }}>
+                  <PeriodFilter
+                    period={finPeriod}
+                    onChange={setFinPeriod}
+                    month={finPeriodMonth}
+                    onMonth={setFinPeriodMonth}
+                    rangeStart={finRangeStart}
+                    onRangeStart={setFinRangeStart}
+                    rangeEnd={finRangeEnd}
+                    onRangeEnd={setFinRangeEnd}
+                    label="Filtrar"
+                  />
+                </div>
+
+                {finView === 'calendario' && <FinCalendar financial={filteredFin} />}
 
                 {finView === 'lista' && (
                   <div className="fin-table-card">
@@ -3172,9 +3617,22 @@ export default function Admin({ produtos, onVoltar }) {
               <div>
                 <div className="fin-toolbar">
                   <span className="fin-toolbar-title"><i className="fa-solid fa-receipt"></i> Despesas</span>
-                  <button className="admin-btn fin-btn-new" onClick={() => { setEditingDespesa(null); setShowDespesaModal(true) }}>
-                    <i className="fa-solid fa-plus"></i> Nova Despesa
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <PeriodFilter
+                      period={despPeriod}
+                      onChange={setDespPeriod}
+                      month={despPeriodMonth}
+                      onMonth={setDespPeriodMonth}
+                      rangeStart={despRangeStart}
+                      onRangeStart={setDespRangeStart}
+                      rangeEnd={despRangeEnd}
+                      onRangeEnd={setDespRangeEnd}
+                      label="Filtrar"
+                    />
+                    <button className="admin-btn fin-btn-new" onClick={() => { setEditingDespesa(null); setShowDespesaModal(true) }}>
+                      <i className="fa-solid fa-plus"></i> Nova Despesa
+                    </button>
+                  </div>
                 </div>
 
                 <div className="admin-tabs fin-tabs">
@@ -3255,6 +3713,10 @@ export default function Admin({ produtos, onVoltar }) {
                 </div>
               </div>
             )}
+
+            {finTab === 'relatorios' && (
+              <RelatoriosPanel orders={orders} financial={financial} despesas={despesas} produtos={produtosAtuais} usuarios={usuarios} rotas={rotas} />
+            )}
           </div>
         )}
       </main>
@@ -3284,7 +3746,7 @@ export default function Admin({ produtos, onVoltar }) {
           onEditAndConfirm={(editedItems, currentStatus) => {
             const totalAvista = editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
             const totalAprazo = editedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
-            const newStatus = currentStatus === 'em-rota' ? 'entregue' : 'em-rota'
+            const newStatus = currentStatus === 'entregue' || currentStatus === 'em-rota' ? 'entregue' : 'em-rota'
             const updatedOrder = {
               ...showOrderDetail,
               items: editedItems,
@@ -3738,6 +4200,95 @@ export default function Admin({ produtos, onVoltar }) {
         </div>
       )}
 
+      {rotaContactModal && (
+        <div className="admin-overlay" onClick={() => setRotaContactModal(null)}>
+          <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px' }}>
+            <div className="admin-modal-header">
+              <h3><i className="fa-solid fa-user-plus"></i> {rotaContactModal.mode === 'edit' ? 'Editar Contato' : 'Adicionar Contato'}</h3>
+              <button className="admin-modal-close" onClick={() => setRotaContactModal(null)}><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <div className="admin-modal-body">
+              <p style={{ margin: '0 0 0.75rem', fontSize: '0.82rem', color: 'var(--admin-text-sec)' }}>
+                Rota: <strong>{(rotaContactModal.rota)}</strong>
+              </p>
+              <div className="form-group">
+                <label>Nome</label>
+                <input type="text" placeholder="Nome do contato" value={rotaContactModal.nomeState ?? ''} onChange={e => setRotaContactModal(m => ({ ...m, nomeState: e.target.value }))} autoFocus />
+              </div>
+              <div className="form-group">
+                <label>Telefone (com DDD, só números)</label>
+                <input type="text" placeholder="31999999999" value={rotaContactModal.phoneState ?? ''} onChange={e => setRotaContactModal(m => ({ ...m, phoneState: e.target.value.replace(/\D/g, '').slice(0, 11) }))} />
+              </div>
+              <div className="form-group">
+                <label>Cidade</label>
+                <input type="text" placeholder="Cidade" value={rotaContactModal.cityState ?? ''} onChange={e => setRotaContactModal(m => ({ ...m, cityState: e.target.value }))} />
+              </div>
+              <div className="modal-actions">
+                <button className="admin-btn admin-btn-sec" onClick={() => setRotaContactModal(null)}>Cancelar</button>
+                <button className="admin-btn admin-btn-primary" disabled={(rotaContactModal.phoneState || '').replace(/\D/g, '').length < 10} onClick={() => {
+                  confirmRotaContact({
+                    rota: rotaContactModal.rota,
+                    mode: rotaContactModal.mode,
+                    oldContact: rotaContactModal.contato,
+                    novoNome: (rotaContactModal.nomeState || '').trim() || 'Sem nome',
+                    novoTelefone: rotaContactModal.phoneState || '',
+                    novoCidade: (rotaContactModal.cityState || '').trim(),
+                    custom: rotaContactModal.custom
+                  })
+                }}>
+                  <i className="fa-solid fa-check"></i> Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRestoreRota && (
+        <div className="admin-overlay" onClick={() => setShowRestoreRota(null)}>
+          <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+            <div className="admin-modal-header">
+              <h3><i className="fa-solid fa-rotate-left"></i> Restaurar contatos</h3>
+              <button className="admin-modal-close" onClick={() => setShowRestoreRota(null)}><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <div className="admin-modal-body">
+              <p style={{ margin: '0 0 0.75rem', fontSize: '0.82rem', color: 'var(--admin-text-sec)' }}>
+                Rota: <strong>{showRestoreRota}</strong> — contatos removidos voltarão à rota na próxima sincronização.
+              </p>
+              {rotaEdits.filter(e => e.rota === showRestoreRota && e.acao === 'remover').map(e => (
+                <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.5rem 0.75rem', marginBottom: '0.4rem', background: '#fff7ed', borderRadius: '8px', border: '1px solid #fed7aa' }}>
+                  <i className="fa-solid fa-user-clock" style={{ color: '#ea580c' }}></i>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{e.contato?.pushName || e.contato?.nome || 'Contato'}</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-sec)' }}>{e.contato?.remoteJid?.replace(/@.*/, '') || e.contato?.telefone || ''}</div>
+                  </div>
+                  <button className="admin-btn admin-btn-primary" style={{ fontSize: '0.75rem', padding: '0.3rem 0.7rem' }} onClick={() => {
+                    removeRotaEdit(e.id)
+                    showToast('Contato restaurado')
+                    if (rotaEdits.filter(x => x.rota === showRestoreRota && x.acao === 'remover').length <= 1) setShowRestoreRota(null)
+                  }}>
+                    <i className="fa-solid fa-rotate-left"></i> Restaurar
+                  </button>
+                </div>
+              ))}
+              {rotaEdits.filter(e => e.rota === showRestoreRota && e.acao === 'remover').length === 0 && (
+                <p style={{ fontSize: '0.85rem', color: 'var(--admin-text-sec)' }}>Nenhum contato removido nesta rota.</p>
+              )}
+              <div className="modal-actions">
+                <button className="admin-btn admin-btn-sec" onClick={() => setShowRestoreRota(null)}>Fechar</button>
+                <button className="admin-btn admin-btn-sec" onClick={() => {
+                  rotaEdits.filter(e => e.rota === showRestoreRota && e.acao === 'remover').forEach(e => removeRotaEdit(e.id))
+                  showToast('Todos os contatos restaurados')
+                  setShowRestoreRota(null)
+                }} disabled={rotaEdits.filter(e => e.rota === showRestoreRota && e.acao === 'remover').length === 0}>
+                  <i className="fa-solid fa-rotate-left"></i> Restaurar todos
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {editCustomContact && (
         <div className="admin-overlay" onClick={() => setEditCustomContact(null)}>
           <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
@@ -4001,6 +4552,1279 @@ export default function Admin({ produtos, onVoltar }) {
 // =============================================
 // MODAL: ADD ORDER
 // =============================================
+const REP_PALETTE = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1']
+
+function fmtK(v) {
+  const n = Number(v) || 0
+  if (Math.abs(n) >= 1000000) return (n / 1000000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + 'M'
+  if (Math.abs(n) >= 1000) return (n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + 'k'
+  return n.toLocaleString('pt-BR', { maximumFractionDigits: 0 })
+}
+
+function Donut({ data, size = 168, centerLabel = 'Total' }) {
+  const total = data.reduce((s, d) => s + (Number(d.value) || 0), 0) || 1
+  let acc = 0
+  const segs = data.map((d, i) => {
+    const from = (acc / total) * 360
+    acc += Number(d.value) || 0
+    const to = (acc / total) * 360
+    return `${REP_PALETTE[i % REP_PALETTE.length]} ${from.toFixed(2)}deg ${to.toFixed(2)}deg`
+  }).join(', ')
+  return (
+    <div className="rep-donut-wrap">
+      <div className="rep-donut" style={{ width: size, height: size, background: `conic-gradient(${segs})` }}>
+        <div className="rep-donut-hole">
+          <strong>{fmtK(total)}</strong>
+          <span>{centerLabel || 'Total'}</span>
+        </div>
+      </div>
+      <div className="rep-donut-legend">
+        {data.map((d, i) => (
+          <div key={i} className="rep-legend-item">
+            <span className="rep-legend-dot" style={{ background: REP_PALETTE[i % REP_PALETTE.length] }}></span>
+            <span className="rep-legend-label">{d.label}</span>
+            <span className="rep-legend-val">{fmtK(d.value)}</span>
+            <span className="rep-legend-pct">{((Number(d.value) || 0) / total * 100).toFixed(1)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function Bars({ data, getLabel, getValue, color = '#8b5cf6', height = 200, formatVal }) {
+  const max = Math.max(1, ...data.map(getValue))
+  const fmt = formatVal || fmtK
+  return (
+    <div className="rep-bars">
+      {data.map((d, i) => {
+        const v = getValue(d)
+        return (
+          <div key={i} className="rep-bar-col">
+            <span className="rep-bar-val">{fmt(v)}</span>
+            <div className="rep-bar" style={{ height: `${Math.max(3, (v / max) * (height - 34))}px`, background: `linear-gradient(180deg, ${color}, ${color}88)` }} title={`${getLabel(d)}: ${formatPreco(v)}`}></div>
+            <span className="rep-bar-label">{getLabel(d)}</span>
+          </div>
+        )
+      })}
+      {data.length === 0 && <p className="rep-empty">Sem dados no período</p>}
+    </div>
+  )
+}
+
+function HBar({ data, getLabel, getValue, color }) {
+  const max = Math.max(1, ...data.map(getValue))
+  return (
+    <div className="rep-hb">
+      {data.map((d, i) => (
+        <div key={i} className="rep-hb-row">
+          <span className="rep-hb-label">{getLabel(d)}</span>
+          <div className="rep-hb-track">
+            <div className="rep-hb-fill" style={{ width: `${Math.max(1.5, (getValue(d) / max) * 100)}%`, background: color || REP_PALETTE[i % REP_PALETTE.length] }}></div>
+          </div>
+          <span className="rep-hb-val">{fmtK(getValue(d))}</span>
+        </div>
+      ))}
+      {data.length === 0 && <p className="rep-empty">Sem dados no período</p>}
+    </div>
+  )
+}
+
+function MetricaToggle({ options, value, onChange }) {
+  return (
+    <div className="rep-toggle">
+      {options.map(o => (
+        <button key={o.id} className={`rep-toggle-btn ${value === o.id ? 'active' : ''}`} onClick={() => onChange(o.id)}>{o.label}</button>
+      ))}
+    </div>
+  )
+}
+
+function RepKpis({ items }) {
+  return (
+    <div className="rep-kpis">
+      {items.map((it, i) => (
+        <div key={i} className="rep-kpi" style={{ '--kpi': it.color || '#8b5cf6' }}>
+          <i className={`fa-solid ${it.icon || 'fa-chart-column'}`}></i>
+          <div>
+            <strong>{it.value}</strong>
+            <span>{it.label}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function RepCard({ icon, title, right, children, className = '' }) {
+  return (
+    <div className={`rep-card ${className}`}>
+      <div className="rep-card-head">
+        <span className="rep-card-title"><i className={`fa-solid ${icon}`}></i> {title}</span>
+        {right}
+      </div>
+      <div className="rep-card-body">{children}</div>
+    </div>
+  )
+}
+
+function RepTotals({ items }) {
+  return (
+    <div className="rep-totals">
+      {items.map((it, i) => (
+        <div key={i} className="rep-total" style={{ '--rep-total': it.color || '#8b5cf6' }}>
+          <span>{it.label}</span>
+          <strong>{it.value}</strong>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rotas }) {
+  const [rep, setRep] = useState('dashboard')
+  const [period, setPeriod] = useState('all')
+  const [month, setMonth] = useState(hoje().slice(0, 7))
+  const [rangeStart, setRangeStart] = useState('')
+  const [rangeEnd, setRangeEnd] = useState('')
+  const [grafMetrica, setGrafMetrica] = useState('bruto')
+  const [grafMetrica2, setGrafMetrica2] = useState('bruto')
+  const [search, setSearch] = useState('')
+  const [valorMin, setValorMin] = useState('')
+  const [valorMax, setValorMax] = useState('')
+  const [statusF, setStatusF] = useState('todos')
+  const [pagamentoF, setPagamentoF] = useState('todos')
+  const [itemTipoF, setItemTipoF] = useState('todos')
+
+  const ORDER_STATUS = ['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'entregue']
+  const FIN_LIKE = ['contratos', 'fin_cliente', 'pagamentos', 'caixa', 'despesas']
+  const isFinLike = FIN_LIKE.includes(rep)
+  const effStatusF = isFinLike ? (statusF === 'pago' || statusF === 'pendente' ? statusF : 'todos') : (ORDER_STATUS.includes(statusF) ? statusF : 'todos')
+
+  const inR = (dt) => dt ? inPeriod(dt, period, month, rangeStart, rangeEnd) : period === 'all'
+
+  const minV = Number(String(valorMin).replace(/\./g, '').replace(/,/g, '.')) || 0
+  const maxV = Number(String(valorMax).replace(/\./g, '').replace(/,/g, '.')) || Infinity
+  const searchT = search.trim().toLowerCase()
+
+  const ordersBase = useMemo(() => orders.filter(o => o.status !== 'cancelado' && inR(o.date || '')), [orders, period, month, rangeStart, rangeEnd])
+
+  const ordersF = useMemo(() => ordersBase.filter(o => {
+    if (effStatusF !== 'todos' && o.status !== effStatusF) return false
+    if (pagamentoF !== 'todos' && (o.pagamento || '') !== pagamentoF) return false
+    const tot = o.total || 0
+    if (tot < minV || tot > maxV) return false
+    if (searchT) {
+      const hay = `${o.customer?.nome || ''} ${o.customer?.telefone || ''} ${String(o.id)} ${(o.items || []).map(i => `${i.nome || ''} ${i.displayName || ''}`).join(' ')}`.toLowerCase()
+      if (!hay.includes(searchT)) return false
+    }
+    return true
+  }), [ordersBase, effStatusF, pagamentoF, minV, maxV, searchT])
+
+  const produtosVendidos = useMemo(() => {
+    const arr = []
+    ordersF.forEach(o => {
+      ;(o.items || []).forEach(i => {
+        if (itemTipoF !== 'todos' && (i.tipo || '') !== itemTipoF) return
+        arr.push({
+          produto: i.displayName || i.nome || i.produto || 'Produto',
+          qty: Number(i.qty) || 0,
+          preco: Number(i.preco) || 0,
+          preco_custo: Number(i.preco_custo) || Number(i.custo) || 0,
+          cliente: o.customer?.nome || '-',
+          data: o.date || '',
+          tipo: i.tipo === 'avista' ? 'À Vista' : 'A Prazo'
+        })
+      })
+    })
+    return arr
+  }, [ordersF, itemTipoF])
+
+  const vendasMes = useMemo(() => {
+    const map = {}
+    ordersF.forEach(o => {
+      const k = (o.date || '').slice(0, 7)
+      if (!k) return
+      if (!map[k]) map[k] = { mes: k, bruto: 0, liq: 0, desconto: 0, frete: 0, custo: 0, qtd: 0, pedidos: 0 }
+      const bruto = o.total || 0
+      const desc = o.desconto || 0
+      map[k].bruto += bruto
+      map[k].liq += Math.max(0, bruto - desc)
+      map[k].desconto += desc
+      map[k].frete += o.frete || 0
+      map[k].pedidos += 1
+      ;(o.items || []).forEach(i => {
+        map[k].qtd += Number(i.qty) || 0
+        map[k].custo += (Number(i.preco_custo) || Number(i.custo) || 0) * (Number(i.qty) || 0)
+      })
+    })
+    return Object.values(map).sort((a, b) => a.mes.localeCompare(b.mes))
+  }, [ordersF])
+
+  const qtdPorProduto = useMemo(() => {
+    const map = {}
+    produtosVendidos.forEach(p => {
+      if (!map[p.produto]) map[p.produto] = { nome: p.produto, qty: 0, bruto: 0, custo: 0 }
+      map[p.produto].qty += p.qty
+      map[p.produto].bruto += p.preco * p.qty
+      map[p.produto].custo += p.preco_custo * p.qty
+    })
+    return Object.values(map)
+  }, [produtosVendidos])
+
+  const linhasAgrupadas = useMemo(() => {
+    const map = {}
+    produtosVendidos.forEach(p => {
+      const k = `${p.produto}||${p.cliente}||${p.data}||${p.tipo}`
+      if (!map[k]) map[k] = { ...p }
+      else {
+        map[k].qty += p.qty
+      }
+    })
+    return Object.values(map)
+  }, [produtosVendidos])
+
+  const itensPorCliente = useMemo(() => {
+    const map = {}
+    ordersF.forEach(o => {
+      const nome = o.customer?.nome || '-'
+      if (!map[nome]) map[nome] = { cliente: nome, itens: 0, bruto: 0, pedidos: 0 }
+      map[nome].itens += (o.items || []).reduce((s, i) => s + (Number(i.qty) || 0), 0)
+      map[nome].bruto += o.total || 0
+      map[nome].pedidos += 1
+    })
+    return Object.values(map).sort((a, b) => b.bruto - a.bruto)
+  }, [ordersF])
+
+  const finBase = useMemo(() => financial.filter(f => f.status !== 'cancelado' && inR(f.dueDate || '')), [financial, period, month, rangeStart, rangeEnd])
+
+  const finRecordsIn = useMemo(() => finBase.filter(f => {
+    if (effStatusF !== 'todos' && f.status !== effStatusF) return false
+    const v = f.value || 0
+    if (v < minV || v > maxV) return false
+    if (searchT) {
+      const hay = `${f.customerName || ''} ${f.itemName || ''} ${f.paymentMethod || ''}`.toLowerCase()
+      if (!hay.includes(searchT)) return false
+    }
+    return true
+  }), [finBase, effStatusF, minV, maxV, searchT])
+
+  const despBase = useMemo(() => despesas.filter(d => inR(d.dueDate || '')), [despesas, period, month, rangeStart, rangeEnd])
+
+  const despIn = useMemo(() => despBase.filter(d => {
+    if (effStatusF !== 'todos' && d.status !== effStatusF) return false
+    const v = d.value || 0
+    if (v < minV || v > maxV) return false
+    if (searchT) {
+      const hay = `${d.tipo || ''} ${d.descricao || ''} ${d.paymentMethod || ''}`.toLowerCase()
+      if (!hay.includes(searchT)) return false
+    }
+    return true
+  }), [despBase, effStatusF, minV, maxV, searchT])
+
+  const fatPorCliente = useMemo(() => {
+    const map = {}
+    finRecordsIn.forEach(f => {
+      if (!map[f.customerName]) map[f.customerName] = { cliente: f.customerName, aberto: 0, pago: 0, vencido: 0, servicos: {} }
+      const c = map[f.customerName]
+      const item = f.itemName || 'Produto'
+      if (!c.servicos[item]) c.servicos[item] = { aberto: 0, pago: 0, vencido: 0 }
+      const valor = f.value || 0
+      const serv = c.servicos[item]
+      if (f.status === 'pago') { c.pago += valor; serv.pago += valor }
+      else {
+        c.aberto += valor; serv.aberto += valor
+        if (f.dueDate && f.dueDate < hoje()) { c.vencido += valor; serv.vencido += valor }
+      }
+    })
+    return Object.values(map)
+  }, [finRecordsIn])
+
+  const contratos = useMemo(() => {
+    const map = {}
+    finRecordsIn.forEach(f => {
+      const order = orders.find(o => o.id === f.orderId)
+      if (!map[f.customerName]) map[f.customerName] = { cliente: f.customerName, inicio: null, termino: null, aberto: 0, pago: 0, vencido: 0 }
+      const c = map[f.customerName]
+      const dt = order?.date || ''
+      if (dt && (!c.inicio || dt < c.inicio)) c.inicio = dt
+      if (f.dueDate && (!c.termino || f.dueDate > c.termino)) c.termino = f.dueDate
+      const valor = f.value || 0
+      if (f.status === 'pago') c.pago += valor
+      else {
+        c.aberto += valor
+        if (f.dueDate && f.dueDate < hoje()) c.vencido += valor
+      }
+    })
+    return Object.values(map)
+  }, [finRecordsIn, orders])
+
+  const pagMetodo = useMemo(() => {
+    const map = {}
+    finRecordsIn.forEach(f => {
+      const m = (f.paymentMethod && PAG_METHODS[f.paymentMethod]?.label) || f.paymentMethod || 'Pix'
+      if (!map[m]) map[m] = { label: m, pago: 0, pendente: 0, total: 0 }
+      const v = f.value || 0
+      map[m].total += v
+      if (f.status === 'pago') map[m].pago += v
+      else map[m].pendente += v
+    })
+    return Object.values(map).sort((a, b) => b.total - a.total)
+  }, [finRecordsIn])
+
+  const statusOrders = useMemo(() => {
+    const map = {}
+    ordersF.forEach(o => {
+      const s = o.status || 'outro'
+      if (!map[s]) map[s] = { label: STATUS_LABELS[s] || s, qty: 0, total: 0 }
+      map[s].qty += 1
+      map[s].total += o.total || 0
+    })
+    return Object.values(map)
+  }, [ordersF])
+
+  const cmvTotal = useMemo(() => {
+    const qty = produtosVendidos.reduce((s, p) => s + p.qty, 0) || 1
+    const custo = produtosVendidos.reduce((s, p) => s + p.preco_custo * p.qty, 0)
+    const bruto = produtosVendidos.reduce((s, p) => s + p.preco * p.qty, 0)
+    return { custoMedio: custo / qty, custoTotal: custo, bruto, unitMedio: bruto / qty }
+  }, [produtosVendidos])
+
+  const abc = useMemo(() => {
+    const totalBruto = qtdPorProduto.reduce((s, p) => s + p.bruto, 0) || 1
+    let acum = 0
+    return [...qtdPorProduto].sort((a, b) => b.bruto - a.bruto).map(p => {
+      acum += p.bruto
+      const pct = (acum / totalBruto) * 100
+      return { ...p, pctAcum: pct, classe: pct <= 70 ? 'A' : pct <= 90 ? 'B' : 'C' }
+    })
+  }, [qtdPorProduto])
+
+  const movimento = useMemo(() => {
+    const arr = []
+    ordersF.forEach(o => {
+      ;(o.items || []).forEach(i => {
+        arr.push({
+          data: o.date || '',
+          descricao: `Pedido #${String(o.id).slice(-6)}`,
+          produto: i.displayName || i.nome || i.produto || 'Produto',
+          sku: i.id || '',
+          qty: Number(i.qty) || 0,
+          tipo: 'Saída',
+          custoMedio: Number(i.preco_custo) || 0
+        })
+      })
+    })
+    return arr.sort((a, b) => b.data.localeCompare(a.data))
+  }, [ordersF])
+
+  const inativos = useMemo(() => {
+    const arr = usuarios.map(u => {
+      const pedidosUser = orders.filter(o => o.customer?.telefone === u.telefone || o.user_id === u.id)
+      const ult = pedidosUser.map(o => o.date || '').filter(Boolean).sort().pop() || ''
+      return { nome: u.nome || '-', telefone: u.telefone || '-', ultima: ult }
+    })
+    return arr.sort((a, b) => {
+      if (!a.ultima && !b.ultima) return 0
+      if (!a.ultima) return -1
+      if (!b.ultima) return 1
+      return a.ultima.localeCompare(b.ultima)
+    }).slice(0, 30)
+  }, [usuarios, orders])
+
+  const despPorTipo = useMemo(() => {
+    const map = {}
+    despIn.forEach(d => {
+      const t = d.tipo || 'Outros'
+      if (!map[t]) map[t] = { tipo: t, pago: 0, pendente: 0, total: 0, qty: 0 }
+      map[t].total += d.value || 0
+      map[t].qty += 1
+      if (d.status === 'pago') map[t].pago += d.value || 0
+      else map[t].pendente += d.value || 0
+    })
+    return Object.values(map).sort((a, b) => b.total - a.total)
+  }, [despIn])
+
+  const caixaSerie = useMemo(() => {
+    const map = {}
+    finRecordsIn.forEach(f => {
+      const k = (f.dueDate || '').slice(0, 7)
+      if (!k) return
+      if (!map[k]) map[k] = { mes: k, receitas: 0, gastos: 0 }
+      map[k].receitas += f.value || 0
+    })
+    despIn.forEach(d => {
+      const k = (d.dueDate || '').slice(0, 7)
+      if (!k) return
+      if (!map[k]) map[k] = { mes: k, receitas: 0, gastos: 0 }
+      map[k].gastos += d.value || 0
+    })
+    return Object.values(map).sort((a, b) => a.mes.localeCompare(b.mes))
+  }, [finRecordsIn, despIn])
+
+  const kpis = useMemo(() => {
+    const bruto = ordersF.reduce((s, o) => s + (o.total || 0), 0)
+    const desc = ordersF.reduce((s, o) => s + (o.desconto || 0), 0)
+    const liq = Math.max(0, bruto - desc)
+    const pedidos = ordersF.length
+    const itens = produtosVendidos.reduce((s, p) => s + p.qty, 0)
+    const custo = produtosVendidos.reduce((s, p) => s + p.preco_custo * p.qty, 0)
+    const aberto = finRecordsIn.filter(f => f.status === 'pendente').reduce((s, f) => s + (f.value || 0), 0)
+    const atrasado = finRecordsIn.filter(f => f.status === 'pendente' && f.dueDate < hoje()).reduce((s, f) => s + (f.value || 0), 0)
+    return { bruto, desc, liq, pedidos, itens, custo, aberto, atrasado, ticket: pedidos ? bruto / pedidos : 0 }
+  }, [ordersF, produtosVendidos, finRecordsIn])
+
+  const REPORTS = [
+    { id: 'dashboard', label: 'Painel geral', icon: 'fa-gauge-high', group: 'Vendas / Financeiro' },
+    { id: 'vendas', label: 'Relação detalhada das vendas', icon: 'fa-file-invoice-dollar', group: 'Vendas / Financeiro' },
+    { id: 'produtos_vendidos', label: 'Produtos vendidos', icon: 'fa-box-open', group: 'Vendas / Financeiro' },
+    { id: 'vendas_mes', label: 'Vendas por período', icon: 'fa-chart-column', group: 'Vendas / Financeiro' },
+    { id: 'graf_lucro', label: 'Lucro e margem por mês', icon: 'fa-chart-line', group: 'Vendas / Financeiro' },
+    { id: 'pagamentos', label: 'Formas de pagamento', icon: 'fa-credit-card', group: 'Vendas / Financeiro' },
+    { id: 'maiores', label: 'Ranking de clientes', icon: 'fa-trophy', group: 'Vendas / Financeiro' },
+    { id: 'analise_cliente', label: 'Análise das vendas por cliente', icon: 'fa-user-chart', group: 'Vendas / Financeiro' },
+    { id: 'fin_cliente', label: 'Situação por cliente e serviço', icon: 'fa-coins', group: 'Vendas / Financeiro' },
+    { id: 'contratos', label: 'Situação dos contratos', icon: 'fa-file-contract', group: 'Vendas / Financeiro' },
+    { id: 'orcamentos', label: 'Situação dos orçamentos', icon: 'fa-file-pen', group: 'Vendas / Financeiro' },
+    { id: 'status', label: 'Pedidos por status', icon: 'fa-list-check', group: 'Vendas / Financeiro' },
+    { id: 'caixa', label: 'Fluxo de caixa', icon: 'fa-money-bill-trend-up', group: 'Vendas / Financeiro' },
+    { id: 'despesas', label: 'Relatório de despesas', icon: 'fa-receipt', group: 'Vendas / Financeiro' },
+    { id: 'impostos', label: 'Relatório de impostos', icon: 'fa-scale-balanced', group: 'Vendas / Financeiro' },
+    { id: 'inativos', label: 'Clientes inativos', icon: 'fa-user-clock', group: 'Vendas / Financeiro' },
+    { id: 'clientes', label: 'Relação de clientes', icon: 'fa-users', group: 'Vendas / Financeiro' },
+    { id: 'custo_margem', label: 'Custo, margem e lucro por mês', icon: 'fa-calculator', group: 'Estoque' },
+    { id: 'cmv', label: 'Análise de custo (CMV)', icon: 'fa-scale-balanced', group: 'Estoque' },
+    { id: 'abc', label: 'Curva ABC', icon: 'fa-ranking-star', group: 'Estoque' },
+    { id: 'giro', label: 'Giro de estoque', icon: 'fa-rotate', group: 'Estoque' },
+    { id: 'posicao', label: 'Posição de estoque', icon: 'fa-boxes-stacked', group: 'Estoque' },
+    { id: 'movimentacoes', label: 'Histórico de movimentações', icon: 'fa-arrows-rotate', group: 'Estoque' },
+  ]
+
+  const current = REPORTS.find(r => r.id === rep) || REPORTS[0]
+
+  const statusOptions = isFinLike
+    ? [{ id: 'todos', label: 'Todos os status' }, { id: 'pago', label: 'Pago' }, { id: 'pendente', label: 'Pendente' }]
+    : [{ id: 'todos', label: 'Todos os status' }, ...ORDER_STATUS.map(s => ({ id: s, label: STATUS_LABELS[s] || s }))]
+
+  const pagamentoOptions = [
+    { id: 'todos', label: 'Toda forma de pagamento' },
+    { id: 'avista', label: 'À Vista' },
+    { id: 'aprazo', label: 'A Prazo' },
+    { id: 'misto', label: 'Misto' }
+  ]
+
+  const renderDashboard = () => {
+    return (
+      <div className="rep-dash">
+        <RepKpis items={[
+          { icon: 'fa-sack-dollar', label: 'Faturamento bruto', value: formatPreco(kpis.bruto), color: '#8b5cf6' },
+          { icon: 'fa-hand-holding-dollar', label: 'Valor líquido', value: formatPreco(kpis.liq), color: '#10b981' },
+          { icon: 'fa-tags', label: 'Descontos', value: formatPreco(kpis.desc), color: '#ef4444' },
+          { icon: 'fa-clipboard-list', label: 'Pedidos', value: kpis.pedidos, color: '#3b82f6' },
+          { icon: 'fa-box', label: 'Itens vendidos', value: kpis.itens, color: '#f59e0b' },
+          { icon: 'fa-receipt', label: 'Ticket médio', value: formatPreco(kpis.ticket), color: '#06b6d4' },
+          { icon: 'fa-chart-pie', label: 'Lucro bruto estimado', value: formatPreco(Math.max(0, kpis.bruto - kpis.custo)), color: '#ec4899' },
+          { icon: 'fa-hourglass-half', label: 'Em aberto', value: formatPreco(kpis.aberto), color: '#f97316' },
+          { icon: 'fa-triangle-exclamation', label: 'Vencidos', value: formatPreco(kpis.atrasado), color: '#dc2626' },
+        ]} />
+
+        <div className="rep-grid rep-grid-2">
+          <RepCard icon="fa-chart-column" title="Vendas por período" right={
+            <MetricaToggle options={[
+              { id: 'bruto', label: 'Bruto' }, { id: 'liq', label: 'Líquido' }, { id: 'desconto', label: 'Desconto' },
+            ]} value={grafMetrica} onChange={setGrafMetrica} />
+          }>
+            <Bars data={vendasMes} getLabel={v => v.mes} getValue={v => v[grafMetrica]} color="#8b5cf6" />
+          </RepCard>
+          <RepCard icon="fa-box-open" title="Top produtos por faturamento" right={
+            <MetricaToggle options={[
+              { id: 'bruto', label: 'Valor' }, { id: 'qty', label: 'Qtd' },
+            ]} value={grafMetrica2} onChange={setGrafMetrica2} />
+          }>
+            <HBar data={[...qtdPorProduto].sort((a, b) => b[grafMetrica2 === 'qty' ? 'qty' : 'bruto'] - a[grafMetrica2 === 'qty' ? 'qty' : 'bruto']).slice(0, 8)}
+              getLabel={p => p.nome} getValue={p => grafMetrica2 === 'qty' ? p.qty : p.bruto} />
+          </RepCard>
+          <RepCard icon="fa-trophy" title="Top clientes">
+            <HBar data={itensPorCliente.slice(0, 8)} getLabel={c => c.cliente} getValue={c => c.bruto} color="#f59e0b" />
+          </RepCard>
+          <RepCard icon="fa-credit-card" title="Formas de pagamento (previsto)">
+            <Donut data={pagMetodo.map(m => ({ label: m.label, value: m.total }))} />
+          </RepCard>
+        </div>
+
+        <div className="rep-grid rep-grid-2">
+          <RepCard icon="fa-list-check" title="Pedidos por status">
+            <Donut data={statusOrders.map(s => ({ label: s.label, value: s.qty }))} centerLabel="Pedidos" size={150} />
+          </RepCard>
+          <RepCard icon="fa-coins" title="A receber por situação">
+            <Donut data={[
+              { label: 'Pago', value: finRecordsIn.filter(f => f.status === 'pago').reduce((s, f) => s + (f.value || 0), 0) },
+              { label: 'Em aberto', value: finRecordsIn.filter(f => f.status === 'pendente').reduce((s, f) => s + (f.value || 0), 0) },
+              { label: 'Vencido', value: finRecordsIn.filter(f => f.status === 'pendente' && f.dueDate < hoje()).reduce((s, f) => s + (f.value || 0), 0) },
+            ]} centerLabel="Financeiro" size={150} />
+          </RepCard>
+        </div>
+      </div>
+    )
+  }
+
+  const renderBody = () => {
+    if (rep === 'vendas') {
+      const totalBruto = ordersF.reduce((s, o) => s + (o.total || 0), 0)
+      const totalDesc = ordersF.reduce((s, o) => s + (o.desconto || 0), 0)
+      return (
+        <div>
+          <RepTotals items={[
+            { label: 'Pedidos no período', value: ordersF.length, color: '#3b82f6' },
+            { label: 'Valor bruto', value: formatPreco(totalBruto), color: '#8b5cf6' },
+            { label: 'Descontos', value: formatPreco(totalDesc), color: '#ef4444' },
+            { label: 'Valor líquido', value: formatPreco(Math.max(0, totalBruto - totalDesc)), color: '#10b981' },
+          ]} />
+          <table className="admin-table">
+            <thead><tr><th>Pedido</th><th>Cliente</th><th>Data da venda</th><th>Itens</th><th>Valor bruto</th><th>Desconto</th><th>Valor líquido</th><th>Frete</th><th>Pagamento</th><th>Status</th></tr></thead>
+            <tbody>
+              {ordersF.map(o => {
+                const bruto = o.total || 0
+                const desc = o.desconto || 0
+                const qtd = (o.items || []).reduce((s, i) => s + (Number(i.qty) || 0), 0)
+                return (
+                  <tr key={o.id}>
+                    <td className="td-prod-name">#{String(o.id).slice(-6)}</td>
+                    <td>{o.customer?.nome || '-'}</td>
+                    <td>{formatDate(o.date)}</td>
+                    <td>{qtd}</td>
+                    <td className="td-price">{formatPreco(bruto)}</td>
+                    <td className="td-price" style={{ color: 'var(--danger)' }}>{desc ? formatPreco(desc) : '-'}</td>
+                    <td className="td-price">{formatPreco(Math.max(0, bruto - desc))}</td>
+                    <td>{o.frete ? formatPreco(o.frete) : '-'}</td>
+                    <td>{o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}</td>
+                    <td><span className={`status-tag status-${o.status}`}>{STATUS_LABELS[o.status] || o.status}</span></td>
+                  </tr>
+                )
+              })}
+              {ordersF.length === 0 && <tr><td colSpan="10" className="td-empty">Nenhuma venda no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'produtos_vendidos') {
+      const totalQty = linhasAgrupadas.reduce((s, p) => s + p.qty, 0)
+      const totalValor = linhasAgrupadas.reduce((s, p) => s + p.preco * p.qty, 0)
+      return (
+        <div>
+          <RepTotals items={[
+            { label: 'Linhas', value: linhasAgrupadas.length, color: '#3b82f6' },
+            { label: 'Quantidade vendida', value: totalQty, color: '#f59e0b' },
+            { label: 'Valor total', value: formatPreco(totalValor), color: '#8b5cf6' },
+          ]} />
+          <table className="admin-table">
+            <thead><tr><th>Produto</th><th>Quantidade</th><th>Valor total</th><th>Cliente</th><th>Data da venda</th><th>Tipo do item</th></tr></thead>
+            <tbody>
+              {linhasAgrupadas.map((p, i) => (
+                <tr key={i}>
+                  <td className="td-prod-name">{p.produto}</td>
+                  <td>{p.qty}</td>
+                  <td className="td-price">{formatPreco(p.preco * p.qty)}</td>
+                  <td>{p.cliente}</td>
+                  <td>{formatDate(p.data)}</td>
+                  <td>{p.tipo}</td>
+                </tr>
+              ))}
+              {linhasAgrupadas.length === 0 && <tr><td colSpan="6" className="td-empty">Nenhum produto vendido no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'servicos') {
+      return (
+        <div className="rep-empty-full">
+          <i className="fa-solid fa-briefcase"></i>
+          <h3>Sem módulo de serviços</h3>
+          <p>O sistema não cadastra serviços atualmente. Este relatório está preparado para quando o módulo existir.</p>
+        </div>
+      )
+    }
+    if (rep === 'custo_margem') {
+      return (
+        <div>
+          <RepTotals items={[
+            { label: 'Meses analisados', value: vendasMes.length, color: '#3b82f6' },
+            { label: 'Custo total', value: formatPreco(vendasMes.reduce((s, v) => s + v.custo, 0)), color: '#ef4444' },
+            { label: 'Lucro bruto', value: formatPreco(vendasMes.reduce((s, v) => s + v.liq - v.custo, 0)), color: '#10b981' },
+          ]} />
+          <table className="admin-table">
+            <thead><tr><th>Mês</th><th>Qtd de itens</th><th>Custo</th><th>Valor bruto</th><th>Valor líquido</th><th>Lucro bruto</th><th>Margem de lucro</th></tr></thead>
+            <tbody>
+              {vendasMes.map(v => {
+                const bruto = v.bruto
+                const lucro = v.liq - v.custo
+                const margem = bruto > 0 ? (lucro / bruto) * 100 : 0
+                return (
+                  <tr key={v.mes}>
+                    <td>{v.mes}</td>
+                    <td>{v.qtd}</td>
+                    <td className="td-price">{formatPreco(v.custo)}</td>
+                    <td className="td-price">{formatPreco(bruto)}</td>
+                    <td className="td-price">{formatPreco(v.liq)}</td>
+                    <td className="td-price" style={{ color: lucro >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatPreco(lucro)}</td>
+                    <td><span className="rep-badge margem-badge">{margem.toFixed(1)}%</span></td>
+                  </tr>
+                )
+              })}
+              {vendasMes.length === 0 && <tr><td colSpan="7" className="td-empty">Sem dados no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'contratos') {
+      return (
+        <div>
+          <RepTotals items={[
+            { label: 'Clientes em contrato', value: contratos.length, color: '#3b82f6' },
+            { label: 'Valores em aberto', value: formatPreco(contratos.reduce((s, c) => s + c.aberto, 0)), color: '#f59e0b' },
+            { label: 'Valores vencidos', value: formatPreco(contratos.reduce((s, c) => s + c.vencido, 0)), color: '#ef4444' },
+            { label: 'Valores pagos', value: formatPreco(contratos.reduce((s, c) => s + c.pago, 0)), color: '#10b981' },
+          ]} />
+          <table className="admin-table">
+            <thead><tr><th>Cliente</th><th>Data de início</th><th>Data de término</th><th>Valores em aberto</th><th>Valores pagos</th><th>Valores vencidos</th></tr></thead>
+            <tbody>
+              {contratos.map(c => (
+                <tr key={c.cliente}>
+                  <td>{c.cliente}</td>
+                  <td>{formatDate(c.inicio)}</td>
+                  <td>{formatDate(c.termino)}</td>
+                  <td className="td-price">{formatPreco(c.aberto)}</td>
+                  <td className="td-price" style={{ color: 'var(--success)' }}>{formatPreco(c.pago)}</td>
+                  <td className="td-price" style={{ color: c.vencido > 0 ? 'var(--danger)' : undefined }}>{formatPreco(c.vencido)}</td>
+                </tr>
+              ))}
+              {contratos.length === 0 && <tr><td colSpan="6" className="td-empty">Sem contratos no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'orcamentos') {
+      const orcs = orders.filter(o => o.status === 'pre-pedido' && inR(o.date || ''))
+      return (
+        <div>
+          <RepTotals items={[
+            { label: 'Orçamentos em análise', value: orcs.length, color: '#3b82f6' },
+            { label: 'Valor total', value: formatPreco(orcs.reduce((s, o) => s + (o.total || 0), 0)), color: '#8b5cf6' },
+          ]} />
+          <table className="admin-table">
+            <thead><tr><th>Cliente</th><th>Data do orçamento</th><th>Valor bruto</th><th>Status</th></tr></thead>
+            <tbody>
+              {orcs.map(o => (
+                <tr key={o.id}>
+                  <td>{o.customer?.nome || '-'}</td>
+                  <td>{formatDate(o.date)}</td>
+                  <td className="td-price">{formatPreco(o.total || 0)}</td>
+                  <td><span className="status-tag status-pre-pedido">Pré-Pedido</span></td>
+                </tr>
+              ))}
+              {orcs.length === 0 && <tr><td colSpan="4" className="td-empty">Nenhum orçamento em andamento</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'fin_cliente') {
+      return (
+        <div>
+          <RepTotals items={[
+            { label: 'Clientes', value: fatPorCliente.length, color: '#3b82f6' },
+            { label: 'Aberto', value: formatPreco(fatPorCliente.reduce((s, c) => s + c.aberto, 0)), color: '#f59e0b' },
+            { label: 'Pago', value: formatPreco(fatPorCliente.reduce((s, c) => s + c.pago, 0)), color: '#10b981' },
+            { label: 'Vencido', value: formatPreco(fatPorCliente.reduce((s, c) => s + c.vencido, 0)), color: '#ef4444' },
+          ]} />
+          <table className="admin-table">
+            <thead><tr><th>Cliente</th><th>Serviço</th><th>Valores em aberto</th><th>Valores pagos</th><th>Valores vencidos</th></tr></thead>
+            <tbody>
+              {fatPorCliente.map(c => (
+                Object.entries(c.servicos).map(([itemName, s]) => (
+                  <tr key={c.cliente + itemName}>
+                    <td>{c.cliente}</td>
+                    <td>{itemName}</td>
+                    <td className="td-price">{formatPreco(s.aberto)}</td>
+                    <td className="td-price" style={{ color: 'var(--success)' }}>{formatPreco(s.pago)}</td>
+                    <td className="td-price" style={{ color: s.vencido > 0 ? 'var(--danger)' : undefined }}>{formatPreco(s.vencido)}</td>
+                  </tr>
+                ))
+              ))}
+              {fatPorCliente.length === 0 && <tr><td colSpan="5" className="td-empty">Sem dados no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'vendas_mes') {
+      const key = grafMetrica === 'bruto' ? 'bruto' : grafMetrica === 'liq' ? 'liq' : 'desconto'
+      return (
+        <div>
+          <div className="rep-chart-toolbar">
+            <MetricaToggle options={[
+              { id: 'bruto', label: 'Valor bruto' }, { id: 'liq', label: 'Valor líquido' }, { id: 'desconto', label: 'Desconto' },
+            ]} value={grafMetrica} onChange={setGrafMetrica} />
+          </div>
+          <RepCard icon="fa-chart-column" title="Vendas por período">
+            <Bars data={vendasMes} getLabel={v => v.mes} getValue={v => v[key]} color="#8b5cf6" />
+          </RepCard>
+          <table className="admin-table" style={{ marginTop: '0.75rem' }}>
+            <thead><tr><th>Mês</th><th>Pedidos</th><th>Valor bruto</th><th>Valor líquido</th><th>Desconto</th><th>Frete</th><th>Qtd itens</th></tr></thead>
+            <tbody>
+              {vendasMes.map(v => (
+                <tr key={v.mes}>
+                  <td><strong>{v.mes}</strong></td>
+                  <td>{v.pedidos}</td>
+                  <td className="td-price">{formatPreco(v.bruto)}</td>
+                  <td className="td-price">{formatPreco(v.liq)}</td>
+                  <td className="td-price">{formatPreco(v.desconto)}</td>
+                  <td>{v.frete ? formatPreco(v.frete) : '-'}</td>
+                  <td>{v.qtd}</td>
+                </tr>
+              ))}
+              {vendasMes.length === 0 && <tr><td colSpan="7" className="td-empty">Sem dados no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'analise_cliente') {
+      return (
+        <div>
+          <table className="admin-table">
+            <thead><tr><th>#</th><th>Cliente</th><th>Pedidos</th><th>Quantidade de itens</th><th>Valor bruto</th><th>Ticket médio</th></tr></thead>
+            <tbody>
+              {itensPorCliente.map((c, i) => (
+                <tr key={c.cliente}>
+                  <td className="rep-rank">{i + 1}</td>
+                  <td>{c.cliente}</td>
+                  <td>{c.pedidos}</td>
+                  <td>{c.itens}</td>
+                  <td className="td-price">{formatPreco(c.bruto)}</td>
+                  <td className="td-price">{formatPreco(c.pedidos ? c.bruto / c.pedidos : 0)}</td>
+                </tr>
+              ))}
+              {itensPorCliente.length === 0 && <tr><td colSpan="6" className="td-empty">Sem dados no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'cmv') {
+      return (
+        <div>
+          <RepKpis items={[
+            { icon: 'fa-scale-balanced', label: 'Custo total', value: formatPreco(cmvTotal.custoTotal), color: '#ef4444' },
+            { icon: 'fa-chart-line', label: 'Valor bruto', value: formatPreco(cmvTotal.bruto), color: '#8b5cf6' },
+            { icon: 'fa-coins', label: 'Custo médio', value: formatPreco(cmvTotal.custoMedio), color: '#06b6d4' },
+            { icon: 'fa-tag', label: 'Valor unitário médio', value: formatPreco(cmvTotal.unitMedio), color: '#10b981' },
+            { icon: 'fa-percent', label: 'Margem média', value: `${(cmvTotal.bruto ? (cmvTotal.bruto - cmvTotal.custoTotal) / cmvTotal.bruto * 100 : 0).toFixed(1)}%`, color: '#f59e0b' },
+          ]} />
+          <table className="admin-table">
+            <thead><tr><th>Produto</th><th>Qtd vendida</th><th>Custo</th><th>Valor bruto</th><th>Lucro</th><th>Margem %</th></tr></thead>
+            <tbody>
+              {qtdPorProduto.map(p => {
+                const lucro = p.bruto - p.custo
+                return (
+                  <tr key={p.nome}>
+                    <td className="td-prod-name">{p.nome}</td>
+                    <td>{p.qty}</td>
+                    <td className="td-price">{formatPreco(p.custo)}</td>
+                    <td className="td-price">{formatPreco(p.bruto)}</td>
+                    <td className="td-price" style={{ color: lucro >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatPreco(lucro)}</td>
+                    <td><span className="rep-badge margem-badge">{p.bruto ? (lucro / p.bruto * 100).toFixed(1) : 0}%</span></td>
+                  </tr>
+                )
+              })}
+              {qtdPorProduto.length === 0 && <tr><td colSpan="6" className="td-empty">Sem dados no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'inativos') {
+      return (
+        <div>
+          <RepCard icon="fa-user-clock" title="Clientes sem vendas há mais tempo" className="rep-mb">
+            <p style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)', margin: 0 }}>
+              Baseado em todos os clientes cadastrados, ordenados pelos que compram há mais tempo.
+            </p>
+          </RepCard>
+          <table className="admin-table">
+            <thead><tr><th>#</th><th>Cliente</th><th>Telefone</th><th>Última venda</th></tr></thead>
+            <tbody>
+              {inativos.map((u, i) => (
+                <tr key={u.telefone}>
+                  <td className="rep-rank">{i + 1}</td>
+                  <td>{u.nome}</td>
+                  <td>{u.telefone}</td>
+                  <td>{u.ultima ? formatDate(u.ultima) : <span className="rep-badge lead-badge">Sem vendas</span>}</td>
+                </tr>
+              ))}
+              {inativos.length === 0 && <tr><td colSpan="4" className="td-empty">Sem clientes cadastrados</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'graf_lucro') {
+      const lucroParams = vendasMes.map(v => ({ mes: v.mes, lucro: v.liq - v.custo, margem: v.bruto > 0 ? ((v.liq - v.custo) / v.bruto) * 100 : 0 }))
+      return (
+        <div>
+          <div className="rep-grid rep-grid-2">
+            <RepCard icon="fa-chart-line" title="Lucro bruto por mês">
+              <Bars data={lucroParams} getLabel={v => v.mes} getValue={v => v.lucro} color="#059669" formatVal={v => formatPreco(v)} />
+            </RepCard>
+            <RepCard icon="fa-percent" title="Margem de lucro por mês">
+              <Bars data={lucroParams} getLabel={v => v.mes} getValue={v => v.margem} color="#f59e0b" formatVal={v => `${v.toFixed(0)}%`} />
+            </RepCard>
+          </div>
+          <table className="admin-table" style={{ marginTop: '0.75rem' }}>
+            <thead><tr><th>Mês</th><th>Faturamento</th><th>Custo</th><th>Lucro bruto</th><th>Margem</th></tr></thead>
+            <tbody>
+              {lucroParams.map(v => (
+                <tr key={v.mes}>
+                  <td><strong>{v.mes}</strong></td>
+                  <td className="td-price">{formatPreco(vendasMes.find(x => x.mes === v.mes)?.bruto || 0)}</td>
+                  <td className="td-price">{formatPreco(vendasMes.find(x => x.mes === v.mes)?.custo || 0)}</td>
+                  <td className="td-price" style={{ color: v.lucro >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatPreco(v.lucro)}</td>
+                  <td><span className="rep-badge margem-badge">{v.margem.toFixed(1)}%</span></td>
+                </tr>
+              ))}
+              {lucroParams.length === 0 && <tr><td colSpan="5" className="td-empty">Sem dados no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'maiores') {
+      const top = itensPorCliente.slice(0, 10)
+      return (
+        <div>
+          <RepCard icon="fa-trophy" title="Ranking de clientes" className="rep-mb">
+            <HBar data={top} getLabel={c => c.cliente} getValue={c => c.bruto} color="#f59e0b" />
+          </RepCard>
+          <table className="admin-table">
+            <thead><tr><th>#</th><th>Cliente</th><th>Nº de vendas</th><th>Total vendido</th><th>Ticket médio</th></tr></thead>
+            <tbody>
+              {top.map((c, i) => (
+                <tr key={c.cliente}>
+                  <td className="rep-rank">{i + 1}</td>
+                  <td>{c.cliente}</td>
+                  <td>{c.pedidos}</td>
+                  <td className="td-price">{formatPreco(c.bruto)}</td>
+                  <td className="td-price">{formatPreco(c.pedidos ? c.bruto / c.pedidos : 0)}</td>
+                </tr>
+              ))}
+              {top.length === 0 && <tr><td colSpan="5" className="td-empty">Sem dados no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'impostos') {
+      const bruto = ordersF.reduce((s, o) => s + (o.total || 0), 0)
+      const desc = ordersF.reduce((s, o) => s + (o.desconto || 0), 0)
+      const liq = Math.max(0, bruto - desc)
+      return (
+        <div>
+          <RepKpis items={[
+            { icon: 'fa-file-invoice', label: 'Base bruta', value: formatPreco(bruto), color: '#8b5cf6' },
+            { icon: 'fa-tags', label: 'Descontos', value: formatPreco(desc), color: '#ef4444' },
+            { icon: 'fa-receipt', label: 'Base líquida', value: formatPreco(liq), color: '#10b981' },
+            { icon: 'fa-landmark', label: 'Impostos estimados (18%)', value: formatPreco(liq * 0.18), color: '#f59e0b' },
+          ]} />
+          <table className="admin-table">
+            <thead><tr><th>Base de cálculo</th><th>Valor bruto</th><th>Valor líquido</th><th>Desconto aplicado</th><th>Impostos estimados (18%)</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Vendas no período</td>
+                <td className="td-price">{formatPreco(bruto)}</td>
+                <td className="td-price">{formatPreco(liq)}</td>
+                <td className="td-price">{formatPreco(desc)}</td>
+                <td className="td-price" style={{ color: '#f59e0b' }}>{formatPreco(liq * 0.18)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'clientes') {
+      return (
+        <div>
+          <table className="admin-table">
+            <thead><tr><th>Cliente</th><th>Telefone</th><th>Cidade</th><th>Rota</th><th>Nº pedidos</th><th>Último pedido</th></tr></thead>
+            <tbody>
+              {usuarios.map(u => {
+                const pedidosUser = orders.filter(o => o.customer?.telefone === u.telefone || o.user_id === u.id)
+                const ult = pedidosUser.map(o => o.date || '').filter(Boolean).sort().pop() || null
+                const semPedido = pedidosUser.length === 0
+                return (
+                  <tr key={u.id || u.telefone} style={{ opacity: semPedido ? 0.7 : 1 }}>
+                    <td>{u.nome || '-'}</td>
+                    <td>{u.telefone || '-'}</td>
+                    <td>{u.endereco?.cidade || '-'}</td>
+                    <td>{u.endereco?.rota || '-'}</td>
+                    <td>{pedidosUser.length}</td>
+                    <td>{ult ? formatDate(ult) : <span className="rep-badge lead-badge">Lead</span>}</td>
+                  </tr>
+                )
+              })}
+              {usuarios.length === 0 && <tr><td colSpan="6" className="td-empty">Nenhum cliente cadastrado</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'giro') {
+      return (
+        <div>
+          <table className="admin-table">
+            <thead><tr><th>Produto</th><th>Estoque atual</th><th>Qtd vendida (período)</th><th>Giro no período</th></tr></thead>
+            <tbody>
+              {produtos.map(p => {
+                const vendido = produtosVendidos.filter(x => x.produto === (p.displayName || p.nome || p.id)).reduce((s, x) => s + x.qty, 0)
+                const estoque = Number(p.estoque) || 0
+                const giro = vendido > 0 && estoque > 0 ? (vendido / estoque) : null
+                return (
+                  <tr key={p.id}>
+                    <td className="td-prod-name">{p.displayName || p.nome || p.id}</td>
+                    <td>{estoque}</td>
+                    <td>{vendido}</td>
+                    <td>{giro !== null ? <span className="rep-badge giro-badge">{giro.toFixed(2)}x</span> : '-'}</td>
+                  </tr>
+                )
+              })}
+              {produtos.length === 0 && <tr><td colSpan="4" className="td-empty">Nenhum produto cadastrado</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'posicao') {
+      return (
+        <div>
+          <RepTotals items={[
+            { label: 'Produtos em estoque', value: produtos.length, color: '#3b82f6' },
+            { label: 'Valor à venda', value: formatPreco(produtos.reduce((s, p) => s + (Number(p.estoque) || 0) * (Number(p.preco) || 0), 0)), color: '#8b5cf6' },
+            { label: 'Valor a custo', value: formatPreco(produtos.reduce((s, p) => s + (Number(p.estoque) || 0) * (Number(p.preco_custo) || Number(p.custo) || 0), 0)), color: '#ef4444' },
+          ]} />
+          <table className="admin-table">
+            <thead><tr><th>Produto</th><th>Estoque total</th><th>Valor à venda</th><th>Valor a custo</th><th>Custo médio</th></tr></thead>
+            <tbody>
+              {produtos.map(p => {
+                const estoque = Number(p.estoque) || 0
+                const preco = Number(p.preco) || 0
+                const custo = Number(p.preco_custo) || Number(p.custo) || 0
+                return (
+                  <tr key={p.id}>
+                    <td className="td-prod-name">{p.displayName || p.nome || p.id}</td>
+                    <td>{estoque}</td>
+                    <td className="td-price">{formatPreco(preco * estoque)}</td>
+                    <td className="td-price">{formatPreco(custo * estoque)}</td>
+                    <td className="td-price">{custo ? formatPreco(custo) : '-'}</td>
+                  </tr>
+                )
+              })}
+              {produtos.length === 0 && <tr><td colSpan="5" className="td-empty">Nenhum produto cadastrado</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'abc') {
+      const cls = { A: 'rep-cls-a', B: 'rep-cls-b', C: 'rep-cls-c' }
+      return (
+        <div>
+          <RepCard icon="fa-ranking-star" title="Curva ABC dos produtos" className="rep-mb">
+            <HBar data={abc} getLabel={p => `${p.classe} · ${p.nome}`} getValue={p => p.bruto} color="#10b981" />
+          </RepCard>
+          <table className="admin-table">
+            <thead><tr><th>Classe</th><th>Produto</th><th>Qtd vendida</th><th>Valor</th><th>% acumulado</th></tr></thead>
+            <tbody>
+              {abc.map((p, i) => (
+                <tr key={i}>
+                  <td><span className={`rep-badge ${cls[p.classe]}`}>{p.classe}</span></td>
+                  <td className="td-prod-name">{p.nome}</td>
+                  <td>{p.qty}</td>
+                  <td className="td-price">{formatPreco(p.bruto)}</td>
+                  <td>{p.pctAcum.toFixed(1)}%</td>
+                </tr>
+              ))}
+              {abc.length === 0 && <tr><td colSpan="5" className="td-empty">Sem dados no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'movimentacoes') {
+      return (
+        <div>
+          <table className="admin-table">
+            <thead><tr><th>Data</th><th>Descrição</th><th>SKU</th><th>Produto</th><th>Quantidade</th><th>Tipo</th><th>Custo médio</th></tr></thead>
+            <tbody>
+              {movimento.map((m, i) => (
+                <tr key={i}>
+                  <td>{formatDate(m.data)}</td>
+                  <td>{m.descricao}</td>
+                  <td>{m.sku}</td>
+                  <td className="td-prod-name">{m.produto}</td>
+                  <td><span className="rep-badge saida-badge">-{m.qty}</span></td>
+                  <td>{m.tipo}</td>
+                  <td className="td-price">{formatPreco(m.custoMedio)}</td>
+                </tr>
+              ))}
+              {movimento.length === 0 && <tr><td colSpan="7" className="td-empty">Sem movimentações no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'pagamentos') {
+      return (
+        <div>
+          <RepTotals items={[
+            { label: 'Previsto total', value: formatPreco(finRecordsIn.reduce((s, f) => s + (f.value || 0), 0)), color: '#8b5cf6' },
+            { label: 'Pago', value: formatPreco(pagMetodo.reduce((s, m) => s + m.pago, 0)), color: '#10b981' },
+            { label: 'Pendente', value: formatPreco(pagMetodo.reduce((s, m) => s + m.pendente, 0)), color: '#f59e0b' },
+          ]} />
+          <div className="rep-grid rep-grid-2">
+            <RepCard icon="fa-chart-pie" title="Distribuição por forma de pagamento">
+              <Donut data={pagMetodo.map(m => ({ label: m.label, value: m.total }))} />
+            </RepCard>
+            <div>
+              {pagMetodo.map((m, i) => (
+                <div key={m.label} className="rep-pag-row">
+                  <span className="rep-legend-dot" style={{ background: REP_PALETTE[i % REP_PALETTE.length] }}></span>
+                  <span className="rep-pag-label">{m.label}</span>
+                  <span className="rep-pag-mini" style={{ color: '#f59e0b' }}>Pend: {formatPreco(m.pendente)}</span>
+                  <span className="rep-pag-mini" style={{ color: '#10b981' }}>Pago: {formatPreco(m.pago)}</span>
+                  <strong>{formatPreco(m.total)}</strong>
+                </div>
+              ))}
+              {pagMetodo.length === 0 && <p className="rep-empty">Sem registros no período</p>}
+            </div>
+          </div>
+        </div>
+      )
+    }
+    if (rep === 'status') {
+      return (
+        <div>
+          <div className="rep-grid rep-grid-2">
+            <RepCard icon="fa-chart-pie" title="Pedidos por status">
+              <Donut data={statusOrders.map(s => ({ label: s.label, value: s.qty }))} centerLabel="Pedidos" />
+            </RepCard>
+            <RepCard icon="fa-sack-dollar" title="Valor por status">
+              <Donut data={statusOrders.map(s => ({ label: s.label, value: s.total }))} centerLabel="Valor" />
+            </RepCard>
+          </div>
+          <table className="admin-table" style={{ marginTop: '0.75rem' }}>
+            <thead><tr><th>Status</th><th>Pedidos</th><th>Valor total</th><th>% dos pedidos</th></tr></thead>
+            <tbody>
+              {statusOrders.map(s => {
+                const pct = ordersF.length ? (s.qty / ordersF.length) * 100 : 0
+                return (
+                  <tr key={s.label}>
+                    <td><span className={`status-tag status-${Object.keys(STATUS_LABELS).find(k => STATUS_LABELS[k] === s.label) || ''}`}>{s.label}</span></td>
+                    <td>{s.qty}</td>
+                    <td className="td-price">{formatPreco(s.total)}</td>
+                    <td>
+                      <div className="rep-pct-track"><div className="rep-pct-fill" style={{ width: `${pct}%` }}></div></div>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--admin-text-sec)' }}>{pct.toFixed(1)}%</span>
+                    </td>
+                  </tr>
+                )
+              })}
+              {statusOrders.length === 0 && <tr><td colSpan="4" className="td-empty">Sem dados no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'caixa') {
+      const totRec = caixaSerie.reduce((s, c) => s + c.receitas, 0)
+      const totGas = caixaSerie.reduce((s, c) => s + c.gastos, 0)
+      return (
+        <div>
+          <RepKpis items={[
+            { icon: 'fa-arrow-trend-up', label: 'Receitas previstas', value: formatPreco(totRec), color: '#10b981' },
+            { icon: 'fa-arrow-trend-down', label: 'Despesas', value: formatPreco(totGas), color: '#ef4444' },
+            { icon: 'fa-scale-balanced', label: 'Resultado', value: formatPreco(totRec - totGas), color: totRec - totGas >= 0 ? '#3b82f6' : '#dc2626' },
+          ]} />
+          <RepCard icon="fa-money-bill-trend-up" title="Receitas x Despesas por mês">
+            <div className="rep-dual">
+              <div className="rep-dual-series rep-dual-rec">
+                {caixaSerie.map(c => (
+                  <div key={c.mes} className="rep-dual-col">
+                    <span className="rep-dual-val">{fmtK(c.receitas)}</span>
+                    <div className="rep-dual-bar" style={{ height: `${Math.max(3, (c.receitas / Math.max(1, ...caixaSerie.map(x => x.receitas), 1)) * 130)}px`, background: 'linear-gradient(180deg,#10b981,#059669)' }}></div>
+                    <span className="rep-dual-label">{c.mes}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="rep-dual-series rep-dual-gas">
+                {caixaSerie.map(c => (
+                  <div key={c.mes} className="rep-dual-col">
+                    <span className="rep-dual-val">{fmtK(c.gastos)}</span>
+                    <div className="rep-dual-bar" style={{ height: `${Math.max(3, (c.gastos / Math.max(1, ...caixaSerie.map(x => x.gastos), 1)) * 130)}px`, background: 'linear-gradient(180deg,#ef4444,#b91c1c)' }}></div>
+                    <span className="rep-dual-label">{c.mes}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <p style={{ fontSize: '0.72rem', color: 'var(--admin-text-sec)', marginTop: '0.4rem' }}>
+              <span style={{ color: '#10b981' }}>■</span> Receitas &nbsp; <span style={{ color: '#ef4444' }}>■</span> Despesas
+            </p>
+          </RepCard>
+          <table className="admin-table" style={{ marginTop: '0.75rem' }}>
+            <thead><tr><th>Mês</th><th>Receitas</th><th>Despesas</th><th>Resultado</th></tr></thead>
+            <tbody>
+              {caixaSerie.map(c => {
+                const res = c.receitas - c.gastos
+                return (
+                  <tr key={c.mes}>
+                    <td><strong>{c.mes}</strong></td>
+                    <td className="td-price" style={{ color: 'var(--success)' }}>{formatPreco(c.receitas)}</td>
+                    <td className="td-price" style={{ color: 'var(--danger)' }}>{formatPreco(c.gastos)}</td>
+                    <td className="td-price" style={{ color: res >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatPreco(res)}</td>
+                  </tr>
+                )
+              })}
+              {caixaSerie.length === 0 && <tr><td colSpan="4" className="td-empty">Sem dados no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'despesas') {
+      const totDesp = despIn.reduce((s, d) => s + (d.value || 0), 0)
+      return (
+        <div>
+          <RepTotals items={[
+            { label: 'Lançamentos', value: despIn.length, color: '#3b82f6' },
+            { label: 'Despesas pagas', value: formatPreco(despIn.filter(d => d.status === 'pago').reduce((s, d) => s + (d.value || 0), 0)), color: '#10b981' },
+            { label: 'A pagar', value: formatPreco(despIn.filter(d => d.status === 'pendente').reduce((s, d) => s + (d.value || 0), 0)), color: '#f59e0b' },
+            { label: 'Total do período', value: formatPreco(totDesp), color: '#ef4444' },
+          ]} />
+          <div className="rep-grid rep-grid-2">
+            <RepCard icon="fa-receipt" title="Despesas por tipo">
+              <HBar data={despPorTipo.slice(0, 8)} getLabel={d => d.tipo} getValue={d => d.total} color="#ef4444" />
+            </RepCard>
+            <RepCard icon="fa-chart-pie" title="Distribuição das despesas">
+              <Donut data={despPorTipo.slice(0, 8).map(d => ({ label: d.tipo, value: d.total }))} />
+            </RepCard>
+          </div>
+          <table className="admin-table" style={{ marginTop: '0.75rem' }}>
+            <thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Pagamento</th><th>Valor</th><th>Status</th></tr></thead>
+            <tbody>
+              {[...despIn].sort((a, b) => (b.dueDate || '').localeCompare(a.dueDate || '')).map(d => {
+                const pm = formatPagamento(d.paymentMethod)
+                return (
+                  <tr key={d.id}>
+                    <td>{formatDate(d.dueDate)}</td>
+                    <td><span className="despesa-tipo">{d.tipo}</span></td>
+                    <td>{d.descricao || '-'}</td>
+                    <td>{pm ? <span className={`pag-badge pag-badge-${d.paymentMethod}`}>{pm.label}</span> : '-'}</td>
+                    <td className="td-price" style={{ color: 'var(--danger)' }}>{formatPreco(d.value)}</td>
+                    <td><span className={`rep-badge ${d.status === 'pago' ? 'status-ok-badge' : 'status-pend-badge'}`}>{d.status === 'pago' ? 'Pago' : 'Pendente'}</span></td>
+                  </tr>
+                )
+              })}
+              {despIn.length === 0 && <tr><td colSpan="6" className="td-empty">Sem despesas no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    return <div className="rep-empty-full"><i className="fa-solid fa-chart-simple"></i><h3>Selecione um relatório</h3></div>
+  }
+
+  const groups = ['Vendas / Financeiro', 'Estoque']
+
+  return (
+    <div className="fin-table-card rep-panel">
+      <div className="rep-sidebar">
+        <div className="rep-sidebar-head">
+          <i className="fa-solid fa-chart-simple"></i>
+          <span>Relatórios</span>
+        </div>
+        {groups.map(g => (
+          <div key={g} className="rep-sidebar-group">
+            <p>{g}</p>
+            <div className="rep-sidebar-items">
+              {REPORTS.filter(r => r.group === g).map(r => (
+                <button key={r.id} className={`rep-sidebar-item ${rep === r.id ? 'active' : ''}`} onClick={() => setRep(r.id)}>
+                  <i className={`fa-solid ${r.icon}`}></i>
+                  <span>{r.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="rep-main">
+        <div className="rep-header">
+          <span className="rep-title"><i className={`fa-solid ${current.icon}`}></i> {current.label}</span>
+          <div className="rep-header-actions">
+            {rep !== 'dashboard' && (
+              <span className="rep-counter">{effStatusF !== 'todos' ? 'Filtrado' : ''}</span>
+            )}
+            <PeriodFilter
+              period={period}
+              onChange={setPeriod}
+              month={month}
+              onMonth={setMonth}
+              rangeStart={rangeStart}
+              onRangeStart={setRangeStart}
+              rangeEnd={rangeEnd}
+              onRangeEnd={setRangeEnd}
+              label="Filtrar período"
+            />
+          </div>
+        </div>
+
+        <div className="rep-filters">
+          <div className="rep-filter-search">
+            <i className="fa-solid fa-magnifying-glass"></i>
+            <input type="text" placeholder="Buscar por cliente, produto ou pedido..." value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <input className="rep-filter-money" type="text" placeholder="Valor mín." value={valorMin} onChange={e => setValorMin(e.target.value.replace(/[^\d.,]/g, ''))} />
+          <input className="rep-filter-money" type="text" placeholder="Valor máx." value={valorMax} onChange={e => setValorMax(e.target.value.replace(/[^\d.,]/g, ''))} />
+          <select className="rep-filter-select" value={statusF} onChange={e => setStatusF(e.target.value)}>
+            {statusOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+          {!isFinLike && (
+            <select className="rep-filter-select" value={pagamentoF} onChange={e => setPagamentoF(e.target.value)}>
+              {pagamentoOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
+          )}
+          {!isFinLike && (
+            <select className="rep-filter-select" value={itemTipoF} onChange={e => setItemTipoF(e.target.value)}>
+              <option value="todos">Item: À vista ou a prazo</option>
+              <option value="avista">Item: À vista</option>
+              <option value="aprazo">Item: A prazo</option>
+            </select>
+          )}
+          <button className="rep-filter-clear" title="Limpar filtros" onClick={() => { setSearch(''); setValorMin(''); setValorMax(''); setStatusF('todos'); setPagamentoF('todos'); setItemTipoF('todos') }}>
+            <i className="fa-solid fa-broom"></i>
+          </button>
+        </div>
+
+        <div className="admin-table-wrap rep-body">
+          {rep === 'dashboard' ? renderDashboard() : renderBody()}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSave, onClose }) {
   const [step, setStep] = useState(1)
   const [showNewForm, setShowNewForm] = useState(false)
@@ -4148,7 +5972,7 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
               { id: 'pre-pedido', label: 'Pré-Pedido' },
               { id: 'pendente', label: 'Pendente' },
               { id: 'em-rota', label: 'Em Rota' },
-              { id: 'entregue', label: 'Entregue' },
+              { id: 'entregue', label: 'Concluído' },
             ].map(s => (
               <button key={s.id} type="button" className={`pag-chip ${orderStatus === s.id ? 'active' : ''}`}
                 style={{ padding: '0.35rem 0.8rem' }}
@@ -4872,6 +6696,11 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
             {order.status === 'pendente' && (
               <button className="admin-btn admin-btn-primary" onClick={() => onStatusChange('em-rota')}>
                 <i className="fa-solid fa-truck"></i> Em Rota
+              </button>
+            )}
+            {order.status === 'em-rota' && (
+              <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} onClick={() => onStatusChange('entregue')}>
+                <i className="fa-solid fa-check-double"></i> Concluir
               </button>
             )}
             {order.status !== 'entregue' && order.status !== 'cancelado' && (

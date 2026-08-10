@@ -153,6 +153,32 @@ export async function getRotasContatos() {
   return data || []
 }
 
+// ---- ROTAS EDITS (edições feitas pelo admin que sobrevivem à sincronização do webhook) ----
+export async function getAllRotaEdits() {
+  const { data } = await supabase.from('rotas_edits').select('*')
+  return data || []
+}
+
+export async function upsertRotaEdits(records) {
+  if (!records || records.length === 0) return
+  const seen = new Map()
+  records.forEach(r => seen.set(r.id, r))
+  const mapped = [...seen.values()].map(r => ({
+    id: r.id,
+    rota: r.rota || '',
+    acao: r.acao || 'adicionar',
+    contato: r.contato || {},
+    created_at: r.created_at || new Date().toISOString()
+  }))
+  const { error } = await supabase.from('rotas_edits').upsert(mapped, { onConflict: 'id' })
+  if (error) console.error('Erro upsertRotaEdits:', error)
+}
+
+export async function deleteRotaEdit(id) {
+  const { error } = await supabase.from('rotas_edits').delete().eq('id', id)
+  if (error) console.error('Erro deleteRotaEdit:', error)
+}
+
 // ---- SYNC CONTATOS -> USUARIOS (upsert all: insert new + update existing nome/cidade/rota) ----
 export async function syncContatosToUsuarios(contatos) {
   if (!contatos || contatos.length === 0) return 0
@@ -272,13 +298,14 @@ export async function upsertProducts(products) {
 }
 
 export async function syncAllForAdmin() {
-  const [orders, financial, users, rotas, products, despesas] = await Promise.allSettled([
+  const [orders, financial, users, rotas, products, despesas, rotaEdits] = await Promise.allSettled([
     getAllOrders(),
     getAllFinancial(),
     getAllUsers(),
     getRotasContatos(),
     getAllProducts(),
-    getAllDespesas()
+    getAllDespesas(),
+    getAllRotaEdits()
   ])
   return {
     orders: orders.status === 'fulfilled' ? orders.value : [],
@@ -286,6 +313,7 @@ export async function syncAllForAdmin() {
     users: users.status === 'fulfilled' ? users.value : [],
     rotas: rotas.status === 'fulfilled' ? rotas.value : [],
     products: products.status === 'fulfilled' ? products.value : [],
-    despesas: despesas.status === 'fulfilled' ? despesas.value : []
+    despesas: despesas.status === 'fulfilled' ? despesas.value : [],
+    rotaEdits: rotaEdits.status === 'fulfilled' ? rotaEdits.value : []
   }
 }

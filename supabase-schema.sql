@@ -47,6 +47,15 @@ CREATE TABLE IF NOT EXISTS rotas_contatos (
   created_at timestamptz DEFAULT now()
 );
 
+-- 4b. ROTAS_EDITS (edições do admin: adicionar/remover contatos, sobrevivem à sincronização)
+CREATE TABLE IF NOT EXISTS rotas_edits (
+  id bigint PRIMARY KEY,
+  rota text NOT NULL DEFAULT '',
+  acao text NOT NULL DEFAULT 'adicionar',
+  contato jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz DEFAULT now()
+);
+
 -- 5. PRODUTOS (overrides for static catalog + new products)
 CREATE TABLE IF NOT EXISTS produtos (
   id bigint PRIMARY KEY,
@@ -110,6 +119,7 @@ ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pedidos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE financeiro ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rotas_contatos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rotas_edits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE produtos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE despesas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE login_tokens ENABLE ROW LEVEL SECURITY;
@@ -213,6 +223,23 @@ CREATE POLICY "Rotas admin all" ON rotas_contatos
 DROP POLICY IF EXISTS "Rotas select all" ON rotas_contatos;
 CREATE POLICY "Rotas select all" ON rotas_contatos
   FOR SELECT USING (true);
+
+-- Rotas edits: admin only
+DROP POLICY IF EXISTS "Rotas edits select admin" ON rotas_edits;
+CREATE POLICY "Rotas edits select admin" ON rotas_edits
+  FOR SELECT USING (current_setting('app.is_admin', true) = 'true');
+
+DROP POLICY IF EXISTS "Rotas edits insert admin" ON rotas_edits;
+CREATE POLICY "Rotas edits insert admin" ON rotas_edits
+  FOR INSERT WITH CHECK (current_setting('app.is_admin', true) = 'true');
+
+DROP POLICY IF EXISTS "Rotas edits update admin" ON rotas_edits;
+CREATE POLICY "Rotas edits update admin" ON rotas_edits
+  FOR UPDATE USING (current_setting('app.is_admin', true) = 'true');
+
+DROP POLICY IF EXISTS "Rotas edits delete admin" ON rotas_edits;
+CREATE POLICY "Rotas edits delete admin" ON rotas_edits
+  FOR DELETE USING (current_setting('app.is_admin', true) = 'true');
 
 -- Produtos: all can read, admin writes
 DROP POLICY IF EXISTS "Produtos select all" ON produtos;
