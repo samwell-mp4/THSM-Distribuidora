@@ -439,15 +439,15 @@ export default function Admin({ produtos, onVoltar }) {
   const firstOrdersSync = useRef(true)
   const firstProdsSync = useRef(true)
   useEffect(() => {
-    if (orders.length === 0) return
     if (firstOrdersSync.current) { firstOrdersSync.current = false; return }
+    if (orders.length === 0) return
     const t = setTimeout(() => { upsertOrders(orders) }, 900)
     return () => clearTimeout(t)
   }, [orders])
   useEffect(() => {
+    if (firstProdsSync.current) { firstProdsSync.current = false; return }
     LS.set(STORAGE_PRODUCTS, prodChanges)
     if (Object.keys(prodChanges).length === 0) return
-    if (firstProdsSync.current) { firstProdsSync.current = false; return }
     const t = setTimeout(() => upsertProducts(prodChanges), 700)
     return () => clearTimeout(t)
   }, [prodChanges])
