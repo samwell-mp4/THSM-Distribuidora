@@ -569,7 +569,15 @@ export default function Admin({ produtos, onVoltar }) {
   useEffect(() => { LS.set(STORAGE_CUSTOM_CATS, customCategorias) }, [customCategorias])
   useEffect(() => { LS.set(STORAGE_CUSTOM_TIPOS, customDespesaTipos) }, [customDespesaTipos])
   useEffect(() => {
-    LS.set(STORAGE_ORDERS, orders)
+    const compact = orders.map(o => {
+      if ((o.identityPhoto && o.identityPhoto.length > 5000) || (o.addressProof && o.addressProof.length > 5000)) {
+        return o.identityPhoto?.startsWith('data:') || o.addressProof?.startsWith('data:')
+          ? { ...o, identityPhoto: o.identityPhoto?.startsWith('data:') ? '' : o.identityPhoto, addressProof: o.addressProof?.startsWith('data:') ? '' : o.addressProof }
+          : o
+      }
+      return o
+    })
+    LS.set(STORAGE_ORDERS, compact)
   }, [orders])
   useEffect(() => {
     LS.set(STORAGE_FINANCIAL, financial)

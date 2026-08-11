@@ -108,8 +108,18 @@ async function upsertChunked(table, records, mapFn) {
   const CHUNK = 200
   for (let i = 0; i < mapped.length; i += CHUNK) {
     const slice = mapped.slice(i, i + CHUNK)
-    const { error } = await supabase.from(table).upsert(slice, { onConflict: 'id' })
-    if (error) console.error(`Erro upsert ${table}:`, error)
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const { error } = await supabase.from(table).upsert(slice, { onConflict: 'id' })
+      if (!error) break
+      // 23503 = FK violation (ex.: financeiro antes do pedido existir). Aguarda e tenta de novo;
+      // a sincronização do pedido costuma chegar em seguida.
+      if (error.code === '23503' && attempt < 3) {
+        await new Promise(r => setTimeout(r, 1200 * attempt))
+        continue
+      }
+      console.error(`Erro upsert ${table}:`, error)
+      break
+    }
   }
 }
 
@@ -152,6 +162,8 @@ export async function upsertFinancial(records) {
     status: r.status || 'pendente',
     data: r
   }))
+  // FK race: se um pedido acabou de ser criado, o financeiro pode chegar antes do pedidos.
+  // Erros de FK (23503) são tolerados aqui; o effect re-sincroniza quando o pedido existir.
 }
 
 export async function deleteFinancialByOrder(orderId) {
@@ -294,7 +306,7 @@ export async function upsertDespesas(records) {
 }
 
 export async function upsertProducts(products) {
-  const records = Object.entries(products).map(([id, changes]) => {
+  let records = Object.entries(products).map(([id, changes]) => {
     const { variantes, ...rest } = changes
     return {
       id: Number(id),
@@ -304,8 +316,20 @@ export async function upsertProducts(products) {
     }
   })
   if (records.length === 0) return
-  const { error } = await supabase.from('produtos').upsert(records, { onConflict: 'id' })
-  if (error) console.error('Erro upsertProducts:', error)
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    const { error } = await supabase.from('produtos').upsert(records, { onConflict: 'id' })
+    if (!error) return
+    console.error('Erro upsertProducts:', error)
+    // PGRST204 = coluna não existe no banco. Remove a coluna problemática e tenta de novo,
+    // para o produto salvar mesmo com o schema do banco desatualizado.
+    const m = /Could not find the '([^']+)' column/.exec(error.message || '')
+    if (m && attempt < 4) {
+      const col = m[1]
+      records = records.map(r => { const { [col]: _omit, ...rest } = r; return rest })
+      continue
+    }
+    return
+  }
 }
 
 export async function deleteProducts(ids) {
