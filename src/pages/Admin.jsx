@@ -388,6 +388,8 @@ export default function Admin({ produtos, onVoltar }) {
   const [showAddOrder, setShowAddOrder] = useState(false)
   const [preselectedUserForOrder, setPreselectedUserForOrder] = useState(null)
   const [showOrderDetail, setShowOrderDetail] = useState(null)
+  const [showRotaDue, setShowRotaDue] = useState(null)
+  const [rotaDueDate, setRotaDueDate] = useState('')
   const [showDeliveryModal, setShowDeliveryModal] = useState(null)
   const [returnQuantities, setReturnQuantities] = useState({})
   const [payQuantities, setPayQuantities] = useState({})
@@ -2371,7 +2373,7 @@ export default function Admin({ produtos, onVoltar }) {
                           {o.status === 'pre-pedido' && <button className="action-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }} title="Revisar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-clipboard-check"></i></button>}
                           {o.status === 'pre-pedido' && <button className="action-btn action-confirm" title="Confirmar (Próxima etapa)" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-check"></i></button>}
                           {o.status === 'pendente' && <button className="action-btn action-confirm" title="Editar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-pen"></i></button>}
-                          {o.status === 'pendente' && <button className="action-btn action-deliver" title="Em Rota (Próxima etapa)" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-truck"></i></button>}
+                          {o.status === 'pendente' && <button className="action-btn action-deliver" title="Em Rota (Próxima etapa)" onClick={() => { setShowRotaDue(o); setRotaDueDate(o.dataVencimento || '') }}><i className="fa-solid fa-truck"></i></button>}
                           {o.status === 'pendente' && (
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Pré-Pedido" onClick={() => updateOrderStatus(o.id, 'pre-pedido')}><i className="fa-solid fa-undo"></i></button>
                           )}
@@ -3982,6 +3984,40 @@ export default function Admin({ produtos, onVoltar }) {
                   <i className="fa-solid fa-print"></i> Imprimir / PDF
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DATA VENCIMENTO AO ENVIAR PARA ROTA */}
+      {showRotaDue && (
+        <div className="admin-overlay" onClick={() => setShowRotaDue(null)}>
+          <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px' }}>
+            <div className="admin-modal-header">
+              <h3><i className="fa-solid fa-truck"></i> Enviar para Rota</h3>
+              <button className="admin-modal-close" onClick={() => setShowRotaDue(null)}><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <div className="admin-modal-body">
+              <p style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                Pedido <strong>#{showRotaDue.id.toString().slice(-6)}</strong> — {showRotaDue.customer?.nome || 'Cliente'}
+              </p>
+              <div className="detail-section">
+                <label style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: '0.3rem' }}>
+                  <i className="fa-solid fa-calendar-day"></i> Data de vencimento das contas a prazo
+                </label>
+                <input type="date" value={rotaDueDate} onChange={e => setRotaDueDate(e.target.value)}
+                  style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', background: 'var(--admin-bg)', color: 'var(--admin-text)' }} />
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button className="admin-btn admin-btn-sec" onClick={() => setShowRotaDue(null)}>Cancelar</button>
+              <button className="admin-btn admin-btn-primary" onClick={() => {
+                if (rotaDueDate) updateOrderDue(showRotaDue.id, rotaDueDate)
+                updateOrderStatus(showRotaDue.id, 'em-rota')
+                setShowRotaDue(null)
+              }}>
+                <i className="fa-solid fa-truck"></i> Enviar para Rota
+              </button>
             </div>
           </div>
         </div>
@@ -7146,7 +7182,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
               </button>
             )}
             {order.status === 'pendente' && (
-              <button className="admin-btn admin-btn-primary" onClick={() => onStatusChange('em-rota')}>
+              <button className="admin-btn admin-btn-primary" onClick={() => { onUpdateDue?.(preVencimento); onStatusChange('em-rota') }}>
                 <i className="fa-solid fa-truck"></i> Em Rota
               </button>
             )}
