@@ -2372,11 +2372,17 @@ export default function Admin({ produtos, onVoltar }) {
                           {o.status === 'pre-pedido' && <button className="action-btn action-confirm" title="Confirmar (Próxima etapa)" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-check"></i></button>}
                           {o.status === 'pendente' && <button className="action-btn action-confirm" title="Editar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-pen"></i></button>}
                           {o.status === 'pendente' && <button className="action-btn action-deliver" title="Em Rota (Próxima etapa)" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-truck"></i></button>}
+                          {o.status === 'pendente' && (
+                            <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Pré-Pedido" onClick={() => updateOrderStatus(o.id, 'pre-pedido')}><i className="fa-solid fa-undo"></i></button>
+                          )}
                           {o.status === 'em-rota' && (
                             <button className="action-btn action-confirm" title="Concluir (Próxima etapa)" onClick={() => updateOrderStatus(o.id, 'entregue')}><i className="fa-solid fa-check-double"></i></button>
                           )}
                           {o.status === 'em-rota' && (
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Pendente" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-undo"></i></button>
+                          )}
+                          {o.status === 'entregue' && (
+                            <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Em Rota" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-undo"></i></button>
                           )}
                           {o.status === 'entregue' && (
                             <button className="action-btn action-confirm" title="Finalizar Pedido" onClick={() => { setShowDeliveryModal(o); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview(''); setDeliveryPayment('pix'); setDeliverySplits({ pix: '', dinheiro: '', cartao: '' }); setDeliveryDiscount(''); setDeliveryDiscountType('reais'); setDeliveryPaid(''); setDeliveryDataInicio(o.date || hoje()); setDeliveryDataVenc(o.dataVencimento || '') }}><i className="fa-solid fa-check"></i></button>
@@ -4046,6 +4052,52 @@ export default function Admin({ produtos, onVoltar }) {
             if ((ESTADOS.includes(currentStatus) && idxTo > idxFrom) || (!ESTADOS.includes(currentStatus) && ESTADOS.includes(newStatus))) {
               sendStatusWebhook(updatedOrder, newStatus)
             }
+          }}
+          onEditSave={(editedItems) => {
+            const totalAvista = editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
+            const totalAprazo = editedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
+            const currentStatus = showOrderDetail.status
+            const updatedOrder = {
+              ...showOrderDetail,
+              items: editedItems,
+              totalAvista,
+              totalAprazo,
+              total: totalAvista + totalAprazo
+            }
+            setOrders(prev => prev.map(o => o.id === showOrderDetail.id ? updatedOrder : o))
+            setFinancial(prev => {
+              const existingIds = new Set(prev.filter(f => f.orderId === showOrderDetail.id).map(f => f.id))
+              const newRecords = editedItems
+                .filter(i => !existingIds.has(showOrderDetail.id + '-' + i.id))
+                .map(i => ({
+                  id: showOrderDetail.id + '-' + i.id,
+                  orderId: showOrderDetail.id,
+                  customerName: showOrderDetail.customer?.nome || '',
+                  itemName: i.nome,
+                  qty: i.qty,
+                  value: i.preco * i.qty,
+                  precoCusto: (i.preco_custo || 0) * i.qty,
+                  dueDate: hoje(),
+                  paidDate: showOrderDetail.deliveredAt ? hoje() : null,
+                  status: showOrderDetail.status === 'entregue' ? 'pago' : (i.tipo === 'aprazo' ? 'pendente' : 'pago'),
+                  paymentMethod: showOrderDetail.paymentMethod || ''
+                }))
+              const updated = prev.map(f => {
+                if (f.orderId !== showOrderDetail.id) return f
+                const item = editedItems.find(i => f.id === showOrderDetail.id + '-' + i.id)
+                if (!item) return f
+                return {
+                  ...f,
+                  qty: item.qty,
+                  value: item.preco * item.qty,
+                  precoCusto: (item.preco_custo || 0) * item.qty,
+                  paidDate: showOrderDetail.status === 'entregue' && !f.paidDate ? hoje() : f.paidDate
+                }
+              })
+              return [...updated, ...newRecords]
+            })
+            showToast('Itens salvos com sucesso!')
+            setShowOrderDetail({ ...updatedOrder, items: editedItems.map(i => ({ ...i })) })
           }}
           onUpdateCustomer={(id, customerData) => updateOrderCustomer(id, customerData)}
           onCancelOrder={(id) => cancelOrder(id)}
@@ -6559,7 +6611,7 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
 // =============================================
 // MODAL: ORDER DETAIL (with pre-pedido review + pendente edit)
 // =============================================
-function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange, onUpdateDue, onPreApprovar, onEditAndConfirm, onOpenDelivery, onUpdateCustomer, onCancelOrder }) {
+function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange, onUpdateDue, onPreApprovar, onEditAndConfirm, onEditSave, onOpenDelivery, onUpdateCustomer, onCancelOrder }) {
   const [rejectedItems, setRejectedItems] = useState(new Set())
   const [editMode, setEditMode] = useState(false)
   const [editedItems, setEditedItems] = useState(order.items.map(i => ({ ...i })))
@@ -6629,6 +6681,12 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
     const validItems = editedItems.filter(i => i.qty > 0)
     if (validItems.length === 0) { return }
     onEditAndConfirm(validItems, order.status)
+  }
+
+  const handleEditSave = () => {
+    const validItems = editedItems.filter(i => i.qty > 0)
+    if (validItems.length === 0) { return }
+    onEditSave(validItems)
   }
 
   const editTotal = editedItems.filter(i => i.qty > 0).reduce((s, i) => s + i.preco * i.qty, 0)
@@ -6763,6 +6821,9 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
 
             <div className="modal-actions">
               <button className="admin-btn admin-btn-sec" onClick={() => { setEditMode(false); setEditedItems(order.items.map(i => ({ ...i }))); setAddCart({}) }}>Cancelar</button>
+              <button className="admin-btn" style={{ background: 'var(--accent)', color: 'white', borderColor: 'var(--accent)' }} disabled={editedItems.filter(i => i.qty > 0).length === 0} onClick={handleEditSave}>
+                <i className="fa-solid fa-save"></i> Salvar
+              </button>
               <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} disabled={editedItems.filter(i => i.qty > 0).length === 0} onClick={handleEditConfirm}>
                 <i className="fa-solid fa-check"></i> {order.status === 'em-rota' ? 'Salvar e Finalizar Entrega' : 'Salvar e Enviar para Rota'}
               </button>
@@ -7061,6 +7122,21 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
               <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
                 onClick={() => { setEditMode(true); setEditedItems(order.items.map(i => ({ ...i }))) }}>
                 <i className="fa-solid fa-pen"></i> Editar Itens
+              </button>
+            )}
+            {order.status === 'pendente' && (
+              <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => onStatusChange('pre-pedido')}>
+                <i className="fa-solid fa-undo"></i> Voltar para Pré-Pedido
+              </button>
+            )}
+            {order.status === 'em-rota' && (
+              <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => onStatusChange('pendente')}>
+                <i className="fa-solid fa-undo"></i> Voltar para Pendente
+              </button>
+            )}
+            {order.status === 'entregue' && (
+              <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => onStatusChange('em-rota')}>
+                <i className="fa-solid fa-undo"></i> Voltar para Em Rota
               </button>
             )}
             {order.status === 'pre-pedido' && (
