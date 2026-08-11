@@ -857,7 +857,8 @@ export default function Admin({ produtos, onVoltar }) {
       createdAt: Date.now(),
       dataVencimento: data.dataVencimento || null,
       deliveredAt: data.status === 'entregue' ? Date.now() : null,
-      deliveryDataInicio: data.status === 'entregue' ? (data.dataPedido || hoje()) : null
+      deliveryDataInicio: data.status === 'entregue' ? (data.dataPedido || hoje()) : null,
+      payment: data.payment || null
     }
     setOrders(prev => [order, ...prev])
 
@@ -920,6 +921,14 @@ export default function Admin({ produtos, onVoltar }) {
     }
     showToast(`Pedido #${id} atualizado para "${status}"`)
     if (order && !skipWebhook) sendStatusWebhook(order, status)
+  }
+
+  const updateOrderDue = (id, due) => {
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, dataVencimento: due || null } : o))
+    setFinancial(prev => prev
+      .filter(f => f.orderId === id && f.status !== 'pago' && f.status !== 'cancelado')
+      .map(f => ({ ...f, dueDate: due || f.dueDate })))
+    showToast('Data de vencimento atualizada!')
   }
 
   const preApprovarPedido = (orderId, rejectedItemIds, replacements = [], dataVencimento = null) => {
@@ -2188,7 +2197,6 @@ export default function Admin({ produtos, onVoltar }) {
                 { id: 'pre-pedido', label: 'Pré-Pedidos', count: orders.filter(o => o.status === 'pre-pedido').length },
                 { id: 'pendente', label: 'Pendentes', count: orders.filter(o => o.status === 'pendente').length },
                 { id: 'em-rota', label: 'Em Rota', count: orders.filter(o => o.status === 'em-rota').length },
-                { id: 'entregue', label: 'Entregues', count: orders.filter(o => o.status === 'entregue').length },
                 { id: 'concluidos', label: 'Concluídos', count: orders.filter(o => o.status === 'entregue').length },
                 { id: 'cancelado', label: 'Cancelados', count: orders.filter(o => o.status === 'cancelado').length },
               ].map(t => (
@@ -2280,6 +2288,7 @@ export default function Admin({ produtos, onVoltar }) {
                     <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('telefone')}>Telefone {sortIcon('telefone')}</th>
                     <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('regiao')}>Região {sortIcon('regiao')}</th>
                     <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('data')}>Data {sortIcon('data')}</th>
+                    <th>Vencimento</th>
                     <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('itens')}>Itens {sortIcon('itens')}</th>
                     <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('total')}>Total {sortIcon('total')}</th>
                     <th>Pagamento</th>
@@ -2297,6 +2306,11 @@ export default function Admin({ produtos, onVoltar }) {
                       <td>{o.customer?.telefone || '-'}</td>
                       <td>{[o.customer.endereco?.cidade, o.customer.endereco?.estado].filter(Boolean).join('/') || '-'}</td>
                       <td>{formatDate(o.date)}</td>
+                      <td onClick={e => e.stopPropagation()}>
+                        <input type="date" value={o.dataVencimento || ''} placeholder="Definir"
+                          onChange={e => updateOrderDue(o.id, e.target.value)}
+                          style={{ padding: '0.2rem 0.3rem', borderRadius: '5px', border: '1px solid var(--admin-border)', fontSize: '0.72rem', background: 'white', color: 'var(--admin-text)', width: '120px' }} />
+                      </td>
                       <td>{o.items.reduce((s, i) => s + i.qty, 0)} itens</td>
                       <td className="td-price">{formatPreco(o.total)}</td>
                       <td>{o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}</td>
@@ -3920,6 +3934,7 @@ export default function Admin({ produtos, onVoltar }) {
           produtos={produtosAtuais}
           onClose={() => setShowOrderDetail(null)}
           onStatusChange={(s) => { updateOrderStatus(showOrderDetail.id, s); setShowOrderDetail(null) }}
+          onUpdateDue={(due) => updateOrderDue(showOrderDetail.id, due)}
           onPreApprovar={(rejectedIds, replacements, venc) => preApprovarPedido(showOrderDetail.id, rejectedIds, replacements, venc)}
           onOpenDelivery={(order) => { setShowDeliveryModal(order); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview(''); setDeliveryPayment('pix'); setDeliverySplits({ pix: '', dinheiro: '', cartao: '' }); setDeliveryDiscount(''); setDeliveryDiscountType('reais'); setDeliveryPaid(''); setDeliveryDataInicio(order.date || hoje()); setDeliveryDataVenc(order.dataVencimento || '') }}
           onEditAndConfirm={(editedItems, currentStatus) => {
@@ -6068,6 +6083,8 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
   })
   const [dataPedido, setDataPedido] = useState(hoje())
   const [orderStatus, setOrderStatus] = useState('pendente')
+  const [metodoPagamento, setMetodoPagamento] = useState('pix')
+  const [valorPago, setValorPago] = useState('')
   const [cart, setCart] = useState(() => {
     if (initialCart && Object.keys(initialCart).length > 0) {
       return Object.fromEntries(
@@ -6148,6 +6165,40 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
     setCart(prev => prev[id] ? { ...prev, [id]: { ...prev[id], tipo } } : prev)
   }
 
+  const setItemPreco = (id, val) => {
+    const num = Number(String(val).replace(',', '.'))
+    setCart(prev => prev[id] ? { ...prev, [id]: { ...prev[id], preco: isNaN(num) ? 0 : num } } : prev)
+  }
+
+  const setItemCusto = (id, val) => {
+    const num = Number(String(val).replace(',', '.'))
+    setCart(prev => prev[id] ? { ...prev, [id]: { ...prev[id], preco_custo: isNaN(num) ? 0 : num } } : prev)
+  }
+
+  const valorPagoNum = Number(String(valorPago).replace(',', '.')) || 0
+  const troco = valorPagoNum - cartTotal
+
+  const handleSave = () => {
+    if (saving || cartItems.length === 0 || !nome.trim() || !telefone.trim() || !cpf.trim()) return
+    setSaving(true)
+    const isConcluido = orderStatus === 'entregue'
+    onSave({
+      nome: nome.trim(),
+      telefone: normalizePhone(telefone),
+      cpf: cpf.trim(),
+      endereco,
+      dataPedido,
+      pagamento: pagamento === 'misto' ? 'misto' : (pagamento === 'aprazo' ? 'aprazo' : 'avista'),
+      items: cartItems.map(i => ({ ...i, tipo: pagamento === 'aprazo' ? 'aprazo' : (pagamento === 'avista' ? 'avista' : i.tipo) })),
+      dataVencimento: (pagamento === 'aprazo' || pagamento === 'misto') ? dataVencimento : '',
+      status: orderStatus,
+      payment: isConcluido ? {
+        method: metodoPagamento,
+        paid: valorPagoNum || cartTotal
+      } : null
+    })
+  }
+
   const formatPhone = (v) => {
     const nums = v.replace(/\D/g, '').slice(0, 11)
     if (nums.length <= 2) return `(${nums}`
@@ -6158,22 +6209,6 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
   const normalizePhone = (v) => {
     const nums = v.replace(/\D/g, '')
     return nums.startsWith('55') ? nums : '55' + nums
-  }
-
-  const handleSave = () => {
-    if (saving || cartItems.length === 0 || !nome.trim() || !telefone.trim() || !cpf.trim()) return
-    setSaving(true)
-    onSave({
-      nome: nome.trim(),
-      telefone: normalizePhone(telefone),
-      cpf: cpf.trim(),
-      endereco,
-      dataPedido,
-      pagamento: pagamento === 'misto' ? 'misto' : (pagamento === 'aprazo' ? 'aprazo' : 'avista'),
-      items: cartItems.map(i => ({ ...i, tipo: pagamento === 'aprazo' ? 'aprazo' : (pagamento === 'avista' ? 'avista' : i.tipo) })),
-      dataVencimento: (pagamento === 'aprazo' || pagamento === 'misto') ? dataVencimento : '',
-      status: orderStatus
-    })
   }
 
   return (
@@ -6343,6 +6378,25 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
               )}
 
               {cartItems.length > 0 && (
+                <div className="add-prod-cart">
+                  <p className="add-prod-cart-title">Itens do pedido — ajuste preço e custo:</p>
+                  {cartItems.map(i => (
+                    <div key={i.id} className="add-prod-cart-item">
+                      <span className="add-prod-cart-name">{i.nome} ({i.qty}x)</span>
+                      <div className="add-prod-cart-fields">
+                        <label>Preço (R$)
+                          <input type="number" step="0.01" min="0" value={i.preco} onChange={e => setItemPreco(i.id, e.target.value)} onClick={e => e.stopPropagation()} />
+                        </label>
+                        <label>Custo (R$)
+                          <input type="number" step="0.01" min="0" value={i.preco_custo ?? ''} placeholder="0" onChange={e => setItemCusto(i.id, e.target.value)} onClick={e => e.stopPropagation()} />
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {cartItems.length > 0 && (
                 <div className="add-prod-summary">
                   <span>{cartItems.length} itens adicionados</span>
                   <span>Total: <strong>{formatPreco(cartTotal)}</strong></span>
@@ -6403,6 +6457,35 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
                 </div>
               )}
 
+              {orderStatus === 'entregue' && (
+                <div className="payment-done-admin">
+                  <p className="payment-done-title">
+                    <i className="fa-solid fa-circle-check"></i> Registro de Pagamento (Concluído)
+                  </p>
+                  <div className="payment-done-methods">
+                    {['pix', 'dinheiro', 'cartao', 'pix+dinheiro', 'pix+cartao', 'cartao+dinheiro'].map(m => (
+                      <button key={m} type="button" className={`pay-done-chip ${metodoPagamento === m ? 'active' : ''}`} onClick={() => setMetodoPagamento(m)}>
+                        <i className={`fa-solid ${PAG_METHODS[m]?.icon || 'fa-money-bill-wave'}`}></i>
+                        {PAG_METHODS[m]?.label || m}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="payment-done-values">
+                    <label>Valor recebido (R$)
+                      <input type="number" step="0.01" min="0" placeholder={String(cartTotal.toFixed(2)).replace('.', ',')} value={valorPago} onChange={e => setValorPago(e.target.value)} />
+                    </label>
+                    <div className="payment-done-totals">
+                      <span>Total do pedido: <strong>{formatPreco(cartTotal)}</strong></span>
+                      {valorPagoNum > 0 && (
+                        <span className={troco >= 0 ? 'payment-troco-ok' : 'payment-troco-pend'}>
+                          {troco >= 0 ? <><i className="fa-solid fa-money-bill-transfer"></i> Troco: {formatPreco(troco)}</> : <><i className="fa-solid fa-triangle-exclamation"></i> Falta: {formatPreco(-troco)}</>}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="modal-actions">
                 <button className="admin-btn admin-btn-sec" onClick={() => setStep(2)}><i className="fa-solid fa-arrow-left"></i> Voltar</button>
                 <button className="admin-btn admin-btn-primary btn-save-order" disabled={saving || cartItems.length === 0} onClick={handleSave}>
@@ -6420,7 +6503,7 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
 // =============================================
 // MODAL: ORDER DETAIL (with pre-pedido review + pendente edit)
 // =============================================
-function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange, onPreApprovar, onEditAndConfirm, onOpenDelivery, onUpdateCustomer, onCancelOrder }) {
+function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange, onUpdateDue, onPreApprovar, onEditAndConfirm, onOpenDelivery, onUpdateCustomer, onCancelOrder }) {
   const [rejectedItems, setRejectedItems] = useState(new Set())
   const [editMode, setEditMode] = useState(false)
   const [editedItems, setEditedItems] = useState(order.items.map(i => ({ ...i })))
@@ -6430,9 +6513,11 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
   const [preAddCart, setPreAddCart] = useState({})
   const [preReplacements, setPreReplacements] = useState([])
   const [preVencimento, setPreVencimento] = useState(() => {
-    const d = new Date()
-    d.setDate(d.getDate() + 60)
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    return order.dataVencimento || (() => {
+      const d = new Date()
+      d.setDate(d.getDate() + 60)
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    })()
   })
   const [customerEdit, setCustomerEdit] = useState(false)
   const [editCustomer, setEditCustomer] = useState({
@@ -6818,12 +6903,16 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
                 <span>Total: <strong>{formatPreco(order.total)}</strong></span>
               )}
               <span>Pagamento: {order.pagamento === 'avista' ? 'À Vista' : order.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}</span>
-              {order.pagamento === 'misto' && order.items && (
-                <span style={{ fontSize: '0.78rem' }}>
-                  💵 Pago: <strong style={{ color: 'var(--success)' }}>{formatPreco(order.items.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0))}</strong>
-                  {' | '}📋 Devendo: <strong style={{ color: 'var(--warning)' }}>{formatPreco(order.items.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0))}</strong>
-                </span>
-              )}
+              {order.status === 'entregue' && order.payment && (() => {
+                const pm = formatPagamento(order.payment.method)
+                const falta = (order.total || 0) - (Number(order.payment.paid) || 0)
+                return (
+                  <span style={{ fontSize: '0.78rem' }}>
+                    ✅ Recebido via {pm ? pm.label : order.payment.method}: <strong style={{ color: 'var(--success)' }}>{formatPreco(order.payment.paid)}</strong>
+                    {falta > 0 ? <em style={{ color: '#dc2626', marginLeft: '0.4rem' }}>Falta {formatPreco(falta)}</em> : <em style={{ color: 'var(--success)', marginLeft: '0.4rem' }}>Pago integralmente</em>}
+                  </span>
+                )
+              })()}
               <span>Status: <span className={`status-tag status-${order.status}`}>{order.status}</span></span>
             </div>
           </div>
@@ -6895,13 +6984,19 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
             )
           })()}
 
-          {order.status === 'pre-pedido' && (
+          {order.status !== 'entregue' && order.status !== 'cancelado' && (
             <div className="detail-section">
               <label style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: '0.3rem' }}>
                 <i className="fa-solid fa-calendar-day"></i> Data de vencimento das contas a prazo
               </label>
-              <input type="date" value={preVencimento} onChange={e => setPreVencimento(e.target.value)}
-                style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', background: 'var(--admin-bg)', color: 'var(--admin-text)' }} />
+              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <input type="date" value={preVencimento} onChange={e => setPreVencimento(e.target.value)}
+                  style={{ flex: 1, minWidth: '120px', padding: '0.4rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', background: 'var(--admin-bg)', color: 'var(--admin-text)' }} />
+                <button className="admin-btn" style={{ fontSize: '0.74rem', padding: '0.35rem 0.7rem', whiteSpace: 'nowrap' }}
+                  onClick={() => onUpdateDue?.(preVencimento)}>
+                  <i className="fa-solid fa-check"></i> Salvar vencimento
+                </button>
+              </div>
             </div>
           )}
 
