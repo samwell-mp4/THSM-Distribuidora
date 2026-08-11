@@ -1336,8 +1336,10 @@ export default function Admin({ produtos, onVoltar }) {
   const getOrderDue = (o) => o.dataVencimento || financial.find(f => f.orderId === o.id)?.dueDate || ''
 
   const filteredOrders = useMemo(() => {
+    const isFinalizada = o => o.status === 'entregue' && (o.paymentMethod || o.payment || (financial.some(f => f.orderId === o.id) && financial.filter(f => f.orderId === o.id).every(f => f.status === 'pago' || f.status === 'cancelado')))
     let result = orders
-    if (orderFilter === 'concluidos') result = result.filter(o => o.status === 'entregue')
+    if (orderFilter === 'concluidos') result = result.filter(o => isFinalizada(o))
+    else if (orderFilter === 'entregue') result = result.filter(o => o.status === 'entregue' && !isFinalizada(o))
     else if (orderFilter !== 'todos') result = result.filter(o => o.status === orderFilter)
     if (selectedUserEmail) result = result.filter(o => o.customer?.email === selectedUserEmail)
     const t = orderSearch.toLowerCase().trim()
@@ -1541,7 +1543,8 @@ export default function Admin({ produtos, onVoltar }) {
 
   // Métricas das comandas concluídas
   const concluidosStats = useMemo(() => {
-    const concluidos = orders.filter(o => o.status === 'entregue')
+    const isFinalizada = o => o.status === 'entregue' && (o.paymentMethod || o.payment || (financial.some(f => f.orderId === o.id) && financial.filter(f => f.orderId === o.id).every(f => f.status === 'pago' || f.status === 'cancelado')))
+    const concluidos = orders.filter(isFinalizada)
     const faturamentoTotal = concluidos.reduce((s, o) => s + (o.total || 0), 0)
     let lucroTotal = 0
     const qtyByProduto = {}
@@ -2197,7 +2200,8 @@ export default function Admin({ produtos, onVoltar }) {
                 { id: 'pre-pedido', label: 'Pré-Pedidos', count: orders.filter(o => o.status === 'pre-pedido').length },
                 { id: 'pendente', label: 'Pendentes', count: orders.filter(o => o.status === 'pendente').length },
                 { id: 'em-rota', label: 'Em Rota', count: orders.filter(o => o.status === 'em-rota').length },
-                { id: 'concluidos', label: 'Concluídos', count: orders.filter(o => o.status === 'entregue').length },
+                { id: 'entregue', label: 'Entregues', count: orders.filter(o => o.status === 'entregue' && !(o.paymentMethod || o.payment || (financial.some(f => f.orderId === o.id) && financial.filter(f => f.orderId === o.id).every(f => f.status === 'pago' || f.status === 'cancelado')))).length },
+                { id: 'concluidos', label: 'Concluídos', count: orders.filter(o => o.status === 'entregue' && (o.paymentMethod || o.payment || (financial.some(f => f.orderId === o.id) && financial.filter(f => f.orderId === o.id).every(f => f.status === 'pago' || f.status === 'cancelado')))).length },
                 { id: 'cancelado', label: 'Cancelados', count: orders.filter(o => o.status === 'cancelado').length },
               ].map(t => (
                 <button key={t.id} className={`admin-tab ${orderFilter === t.id ? 'active' : ''}`} onClick={() => setOrderFilter(t.id)}>
