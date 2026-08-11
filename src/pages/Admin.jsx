@@ -2,7 +2,8 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import './Admin.css'
 import { supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser,
   deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads,
-  upsertProducts, upsertDespesas, generateLoginToken, getAllRotaEdits, upsertRotaEdits, deleteRotaEdit as supabaseDeleteRotaEdit } from '../lib/supabase'
+  upsertProducts, upsertDespesas, generateLoginToken, getAllRotaEdits, upsertRotaEdits, deleteRotaEdit as supabaseDeleteRotaEdit,
+  deleteProducts as supabaseDeleteProducts } from '../lib/supabase'
 
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
 const STORAGE_ORDERS = 'thsm_admin_orders'
@@ -494,6 +495,7 @@ export default function Admin({ produtos, onVoltar }) {
   const [showKitModal, setShowKitModal] = useState(false)
   const [editingKit, setEditingKit] = useState(null)
   const [newProducts, setNewProducts] = useState(() => LS.get('thsm_admin_new_products', []))
+  const [deletedProdIds, setDeletedProdIds] = useState(() => LS.get('thsm_admin_deleted_products', []))
   const PROD_PER_PAGE = 20
 
   const showToast = (msg, type = 'success') => {
@@ -841,6 +843,7 @@ export default function Admin({ produtos, onVoltar }) {
   }, [rotas, expandedRota])
 
   useEffect(() => { LS.set('thsm_admin_new_products', newProducts) }, [newProducts])
+  useEffect(() => { LS.set('thsm_admin_deleted_products', deletedProdIds) }, [deletedProdIds])
 
   const produtosAtuais = useMemo(() => {
     const base = produtos.map(p => ({
@@ -848,8 +851,8 @@ export default function Admin({ produtos, onVoltar }) {
       ...(prodChanges[p.id] || {})
     }))
     const news = newProducts.map(p => ({ ...p, ...(prodChanges[p.id] || {}) }))
-    return [...news, ...base]
-  }, [produtos, prodChanges, newProducts])
+    return [...news, ...base].filter(p => !deletedProdIds.includes(p.id))
+  }, [produtos, prodChanges, newProducts, deletedProdIds])
 
   // =============================================
   // ORDERS
@@ -1748,6 +1751,17 @@ export default function Admin({ produtos, onVoltar }) {
     setProdImageErrors(prev => ({ ...prev, [id]: true }))
   }
 
+  const deleteSelectedProducts = (ids) => {
+    const idList = [...ids]
+    if (idList.length === 0) return
+    if (!confirm(`Excluir permanentemente ${idList.length} produto(s)?\nEsta ação não pode ser desfeita.`)) return
+    setDeletedProdIds(prev => [...prev, ...idList])
+    setNewProducts(prev => prev.filter(p => !idList.includes(p.id)))
+    supabaseDeleteProducts(idList)
+    showToast(`${idList.length} produto(s) excluído(s)`)
+    setProdSelectedIds(new Set())
+  }
+
   const bulkProdAction = (action) => {
     if (prodSelectedIds.size === 0) { showToast('Selecione pelo menos um produto', 'error'); return }
     if (action === 'zerar') {
@@ -2472,6 +2486,9 @@ export default function Admin({ produtos, onVoltar }) {
                 <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', background: '#dc2626', color: 'white', borderColor: '#dc2626' }} onClick={() => bulkProdAction('semdev')}>
                   <i className="fa-solid fa-ban"></i> Sem Devolução
                 </button>
+                <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', background: '#000', color: 'white', borderColor: '#000' }} onClick={() => deleteSelectedProducts(prodSelectedIds)}>
+                  <i className="fa-solid fa-trash"></i> Excluir
+                </button>
                 <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }} onClick={() => setProdSelectedIds(new Set())}>
                   <i className="fa-solid fa-xmark"></i> Limpar
                 </button>
@@ -2587,6 +2604,9 @@ export default function Admin({ produtos, onVoltar }) {
                               </button>
                               <button className="action-btn" title="Alternar disponibilidade" onClick={() => updateProduct(p.id, { estoque: p.estoque > 0 ? 0 : 1 })}>
                                 <i className={`fa-solid ${p.estoque > 0 ? 'fa-eye-slash' : 'fa-eye'}`} style={{ color: p.estoque > 0 ? '#f59e0b' : 'var(--success)' }}></i>
+                              </button>
+                              <button className="action-btn" title="Excluir" onClick={() => deleteSelectedProducts([p.id])}>
+                                <i className="fa-solid fa-trash" style={{ color: '#dc2626' }}></i>
                               </button>
                             </div>
                           </td>

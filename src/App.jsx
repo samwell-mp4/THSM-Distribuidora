@@ -351,10 +351,13 @@ const fetchProductsDB = useCallback(() => {
   }, [])
 
   const produtosMerged = useMemo(() => {
+    let deleted = []
+    try { deleted = JSON.parse(localStorage.getItem('thsm_admin_deleted_products')) || [] } catch {}
+    const deletedSet = new Set(deleted)
     const overridden = produtos.map(p => ({ ...p, ...(prodChangesApp[p.id] || {}) }))
     const news = dbNewProducts.map(p => ({ ...p, ...(prodChangesApp[p.id] || {}) }))
-    return [...news, ...overridden]
-  }, [produtos, prodChangesApp, dbNewProducts])
+    return [...news, ...overridden].filter(p => !deletedSet.has(p.id))
+  }, [produtos, prodChangesApp, dbNewProducts, route])
 
   const categorias = useMemo(() => ['TODOS', ...[...new Set(produtosMerged.map(p => p.categoria))].sort()], [produtosMerged])
 

@@ -308,6 +308,13 @@ export async function upsertProducts(products) {
   if (error) console.error('Erro upsertProducts:', error)
 }
 
+export async function deleteProducts(ids) {
+  if (!ids || ids.length === 0) return
+  const mapped = [...new Set(ids)].map(Number)
+  const { error } = await supabase.from('produtos').delete().in('id', mapped)
+  if (error) console.error('Erro deleteProducts:', error)
+}
+
 export async function syncAllForAdmin() {
   const [orders, financial, users, rotas, products, despesas, rotaEdits] = await Promise.allSettled([
     getAllOrders(),

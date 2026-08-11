@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS produtos (
   imagem text,
   categoria text,
   variantes jsonb DEFAULT '{}'::jsonb,
+  semDevolucao boolean DEFAULT false,
   updated_at timestamptz DEFAULT now()
 );
 
@@ -74,6 +75,7 @@ ALTER TABLE produtos ADD COLUMN IF NOT EXISTS nome text DEFAULT '';
 ALTER TABLE produtos ADD COLUMN IF NOT EXISTS descricao text DEFAULT '';
 ALTER TABLE produtos ADD COLUMN IF NOT EXISTS variantes jsonb DEFAULT '{}'::jsonb;
 ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco_custo numeric(12,2);
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS semDevolucao boolean DEFAULT false;
 ALTER TABLE produtos ALTER COLUMN id TYPE bigint;
 
 -- 5b. DESPESAS (expense records)
