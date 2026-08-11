@@ -694,7 +694,13 @@ const fetchProductsDB = useCallback(() => {
     const nome = order.customer?.nome || 'Cliente'
     const id = `#${order.id.toString().slice(-6)}`
     const statusLabel = order.status === 'pre-pedido' ? 'Pré-pedido Recebido' : 'Pedido Enviado'
-    return `🆕 *${statusLabel}* 🆕\n━━━━━━━━━━━━━━━━━━\n📋 Pedido: ${id}\n👤 Cliente: ${nome}\n━━━━━━━━━━━━━━━━━━\n${statusLabel}\n━━━━━━━━━━━━━━━━━━\n🔗 Acompanhe: ${link}`
+    const formatDate = (str) => {
+      if (!str) return '—'
+      const d = new Date(String(str).length <= 10 ? str + 'T12:00:00' : str)
+      return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-BR')
+    }
+    const msgDatas = `📅 Data do pedido: ${formatDate(order.date || order.dataInicio || order.createdAt)}\n📅 Vencimento: ${formatDate(order.dataVencimento)}`
+    return `🆕 *${statusLabel}* 🆕\n━━━━━━━━━━━━━━━━━━\n📋 Pedido: ${id}\n👤 Cliente: ${nome}\n${msgDatas}\n━━━━━━━━━━━━━━━━━━\n${statusLabel}\n━━━━━━━━━━━━━━━━━━\n🔗 Acompanhe: ${link}`
   }
 
   const sendOrderWebhook = (order) => {

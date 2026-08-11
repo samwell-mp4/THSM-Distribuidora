@@ -140,6 +140,15 @@ function buildStatusWhatsApp(order, newStatus, extra = {}) {
   const link = buildOrderLink(order.id)
   const nome = order.customer?.nome || 'Cliente'
   const id = `#${order.id.toString().slice(-6)}`
+  function formatDate(str) {
+    if (!str) return '—'
+    const d = new Date(String(str).length <= 10 ? str + 'T12:00:00' : str)
+    return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-BR')
+  }
+  const dataPedido = formatDate(order.date || order.dataInicio || order.createdAt)
+  const dataVencimento = formatDate(order.dataVencimento)
+  const msgDatas = `📅 Data do pedido: ${dataPedido}
+📅 Vencimento: ${dataVencimento}`
   const msgItems = order.items.map(i => `  • ${i.nome} (${i.qty}x) — R$ ${i.preco.toFixed(2)}`).join('\n')
   const msgPagamento = order.pagamento === 'avista' ? 'À Vista' : order.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'
 
@@ -148,6 +157,7 @@ function buildStatusWhatsApp(order, newStatus, extra = {}) {
 ━━━━━━━━━━━━━━━━━━
 📋 Pedido: ${id}
 👤 Cliente: ${nome}
+${msgDatas}
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pré-pedido foi recebido e está em análise pela nossa equipe.
 Em breve você receberá a confirmação.
@@ -158,6 +168,7 @@ Em breve você receberá a confirmação.
 ━━━━━━━━━━━━━━━━━━
 📋 Pedido: ${id}
 👤 Cliente: ${nome}
+${msgDatas}
 💳 Pagamento: ${msgPagamento}
 💰 Total: R$ ${order.total.toFixed(2)}
 ━━━━━━━━━━━━━━━━━━
@@ -172,6 +183,7 @@ Em breve confirmaremos seu pedido.
 ━━━━━━━━━━━━━━━━━━
 📋 Pedido: ${id}
 👤 Cliente: ${nome}
+${msgDatas}
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pedido foi confirmado!
 Em breve entraremos em contato para combinar a entrega.
@@ -182,6 +194,7 @@ Em breve entraremos em contato para combinar a entrega.
 ━━━━━━━━━━━━━━━━━━
 📋 Pedido: ${id}
 👤 Cliente: ${nome}
+${msgDatas}
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pedido está em andamento e sendo preparado para entrega.
 ━━━━━━━━━━━━━━━━━━
@@ -191,6 +204,7 @@ Olá ${nome}, seu pedido está em andamento e sendo preparado para entrega.
 ━━━━━━━━━━━━━━━━━━
 📋 Pedido: ${id}
 👤 Cliente: ${nome}
+${msgDatas}
 💳 Pagamento: ${msgPagamento}
 💰 Total: R$ ${order.total.toFixed(2)}
 ━━━━━━━━━━━━━━━━━━
@@ -205,6 +219,7 @@ Olá ${nome}, seu pedido já foi separado. Só aguardar a entrega.
 ━━━━━━━━━━━━━━━━━━
 📋 Pedido: ${id}
 👤 Cliente: ${nome}
+${msgDatas}
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pedido foi finalizado!
 📦 Itens entregues:
@@ -224,6 +239,7 @@ Obrigado pela preferência! 🎉`
 ━━━━━━━━━━━━━━━━━━
 📋 Pedido: ${id}
 👤 Cliente: ${nome}
+${msgDatas}
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pedido foi entregue com sucesso! 🎉
 ${order.items.length > 0 ? `📦 Itens:\n${order.items.map(i => `  • ${i.nome} (${i.qty}x) — R$ ${(i.preco * i.qty).toFixed(2)}`).join('\n')}\n` : ''}
@@ -239,6 +255,7 @@ Obrigado pela preferência! 🎉`,
 ━━━━━━━━━━━━━━━━━━
 📋 Pedido: ${id}
 👤 Cliente: ${nome}
+${msgDatas}
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pedido foi cancelado.
 Em caso de dúvidas, entre em contato conosco.
@@ -306,7 +323,7 @@ function sendAlertRota(tipo, contatos, orders, customText = '') {
       if (lastOrder) {
         const itens = lastOrder.items?.slice(0, 3).map(i => `  • ${i.nome} (${i.qty}x)`).join('\n') || ''
         const extras = lastOrder.items?.length > 3 ? `\n  ...e mais ${lastOrder.items.length - 3} item(ns)` : ''
-        whatsappMessage = `🚚 *PASSANDO NA SUA CIDADE!* 🚚\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n📋 Pedido #${lastOrder.id.toString().slice(-6)}\n📌 Status: ${lastOrder.status}\n💵 Total: ${formatPreco(lastOrder.total)}\n${itens}${extras}\n━━━━━━━━━━━━━━━━━━\nEstamos na sua região! Seu pedido está em aberto.\n🔗 Acesse sua conta: ${loginLink}`
+        whatsappMessage = `🚚 *PASSANDO NA SUA CIDADE!* 🚚\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n📋 Pedido #${lastOrder.id.toString().slice(-6)}\n📅 Data: ${formatDate(lastOrder.date || lastOrder.createdAt)}\n📅 Vencimento: ${formatDate(lastOrder.dataVencimento)}\n📌 Status: ${lastOrder.status}\n💵 Total: ${formatPreco(lastOrder.total)}\n${itens}${extras}\n━━━━━━━━━━━━━━━━━━\nEstamos na sua região! Seu pedido está em aberto.\n🔗 Acesse sua conta: ${loginLink}`
       } else {
         whatsappMessage = `🚚 *PASSANDO NA SUA CIDADE!* 🚚\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n━━━━━━━━━━━━━━━━━━\nEstamos passando na sua cidade! Aproveite para fazer seu pedido.\n🔗 Faça já seu pedido: ${loginLink}`
       }
@@ -315,11 +332,12 @@ function sendAlertRota(tipo, contatos, orders, customText = '') {
         const itens = lastOrder.items?.slice(0, 3).map(i => `  • ${i.nome} (${i.qty}x) — ${formatPreco(i.preco * i.qty)}`).join('\n') || ''
         const extras = lastOrder.items?.length > 3 ? `\n  ...e mais ${lastOrder.items.length - 3} item(ns)` : ''
         const dataPedido = formatDate(lastOrder.date || lastOrder.createdAt)
+        const dataVencimento = formatDate(lastOrder.dataVencimento)
         const finRecords = JSON.parse(localStorage.getItem('thsm_admin_financeiro') || '[]')
           .filter(f => f.orderId === lastOrder.id && f.status === 'pendente')
         const vencimentos = finRecords.slice(0, 2).map(f => `  📅 ${f.itemName}: ${formatDate(f.dueDate)} — ${formatPreco(f.value)}`).join('\n')
         const vencExtras = finRecords.length > 2 ? `\n  ...e mais ${finRecords.length - 2} parcela(s)` : ''
-        whatsappMessage = `📋 *ATUALIZAÇÃO DO PEDIDO* 📋\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n📋 Pedido: #${lastOrder.id.toString().slice(-6)}\n📅 Data: ${dataPedido}\n📌 Status: ${lastOrder.status}\n${itens}${extras}\n💵 Total: ${formatPreco(lastOrder.total)}${vencimentos ? `\n━━━━━━━━━━━━━━━━━━\n📆 *Pendências:*\n${vencimentos}${vencExtras}` : ''}\n━━━━━━━━━━━━━━━━━━\n🔗 Acompanhe seu pedido: ${loginLink}`
+        whatsappMessage = `📋 *ATUALIZAÇÃO DO PEDIDO* 📋\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n📋 Pedido: #${lastOrder.id.toString().slice(-6)}\n📅 Data: ${dataPedido}\n📅 Vencimento: ${dataVencimento}\n📌 Status: ${lastOrder.status}\n${itens}${extras}\n💵 Total: ${formatPreco(lastOrder.total)}${vencimentos ? `\n━━━━━━━━━━━━━━━━━━\n📆 *Pendências:*\n${vencimentos}${vencExtras}` : ''}\n━━━━━━━━━━━━━━━━━━\n🔗 Acompanhe seu pedido: ${loginLink}`
       } else {
         whatsappMessage = `📋 *ATUALIZAÇÃO* 📋\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n━━━━━━━━━━━━━━━━━━\nVocê ainda não tem pedidos conosco.\nAproveite para fazer seu pedido agora!\n🔗 Fazer pedido: ${loginLink}`
       }
@@ -920,7 +938,12 @@ export default function Admin({ produtos, onVoltar }) {
       setFinancial(prev => prev.map(f => f.orderId === id && f.status !== 'pago' ? { ...f, status: 'pago', paidDate: hoje() } : f))
     }
     showToast(`Pedido #${id} atualizado para "${status}"`)
-    if (order && !skipWebhook) sendStatusWebhook(order, status)
+    const STATUS_ORDER = ['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'entregue']
+    const prevIndex = STATUS_ORDER.indexOf(order?.status)
+    const nextIndex = STATUS_ORDER.indexOf(status)
+    const isAdvance = prevIndex !== -1 && nextIndex > prevIndex
+    const isNewOrder = prevIndex === -1 && STATUS_ORDER.includes(status)
+    if (order && !skipWebhook && (isAdvance || isNewOrder)) sendStatusWebhook(order, status)
   }
 
   const updateOrderDue = (id, due) => {
@@ -3989,10 +4012,11 @@ export default function Admin({ produtos, onVoltar }) {
             })
             showToast(currentStatus === 'em-rota' ? `Pedido #${showOrderDetail.id} finalizado e enviado para Entregues!` : `Pedido #${showOrderDetail.id} enviado para a rota!`)
             setShowOrderDetail(null)
-            if (currentStatus !== 'em-rota') {
-              sendStatusWebhook(updatedOrder, 'em-rota')
-            } else {
-              sendStatusWebhook(updatedOrder, 'entregue')
+            const ESTADOS = ['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'entregue']
+            const idxFrom = ESTADOS.indexOf(currentStatus)
+            const idxTo = ESTADOS.indexOf(newStatus)
+            if ((ESTADOS.includes(currentStatus) && idxTo > idxFrom) || (!ESTADOS.includes(currentStatus) && ESTADOS.includes(newStatus))) {
+              sendStatusWebhook(updatedOrder, newStatus)
             }
           }}
           onUpdateCustomer={(id, customerData) => updateOrderCustomer(id, customerData)}
