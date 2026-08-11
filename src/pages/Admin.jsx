@@ -956,7 +956,8 @@ export default function Admin({ produtos, onVoltar }) {
     const nextIndex = STATUS_ORDER.indexOf(status)
     const isAdvance = prevIndex !== -1 && nextIndex > prevIndex
     const isNewOrder = prevIndex === -1 && STATUS_ORDER.includes(status)
-    if (order && !skipWebhook && (isAdvance || isNewOrder)) sendStatusWebhook(order, status)
+    const isPreToPendente = order?.status === 'pre-pedido' && status === 'pendente'
+    if (order && !skipWebhook && !isPreToPendente && (isAdvance || isNewOrder)) sendStatusWebhook(order, status)
   }
 
   const updateOrderDue = (id, due) => {
@@ -4135,6 +4136,19 @@ export default function Admin({ produtos, onVoltar }) {
             showToast('Itens salvos com sucesso!')
             setShowOrderDetail({ ...updatedOrder, items: editedItems.map(i => ({ ...i })) })
           }}
+          onSyncCusto={(prodId, custo) => {
+            if (prodId == null) return
+            setProdChanges(prev => {
+              const hasProd = produtosAtuais.some(p => p.id === prodId || p.id === String(prodId))
+              if (!hasProd) return prev
+              const next = {
+                ...prev,
+                [prodId]: { ...(prev[prodId] || {}), preco_custo: custo === null ? null : Number(custo) }
+              }
+              if (custo === null && prev[prodId] && Object.keys(prev[prodId]).length === 0) delete next[prodId]
+              return next
+            })
+          }}
           onUpdateCustomer={(id, customerData) => updateOrderCustomer(id, customerData)}
           onCancelOrder={(id) => cancelOrder(id)}
         />
@@ -6647,7 +6661,7 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
 // =============================================
 // MODAL: ORDER DETAIL (with pre-pedido review + pendente edit)
 // =============================================
-function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange, onUpdateDue, onPreApprovar, onEditAndConfirm, onEditSave, onOpenDelivery, onUpdateCustomer, onCancelOrder }) {
+function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange, onUpdateDue, onPreApprovar, onEditAndConfirm, onEditSave, onSyncCusto, onOpenDelivery, onUpdateCustomer, onCancelOrder }) {
   const [rejectedItems, setRejectedItems] = useState(new Set())
   const [editMode, setEditMode] = useState(false)
   const [editedItems, setEditedItems] = useState(order.items.map(i => ({ ...i })))
@@ -6684,6 +6698,24 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
     setEditedItems(prev => prev.map((item, i) => i === idx ? { ...item, qty: Math.max(0, item.qty + delta) } : item))
   }
 
+  const resetEditedItems = () => {
+    setEditedItems(order.items.map(i => {
+      const prod = produtos.find(p => p.id === i.id || p.id === String(i.id))
+      return {
+        ...i,
+        preco_custo: i.preco_custo ?? (prod?.preco_custo ?? null)
+      }
+    }))
+  }
+
+  const setItemCusto = (idx, val) => {
+    const num = parseFloat(val)
+    const custo = isNaN(num) || num < 0 ? null : num
+    setEditedItems(prev => prev.map((item, i) => i === idx ? { ...item, preco_custo: custo } : item))
+    const prodId = editedItems[idx]?.id
+    if (prodId != null) onSyncCusto?.(prodId, custo)
+  }
+
   const removeItem = (idx) => {
     setEditedItems(prev => prev.filter((_, i) => i !== idx))
   }
@@ -6691,7 +6723,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
   const addItemToEdit = (p) => {
     setAddCart(prev => ({
       ...prev,
-      [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, tipo: 'aprazo', qty: (prev[p.id]?.qty || 0) + 1, semDevolucao: !!p.semDevolucao }
+      [p.id]: { id: p.id, nome: p.nome, preco: p.preco, preco_custo: p.preco_custo ?? null, imagem: p.imagem, tipo: 'aprazo', qty: (prev[p.id]?.qty || 0) + 1, semDevolucao: !!p.semDevolucao }
     }))
   }
 
@@ -6766,11 +6798,11 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
 
   if (editMode) {
     return (
-      <div className="admin-overlay" onClick={() => { setEditMode(false); setEditedItems(order.items.map(i => ({ ...i }))); setAddCart({}) }}>
+      <div className="admin-overlay" onClick={() => { setEditMode(false); resetEditedItems(); setAddCart({}) }}>
         <div className="admin-modal admin-modal-lg" onClick={e => e.stopPropagation()} style={{ maxWidth: '550px' }}>
           <div className="admin-modal-header">
             <h3><i className="fa-solid fa-pen"></i> Editar Itens — Pedido #{order.id.toString().slice(-6)}</h3>
-            <button className="admin-modal-close" onClick={() => { setEditMode(false); setEditedItems(order.items.map(i => ({ ...i }))); setAddCart({}) }}><i className="fa-solid fa-xmark"></i></button>
+            <button className="admin-modal-close" onClick={() => { setEditMode(false); resetEditedItems(); setAddCart({}) }}><i className="fa-solid fa-xmark"></i></button>
           </div>
           <div className="admin-modal-body">
             <div className="detail-section">
@@ -6788,6 +6820,13 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
                             setEditedItems(prev => prev.map((item, ii) => ii === idx ? { ...item, preco: val } : item))
                           }
                         }}
+                        style={{ width: '80px', padding: '0.2rem 0.35rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', textAlign: 'right' }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.15rem' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--admin-text-sec)' }}>Custo:</span>
+                      <input type="number" step="0.01" min="0" value={i.preco_custo ?? ''} placeholder="0,00"
+                        onChange={e => setItemCusto(idx, e.target.value)}
                         style={{ width: '80px', padding: '0.2rem 0.35rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', textAlign: 'right' }}
                       />
                     </div>
@@ -6856,7 +6895,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
             </div>
 
             <div className="modal-actions">
-              <button className="admin-btn admin-btn-sec" onClick={() => { setEditMode(false); setEditedItems(order.items.map(i => ({ ...i }))); setAddCart({}) }}>Cancelar</button>
+              <button className="admin-btn admin-btn-sec" onClick={() => { setEditMode(false); resetEditedItems(); setAddCart({}) }}>Cancelar</button>
               <button className="admin-btn" style={{ background: 'var(--accent)', color: 'white', borderColor: 'var(--accent)' }} disabled={editedItems.filter(i => i.qty > 0).length === 0} onClick={handleEditSave}>
                 <i className="fa-solid fa-save"></i> Salvar
               </button>
@@ -7156,7 +7195,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
           <div className="modal-actions">
             {(order.status === 'pendente' || order.status === 'em-rota') && (
               <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
-                onClick={() => { setEditMode(true); setEditedItems(order.items.map(i => ({ ...i }))) }}>
+                onClick={() => { setEditMode(true); resetEditedItems() }}>
                 <i className="fa-solid fa-pen"></i> Editar Itens
               </button>
             )}
