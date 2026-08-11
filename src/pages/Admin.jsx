@@ -7151,7 +7151,7 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
               </button>
             )}
             {order.status === 'em-rota' && (
-              <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} onClick={() => onStatusChange('entregue')}>
+              <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} onClick={onClose}>
                 <i className="fa-solid fa-check-double"></i> Concluir
               </button>
             )}
