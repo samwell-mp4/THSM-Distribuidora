@@ -17,13 +17,24 @@ const WEBHOOK_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host
 const LISTA_CONTATOS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/lista-contatos'
 const ALERTAR_ROTAS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/alertar-rotas'
 const WHATSAPP_FORCE_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/whatsapp-force'
-
 const LS = {
   get(key, def) {
     try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : def } catch { return def }
   },
   set(key, val) {
-    try { localStorage.setItem(key, JSON.stringify(val)) } catch (e) { console.warn('LS.set quota/falha:', key, e) }
+    try {
+      localStorage.setItem(key, JSON.stringify(val))
+    } catch (e) {
+      console.warn('LS.set quota/falha:', key, e)
+      try {
+        localStorage.removeItem('thsm_admin_orders')
+        localStorage.removeItem('thsm_admin_financeiro')
+        localStorage.removeItem('thsm_admin_produtos')
+        localStorage.setItem(key, JSON.stringify(val))
+      } catch (inner) {
+        console.error('Falha crítica de localStorage mesmo limpando cache:', inner)
+      }
+    }
   }
 }
 
@@ -427,7 +438,9 @@ export default function Admin({ produtos, onVoltar }) {
   const [deliveryDataInicio, setDeliveryDataInicio] = useState(() => hoje())
   const [deliveryDataVenc, setDeliveryDataVenc] = useState('')
   const [usuarios, setUsuarios] = useState(() => LS.get('thsm_usuarios', []))
+
   const [syncingUsers, setSyncingUsers] = useState(false)
+  const [isInitialSyncing, setIsInitialSyncing] = useState(true)
   const [selectedUserEmail, setSelectedUserEmail] = useState(null)
   const [selectedUserDetail, setSelectedUserDetail] = useState(null)
   const [recoverLinkUser, setRecoverLinkUser] = useState(null)
@@ -551,6 +564,7 @@ export default function Admin({ produtos, onVoltar }) {
   const firstProdsSync = useRef(true)
   const ordersSigRef = useRef(null)
   useEffect(() => {
+    if (isInitialSyncing) return
     if (orders.length === 0) return
     const sig = {}
     orders.forEach(o => { if (o && o.id != null) sig[o.id] = JSON.stringify(o) })
@@ -561,18 +575,20 @@ export default function Admin({ produtos, onVoltar }) {
     if (dirty.length === 0) return
     const t = setTimeout(() => { upsertOrders(dirty) }, 350)
     return () => clearTimeout(t)
-  }, [orders])
+  }, [orders, isInitialSyncing])
   useEffect(() => {
     flushPendingOrders()
   }, [])
   useEffect(() => {
+    if (isInitialSyncing) return
     if (firstProdsSync.current) { firstProdsSync.current = false; return }
     LS.set(STORAGE_PRODUCTS, prodChanges)
     if (Object.keys(prodChanges).length === 0) return
     const t = setTimeout(() => upsertProducts(prodChanges), 700)
     return () => clearTimeout(t)
-  }, [prodChanges])
+  }, [prodChanges, isInitialSyncing])
   useEffect(() => {
+    if (isInitialSyncing) return
     if (newProducts.length > 0) {
       const obj = {}
       newProducts.forEach(p => {
@@ -581,7 +597,7 @@ export default function Admin({ produtos, onVoltar }) {
       })
       upsertProducts(obj)
     }
-  }, [newProducts])
+  }, [newProducts, isInitialSyncing])
   useEffect(() => { LS.set(STORAGE_CUSTOM_ROTAS, customRotas) }, [customRotas])
   useEffect(() => { LS.set(STORAGE_CUSTOM_CATS, customCategorias) }, [customCategorias])
   useEffect(() => { LS.set(STORAGE_CUSTOM_TIPOS, customDespesaTipos) }, [customDespesaTipos])
@@ -590,14 +606,16 @@ export default function Admin({ produtos, onVoltar }) {
       if (!o.identityPhoto && !o.addressProof) return o
       return {
         ...o,
-        identityPhoto: capPhotoSize(o.identityPhoto, 3000),
-        addressProof: capPhotoSize(o.addressProof, 3000)
+        identityPhoto: '',
+        addressProof: ''
       }
     })
     LS.set(STORAGE_ORDERS, compact)
   }, [orders])
+
   useEffect(() => {
     LS.set(STORAGE_FINANCIAL, financial)
+    if (isInitialSyncing) return
     if (financial.length === 0) return
     const t = setTimeout(() => {
       const doUpsert = () => upsertFinancial(financial)
@@ -608,11 +626,12 @@ export default function Admin({ produtos, onVoltar }) {
       }
     }, 1400)
     return () => clearTimeout(t)
-  }, [financial, orders])
+  }, [financial, orders, isInitialSyncing])
   useEffect(() => {
     LS.set(STORAGE_DESPESAS, despesas)
+    if (isInitialSyncing) return
     if (despesas.length > 0) upsertDespesas(despesas)
-  }, [despesas])
+  }, [despesas, isInitialSyncing])
 
   const fetchRotas = useCallback(async () => {
     setRotasLoading(true)
@@ -857,7 +876,10 @@ export default function Admin({ produtos, onVoltar }) {
         })
       }
     }).catch(e => { console.error('syncAllForAdmin error:', e) })
-      .finally(() => setSyncingUsers(false))
+      .finally(() => {
+        setSyncingUsers(false)
+        setIsInitialSyncing(false)
+      })
     getAllLeads().then(setLeads).catch(() => {})
     // Reenvia leads salvos localmente (fallback quando site ficou offline)
     ;(async () => {
@@ -4086,6 +4108,7 @@ export default function Admin({ produtos, onVoltar }) {
               deliveredAt: newStatus === 'entregue' ? Date.now() : showOrderDetail.deliveredAt
             }
             setOrders(prev => prev.map(o => o.id === showOrderDetail.id ? updatedOrder : o))
+            upsertOrder(updatedOrder)
             setFinancial(prev => {
               const existingIds = new Set(prev.filter(f => f.orderId === showOrderDetail.id).map(f => f.id))
               const newRecords = editedItems
@@ -4116,7 +4139,9 @@ export default function Admin({ produtos, onVoltar }) {
                   paidDate: newStatus === 'entregue' ? hoje() : f.paidDate
                 }
               })
-              return [...updated, ...newRecords]
+              const mergedFin = [...updated, ...newRecords]
+              upsertFinancial(mergedFin)
+              return mergedFin
             })
             showToast(currentStatus === 'em-rota' ? `Pedido #${showOrderDetail.id} finalizado e enviado para Entregues!` : `Pedido #${showOrderDetail.id} enviado para a rota!`)
             setShowOrderDetail(null)
@@ -4130,7 +4155,6 @@ export default function Admin({ produtos, onVoltar }) {
           onEditSave={(editedItems) => {
             const totalAvista = editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
             const totalAprazo = editedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
-            const currentStatus = showOrderDetail.status
             const updatedOrder = {
               ...showOrderDetail,
               items: editedItems,

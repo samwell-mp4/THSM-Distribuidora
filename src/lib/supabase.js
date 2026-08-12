@@ -404,9 +404,8 @@ export async function upsertProducts(products) {
     const { error } = await supabase.from('produtos').upsert(records, { onConflict: 'id' })
     if (!error) return
     console.error('Erro upsertProducts:', error)
-    // PGRST204 = coluna não existe no banco. Remove a coluna problemática e tenta de novo,
-    // para o produto salvar mesmo com o schema do banco desatualizado.
-    const m = /Could not find the '([^']+)' column/.exec(error.message || '')
+    const msg = error.message || ''
+    const m = /Could not find the ['"]([^'"]+)['"] column/.exec(msg) || /column [\'\"]?([^\'\"]+)[\'\"]? does not exist/i.exec(msg) || /column "([^"]+)"/i.exec(msg)
     if (m && attempt < 4) {
       const col = m[1]
       records = records.map(r => { const { [col]: _omit, ...rest } = r; return rest })
