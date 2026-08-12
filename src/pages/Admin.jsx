@@ -376,6 +376,10 @@ export default function Admin({ produtos, onVoltar }) {
   useEffect(() => { sessionStorage.setItem('thsm_admin_tab', tab) }, [tab])
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [orders, setOrders] = useState(() => LS.get(STORAGE_ORDERS, []))
+  const [deletedOrderIds, setDeletedOrderIds] = useState(() => LS.get('thsm_admin_deleted_orders', []))
+  const deletedOrderIdsRef = useRef(null)
+  useEffect(() => { deletedOrderIdsRef.current = new Set(deletedOrderIds) }, [deletedOrderIds])
+  useEffect(() => { LS.set('thsm_admin_deleted_orders', deletedOrderIds) }, [deletedOrderIds])
   const [prodChanges, setProdChanges] = useState(() => LS.get(STORAGE_PRODUCTS, {}))
   const [financial, setFinancial] = useState(() => LS.get(STORAGE_FINANCIAL, []))
   const [toast, setToast] = useState(null)
@@ -757,7 +761,10 @@ export default function Admin({ produtos, onVoltar }) {
           const map = new Map()
           o.forEach(ord => map.set(ord.id, ord))
           prev.forEach(ord => map.set(ord.id, ord))
-          return Array.from(map.values())
+          const del = deletedOrderIdsRef.current || new Set()
+          const merged = Array.from(map.values()).filter(ord => !del.has(ord.id))
+          LS.set(STORAGE_ORDERS, merged)
+          return merged
         })
       }
       if (f.length) {
@@ -1229,7 +1236,10 @@ export default function Admin({ produtos, onVoltar }) {
     if (!confirm('Excluir este pedido?')) return
     setOrders(prev => prev.filter(o => o.id !== id))
     setFinancial(prev => prev.filter(f => f.orderId !== id))
-    supabaseDeleteOrder(id)
+    setDeletedOrderIds(prev => prev.includes(id) ? prev : [...prev, id])
+    supabaseDeleteOrder(id).then(({ error } = {}) => {
+      if (error) showToast('Pedido excluído (não sincronizou: rode o SQL admin_delete_order no Supabase)', 'error')
+    })
     showToast('Pedido excluído')
   }
 
@@ -1463,6 +1473,7 @@ export default function Admin({ produtos, onVoltar }) {
       } else if (action === 'delete') {
         setOrders(prev => prev.filter(o => o.id !== id))
         setFinancial(prev => prev.filter(f => f.orderId !== id))
+        setDeletedOrderIds(prev => prev.includes(id) ? prev : [...prev, id])
         supabaseDeleteOrder(id)
       }
     })

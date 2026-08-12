@@ -143,8 +143,14 @@ export async function upsertOrders(orders) {
 }
 
 export async function deleteOrder(id) {
-  const { error } = await supabase.rpc('admin_delete_order', { ord_id: id })
-  if (error) console.error('Erro deleteOrder:', error)
+  try {
+    const { error } = await supabase.rpc('admin_delete_order', { ord_id: id })
+    if (error) console.error('Erro deleteOrder:', error)
+    return { error }
+  } catch (e) {
+    console.error('Exceção deleteOrder:', e)
+    return { error: e }
+  }
 }
 
 export async function deleteUserByTelefone(telefone) {
