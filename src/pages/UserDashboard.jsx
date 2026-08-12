@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { supabase, upsertOrder, upsertFinancial, deleteOrder as supabaseDeleteOrder, upsertUser } from '../lib/supabase'
+import { supabase, upsertOrder, upsertFinancial, deleteOrder as supabaseDeleteOrder, upsertUser, flushPendingOrders } from '../lib/supabase'
 import { compressImageDataUrl } from '../lib/image'
 import AddressForm from '../components/AddressForm'
 
@@ -131,6 +131,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
 
   // Order tracking link (?pedido=ID): load the order directly (only da própria conta)
   const initialOrderHandled = useRef(false)
+  useEffect(() => { flushPendingOrders() }, [])
   useEffect(() => {
     if (!initialOrderId || initialOrderHandled.current) return
     const order = allOrders.find(o => o.id === initialOrderId)

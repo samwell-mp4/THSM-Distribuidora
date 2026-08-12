@@ -3,7 +3,7 @@ import './Admin.css'
 import { supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser,
   deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads,
   upsertProducts, upsertDespesas, generateLoginToken, getAllRotaEdits, upsertRotaEdits, deleteRotaEdit as supabaseDeleteRotaEdit,
-  deleteProducts as supabaseDeleteProducts } from '../lib/supabase'
+  deleteProducts as supabaseDeleteProducts, flushPendingOrders } from '../lib/supabase'
 import { compressImageDataUrl, capPhotoSize } from '../lib/image'
 
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
@@ -548,14 +548,23 @@ export default function Admin({ produtos, onVoltar }) {
     setUserMsgMenu(null)
   }
 
-  const firstOrdersSync = useRef(true)
   const firstProdsSync = useRef(true)
+  const ordersSigRef = useRef(null)
   useEffect(() => {
-    if (firstOrdersSync.current) { firstOrdersSync.current = false; return }
     if (orders.length === 0) return
-    const t = setTimeout(() => { upsertOrders(orders) }, 900)
+    const sig = {}
+    orders.forEach(o => { if (o && o.id != null) sig[o.id] = JSON.stringify(o) })
+    const prev = ordersSigRef.current
+    let dirty = orders
+    if (prev) dirty = orders.filter(o => prev[o.id] !== sig[o.id])
+    ordersSigRef.current = sig
+    if (dirty.length === 0) return
+    const t = setTimeout(() => { upsertOrders(dirty) }, 350)
     return () => clearTimeout(t)
   }, [orders])
+  useEffect(() => {
+    flushPendingOrders()
+  }, [])
   useEffect(() => {
     if (firstProdsSync.current) { firstProdsSync.current = false; return }
     LS.set(STORAGE_PRODUCTS, prodChanges)
@@ -964,10 +973,12 @@ export default function Admin({ produtos, onVoltar }) {
 
   const updateOrderStatus = (id, status, skipWebhook = false) => {
     const order = orders.find(o => o.id === id)
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status, deliveredAt: status === 'entregue' ? Date.now() : o.deliveredAt } : o))
+    const updated = order ? { ...order, status, deliveredAt: status === 'entregue' ? Date.now() : order.deliveredAt } : null
+    setOrders(prev => prev.map(o => o.id === id ? (updated || o) : o))
     if (status === 'entregue') {
       setFinancial(prev => prev.map(f => f.orderId === id && f.status !== 'pago' ? { ...f, status: 'pago', paidDate: hoje() } : f))
     }
+    if (updated) upsertOrder(updated)
     showToast(`Pedido #${id} atualizado para "${status}"`)
     const STATUS_ORDER = ['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'entregue']
     const prevIndex = STATUS_ORDER.indexOf(order?.status)

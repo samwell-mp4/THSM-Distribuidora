@@ -5,7 +5,7 @@ import AddressForm from './components/AddressForm'
 import UserDashboard from './pages/UserDashboard'
 import KitPage from './pages/KitPage'
 import LandingPage from './pages/LandingPage'
-import { supabase, upsertOrder, upsertUser, generateLoginToken, consumeLoginToken } from './lib/supabase'
+import { supabase, upsertOrder, upsertUser, generateLoginToken, consumeLoginToken, flushPendingOrders } from './lib/supabase'
 import './App.css'
 
 const LS_USUARIOS = 'thsm_usuarios'
@@ -159,7 +159,8 @@ const fetchProductsDB = useCallback(() => {
   useEffect(() => {
     const onFocus = () => {
       try { const d = JSON.parse(localStorage.getItem('thsm_admin_produtos')); if (d) setProdChangesApp(d) } catch {}
-      fetchProductsDB()
+fetchProductsDB()
+    flushPendingOrders()
     }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)

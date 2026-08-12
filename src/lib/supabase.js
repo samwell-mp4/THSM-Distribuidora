@@ -85,24 +85,92 @@ export async function getUserOrders(userId) {
   return (data || []).map(fixOrder)
 }
 
-export async function upsertOrder(order) {
-  const record = {
-    id: order.id,
-    user_id: order.user_id || order.userId || null,
-    status: order.status || 'pendente',
-    created_at: toDateInput(order.created_at || order.createdAt),
+const PENDING_ORDERS_KEY = 'thsm_pending_orders'
+
+function readPendingOrders() {
+  try { return JSON.parse(localStorage.getItem(PENDING_ORDERS_KEY)) || [] } catch { return [] }
+}
+
+function writePendingOrders(list) {
+  try {
+    if (list.length) localStorage.setItem(PENDING_ORDERS_KEY, JSON.stringify(list))
+    else localStorage.removeItem(PENDING_ORDERS_KEY)
+  } catch {}
+}
+
+function orderRecord(o) {
+  return {
+    id: o.id,
+    user_id: o.user_id || o.userId || null,
+    status: o.status || 'pendente',
+    created_at: toDateInput(o.created_at || o.createdAt),
     data: {
-      ...order,
-      identityPhoto: capPhotoSize(order.identityPhoto),
-      addressProof: capPhotoSize(order.addressProof)
+      ...o,
+      identityPhoto: capPhotoSize(o.identityPhoto),
+      addressProof: capPhotoSize(o.addressProof)
     }
   }
-  try {
-    const { error } = await supabase.from('pedidos').upsert(record, { onConflict: 'id' })
-    if (error) console.error('Erro upsertOrder:', error)
-  } catch (e) {
-    console.error('Exceção upsertOrder:', e)
+}
+
+async function upsertOrderBatch(records, attempts = 3) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const { error } = await supabase.from('pedidos').upsert(records, { onConflict: 'id' })
+      if (!error) return true
+      console.error('Erro upsert pedidos:', attempt, error)
+    } catch (e) {
+      console.error('Exceção upsert pedidos:', attempt, e)
+    }
+    if (attempt < attempts) await new Promise(r => setTimeout(r, 700 * attempt))
   }
+  return false
+}
+
+function queueOrderWrite(order) {
+  if (!order || order.id == null) return
+  const compact = { ...order, identityPhoto: capPhotoSize(order.identityPhoto, 8000), addressProof: capPhotoSize(order.addressProof, 8000) }
+  const pending = readPendingOrders()
+  const idx = pending.findIndex(p => p.id === order.id)
+  if (idx >= 0) pending[idx] = { ...pending[idx], ...compact }
+  else pending.push(compact)
+  writePendingOrders(pending)
+  setTimeout(() => { flushPendingOrders() }, 800)
+}
+
+function removePendingOrder(id) {
+  const pending = readPendingOrders().filter(p => p.id !== id)
+  writePendingOrders(pending)
+}
+
+let flushingOrders = false
+export async function flushPendingOrders() {
+  if (flushingOrders) return
+  const pending = readPendingOrders()
+  if (pending.length === 0) return
+  flushingOrders = true
+  try {
+    const remaining = []
+    for (const o of pending) {
+      const ok = await upsertOrderBatch([orderRecord(o)], 2)
+      if (!ok) remaining.push(o)
+    }
+    writePendingOrders(remaining)
+  } finally {
+    flushingOrders = false
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => { flushPendingOrders() })
+  window.addEventListener('focus', () => { flushPendingOrders() })
+}
+
+export async function upsertOrder(order) {
+  if (!order || order.id == null) return true
+  const ok = await upsertOrderBatch([orderRecord(order)])
+  if (ok) removePendingOrder(order.id)
+  else queueOrderWrite(order)
+  return ok
 }
 
 async function upsertChunked(table, records, mapFn) {
@@ -118,7 +186,7 @@ async function upsertChunked(table, records, mapFn) {
       if (!error) break
       // 23503 = FK violation (ex.: financeiro antes do pedido existir). Aguarda e tenta de novo;
       // a sincronização do pedido costuma chegar em seguida.
-      if (error.code === '23503' && attempt < 3) {
+      if ((error.code === '23503' || error.code === '57014' || !error.code) && attempt < 3) {
         await new Promise(r => setTimeout(r, 1200 * attempt))
         continue
       }
@@ -129,17 +197,18 @@ async function upsertChunked(table, records, mapFn) {
 }
 
 export async function upsertOrders(orders) {
-  await upsertChunked('pedidos', orders, o => ({
-    id: o.id,
-    user_id: o.user_id || o.userId || null,
-    status: o.status || 'pendente',
-    created_at: toDateInput(o.created_at || o.createdAt),
-    data: {
-      ...o,
-      identityPhoto: capPhotoSize(o.identityPhoto),
-      addressProof: capPhotoSize(o.addressProof)
-    }
-  }))
+  const seen = new Map()
+  orders.forEach(o => { if (o && o.id != null) seen.set(o.id, o) })
+  const list = [...seen.values()]
+  if (list.length === 0) return
+  const CHUNK = 100
+  for (let i = 0; i < list.length; i += CHUNK) {
+    const slice = list.slice(i, i + CHUNK)
+    const ok = await upsertOrderBatch(slice.map(orderRecord))
+    if (ok) slice.forEach(o => removePendingOrder(o.id))
+    else slice.forEach(o => queueOrderWrite(o))
+  }
+  flushPendingOrders()
 }
 
 export async function deleteOrder(id) {
