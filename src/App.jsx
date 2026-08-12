@@ -76,6 +76,7 @@ function App() {
     try { return JSON.parse(localStorage.getItem('thsm_admin_produtos')) || {} } catch { return {} }
   })
   const [dbNewProducts, setDbNewProducts] = useState([])
+  const [dbDeletedIds, setDbDeletedIds] = useState([])
   const [prodVariants, setProdVariants] = useState(() => {
     try { return JSON.parse(localStorage.getItem('thsm_prod_variants')) || {} } catch { return {} }
   })
@@ -114,7 +115,9 @@ const fetchProductsDB = useCallback(() => {
       const baseIds = new Set(produtos.map(p => p.id))
       const fromDB = {}
       const news = []
+      const deletedDB = []
       data.forEach(prod => {
+        if (prod.deleted) { deletedDB.push(prod.id); return }
         if (!baseIds.has(prod.id)) {
           news.push({
             id: prod.id,
@@ -137,6 +140,7 @@ const fetchProductsDB = useCallback(() => {
         if (Object.keys(override).length > 0) fromDB[prod.id] = override
       })
       setDbNewProducts(news)
+      setDbDeletedIds(deletedDB)
       setProdChangesApp(prev => {
         const merged = { ...fromDB, ...prev }
         const novoJson = JSON.stringify(merged)
@@ -343,6 +347,7 @@ const fetchProductsDB = useCallback(() => {
 
   useEffect(() => {
     try { const d = JSON.parse(localStorage.getItem('thsm_admin_produtos')); if (d) setProdChangesApp(d) } catch {}
+    fetchProductsDB()
   }, [route])
 
   const showToast = useCallback((msg, type = 'success') => {
@@ -353,19 +358,21 @@ const fetchProductsDB = useCallback(() => {
   const produtosMerged = useMemo(() => {
     let deleted = []
     try { deleted = JSON.parse(localStorage.getItem('thsm_admin_deleted_products')) || [] } catch {}
-    const deletedSet = new Set(deleted)
+    const deletedSet = new Set([...deleted, ...dbDeletedIds])
     const overridden = produtos.map(p => ({ ...p, ...(prodChangesApp[p.id] || {}) }))
     const news = dbNewProducts.map(p => ({ ...p, ...(prodChangesApp[p.id] || {}) }))
     return [...news, ...overridden].filter(p => !deletedSet.has(p.id))
-  }, [produtos, prodChangesApp, dbNewProducts, route])
+  }, [produtos, prodChangesApp, dbNewProducts, dbDeletedIds, route])
 
-  const categorias = useMemo(() => ['TODOS', ...[...new Set(produtosMerged.map(p => p.categoria))].sort()], [produtosMerged])
+  const categorias = useMemo(() => ['TODOS', 'Encomendas da Empresa', ...[...new Set(produtosMerged.map(p => p.categoria))].sort()], [produtosMerged])
 
   const filtered = useMemo(() => {
     const term = search.toLowerCase().trim()
     return produtosMerged.filter(p => {
       if (term && !p.nome.toLowerCase().includes(term) && !p.categoria.toLowerCase().includes(term)) return false
-      if (categoria !== 'TODOS' && p.categoria !== categoria) return false
+      if (categoria === 'Encomendas da Empresa') {
+        if (!p.semDevolucao) return false
+      } else if (categoria !== 'TODOS' && p.categoria !== categoria) return false
       if (p.preco < priceRange[0] || p.preco > priceRange[1]) return false
       if (onlyInStock && p.estoque <= 0) return false
       return true

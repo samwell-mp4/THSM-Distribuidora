@@ -4,6 +4,7 @@ import { supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, 
   deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads,
   upsertProducts, upsertDespesas, generateLoginToken, getAllRotaEdits, upsertRotaEdits, deleteRotaEdit as supabaseDeleteRotaEdit,
   deleteProducts as supabaseDeleteProducts } from '../lib/supabase'
+import { compressImageDataUrl, capPhotoSize } from '../lib/image'
 
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
 const STORAGE_ORDERS = 'thsm_admin_orders'
@@ -267,6 +268,7 @@ Em caso de dúvidas, entre em contato conosco.
 }
 
 function sendStatusWebhook(order, newStatus, extra = {}) {
+  if (order?.status === 'pre-pedido' && newStatus === 'pendente') return
   const whatsappMessage = buildStatusWhatsApp(order, newStatus, extra)
   const returnedItems = extra.returnedItems || order.returnedItems || []
   const rawPhone = (order.customer?.telefone || '').replace(/\D/g, '')
@@ -572,12 +574,12 @@ export default function Admin({ produtos, onVoltar }) {
   useEffect(() => { LS.set(STORAGE_CUSTOM_TIPOS, customDespesaTipos) }, [customDespesaTipos])
   useEffect(() => {
     const compact = orders.map(o => {
-      if ((o.identityPhoto && o.identityPhoto.length > 5000) || (o.addressProof && o.addressProof.length > 5000)) {
-        return o.identityPhoto?.startsWith('data:') || o.addressProof?.startsWith('data:')
-          ? { ...o, identityPhoto: o.identityPhoto?.startsWith('data:') ? '' : o.identityPhoto, addressProof: o.addressProof?.startsWith('data:') ? '' : o.addressProof }
-          : o
+      if (!o.identityPhoto && !o.addressProof) return o
+      return {
+        ...o,
+        identityPhoto: capPhotoSize(o.identityPhoto, 3000),
+        addressProof: capPhotoSize(o.addressProof, 3000)
       }
-      return o
     })
     LS.set(STORAGE_ORDERS, compact)
   }, [orders])
@@ -785,7 +787,9 @@ export default function Admin({ produtos, onVoltar }) {
         const variantsDB = {}
         const prodIdsFromJSON = new Set(produtos.map(x => x.id))
         const newsFromDB = []
+        const deletedFromDB = []
         p.forEach(prod => {
+          if (prod.deleted) { deletedFromDB.push(prod.id); return }
           if (!prodIdsFromJSON.has(prod.id)) {
             newsFromDB.push({ id: prod.id, nome: prod.nome || '', preco: prod.preco || 0, estoque: prod.estoque || 0, imagem: prod.imagem || '', categoria: prod.categoria || '', descricao: '', variantes: prod.variantes || {}, semDevolucao: !!prod.semDevolucao })
           }
@@ -800,6 +804,13 @@ export default function Admin({ produtos, onVoltar }) {
             variantsDB[prod.id] = prod.variantes
           }
         })
+        if (deletedFromDB.length > 0) {
+          setDeletedProdIds(prev => {
+            const next = Array.from(new Set([...prev, ...deletedFromDB]))
+            LS.set('thsm_admin_deleted_products', next)
+            return next
+          })
+        }
         if (newsFromDB.length > 0) {
           setNewProducts(prev => {
             const map = new Map()
@@ -1088,9 +1099,10 @@ export default function Admin({ produtos, onVoltar }) {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = (ev) => {
-      if (type === 'identity') setIdentityPreview(ev.target.result)
-      else setAddressPreview(ev.target.result)
+    reader.onload = async (ev) => {
+      const compressed = await compressImageDataUrl(ev.target.result)
+      if (type === 'identity') setIdentityPreview(compressed)
+      else setAddressPreview(compressed)
     }
     reader.readAsDataURL(file)
   }
@@ -1684,7 +1696,9 @@ export default function Admin({ produtos, onVoltar }) {
     const [pMin, pMax] = prodPriceRange
     return produtosAtuais.filter(p => {
       if (t && !p.nome.toLowerCase().includes(t) && !p.categoria.toLowerCase().includes(t)) return false
-      if (prodCatFilter !== 'TODOS' && p.categoria !== prodCatFilter) return false
+      if (prodCatFilter === 'Encomendas da Empresa') {
+        if (!p.semDevolucao) return false
+      } else if (prodCatFilter !== 'TODOS' && p.categoria !== prodCatFilter) return false
       if (prodStockFilter === 'in' && p.estoque <= 0) return false
       if (prodStockFilter === 'out' && p.estoque > 0) return false
       if (p.preco < pMin || p.preco > pMax) return false
@@ -2468,7 +2482,8 @@ export default function Admin({ produtos, onVoltar }) {
                 }
                 setProdCatFilter(e.target.value)
               }} style={{ padding: '0.45rem 0.7rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', background: 'white', cursor: 'pointer' }}>
-                {categoriasProd.map(c => <option key={c} value={c}>{c}</option>)}
+                <option value="Encomendas da Empresa">Encomendas da Empresa</option>
+                {categoriasProd.filter(c => c !== 'TODOS').map(c => <option key={c} value={c}>{c}</option>)}
                 <option value="__nova__">＋ Nova categoria...</option>
               </select>
               <select value={prodStockFilter} onChange={e => setProdStockFilter(e.target.value)} style={{ padding: '0.45rem 0.7rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', background: 'white', cursor: 'pointer' }}>

@@ -166,6 +166,23 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Produtos safe delete: remove product rows (new/DB-only products) and create
+-- persistent tombstones so deleted catalog products stay hidden in every browser.
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS deleted boolean DEFAULT false;
+
+CREATE OR REPLACE FUNCTION admin_delete_products(product_ids bigint[])
+RETURNS void
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  DELETE FROM produtos WHERE id = ANY(product_ids);
+  INSERT INTO produtos (id, deleted)
+  SELECT DISTINCT id, true FROM unnest(product_ids) AS t(id)
+  ON CONFLICT (id) DO UPDATE SET deleted = true;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Users: read own, admin reads all
 DROP POLICY IF EXISTS "Usuarios select own" ON usuarios;
 CREATE POLICY "Usuarios select own" ON usuarios

@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { supabase, upsertOrder, upsertFinancial, deleteOrder as supabaseDeleteOrder, upsertUser } from '../lib/supabase'
+import { compressImageDataUrl } from '../lib/image'
 import AddressForm from '../components/AddressForm'
 
 const LS_ORDERS = 'thsm_admin_orders'
@@ -329,9 +330,10 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = (ev) => {
-      if (type === 'identity') setIdentityPreview(ev.target.result)
-      else setAddressPreview(ev.target.result)
+    reader.onload = async (ev) => {
+      const compressed = await compressImageDataUrl(ev.target.result)
+      if (type === 'identity') setIdentityPreview(compressed)
+      else setAddressPreview(compressed)
     }
     reader.readAsDataURL(file)
   }

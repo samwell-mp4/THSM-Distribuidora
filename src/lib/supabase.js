@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { capPhotoSize } from './image'
 
 const SUPABASE_URL = 'https://zncuyrimrkzbidvxyonk.supabase.co'
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpuY3V5cmltcmt6Ymlkdnh5b25rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTMzOTksImV4cCI6MjA5OTMyOTM5OX0.gJ_NxaMO7fTpxwdFNNU4Phnn9E4qtOlyaMGugryL1iE'
@@ -90,7 +91,11 @@ export async function upsertOrder(order) {
     user_id: order.user_id || order.userId || null,
     status: order.status || 'pendente',
     created_at: toDateInput(order.created_at || order.createdAt),
-    data: order
+    data: {
+      ...order,
+      identityPhoto: capPhotoSize(order.identityPhoto),
+      addressProof: capPhotoSize(order.addressProof)
+    }
   }
   try {
     const { error } = await supabase.from('pedidos').upsert(record, { onConflict: 'id' })
@@ -129,7 +134,11 @@ export async function upsertOrders(orders) {
     user_id: o.user_id || o.userId || null,
     status: o.status || 'pendente',
     created_at: toDateInput(o.created_at || o.createdAt),
-    data: o
+    data: {
+      ...o,
+      identityPhoto: capPhotoSize(o.identityPhoto),
+      addressProof: capPhotoSize(o.addressProof)
+    }
   }))
 }
 
@@ -335,8 +344,12 @@ export async function upsertProducts(products) {
 export async function deleteProducts(ids) {
   if (!ids || ids.length === 0) return
   const mapped = [...new Set(ids)].map(Number)
-  const { error } = await supabase.from('produtos').delete().in('id', mapped)
-  if (error) console.error('Erro deleteProducts:', error)
+  try {
+    const { error } = await supabase.rpc('admin_delete_products', { product_ids: mapped })
+    if (error) console.error('Erro deleteProducts (rpc):', error)
+  } catch (e) {
+    console.error('Erro deleteProducts:', e)
+  }
 }
 
 export async function syncAllForAdmin() {
