@@ -1455,6 +1455,7 @@ export default function Admin({ produtos, onVoltar }) {
         case 'telefone': va = a.customer?.telefone || ''; vb = b.customer?.telefone || ''; return orderSort.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
         case 'regiao': va = a.customer?.endereco?.cidade || ''; vb = b.customer?.endereco?.cidade || ''; return orderSort.dir === 'asc' ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR')
         case 'data': return orderSort.dir === 'asc' ? (a.date || '').localeCompare(b.date || '') : (b.date || '').localeCompare(a.date || '')
+        case 'vencimento': return orderSort.dir === 'asc' ? (a.dataVencimento || '').localeCompare(b.dataVencimento || '') : (b.dataVencimento || '').localeCompare(a.dataVencimento || '')
         case 'itens': va = a.items?.reduce((s, i) => s + i.qty, 0) || 0; vb = b.items?.reduce((s, i) => s + i.qty, 0) || 0; return orderSort.dir === 'asc' ? va - vb : vb - va
         case 'total': return orderSort.dir === 'asc' ? (a.total || 0) - (b.total || 0) : (b.total || 0) - (a.total || 0)
         default: return (b.createdAt || 0) - (a.createdAt || 0)
@@ -2398,7 +2399,7 @@ export default function Admin({ produtos, onVoltar }) {
                     <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('telefone')}>Telefone {sortIcon('telefone')}</th>
                     <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('regiao')}>Região {sortIcon('regiao')}</th>
                     <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('data')}>Data {sortIcon('data')}</th>
-                    <th>Vencimento</th>
+                    <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('vencimento')}>Vencimento {sortIcon('vencimento')}</th>
                     <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('itens')}>Itens {sortIcon('itens')}</th>
                     <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('total')}>Total {sortIcon('total')}</th>
                     <th>Pagamento</th>
