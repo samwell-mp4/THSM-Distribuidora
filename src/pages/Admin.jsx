@@ -1,9 +1,11 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import './Admin.css'
-import { supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser,
+import {
+  supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser,
   deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads,
   upsertProducts, upsertDespesas, generateLoginToken, getAllRotaEdits, upsertRotaEdits, deleteRotaEdit as supabaseDeleteRotaEdit,
-  deleteProducts as supabaseDeleteProducts, flushPendingOrders } from '../lib/supabase'
+  deleteProducts as supabaseDeleteProducts, flushPendingOrders
+} from '../lib/supabase'
 import { compressImageDataUrl, capPhotoSize } from '../lib/image'
 
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
@@ -304,7 +306,7 @@ function sendStatusWebhook(order, newStatus, extra = {}) {
         ...(returnedItems.length > 0 ? { returnedItems: returnedItems.map(i => ({ nome: i.nome, returnedQty: i.returnedQty || i.qty, preco: i.preco })) } : {})
       }
     })
-  }).catch(() => {})
+  }).catch(() => { })
 }
 
 function sendAlertRota(tipo, contatos, orders, customText = '') {
@@ -375,7 +377,7 @@ function sendAlertRota(tipo, contatos, orders, customText = '') {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
-  }).catch(() => {})
+  }).catch(() => { })
 }
 
 import AddressForm from '../components/AddressForm'
@@ -438,7 +440,7 @@ export default function Admin({ produtos, onVoltar }) {
   const [deliveryDataInicio, setDeliveryDataInicio] = useState(() => hoje())
   const [deliveryDataVenc, setDeliveryDataVenc] = useState('')
   const [usuarios, setUsuarios] = useState([])
-  
+
   const [syncingUsers, setSyncingUsers] = useState(false)
   const [isInitialSyncing, setIsInitialSyncing] = useState(true)
   const [selectedUserEmail, setSelectedUserEmail] = useState(null)
@@ -618,15 +620,10 @@ export default function Admin({ produtos, onVoltar }) {
     if (isInitialSyncing) return
     if (financial.length === 0) return
     const t = setTimeout(() => {
-      const doUpsert = () => upsertFinancial(financial)
-      if (orders.length > 0) {
-        upsertOrders(orders).then(doUpsert).catch(doUpsert)
-      } else {
-        doUpsert()
-      }
+      upsertFinancial(financial)
     }, 1400)
     return () => clearTimeout(t)
-  }, [financial, orders, isInitialSyncing])
+  }, [financial, isInitialSyncing])
   useEffect(() => {
     LS.set(STORAGE_DESPESAS, despesas)
     if (isInitialSyncing) return
@@ -860,7 +857,7 @@ export default function Admin({ produtos, onVoltar }) {
           try {
             const existing = JSON.parse(localStorage.getItem('thsm_prod_variants') || '{}')
             localStorage.setItem('thsm_prod_variants', JSON.stringify({ ...existing, ...variantsDB }))
-          } catch {}
+          } catch { }
         }
         setProdChanges(prev => {
           const merged = { ...fromDB, ...prev }
@@ -880,20 +877,20 @@ export default function Admin({ produtos, onVoltar }) {
         setSyncingUsers(false)
         setIsInitialSyncing(false)
       })
-    getAllLeads().then(setLeads).catch(() => {})
-    // Reenvia leads salvos localmente (fallback quando site ficou offline)
-    ;(async () => {
-      try {
-        const pendentes = JSON.parse(localStorage.getItem('thsm_pending_leads') || '[]')
-        if (!pendentes.length) return
-        const enviados = []
-        for (const lead of pendentes) {
-          const { error } = await supabase.from('leads').insert(lead)
-          if (!error || error.code === '23505') enviados.push(lead)
-        }
-        if (enviados.length) localStorage.setItem('thsm_pending_leads', JSON.stringify(pendentes.filter(p => !enviados.includes(p))))
-      } catch {}
-    })()
+    getAllLeads().then(setLeads).catch(() => { })
+      // Reenvia leads salvos localmente (fallback quando site ficou offline)
+      ; (async () => {
+        try {
+          const pendentes = JSON.parse(localStorage.getItem('thsm_pending_leads') || '[]')
+          if (!pendentes.length) return
+          const enviados = []
+          for (const lead of pendentes) {
+            const { error } = await supabase.from('leads').insert(lead)
+            if (!error || error.code === '23505') enviados.push(lead)
+          }
+          if (enviados.length) localStorage.setItem('thsm_pending_leads', JSON.stringify(pendentes.filter(p => !enviados.includes(p))))
+        } catch { }
+      })()
   }, [])
 
   // Auto-expand first rota when rotas load
@@ -1526,22 +1523,22 @@ export default function Admin({ produtos, onVoltar }) {
     selectedIds.forEach(id => {
       const order = orders.find(o => o.id === id)
       if (!order) return
-      ;(order.items || []).forEach(i => {
-        const prodAtual = produtosAtuais.find(p => p.id === i.id || p.id === String(i.id) || norm(p.nome) === norm(i.nome))
-        const semDev = i.semDevolucao || prodAtual?.semDevolucao || isNoDevName(i.nome)
-        if (semDev) {
-          rows.push({
-            orderId: id,
-            cliente: order.customer?.nome || '-',
-            telefone: order.customer?.telefone || '-',
-            cidade: order.customer?.endereco?.cidade || '',
-            produto: i.nome,
-            qty: i.qty || 1,
-            valor: (i.preco || 0) * (i.qty || 1),
-            data: order.date || ''
-          })
-        }
-      })
+        ; (order.items || []).forEach(i => {
+          const prodAtual = produtosAtuais.find(p => p.id === i.id || p.id === String(i.id) || norm(p.nome) === norm(i.nome))
+          const semDev = i.semDevolucao || prodAtual?.semDevolucao || isNoDevName(i.nome)
+          if (semDev) {
+            rows.push({
+              orderId: id,
+              cliente: order.customer?.nome || '-',
+              telefone: order.customer?.telefone || '-',
+              cidade: order.customer?.endereco?.cidade || '',
+              produto: i.nome,
+              qty: i.qty || 1,
+              valor: (i.preco || 0) * (i.qty || 1),
+              data: order.date || ''
+            })
+          }
+        })
     })
     if (rows.length === 0) {
       showToast('Nenhum produto SEM DEVOLUÇÃO nos pedidos selecionados', 'error')
@@ -1570,7 +1567,7 @@ export default function Admin({ produtos, onVoltar }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ telefone, message: msg })
-    }).then(() => showToast('WhatsApp enviado!', 'success')).catch(() => {})
+    }).then(() => showToast('WhatsApp enviado!', 'success')).catch(() => { })
   }
 
   // Stats
@@ -1643,7 +1640,7 @@ export default function Admin({ produtos, onVoltar }) {
     let lucroTotal = 0
     const qtyByProduto = {}
     concluidos.forEach(o => {
-      ;(o.items || []).forEach(i => {
+      ; (o.items || []).forEach(i => {
         const qty = Number(i.qty) || 0
         const preco = Number(i.preco) || 0
         const custo = Number(i.preco_custo) || Number(i.custo) || 0
@@ -2226,28 +2223,28 @@ export default function Admin({ produtos, onVoltar }) {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                    <th>#</th>
-                    <th>Cliente</th>
-                    <th>Região</th>
-                    <th>Data</th>
-                    <th>Total</th>
-                    <th>Pagamento</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dashLastOrders.map(o => (
-                    <tr key={o.id}>
-                      <td>#{o.id.toString().slice(-6)}</td>
-                      <td>{o.customer.nome}</td>
-                      <td>{[o.customer.endereco?.cidade, o.customer.endereco?.estado].filter(Boolean).join('/') || '-'}</td>
-                      <td>{formatDate(o.date)}</td>
-                      <td className="td-price">{formatPreco(o.total)}</td>
-                      <td>{o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}</td>
-                      <td><span className={`status-tag status-${o.status}`}>{o.status}</span></td>
+                      <th>#</th>
+                      <th>Cliente</th>
+                      <th>Região</th>
+                      <th>Data</th>
+                      <th>Total</th>
+                      <th>Pagamento</th>
+                      <th>Status</th>
                     </tr>
-                  ))}
-                  {dashLastOrders.length === 0 && <tr><td colSpan="7" className="td-empty">Nenhum pedido no período</td></tr>}
+                  </thead>
+                  <tbody>
+                    {dashLastOrders.map(o => (
+                      <tr key={o.id}>
+                        <td>#{o.id.toString().slice(-6)}</td>
+                        <td>{o.customer.nome}</td>
+                        <td>{[o.customer.endereco?.cidade, o.customer.endereco?.estado].filter(Boolean).join('/') || '-'}</td>
+                        <td>{formatDate(o.date)}</td>
+                        <td className="td-price">{formatPreco(o.total)}</td>
+                        <td>{o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}</td>
+                        <td><span className={`status-tag status-${o.status}`}>{o.status}</span></td>
+                      </tr>
+                    ))}
+                    {dashLastOrders.length === 0 && <tr><td colSpan="7" className="td-empty">Nenhum pedido no período</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -2590,7 +2587,7 @@ export default function Admin({ produtos, onVoltar }) {
                         <div className="admin-prod-card-badges">
                           {p.estoque <= 0 ? <span className="admin-badge out">Indisponível</span>
                             : p.estoque <= 5 ? <span className="admin-badge low">Últimas {p.estoque}</span>
-                            : <span className="admin-badge in">Disponível</span>}
+                              : <span className="admin-badge in">Disponível</span>}
                           {p.semDevolucao && <span className="admin-badge nodev">SEM DEVOLUÇÃO</span>}
                         </div>
                         <div className="admin-prod-card-cat">{p.categoria}</div>
@@ -2642,7 +2639,7 @@ export default function Admin({ produtos, onVoltar }) {
                         <th style={{ width: '36px' }}>
                           <input type="checkbox" checked={filteredProds.length > 0 && prodSelectedIds.size === filteredProds.length} onChange={toggleProdSelectAll} style={{ cursor: 'pointer', width: '15px', height: '15px' }} title={prodSelectedIds.size === filteredProds.length ? 'Desmarcar todos' : `Selecionar todos (${filteredProds.length} produtos)`} />
                         </th>
-                        <th style={{width: '50px'}}>Foto</th>
+                        <th style={{ width: '50px' }}>Foto</th>
                         <th style={{ cursor: 'pointer' }} onClick={() => toggleProdSort('nome')}>Produto {prodSortIcon('nome')}</th>
                         <th style={{ cursor: 'pointer' }} onClick={() => toggleProdSort('categoria')}>Categoria {prodSortIcon('categoria')}</th>
                         <th style={{ cursor: 'pointer' }} onClick={() => toggleProdSort('preco')}>Preço {prodSortIcon('preco')}</th>
@@ -2662,7 +2659,7 @@ export default function Admin({ produtos, onVoltar }) {
                               {p.imagem ? <img src={p.imagem} alt={p.nome} /> : <i className="fa-solid fa-image"></i>}
                             </div>
                           </td>
-<td className="td-prod-name">{p.nome}{p.semDevolucao && <span className="prod-nodev-tag">SEM DEVOLUÇÃO</span>}</td>
+                          <td className="td-prod-name">{p.nome}{p.semDevolucao && <span className="prod-nodev-tag">SEM DEVOLUÇÃO</span>}</td>
                           <td><span className="cat-tag">{p.categoria}</span></td>
                           <td className="td-price">{formatPreco(p.preco)}</td>
                           <td className="td-price" style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>{p.preco_custo ? formatPreco(p.preco_custo) : '-'}</td>
@@ -2940,8 +2937,8 @@ export default function Admin({ produtos, onVoltar }) {
                   ) : (
                     <p style={{ fontSize: '0.82rem' }}>
                       {selectedUserDetail.endereco?.nivel === 'primeiro-comprador' ? <><span style={{ color: '#10b981', fontWeight: 600 }}>●</span> Primeiro Comprador</> :
-                       selectedUserDetail.endereco?.nivel === 'comprador-antigo' ? <><span style={{ color: '#8b5cf6', fontWeight: 600 }}>●</span> Comprador Antigo</> :
-                       <span style={{ color: 'var(--admin-text-sec)' }}>Nenhum nível definido</span>}
+                        selectedUserDetail.endereco?.nivel === 'comprador-antigo' ? <><span style={{ color: '#8b5cf6', fontWeight: 600 }}>●</span> Comprador Antigo</> :
+                          <span style={{ color: 'var(--admin-text-sec)' }}>Nenhum nível definido</span>}
                     </p>
                   )}
                   <div style={{ marginTop: '0.75rem', borderTop: '1px solid var(--admin-border)', paddingTop: '0.75rem' }}>
@@ -3062,7 +3059,7 @@ export default function Admin({ produtos, onVoltar }) {
                           <td>{o.items.reduce((s, i) => s + i.qty, 0)} itens</td>
                           <td className="td-price">{formatPreco(o.total)}</td>
                           <td>{o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}</td>
-                      <td><span className={`status-tag status-${o.status}`}>{STATUS_LABELS[o.status] || o.status}</span></td>
+                          <td><span className={`status-tag status-${o.status}`}>{STATUS_LABELS[o.status] || o.status}</span></td>
                           <td>
                             <div className="td-actions">
                               <button className="action-btn" title="Ver pedido" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-eye"></i></button>
@@ -3152,124 +3149,124 @@ export default function Admin({ produtos, onVoltar }) {
                 </div>
 
                 <div className="admin-table-wrap">
-                    <table className="admin-table">
-                      <thead>
-                        <tr>
-                          <th style={{ width: '32px' }}>
-                            <input type="checkbox" checked={paginatedUsuarios.length > 0 && paginatedUsuarios.every(u => selectedUserIds.has(u.telefone || u.id))}
-                              onChange={e => {
-                                if (e.target.checked) {
-                                  setSelectedUserIds(new Set(paginatedUsuarios.map(u => u.telefone || u.id)))
-                                } else {
-                                  setSelectedUserIds(new Set())
-                                }
-                              }} />
-                          </th>
-                          <th>Nome</th>
-                          <th>Telefone</th>
-                          <th>Email</th>
-                          <th>CPF</th>
-                          <th>Origem</th>
-                          <th>Nível</th>
-                          <th>Endereço</th>
-                          <th>Cadastro</th>
-                          <th>Pedidos</th>
-                          <th>Limites</th>
-                          <th>Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                         {paginatedUsuarios.map(u => {
-                           const uid = u.telefone || u.id
-                           const userOrders = orders.filter(o => o.customer?.telefone === u.telefone || o.user_id === u.id)
-                           const totalGasto = userOrders.reduce((s, o) => s + o.total, 0)
-                           const e = u.endereco || {}
-                           const endStr = [e.rua && `${e.rua}${e.numero ? `, ${e.numero}` : ''}`, e.bairro, e.cidade].filter(Boolean).join(', ') || '-'
-                           const origem = e.origem || '—'
-                           const origemColors = { 'BOT': '#8b5cf6', 'Registro do Site': '#16a34a', 'Admin': '#2563eb', 'Importado WhatsApp': '#d97706' }
-                           return (
-                             <tr key={uid}>
-                               <td>
-                                 <input type="checkbox" checked={selectedUserIds.has(uid)}
-                                   onChange={e => {
-                                     const next = new Set(selectedUserIds)
-                                     e.target.checked ? next.add(uid) : next.delete(uid)
-                                     setSelectedUserIds(next)
-                                   }} />
-                               </td>
-                                <td style={{ fontWeight: 600 }}>{u.nome}</td>
-                                <td>{u.telefone}</td>
-                                <td>{u.email || '-'}</td>
-                                <td style={{ fontSize: '0.78rem' }}>{u.endereco?.cpf || '-'}</td>
-                                <td>
-                                  <span className="origem-badge" style={{ background: `${origemColors[origem] || '#6b7280'}18`, color: origemColors[origem] || '#6b7280', border: `1px solid ${origemColors[origem] || '#6b7280'}30` }}>
-                                    {origem === 'BOT' ? <i className="fa-solid fa-robot"></i> : origem === 'Registro do Site' ? <i className="fa-solid fa-globe"></i> : origem === 'Admin' ? <i className="fa-solid fa-user-tie"></i> : origem === 'Importado WhatsApp' ? <i className="fa-brands fa-whatsapp"></i> : <i className="fa-solid fa-circle-question"></i>}
-                                    {' '}{origem}
-                                  </span>
-                                </td>
-                                <td>
-                                  {u.endereco?.nivel === 'primeiro-comprador' ? <span style={{ color: '#10b981', fontWeight: 600, fontSize: '0.78rem' }}>Primeiro Comprador</span> :
-                                   u.endereco?.nivel === 'comprador-antigo' ? <span style={{ color: '#8b5cf6', fontWeight: 600, fontSize: '0.78rem' }}>Comprador Antigo</span> :
-                                   <span style={{ color: 'var(--admin-text-sec)', fontSize: '0.75rem' }}>—</span>}
-                                </td>
-                               <td style={{ fontSize: '0.78rem', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={endStr}>
-                                 {endStr}
-                               </td>
-                               <td>{formatDate(u.created_at ? new Date(u.created_at).toISOString().split('T')[0] : (u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : ''))}</td>
-                                <td>
-                                  <span className="cat-tag">{userOrders.length} pedidos</span>
-                                  {userOrders.length > 0 && (
-                                    <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>
-                                      {formatPreco(totalGasto)}
-                                    </span>
-                                  )}
-                                </td>
-                                <td style={{ fontSize: '0.75rem' }}>
-                                  {u.endereco?.limitePedidos ? <span>P: {u.endereco.limitePedidos}</span> : null}
-                                  {u.endereco?.limitePreco ? <span>{u.endereco?.limitePedidos ? ' | ' : ''}R$: {formatPreco(u.endereco.limitePreco)}</span> : null}
-                                  {!u.endereco?.limitePedidos && !u.endereco?.limitePreco ? <span style={{ color: 'var(--admin-text-sec)' }}>—</span> : null}
-                                </td>
-                                 <td style={{ position: 'relative' }}>
-                                  <div className="td-actions">
-                                    <button className="action-btn" style={{ color: '#2563eb' }} title="Ver no Google Maps" onClick={() => openGoogleMaps(buildAddressString(e))}>
-                                      <i className="fa-solid fa-location-dot"></i>
-                                    </button>
-                                    <button className="action-btn" style={{ color: '#8b5cf6' }} title="Ver no Mapa Interativo" onClick={() => { setTab('mapa'); setSelectedUserIds(new Set([u.telefone || u.id])) }}>
-                                      <i className="fa-solid fa-map"></i>
-                                    </button>
-                                    <button className="action-btn" style={{ color: '#25d366' }} title="Enviar WhatsApp"
-                                      onClick={() => setUserMsgMenu(userMsgMenu === u.telefone ? null : u.telefone)}>
-                                      <i className="fa-brands fa-whatsapp"></i>
-                                    </button>
-                                    <button className="action-btn action-green" title="Ver detalhes do usuário" onClick={() => setSelectedUserDetail(u)}>
-                                      <i className="fa-solid fa-user"></i>
-                                    </button>
-                                    <button className="action-btn" title="Ver pedidos" onClick={() => { setSelectedUserEmail(u.email || u.telefone); setTab('pedidos') }}>
-                                      <i className="fa-solid fa-clipboard-list"></i>
-                                    </button>
-                                    <button className="action-btn" style={{ color: 'var(--danger)' }} title="Excluir usuário" onClick={() => handleDeleteUser(u)}>
-                                      <i className="fa-solid fa-trash-can"></i>
-                                    </button>
-                                  </div>
-                                  {userMsgMenu === u.telefone && (
-                                    <div style={{ position: 'absolute', right: 0, top: '100%', zIndex: 100, background: 'white', border: '1px solid var(--admin-border)', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', minWidth: '200px', padding: '0.35rem', marginTop: '4px' }}>
-                                      {USER_MSG_TEMPLATES.map(t => (
-                                        <div key={t.key}
-                                          style={{ padding: '0.55rem 0.7rem', cursor: 'pointer', borderRadius: '8px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--admin-text)' }}
-                                          onClick={() => sendUserWhatsApp(u, t.key)}
-                                          onMouseEnter={e => e.currentTarget.style.background = '#f3f4f6'}
-                                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                          <i className={`fa-solid ${t.icon}`} style={{ width: '16px', color: '#25d366' }}></i>
-                                          {t.label}
-                                        </div>
-                                      ))}
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: '32px' }}>
+                          <input type="checkbox" checked={paginatedUsuarios.length > 0 && paginatedUsuarios.every(u => selectedUserIds.has(u.telefone || u.id))}
+                            onChange={e => {
+                              if (e.target.checked) {
+                                setSelectedUserIds(new Set(paginatedUsuarios.map(u => u.telefone || u.id)))
+                              } else {
+                                setSelectedUserIds(new Set())
+                              }
+                            }} />
+                        </th>
+                        <th>Nome</th>
+                        <th>Telefone</th>
+                        <th>Email</th>
+                        <th>CPF</th>
+                        <th>Origem</th>
+                        <th>Nível</th>
+                        <th>Endereço</th>
+                        <th>Cadastro</th>
+                        <th>Pedidos</th>
+                        <th>Limites</th>
+                        <th>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedUsuarios.map(u => {
+                        const uid = u.telefone || u.id
+                        const userOrders = orders.filter(o => o.customer?.telefone === u.telefone || o.user_id === u.id)
+                        const totalGasto = userOrders.reduce((s, o) => s + o.total, 0)
+                        const e = u.endereco || {}
+                        const endStr = [e.rua && `${e.rua}${e.numero ? `, ${e.numero}` : ''}`, e.bairro, e.cidade].filter(Boolean).join(', ') || '-'
+                        const origem = e.origem || '—'
+                        const origemColors = { 'BOT': '#8b5cf6', 'Registro do Site': '#16a34a', 'Admin': '#2563eb', 'Importado WhatsApp': '#d97706' }
+                        return (
+                          <tr key={uid}>
+                            <td>
+                              <input type="checkbox" checked={selectedUserIds.has(uid)}
+                                onChange={e => {
+                                  const next = new Set(selectedUserIds)
+                                  e.target.checked ? next.add(uid) : next.delete(uid)
+                                  setSelectedUserIds(next)
+                                }} />
+                            </td>
+                            <td style={{ fontWeight: 600 }}>{u.nome}</td>
+                            <td>{u.telefone}</td>
+                            <td>{u.email || '-'}</td>
+                            <td style={{ fontSize: '0.78rem' }}>{u.endereco?.cpf || '-'}</td>
+                            <td>
+                              <span className="origem-badge" style={{ background: `${origemColors[origem] || '#6b7280'}18`, color: origemColors[origem] || '#6b7280', border: `1px solid ${origemColors[origem] || '#6b7280'}30` }}>
+                                {origem === 'BOT' ? <i className="fa-solid fa-robot"></i> : origem === 'Registro do Site' ? <i className="fa-solid fa-globe"></i> : origem === 'Admin' ? <i className="fa-solid fa-user-tie"></i> : origem === 'Importado WhatsApp' ? <i className="fa-brands fa-whatsapp"></i> : <i className="fa-solid fa-circle-question"></i>}
+                                {' '}{origem}
+                              </span>
+                            </td>
+                            <td>
+                              {u.endereco?.nivel === 'primeiro-comprador' ? <span style={{ color: '#10b981', fontWeight: 600, fontSize: '0.78rem' }}>Primeiro Comprador</span> :
+                                u.endereco?.nivel === 'comprador-antigo' ? <span style={{ color: '#8b5cf6', fontWeight: 600, fontSize: '0.78rem' }}>Comprador Antigo</span> :
+                                  <span style={{ color: 'var(--admin-text-sec)', fontSize: '0.75rem' }}>—</span>}
+                            </td>
+                            <td style={{ fontSize: '0.78rem', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={endStr}>
+                              {endStr}
+                            </td>
+                            <td>{formatDate(u.created_at ? new Date(u.created_at).toISOString().split('T')[0] : (u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : ''))}</td>
+                            <td>
+                              <span className="cat-tag">{userOrders.length} pedidos</span>
+                              {userOrders.length > 0 && (
+                                <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>
+                                  {formatPreco(totalGasto)}
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ fontSize: '0.75rem' }}>
+                              {u.endereco?.limitePedidos ? <span>P: {u.endereco.limitePedidos}</span> : null}
+                              {u.endereco?.limitePreco ? <span>{u.endereco?.limitePedidos ? ' | ' : ''}R$: {formatPreco(u.endereco.limitePreco)}</span> : null}
+                              {!u.endereco?.limitePedidos && !u.endereco?.limitePreco ? <span style={{ color: 'var(--admin-text-sec)' }}>—</span> : null}
+                            </td>
+                            <td style={{ position: 'relative' }}>
+                              <div className="td-actions">
+                                <button className="action-btn" style={{ color: '#2563eb' }} title="Ver no Google Maps" onClick={() => openGoogleMaps(buildAddressString(e))}>
+                                  <i className="fa-solid fa-location-dot"></i>
+                                </button>
+                                <button className="action-btn" style={{ color: '#8b5cf6' }} title="Ver no Mapa Interativo" onClick={() => { setTab('mapa'); setSelectedUserIds(new Set([u.telefone || u.id])) }}>
+                                  <i className="fa-solid fa-map"></i>
+                                </button>
+                                <button className="action-btn" style={{ color: '#25d366' }} title="Enviar WhatsApp"
+                                  onClick={() => setUserMsgMenu(userMsgMenu === u.telefone ? null : u.telefone)}>
+                                  <i className="fa-brands fa-whatsapp"></i>
+                                </button>
+                                <button className="action-btn action-green" title="Ver detalhes do usuário" onClick={() => setSelectedUserDetail(u)}>
+                                  <i className="fa-solid fa-user"></i>
+                                </button>
+                                <button className="action-btn" title="Ver pedidos" onClick={() => { setSelectedUserEmail(u.email || u.telefone); setTab('pedidos') }}>
+                                  <i className="fa-solid fa-clipboard-list"></i>
+                                </button>
+                                <button className="action-btn" style={{ color: 'var(--danger)' }} title="Excluir usuário" onClick={() => handleDeleteUser(u)}>
+                                  <i className="fa-solid fa-trash-can"></i>
+                                </button>
+                              </div>
+                              {userMsgMenu === u.telefone && (
+                                <div style={{ position: 'absolute', right: 0, top: '100%', zIndex: 100, background: 'white', border: '1px solid var(--admin-border)', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', minWidth: '200px', padding: '0.35rem', marginTop: '4px' }}>
+                                  {USER_MSG_TEMPLATES.map(t => (
+                                    <div key={t.key}
+                                      style={{ padding: '0.55rem 0.7rem', cursor: 'pointer', borderRadius: '8px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--admin-text)' }}
+                                      onClick={() => sendUserWhatsApp(u, t.key)}
+                                      onMouseEnter={e => e.currentTarget.style.background = '#f3f4f6'}
+                                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                      <i className={`fa-solid ${t.icon}`} style={{ width: '16px', color: '#25d366' }}></i>
+                                      {t.label}
                                     </div>
-                                  )}
-                               </td>
-                             </tr>
-                           )
-                         })}
-                         {paginatedUsuarios.length === 0 && <tr><td colSpan="10" className="td-empty">Nenhum usuário encontrado</td></tr>}
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                      {paginatedUsuarios.length === 0 && <tr><td colSpan="10" className="td-empty">Nenhum usuário encontrado</td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -3340,18 +3337,20 @@ export default function Admin({ produtos, onVoltar }) {
         {tab === 'mapa' && (
           <div className="admin-section" style={{ height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column' }}>
             <MapView usuarios={usuarios} orders={orders} financial={financial}
-  onMarkOnWay={(user) => {
-    const userOrders = orders.filter(o => o.customer?.telefone === user.telefone || o.user_id === user.id)
-    const toUpdate = userOrders.filter(o => !['entregue', 'cancelado'].includes(o.status))
-    if (toUpdate.length === 0) return
-    if (confirm(`Marcar ${toUpdate.length} pedido(s) de ${user.nome || user.pushName} como "Em Rota"?`)) {
-      setOrders(prev => prev.map(o => toUpdate.some(t => t.id === o.id) ? { ...o, status: 'em-rota' } : o))
-    }
-  }}
-  onViewUser={(user) => {
-    setSelectedUserDetail(user)
-    setTab('usuarios')
-  }} />
+              onMarkOnWay={(user) => {
+                const userOrders = orders.filter(o => o.customer?.telefone === user.telefone || o.user_id === user.id)
+                const toUpdate = userOrders.filter(o => !['entregue', 'cancelado'].includes(o.status))
+                if (toUpdate.length === 0) return
+                if (confirm(`Marcar ${toUpdate.length} pedido(s) de ${user.nome || user.pushName} como "Em Rota"?`)) {
+                  toUpdate.forEach(ord => {
+                    updateOrderStatus(ord.id, 'em-rota')
+                  })
+                }
+              }}
+              onViewUser={(user) => {
+                setSelectedUserDetail(user)
+                setTab('usuarios')
+              }} />
           </div>
         )}
 
@@ -3536,45 +3535,45 @@ export default function Admin({ produtos, onVoltar }) {
                                   <span className="rota-dot"></span>
                                   <i className="fa-solid fa-city"></i> {cidadesVisiveis.length} {cidadesVisiveis.length === 1 ? 'cidade' : 'cidades'}
                                 </span>
-            </div>
-                            <div className="rota-card-actions">
-                              <button className="rota-map-btn" title="Ver no Google Maps" onClick={e => { e.stopPropagation(); window.open(`https://www.google.com/maps/search/${encodeURIComponent(grupo.rota)}`, '_blank') }}>
-                                <i className="fa-solid fa-map-location-dot"></i>
-                                <span>Mapa</span>
-                              </button>
-                              <button className="rota-map-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }} title="Alertar Rotas" onClick={e => { e.stopPropagation(); if (confirm(`Enviar alerta para ${totalVisivel} contatos da rota "${grupo.rota}"?`)) { sendAlertRota('alerta', allContatos, orders); showToast(`Alerta enviado para ${totalVisivel} contatos`) } }}>
-                                <i className="fa-solid fa-bullhorn"></i>
-                                <span>Alertar</span>
-                              </button>
-                              <button className="rota-map-btn" style={{ background: '#059669', color: 'white', borderColor: '#059669' }} title="Atualização Pedidos" onClick={e => { e.stopPropagation(); if (confirm(`Enviar atualização de pedidos para ${totalVisivel} contatos da rota "${grupo.rota}"?`)) { sendAlertRota('atualizacao', allContatos, orders); showToast(`Atualização enviada para ${totalVisivel} contatos`) } }}>
-                                <i className="fa-solid fa-rotate"></i>
-                                <span>Pedidos</span>
-                              </button>
-                              <button className="rota-map-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} title="Personalizado" onClick={e => { e.stopPropagation(); setCustomMsgRota({ rota: grupo.rota, contatos: allContatos, total: totalVisivel }) }}>
-                                <i className="fa-solid fa-pen"></i>
-                                <span>Custom</span>
-                              </button>
-                              <button className="rota-map-btn" style={{ background: '#0ea5e9', color: 'white', borderColor: '#0ea5e9' }} title="Adicionar contato à rota" onClick={e => { e.stopPropagation(); setRotaContactModal({ rota: grupo.rota, mode: 'add', custom: !!grupo._custom }) }}>
-                                <i className="fa-solid fa-user-plus"></i>
-                                <span>Adicionar</span>
-                              </button>
-                              {removedEdits.length > 0 && (
-                                <button className="rota-map-btn" style={{ background: '#f97316', color: 'white', borderColor: '#f97316' }} title="Restaurar contatos removidos desta rota" onClick={e => { e.stopPropagation(); setShowRestoreRota(grupo.rota) }}>
-                                  <i className="fa-solid fa-rotate-left"></i>
-                                  <span>Restaurar ({removedEdits.length})</span>
+                              </div>
+                              <div className="rota-card-actions">
+                                <button className="rota-map-btn" title="Ver no Google Maps" onClick={e => { e.stopPropagation(); window.open(`https://www.google.com/maps/search/${encodeURIComponent(grupo.rota)}`, '_blank') }}>
+                                  <i className="fa-solid fa-map-location-dot"></i>
+                                  <span>Mapa</span>
                                 </button>
-                              )}
-                              {grupo._custom && (
-                                <button className="rota-map-btn" style={{ background: '#dc2626', color: 'white', borderColor: '#dc2626' }} title="Excluir rota" onClick={e => { e.stopPropagation(); if (confirm(`Excluir rota "${grupo.rota}"?`)) { setCustomRotas(prev => prev.filter(cr => cr.rota !== grupo.rota)); showToast(`Rota "${grupo.rota}" excluída`) } }}>
-                                  <i className="fa-solid fa-trash"></i>
-                                  <span>Excluir</span>
+                                <button className="rota-map-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }} title="Alertar Rotas" onClick={e => { e.stopPropagation(); if (confirm(`Enviar alerta para ${totalVisivel} contatos da rota "${grupo.rota}"?`)) { sendAlertRota('alerta', allContatos, orders); showToast(`Alerta enviado para ${totalVisivel} contatos`) } }}>
+                                  <i className="fa-solid fa-bullhorn"></i>
+                                  <span>Alertar</span>
                                 </button>
-                              )}
-                              <span className="rota-expand-icon">
-                                <i className={`fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
-                              </span>
+                                <button className="rota-map-btn" style={{ background: '#059669', color: 'white', borderColor: '#059669' }} title="Atualização Pedidos" onClick={e => { e.stopPropagation(); if (confirm(`Enviar atualização de pedidos para ${totalVisivel} contatos da rota "${grupo.rota}"?`)) { sendAlertRota('atualizacao', allContatos, orders); showToast(`Atualização enviada para ${totalVisivel} contatos`) } }}>
+                                  <i className="fa-solid fa-rotate"></i>
+                                  <span>Pedidos</span>
+                                </button>
+                                <button className="rota-map-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} title="Personalizado" onClick={e => { e.stopPropagation(); setCustomMsgRota({ rota: grupo.rota, contatos: allContatos, total: totalVisivel }) }}>
+                                  <i className="fa-solid fa-pen"></i>
+                                  <span>Custom</span>
+                                </button>
+                                <button className="rota-map-btn" style={{ background: '#0ea5e9', color: 'white', borderColor: '#0ea5e9' }} title="Adicionar contato à rota" onClick={e => { e.stopPropagation(); setRotaContactModal({ rota: grupo.rota, mode: 'add', custom: !!grupo._custom }) }}>
+                                  <i className="fa-solid fa-user-plus"></i>
+                                  <span>Adicionar</span>
+                                </button>
+                                {removedEdits.length > 0 && (
+                                  <button className="rota-map-btn" style={{ background: '#f97316', color: 'white', borderColor: '#f97316' }} title="Restaurar contatos removidos desta rota" onClick={e => { e.stopPropagation(); setShowRestoreRota(grupo.rota) }}>
+                                    <i className="fa-solid fa-rotate-left"></i>
+                                    <span>Restaurar ({removedEdits.length})</span>
+                                  </button>
+                                )}
+                                {grupo._custom && (
+                                  <button className="rota-map-btn" style={{ background: '#dc2626', color: 'white', borderColor: '#dc2626' }} title="Excluir rota" onClick={e => { e.stopPropagation(); if (confirm(`Excluir rota "${grupo.rota}"?`)) { setCustomRotas(prev => prev.filter(cr => cr.rota !== grupo.rota)); showToast(`Rota "${grupo.rota}" excluída`) } }}>
+                                    <i className="fa-solid fa-trash"></i>
+                                    <span>Excluir</span>
+                                  </button>
+                                )}
+                                <span className="rota-expand-icon">
+                                  <i className={`fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
+                                </span>
+                              </div>
                             </div>
-                          </div>
                           </div>
 
                           {/* Subcategory badges */}
@@ -3791,68 +3790,68 @@ export default function Admin({ produtos, onVoltar }) {
                           </tr>
                         </thead>
                         <tbody>
-                        {filteredFin.map(f => {
-                          const dias = diffDays(hoje(), f.dueDate)
-                          const atrasado = f.status === 'pendente' && dias > 0
-                          const pm = formatPagamento(f.paymentMethod)
-                          return (
-                            <tr key={f.id} className={atrasado ? 'row-overdue' : ''}>
-                              <td>{f.customerName}</td>
-                              <td className="td-prod-name">{f.itemName}</td>
-                              <td>{f.qty}</td>
-                              <td className="td-price">{formatPreco(f.value)}</td>
-                              <td className="td-price" style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>{f.precoCusto ? formatPreco(f.precoCusto) : '-'}</td>
-                              <td>{formatDate(f.dueDate)}</td>
-                              <td>
-                                {f.status === 'pago' ? (
-                                  <span className="days-ok">Pago</span>
-                                ) : dias > 0 ? (
-                                  <span className="days-overdue">+{dias} dias</span>
-                                ) : dias === 0 ? (
-                                  <span className="days-today">Vence hoje</span>
-                                ) : (
-                                  <span className="days-future">Faltam {Math.abs(dias)} dias</span>
-                                )}
-                              </td>
-                              <td>
-                                <span className={`status-tag ${atrasado ? 'status-atrasado' : f.status === 'pendente' ? 'status-pendente' : 'status-pago'}`}>
-                                  {atrasado ? 'Atrasado' : f.status === 'pendente' ? 'Pendente' : 'Pago'}
-                                </span>
-                              </td>
-                              <td>
-                                {pm ? <span className="pag-badge"><i className={`fa-solid ${pm.icon}`}></i> {pm.label}</span> : '-'}
-                              </td>
-                              <td>
-                                {f.paidDate ? formatDate(f.paidDate) : '-'}
-                              </td>
-                              <td>
-                                <div className="td-actions">
-                                  {f.status === 'pendente' && (
-                                    <>
-                                      <button className="action-btn action-confirm" title="Quitar" onClick={() => quitarFin(f.id)}>
-                                        <i className="fa-solid fa-check"></i>
-                                      </button>
-                                      <button className="action-btn" title="Editar vencimento" onClick={() => setFinEdit(f)}>
-                                        <i className="fa-solid fa-calendar"></i>
-                                      </button>
-                                    </>
+                          {filteredFin.map(f => {
+                            const dias = diffDays(hoje(), f.dueDate)
+                            const atrasado = f.status === 'pendente' && dias > 0
+                            const pm = formatPagamento(f.paymentMethod)
+                            return (
+                              <tr key={f.id} className={atrasado ? 'row-overdue' : ''}>
+                                <td>{f.customerName}</td>
+                                <td className="td-prod-name">{f.itemName}</td>
+                                <td>{f.qty}</td>
+                                <td className="td-price">{formatPreco(f.value)}</td>
+                                <td className="td-price" style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>{f.precoCusto ? formatPreco(f.precoCusto) : '-'}</td>
+                                <td>{formatDate(f.dueDate)}</td>
+                                <td>
+                                  {f.status === 'pago' ? (
+                                    <span className="days-ok">Pago</span>
+                                  ) : dias > 0 ? (
+                                    <span className="days-overdue">+{dias} dias</span>
+                                  ) : dias === 0 ? (
+                                    <span className="days-today">Vence hoje</span>
+                                  ) : (
+                                    <span className="days-future">Faltam {Math.abs(dias)} dias</span>
                                   )}
-                                </div>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                        {filteredFin.length === 0 && <tr><td colSpan="11" className="td-empty">Nenhum registro financeiro</td></tr>}
-                      </tbody>
-                      <tfoot className="fin-tfoot">
-                        <tr>
-                          <td colSpan="3">Total</td>
-                          <td className="td-price">{formatPreco(finTotalFiltered)}</td>
-                          <td colSpan="7"></td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
+                                </td>
+                                <td>
+                                  <span className={`status-tag ${atrasado ? 'status-atrasado' : f.status === 'pendente' ? 'status-pendente' : 'status-pago'}`}>
+                                    {atrasado ? 'Atrasado' : f.status === 'pendente' ? 'Pendente' : 'Pago'}
+                                  </span>
+                                </td>
+                                <td>
+                                  {pm ? <span className="pag-badge"><i className={`fa-solid ${pm.icon}`}></i> {pm.label}</span> : '-'}
+                                </td>
+                                <td>
+                                  {f.paidDate ? formatDate(f.paidDate) : '-'}
+                                </td>
+                                <td>
+                                  <div className="td-actions">
+                                    {f.status === 'pendente' && (
+                                      <>
+                                        <button className="action-btn action-confirm" title="Quitar" onClick={() => quitarFin(f.id)}>
+                                          <i className="fa-solid fa-check"></i>
+                                        </button>
+                                        <button className="action-btn" title="Editar vencimento" onClick={() => setFinEdit(f)}>
+                                          <i className="fa-solid fa-calendar"></i>
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                          {filteredFin.length === 0 && <tr><td colSpan="11" className="td-empty">Nenhum registro financeiro</td></tr>}
+                        </tbody>
+                        <tfoot className="fin-tfoot">
+                          <tr>
+                            <td colSpan="3">Total</td>
+                            <td className="td-price">{formatPreco(finTotalFiltered)}</td>
+                            <td colSpan="7"></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
                   </div>
                 )}
               </>
@@ -3893,68 +3892,68 @@ export default function Admin({ produtos, onVoltar }) {
                 </div>
 
                 <div className="fin-table-card">
-                <div className="admin-table-wrap">
-                  <table className="admin-table">
-                    <thead>
-                      <tr>
-                        <th>Tipo</th>
-                        <th>Descrição</th>
-                        <th>Valor</th>
-                        <th>Vencimento</th>
-                        <th>Forma</th>
-                        <th>Status</th>
-                        <th>Pagamento</th>
-                        <th>Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredDespesas.map(d => {
-                        const atrasado = d.status === 'pendente' && diffDays(d.dueDate, hoje()) > 0
-                        const pm = formatPagamento(d.paymentMethod)
-                        return (
-                          <tr key={d.id} className={atrasado ? 'row-overdue' : ''}>
-                            <td><span className="despesa-tipo">{d.tipo}</span></td>
-                            <td className="td-prod-name">{d.descricao || '-'}</td>
-                            <td className="td-price">{formatPreco(d.value)}</td>
-                            <td>{formatDate(d.dueDate)}</td>
-                            <td>
-                              {pm ? <span className="pag-badge"><i className={`fa-solid ${pm.icon}`}></i> {pm.label}</span> : '-'}
-                            </td>
-                            <td>
-                              <span className={`status-tag ${atrasado ? 'status-atrasado' : d.status === 'pendente' ? 'status-pendente' : 'status-pago'}`}>
-                                {atrasado ? 'Atrasado' : d.status === 'pendente' ? 'Pendente' : 'Pago'}
-                              </span>
-                            </td>
-                            <td>{d.paidDate ? formatDate(d.paidDate) : '-'}</td>
-                            <td>
-                              <div className="td-actions">
-                                {d.status === 'pendente' && (
-                                  <button className="action-btn action-confirm" title="Quitar" onClick={() => quitarDespesa(d.id)}>
-                                    <i className="fa-solid fa-check"></i>
+                  <div className="admin-table-wrap">
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>Tipo</th>
+                          <th>Descrição</th>
+                          <th>Valor</th>
+                          <th>Vencimento</th>
+                          <th>Forma</th>
+                          <th>Status</th>
+                          <th>Pagamento</th>
+                          <th>Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredDespesas.map(d => {
+                          const atrasado = d.status === 'pendente' && diffDays(d.dueDate, hoje()) > 0
+                          const pm = formatPagamento(d.paymentMethod)
+                          return (
+                            <tr key={d.id} className={atrasado ? 'row-overdue' : ''}>
+                              <td><span className="despesa-tipo">{d.tipo}</span></td>
+                              <td className="td-prod-name">{d.descricao || '-'}</td>
+                              <td className="td-price">{formatPreco(d.value)}</td>
+                              <td>{formatDate(d.dueDate)}</td>
+                              <td>
+                                {pm ? <span className="pag-badge"><i className={`fa-solid ${pm.icon}`}></i> {pm.label}</span> : '-'}
+                              </td>
+                              <td>
+                                <span className={`status-tag ${atrasado ? 'status-atrasado' : d.status === 'pendente' ? 'status-pendente' : 'status-pago'}`}>
+                                  {atrasado ? 'Atrasado' : d.status === 'pendente' ? 'Pendente' : 'Pago'}
+                                </span>
+                              </td>
+                              <td>{d.paidDate ? formatDate(d.paidDate) : '-'}</td>
+                              <td>
+                                <div className="td-actions">
+                                  {d.status === 'pendente' && (
+                                    <button className="action-btn action-confirm" title="Quitar" onClick={() => quitarDespesa(d.id)}>
+                                      <i className="fa-solid fa-check"></i>
+                                    </button>
+                                  )}
+                                  <button className="action-btn" title="Editar" onClick={() => { setEditingDespesa(d); setShowDespesaModal(true) }}>
+                                    <i className="fa-solid fa-pen"></i>
                                   </button>
-                                )}
-                                <button className="action-btn" title="Editar" onClick={() => { setEditingDespesa(d); setShowDespesaModal(true) }}>
-                                  <i className="fa-solid fa-pen"></i>
-                                </button>
-                                <button className="action-btn action-delete" title="Excluir" onClick={() => deleteDespesa(d.id)}>
-                                  <i className="fa-solid fa-trash-can"></i>
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                      {filteredDespesas.length === 0 && <tr><td colSpan="8" className="td-empty">Nenhuma despesa cadastrada</td></tr>}
-                    </tbody>
-                    <tfoot className="fin-tfoot">
-                      <tr>
-                        <td colSpan="2">Total</td>
-                        <td className="td-price">{formatPreco(despesasTotalFiltered)}</td>
-                        <td colSpan="5"></td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
+                                  <button className="action-btn action-delete" title="Excluir" onClick={() => deleteDespesa(d.id)}>
+                                    <i className="fa-solid fa-trash-can"></i>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                        {filteredDespesas.length === 0 && <tr><td colSpan="8" className="td-empty">Nenhuma despesa cadastrada</td></tr>}
+                      </tbody>
+                      <tfoot className="fin-tfoot">
+                        <tr>
+                          <td colSpan="2">Total</td>
+                          <td className="td-price">{formatPreco(despesasTotalFiltered)}</td>
+                          <td colSpan="5"></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
@@ -5184,7 +5183,7 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
   const produtosVendidos = useMemo(() => {
     const arr = []
     ordersF.forEach(o => {
-      ;(o.items || []).forEach(i => {
+      ; (o.items || []).forEach(i => {
         if (itemTipoF !== 'todos' && (i.tipo || '') !== itemTipoF) return
         arr.push({
           produto: i.displayName || i.nome || i.produto || 'Produto',
@@ -5213,10 +5212,10 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
       map[k].desconto += desc
       map[k].frete += o.frete || 0
       map[k].pedidos += 1
-      ;(o.items || []).forEach(i => {
-        map[k].qtd += Number(i.qty) || 0
-        map[k].custo += (Number(i.preco_custo) || Number(i.custo) || 0) * (Number(i.qty) || 0)
-      })
+        ; (o.items || []).forEach(i => {
+          map[k].qtd += Number(i.qty) || 0
+          map[k].custo += (Number(i.preco_custo) || Number(i.custo) || 0) * (Number(i.qty) || 0)
+        })
     })
     return Object.values(map).sort((a, b) => a.mes.localeCompare(b.mes))
   }, [ordersF])
@@ -5363,7 +5362,7 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
   const movimento = useMemo(() => {
     const arr = []
     ordersF.forEach(o => {
-      ;(o.items || []).forEach(i => {
+      ; (o.items || []).forEach(i => {
         arr.push({
           data: o.date || '',
           descricao: `Pedido #${String(o.id).slice(-6)}`,
@@ -6964,11 +6963,11 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
               <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} disabled={editedItems.filter(i => i.qty > 0).length === 0} onClick={handleEditConfirm}>
                 <i className="fa-solid fa-check"></i> {order.status === 'em-rota' ? 'Salvar e Finalizar Entrega' : 'Salvar e Enviar para Rota'}
               </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  )
+    )
   }
 
   return (
@@ -6981,13 +6980,13 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
         <div className="admin-modal-body">
           <div className="detail-section">
             <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                Cliente
-                {!customerEdit && order.status !== 'entregue' && order.status !== 'cancelado' && (
-                  <button className="action-btn" title="Editar dados do cliente" onClick={() => setCustomerEdit(true)} style={{ color: '#2563eb', fontSize: '0.75rem', padding: '0.2rem 0.4rem' }}>
-                    <i className="fa-solid fa-pencil"></i>
-                  </button>
-                )}
-              </h4>
+              Cliente
+              {!customerEdit && order.status !== 'entregue' && order.status !== 'cancelado' && (
+                <button className="action-btn" title="Editar dados do cliente" onClick={() => setCustomerEdit(true)} style={{ color: '#2563eb', fontSize: '0.75rem', padding: '0.2rem 0.4rem' }}>
+                  <i className="fa-solid fa-pencil"></i>
+                </button>
+              )}
+            </h4>
             {customerEdit ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 <div><strong style={{ fontSize: '0.78rem' }}>Nome:</strong>
@@ -7485,7 +7484,7 @@ function EditProductModal({ product, categorias = [], onAddCategoria, onSave, on
       if (Object.keys(cleaned).length > 0) all[product.id] = cleaned
       else delete all[product.id]
       localStorage.setItem('thsm_prod_variants', JSON.stringify(all))
-    } catch {}
+    } catch { }
     onSave({ nome: nome.trim(), preco: Number(preco), preco_custo: precoCusto === '' ? null : Number(precoCusto), estoque: Number(estoque), imagem, categoria, descricao, variantes: cleaned, semDevolucao })
   }
 
@@ -7498,12 +7497,12 @@ function EditProductModal({ product, categorias = [], onAddCategoria, onSave, on
         </div>
         <div className="admin-modal-body">
           <div className="form-group">
-            <label>Nome do produto <span style={{color:'var(--danger)'}}>*</span></label>
+            <label>Nome do produto <span style={{ color: 'var(--danger)' }}>*</span></label>
             <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Camiseta Masculina" />
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label>Preço (R$) <span style={{color:'var(--danger)'}}>*</span></label>
+              <label>Preço (R$) <span style={{ color: 'var(--danger)' }}>*</span></label>
               <input type="number" step="0.01" min="0" value={preco} onChange={e => setPreco(e.target.value)} placeholder="0,00" />
             </div>
             <div className="form-group">
