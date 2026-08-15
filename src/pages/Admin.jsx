@@ -823,7 +823,7 @@ export default function Admin({ produtos, onVoltar }) {
         p.forEach(prod => {
           if (prod.deleted) { deletedFromDB.push(prod.id); return }
           if (!prodIdsFromJSON.has(prod.id)) {
-            newsFromDB.push({ id: prod.id, nome: prod.nome || '', preco: prod.preco || 0, estoque: prod.estoque || 0, imagem: prod.imagem || '', categoria: prod.categoria || '', descricao: '', variantes: prod.variantes || {}, semDevolucao: !!prod.semDevolucao })
+            newsFromDB.push({ id: prod.id, nome: prod.nome || '', preco: prod.preco || 0, estoque: prod.estoque || 0, imagem: prod.imagem || '', categoria: prod.categoria || '', descricao: '', variantes: prod.variantes || {}, semDevolucao: !!prod.semDevolucao, preco_custo: prod.preco_custo ?? null })
           }
           const override = {}
           if (prod.preco !== null) override.preco = prod.preco
@@ -918,6 +918,19 @@ export default function Admin({ produtos, onVoltar }) {
     if (savingOrder) return
     setSavingOrder(true)
     const items = data.items
+
+    // Update product cost updates in prodChanges
+    items.forEach(i => {
+      const numCusto = Number(i.preco_custo)
+      if (i.id != null && !isNaN(numCusto) && numCusto >= 0) {
+        setProdChanges(prev => {
+          const next = { ...prev, [i.id]: { ...(prev[i.id] || {}), preco_custo: numCusto } }
+          LS.set(STORAGE_PRODUCTS, next)
+          return next
+        })
+      }
+    })
+
     const totalAvista = items.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
     const totalAprazo = items.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
     const orderId = Date.now()

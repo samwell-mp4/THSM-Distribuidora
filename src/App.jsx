@@ -137,6 +137,7 @@ const fetchProductsDB = useCallback(() => {
         if (prod.estoque !== null) override.estoque = prod.estoque
         if (prod.imagem !== null && typeof prod.imagem === 'string' && !prod.imagem.startsWith('data:') && prod.imagem.length < 2048) override.imagem = prod.imagem
         if (prod.categoria !== null) override.categoria = prod.categoria
+        if (prod.preco_custo !== null) override.preco_custo = prod.preco_custo
         if (Object.keys(override).length > 0) fromDB[prod.id] = override
       })
       setDbNewProducts(news)
