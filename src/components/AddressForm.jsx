@@ -34,7 +34,7 @@ const ESTADOS_BR = [
   { sigla: 'TO', nome: 'Tocantins' },
 ]
 
-export default function AddressForm({ value, onChange, showErrors }) {
+export default function AddressForm({ value, onChange, showErrors, requiredFields = true }) {
   const [cep, setCep] = useState(value.cep || '')
   const [estado, setEstado] = useState(value.estado || '')
   const [cidade, setCidade] = useState(value.cidade || '')
@@ -47,7 +47,9 @@ export default function AddressForm({ value, onChange, showErrors }) {
   const [loadingCidades, setLoadingCidades] = useState(false)
   const [cepError, setCepError] = useState('')
 
-  const required = { cep: !cep, cidade: !cidade, rua: !rua, numero: !numero }
+  const required = requiredFields
+    ? { cep: !cep, cidade: !cidade, rua: !rua, numero: !numero }
+    : { cep: false, cidade: false, rua: false, numero: false }
 
   const emitChange = useCallback((updates) => {
     onChange({ cep: cep.replace(/\D/g, ''), estado, cidade, bairro, rua, numero, complemento, ...updates })
@@ -116,7 +118,7 @@ export default function AddressForm({ value, onChange, showErrors }) {
     <div className="address-form">
       <div className="cep-row">
         <div className={`form-group cep-field ${showErrors && required.cep ? 'field-error' : ''}`}>
-          <label>CEP <span className="required-star">*</span></label>
+          <label>CEP {requiredFields && <span className="required-star">*</span>}</label>
           <div className="cep-input-wrap">
             <input
               type="text"
@@ -152,7 +154,7 @@ export default function AddressForm({ value, onChange, showErrors }) {
           </select>
         </div>
         <div className={`form-group ${showErrors && required.cidade ? 'field-error' : ''}`}>
-          <label>Cidade <span className="required-star">*</span></label>
+          <label>Cidade {requiredFields && <span className="required-star">*</span>}</label>
           <select value={cidade} onChange={e => { setCidade(e.target.value); emitChange({ cidade: e.target.value }) }} disabled={!estado || loadingCidades}>
             <option value="">{loadingCidades ? 'Carregando...' : 'Selecione...'}</option>
             {cidades.map(c => <option key={c} value={c}>{c}</option>)}
@@ -163,12 +165,12 @@ export default function AddressForm({ value, onChange, showErrors }) {
 
       <div className="form-row">
         <div className={`form-group ${showErrors && required.rua ? 'field-error' : ''}`} style={{ flex: 2 }}>
-          <label>Logradouro <span className="required-star">*</span></label>
+          <label>Logradouro {requiredFields && <span className="required-star">*</span>}</label>
           <input type="text" placeholder="Rua, Avenida..." value={rua} onChange={e => { setRua(e.target.value); emitChange({ rua: e.target.value }) }} />
           {showErrors && required.rua && <span className="field-error-msg">Logradouro é obrigatório</span>}
         </div>
         <div className={`form-group ${showErrors && required.numero ? 'field-error' : ''}`} style={{ flex: 0.6 }}>
-          <label>Número <span className="required-star">*</span></label>
+          <label>Número {requiredFields && <span className="required-star">*</span>}</label>
           <input type="text" placeholder="Nº" value={numero} onChange={e => { setNumero(e.target.value); emitChange({ numero: e.target.value }) }} />
           {showErrors && required.numero && <span className="field-error-msg">Número é obrigatório</span>}
         </div>

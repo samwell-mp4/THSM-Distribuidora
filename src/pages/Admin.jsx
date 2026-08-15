@@ -6334,7 +6334,12 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
   const pickUser = (u) => {
     setSelectedUser(u)
     setNome(u.nome || '')
-    setTelefone(u.telefone || '')
+    let rawTel = u.telefone || ''
+    const cleanTel = rawTel.replace(/\D/g, '')
+    if (cleanTel.startsWith('55') && cleanTel.length > 10) {
+      rawTel = cleanTel.slice(2)
+    }
+    setTelefone(rawTel)
     setCpf(u.endereco?.cpf || '')
     setEndereco(u.endereco || { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
     setUserSearch('')
@@ -6398,7 +6403,7 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
   const troco = valorPagoNum - cartTotal
 
   const handleSave = () => {
-    if (saving || cartItems.length === 0 || !nome.trim() || !telefone.trim() || !cpf.trim()) return
+    if (saving || cartItems.length === 0 || !nome.trim() || !telefone.trim()) return
     setSaving(true)
     const isConcluido = orderStatus === 'entregue'
     onSave({
@@ -6519,12 +6524,12 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
                     <input type="text" placeholder="(31) 99999-9999" value={formatPhone(telefone)} onChange={e => setTelefone(e.target.value)} />
                   </div>
                   <div className="form-group">
-                    <label>CPF *</label>
-                    <input type="text" placeholder="000.000.000-00" value={cpf} onChange={e => setCpf(e.target.value)} />
+                    <label>CPF</label>
+                    <input type="text" placeholder="000.000.000-00 (Opcional)" value={cpf} onChange={e => setCpf(e.target.value)} />
                   </div>
                   <div className="form-group">
                     <label>Endereço</label>
-                    <AddressForm value={endereco} onChange={(a) => setEndereco(a)} />
+                    <AddressForm value={endereco} onChange={(a) => setEndereco(a)} requiredFields={false} />
                   </div>
                 </>
               )}
@@ -6540,17 +6545,17 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
                     <input type="text" placeholder="(31) 99999-9999" value={formatPhone(telefone)} onChange={e => setTelefone(e.target.value)} />
                   </div>
                   <div className="form-group">
-                    <label>CPF *</label>
-                    <input type="text" placeholder="000.000.000-00" value={cpf} onChange={e => setCpf(e.target.value)} />
+                    <label>CPF</label>
+                    <input type="text" placeholder="000.000.000-00 (Opcional)" value={cpf} onChange={e => setCpf(e.target.value)} />
                   </div>
                   <div className="form-group">
                     <label>Endereço</label>
-                    <AddressForm value={endereco} onChange={(a) => setEndereco(a)} />
+                    <AddressForm value={endereco} onChange={(a) => setEndereco(a)} requiredFields={false} />
                   </div>
                 </div>
               )}
 
-              <button className="admin-btn admin-btn-primary" disabled={!nome.trim() || !telefone.trim() || !cpf.trim()} onClick={() => setStep(2)} style={{ marginTop: '0.75rem' }}>
+              <button className="admin-btn admin-btn-primary" disabled={!nome.trim() || !telefone.trim()} onClick={() => setStep(2)} style={{ marginTop: '0.75rem' }}>
                 Próximo <i className="fa-solid fa-arrow-right"></i>
               </button>
             </div>
