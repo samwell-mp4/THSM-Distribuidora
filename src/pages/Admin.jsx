@@ -164,7 +164,22 @@ function buildStatusWhatsApp(order, newStatus, extra = {}) {
   const dataVencimento = formatDate(order.dataVencimento)
   const msgDatas = `📅 Data do pedido: ${dataPedido}
 📅 Vencimento: ${dataVencimento}`
-  const msgItems = order.items.map(i => `  • ${i.nome} (${i.qty}x) — R$ ${i.preco.toFixed(2)}`).join('\n')
+
+  const formatItemRow = (i) => {
+    const unitPrice = Number(i.preco || 0).toFixed(2)
+    const itemTotal = (Number(i.preco || 0) * (Number(i.qty) || 0)).toFixed(2)
+    return `  • ${i.nome} — ${i.qty}x R$ ${unitPrice} = R$ ${itemTotal}`
+  }
+
+  const formatReturnedItemRow = (i) => {
+    const unitPrice = Number(i.preco || 0).toFixed(2)
+    const qty = Number(i.returnedQty || i.qty) || 0
+    const itemTotal = (Number(i.preco || 0) * qty).toFixed(2)
+    return `  • ${i.nome} — ${qty}x R$ ${unitPrice} = R$ ${itemTotal}`
+  }
+
+  const totalQty = order.items.reduce((s, i) => s + (Number(i.qty) || 0), 0)
+  const msgItems = order.items.map(formatItemRow).join('\n')
   const msgPagamento = order.pagamento === 'avista' ? 'À Vista' : order.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'
 
   const templates = {
@@ -185,9 +200,11 @@ Em breve você receberá a confirmação.
 👤 Cliente: ${nome}
 ${msgDatas}
 💳 Pagamento: ${msgPagamento}
-💰 Total: R$ ${order.total.toFixed(2)}
 ━━━━━━━━━━━━━━━━━━
 ${msgItems}
+━━━━━━━━━━━━━━━━━━
+📦 Total de itens: ${totalQty}
+💰 Valor Total: R$ ${order.total.toFixed(2)}
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pedido foi recebido com sucesso!
 Em breve confirmaremos seu pedido.
@@ -221,10 +238,12 @@ Olá ${nome}, seu pedido está em andamento e sendo preparado para entrega.
 👤 Cliente: ${nome}
 ${msgDatas}
 💳 Pagamento: ${msgPagamento}
-💰 Total: R$ ${order.total.toFixed(2)}
 ━━━━━━━━━━━━━━━━━━
 📦 *ITENS:*
 ${msgItems}
+━━━━━━━━━━━━━━━━━━
+📦 Total de itens: ${totalQty}
+💰 Valor Total: R$ ${order.total.toFixed(2)}
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pedido já foi separado. Só aguardar a entrega.
 🔗 Acesse seu pedido: ${link}`,
@@ -238,9 +257,11 @@ ${msgDatas}
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pedido foi finalizado!
 📦 Itens entregues:
-${order.items.map(i => `  • ${i.nome} (${i.qty}x) — R$ ${(i.preco * i.qty).toFixed(2)}`).join('\n')}
+${order.items.map(formatItemRow).join('\n')}
 📦 Itens devolvidos:
-${extra.returnedItems.map(i => `  • ${i.nome} (${i.returnedQty}x) — R$ ${(i.preco * (i.returnedQty || 0)).toFixed(2)}`).join('\n')}
+${extra.returnedItems.map(formatReturnedItemRow).join('\n')}
+━━━━━━━━━━━━━━━━━━
+📦 Total de itens entregues: ${totalQty}
 💰 Total cobrado: R$ ${order.total.toFixed(2)}
 ━━━━━━━━━━━━━━━━━━
 ⚠️ *Importante:* Produtos embalados/lacrados não podem ser abertos. Não aceitamos devolução de produtos violados.
@@ -257,7 +278,11 @@ Obrigado pela preferência! 🎉`
 ${msgDatas}
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pedido foi entregue com sucesso! 🎉
-${order.items.length > 0 ? `📦 Itens:\n${order.items.map(i => `  • ${i.nome} (${i.qty}x) — R$ ${(i.preco * i.qty).toFixed(2)}`).join('\n')}\n` : ''}
+${order.items.length > 0 ? `📦 Itens:\n${order.items.map(formatItemRow).join('\n')}
+━━━━━━━━━━━━━━━━━━
+📦 Total de itens: ${totalQty}
+💰 Valor Total: R$ ${order.total.toFixed(2)}` : ''}
+━━━━━━━━━━━━━━━━━━
 ⚠️ *Importante:* Produtos embalados/lacrados não podem ser abertos. Não aceitamos devolução de produtos violados.
 Você tem até 24 horas para nos informar se houver algum item faltando ou com avaria.
 ━━━━━━━━━━━━━━━━━━
