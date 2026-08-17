@@ -254,6 +254,11 @@ export async function deleteFinancialByOrder(orderId) {
   await supabase.rpc('admin_delete_order', { ord_id: orderId })
 }
 
+export async function deleteOnlyFinancialByOrder(orderId) {
+  const { error } = await supabase.from('financeiro').delete().eq('order_id', orderId)
+  if (error) console.error('Erro ao deletar financeiro:', error)
+}
+
 // ---- ROTAS ----
 export async function getRotasContatos() {
   const { data } = await supabase.from('rotas_contatos').select('*')

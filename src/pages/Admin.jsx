@@ -4,7 +4,7 @@ import {
   supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser,
   deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads,
   upsertProducts, upsertDespesas, generateLoginToken, getAllRotaEdits, upsertRotaEdits, deleteRotaEdit as supabaseDeleteRotaEdit,
-  deleteProducts as supabaseDeleteProducts, flushPendingOrders
+  deleteProducts as supabaseDeleteProducts, flushPendingOrders, deleteOnlyFinancialByOrder
 } from '../lib/supabase'
 import { compressImageDataUrl, capPhotoSize } from '../lib/image'
 
@@ -396,6 +396,98 @@ export default function Admin({ produtos, onVoltar }) {
   const [prodChanges, setProdChanges] = useState({})
   const [financial, setFinancial] = useState([])
   const [toast, setToast] = useState(null)
+
+  const isFinalizada = useCallback((o) => {
+    return o.status === 'entregue' && (
+      o.paymentMethod ||
+      o.payment ||
+      (financial.some(f => f.orderId === o.id) &&
+       financial.filter(f => f.orderId === o.id).every(f => f.status === 'pago' || f.status === 'cancelado'))
+    )
+  }, [financial])
+
+  const revertOrderFinalization = async (orderId) => {
+    const order = orders.find(o => o.id === orderId)
+    if (!order) return
+    if (!confirm('Deseja voltar este pedido para Entregues? (Isso irá reverter as devoluções e pagamentos)')) return
+
+    // 1. Restore items (add back returned quantities)
+    const restoredItems = []
+    const returnedMap = new Map((order.returnedItems || []).map(i => [i.id, i.qty]))
+    
+    order.items.forEach(item => {
+      const returnedQty = returnedMap.get(item.id) || 0
+      restoredItems.push({
+        ...item,
+        qty: item.qty + returnedQty
+      })
+      returnedMap.delete(item.id)
+    })
+    
+    // Add back items that were completely returned (qty became 0)
+    ;(order.returnedItems || []).forEach(item => {
+      if (returnedMap.has(item.id)) {
+        restoredItems.push({
+          ...item,
+          qty: item.qty
+        })
+      }
+    })
+
+    const totalAvista = restoredItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
+    const totalAprazo = restoredItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
+    
+    const updatedOrder = {
+      ...order,
+      items: restoredItems,
+      totalAvista,
+      totalAprazo,
+      total: totalAvista + totalAprazo,
+      desconto: 0,
+      totalPago: 0,
+      status: 'entregue',
+      returnedItems: [],
+      totalReembolso: 0,
+      paymentMethod: '',
+      paymentSplits: null
+    }
+
+    setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o))
+    await upsertOrder(updatedOrder)
+
+    // 2. Revert financial records in DB and State
+    await deleteOnlyFinancialByOrder(orderId)
+
+    setFinancial(prev => {
+      const otherRecords = prev.filter(f => f.orderId !== orderId)
+      const orderAprazoItems = restoredItems.filter(i => i.tipo === 'aprazo')
+      
+      const restoredFinancial = orderAprazoItems.map(i => {
+        const existing = prev.find(f => f.id === orderId + '-' + i.id)
+        return {
+          id: orderId + '-' + i.id,
+          orderId,
+          customerName: order.customer?.nome || '',
+          itemName: i.nome,
+          qty: i.qty,
+          value: i.preco * i.qty,
+          precoCusto: (i.preco_custo || 0) * i.qty,
+          dueDate: existing?.dueDate || order.dataVencimento || hoje(),
+          paidDate: null,
+          status: 'pendente',
+          paymentMethod: ''
+        }
+      })
+      
+      const newFin = [...otherRecords, ...restoredFinancial]
+      upsertFinancial(restoredFinancial) // upsert only the new restored ones
+      return newFin
+    })
+
+    showToast(`Pedido #${orderId} voltou para Entregues! Pagamentos e devoluções revertidos.`)
+    sendStatusWebhook(updatedOrder, 'entregue')
+  }
+
   const [orderFilter, setOrderFilter] = useState('todos')
   const [prodSearch, setProdSearch] = useState('')
   const [prodPage, setProdPage] = useState(1)
@@ -1007,9 +1099,6 @@ export default function Admin({ produtos, onVoltar }) {
     const order = orders.find(o => o.id === id)
     const updated = order ? { ...order, status, deliveredAt: status === 'entregue' ? Date.now() : order.deliveredAt } : null
     setOrders(prev => prev.map(o => o.id === id ? (updated || o) : o))
-    if (status === 'entregue') {
-      setFinancial(prev => prev.map(f => f.orderId === id && f.status !== 'pago' ? { ...f, status: 'pago', paidDate: hoje() } : f))
-    }
     if (updated) upsertOrder(updated)
     showToast(`Pedido #${id} atualizado para "${status}"`)
     const STATUS_ORDER = ['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'entregue']
@@ -1438,7 +1527,6 @@ export default function Admin({ produtos, onVoltar }) {
   const getOrderDue = (o) => o.dataVencimento || financial.find(f => f.orderId === o.id)?.dueDate || ''
 
   const filteredOrders = useMemo(() => {
-    const isFinalizada = o => o.status === 'entregue' && (o.paymentMethod || o.payment || (financial.some(f => f.orderId === o.id) && financial.filter(f => f.orderId === o.id).every(f => f.status === 'pago' || f.status === 'cancelado')))
     let result = orders
     if (orderFilter === 'concluidos') result = result.filter(o => isFinalizada(o))
     else if (orderFilter === 'entregue') result = result.filter(o => o.status === 'entregue' && !isFinalizada(o))
@@ -1647,7 +1735,6 @@ export default function Admin({ produtos, onVoltar }) {
 
   // Métricas das comandas concluídas
   const concluidosStats = useMemo(() => {
-    const isFinalizada = o => o.status === 'entregue' && (o.paymentMethod || o.payment || (financial.some(f => f.orderId === o.id) && financial.filter(f => f.orderId === o.id).every(f => f.status === 'pago' || f.status === 'cancelado')))
     const concluidos = orders.filter(isFinalizada)
     const faturamentoTotal = concluidos.reduce((s, o) => s + (o.total || 0), 0)
     let lucroTotal = 0
@@ -2317,8 +2404,8 @@ export default function Admin({ produtos, onVoltar }) {
                 { id: 'pre-pedido', label: 'Pré-Pedidos', count: orders.filter(o => o.status === 'pre-pedido').length },
                 { id: 'pendente', label: 'Pendentes', count: orders.filter(o => o.status === 'pendente').length },
                 { id: 'em-rota', label: 'Em Rota', count: orders.filter(o => o.status === 'em-rota').length },
-                { id: 'entregue', label: 'Entregues', count: orders.filter(o => o.status === 'entregue' && !(o.paymentMethod || o.payment || (financial.some(f => f.orderId === o.id) && financial.filter(f => f.orderId === o.id).every(f => f.status === 'pago' || f.status === 'cancelado')))).length },
-                { id: 'concluidos', label: 'Concluídos', count: orders.filter(o => o.status === 'entregue' && (o.paymentMethod || o.payment || (financial.some(f => f.orderId === o.id) && financial.filter(f => f.orderId === o.id).every(f => f.status === 'pago' || f.status === 'cancelado')))).length },
+                { id: 'entregue', label: 'Entregues', count: orders.filter(o => o.status === 'entregue' && !isFinalizada(o)).length },
+                { id: 'concluidos', label: 'Concluídos', count: orders.filter(o => o.status === 'entregue' && isFinalizada(o)).length },
                 { id: 'cancelado', label: 'Cancelados', count: orders.filter(o => o.status === 'cancelado').length },
               ].map(t => (
                 <button key={t.id} className={`admin-tab ${orderFilter === t.id ? 'active' : ''}`} onClick={() => setOrderFilter(t.id)}>
@@ -2453,11 +2540,14 @@ export default function Admin({ produtos, onVoltar }) {
                           {o.status === 'em-rota' && (
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Pendente" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-undo"></i></button>
                           )}
-                          {o.status === 'entregue' && (
+                          {o.status === 'entregue' && !isFinalizada(o) && (
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Em Rota" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-undo"></i></button>
                           )}
-                          {o.status === 'entregue' && (
+                          {o.status === 'entregue' && !isFinalizada(o) && (
                             <button className="action-btn action-confirm" title="Finalizar Pedido" onClick={() => { setShowDeliveryModal(o); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview(''); setDeliveryPayment('pix'); setDeliverySplits({ pix: '', dinheiro: '', cartao: '' }); setDeliveryDiscount(''); setDeliveryDiscountType('reais'); setDeliveryPaid(''); setDeliveryDataInicio(o.date || hoje()); setDeliveryDataVenc(o.dataVencimento || '') }}><i className="fa-solid fa-check"></i></button>
+                          )}
+                          {o.status === 'entregue' && isFinalizada(o) && (
+                            <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Entregues" onClick={() => revertOrderFinalization(o.id)}><i className="fa-solid fa-undo"></i></button>
                           )}
                           {(() => {
                             const e = o.customer?.endereco || {}
@@ -4135,8 +4225,8 @@ export default function Admin({ produtos, onVoltar }) {
                   value: i.preco * i.qty,
                   precoCusto: (i.preco_custo || 0) * i.qty,
                   dueDate: hoje(),
-                  paidDate: newStatus === 'entregue' ? hoje() : null,
-                  status: newStatus === 'entregue' ? 'pago' : (i.tipo === 'aprazo' ? 'pendente' : 'pago'),
+                  paidDate: null,
+                  status: i.tipo === 'aprazo' ? 'pendente' : 'pago',
                   paymentMethod: showOrderDetail.paymentMethod || ''
                 }))
               const updated = prev.map(f => {
@@ -4148,8 +4238,8 @@ export default function Admin({ produtos, onVoltar }) {
                   qty: item.qty,
                   value: item.preco * item.qty,
                   precoCusto: (item.preco_custo || 0) * item.qty,
-                  status: newStatus === 'entregue' ? 'pago' : f.status,
-                  paidDate: newStatus === 'entregue' ? hoje() : f.paidDate
+                  status: f.status,
+                  paidDate: f.paidDate
                 }
               })
               const mergedFin = [...updated, ...newRecords]
