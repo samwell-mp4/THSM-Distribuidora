@@ -449,7 +449,8 @@ export default function Admin({ produtos, onVoltar }) {
       returnedItems: [],
       totalReembolso: 0,
       paymentMethod: '',
-      paymentSplits: null
+      paymentSplits: null,
+      payment: null
     }
 
     setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o))
@@ -1097,9 +1098,47 @@ export default function Admin({ produtos, onVoltar }) {
 
   const updateOrderStatus = (id, status, skipWebhook = false) => {
     const order = orders.find(o => o.id === id)
-    const updated = order ? { ...order, status, deliveredAt: status === 'entregue' ? Date.now() : order.deliveredAt } : null
-    setOrders(prev => prev.map(o => o.id === id ? (updated || o) : o))
-    if (updated) upsertOrder(updated)
+    if (!order) return
+
+    let updated = { ...order, status, deliveredAt: status === 'entregue' ? Date.now() : order.deliveredAt }
+    
+    if (status !== 'entregue') {
+      updated = {
+        ...updated,
+        desconto: 0,
+        totalPago: 0,
+        returnedItems: [],
+        totalReembolso: 0,
+        paymentMethod: '',
+        paymentSplits: null,
+        payment: null
+      }
+      
+      deleteOnlyFinancialByOrder(id).then(() => {
+        setFinancial(prev => {
+          const otherRecords = prev.filter(f => f.orderId !== id)
+          const orderAprazoItems = order.items.filter(i => i.tipo === 'aprazo')
+          const restoredFinancial = orderAprazoItems.map(i => ({
+            id: id + '-' + i.id,
+            orderId: id,
+            customerName: order.customer?.nome || '',
+            itemName: i.nome,
+            qty: i.qty,
+            value: i.preco * i.qty,
+            precoCusto: (i.preco_custo || 0) * i.qty,
+            dueDate: order.dataVencimento || hoje(),
+            paidDate: null,
+            status: 'pendente',
+            paymentMethod: ''
+          }))
+          upsertFinancial(restoredFinancial)
+          return [...otherRecords, ...restoredFinancial]
+        })
+      })
+    }
+
+    setOrders(prev => prev.map(o => o.id === id ? updated : o))
+    upsertOrder(updated)
     showToast(`Pedido #${id} atualizado para "${status}"`)
     const STATUS_ORDER = ['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'entregue']
     const prevIndex = STATUS_ORDER.indexOf(order?.status)
@@ -1601,7 +1640,8 @@ export default function Admin({ produtos, onVoltar }) {
       if (action === 'confirm') {
         if (order?.status === 'pre-pedido') updateOrderStatus(id, 'pendente', true)
         else if (order?.status === 'pendente') updateOrderStatus(id, 'em-rota')
-        else updateOrderStatus(id, 'em-rota')
+        else if (order?.status === 'em-rota') updateOrderStatus(id, 'entregue')
+        else updateOrderStatus(id, 'entregue')
       } else if (action === 'delete') {
         setOrders(prev => prev.filter(o => o.id !== id))
         setFinancial(prev => prev.filter(f => f.orderId !== id))
