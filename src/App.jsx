@@ -410,10 +410,24 @@ fetchProductsDB()
 
   // --- Auth ---
   const fazerLogin = async () => {
-    const raw = loginEmail.replace(/\D/g, '')
-    const telefone = raw.startsWith('55') ? raw : '55' + raw
-    const user = usuarios.find(u => u.telefone === telefone)
-    if (!user) { showToast('Telefone não cadastrado', 'error'); return }
+    let user = null
+    if (loginEmail.includes('@')) {
+      user = usuarios.find(u => u.email === loginEmail)
+      if (!user) {
+        const { data } = await supabase.from('usuarios').select('*').ilike('email', loginEmail).maybeSingle()
+        user = data
+      }
+    } else {
+      const raw = loginEmail.replace(/\D/g, '')
+      const telefone = raw.startsWith('55') ? raw : '55' + raw
+      user = usuarios.find(u => u.telefone === telefone)
+      if (!user) {
+        const { data } = await supabase.from('usuarios').select('*').eq('telefone', telefone).maybeSingle()
+        user = data
+      }
+    }
+
+    if (!user) { showToast('Login não existe ou incorreto', 'error'); return }
     const senha = user.endereco?.senha
     if (senha && loginSenha !== senha) { showToast('Senha incorreta', 'error'); return }
     setCurrentUser(user)
