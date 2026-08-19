@@ -68,6 +68,57 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
   const [editSenha, setEditSenha] = useState('')
   const [editEndereco, setEditEndereco] = useState({ cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
   const [savingProfile, setSavingProfile] = useState(false)
+  const [shopCart, setShopCart] = useState({})
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const handleShopCheckout = async () => {
+    const items = Object.entries(shopCart)
+      .map(([id, qty]) => {
+        const p = produtos.find(x => x.id === id || String(x.id) === String(id))
+        if (!p || qty <= 0) return null
+        return {
+          id: p.id,
+          nome: p.nome || p.displayName,
+          qty,
+          preco: Number(p.preco) || 0,
+          preco_custo: Number(p.preco_custo) || Number(p.custo) || 0
+        }
+      })
+      .filter(Boolean)
+
+    if (items.length === 0) return
+
+    setCheckoutLoading(true)
+    const total = items.reduce((s, i) => s + i.qty * i.preco, 0)
+    
+    try {
+      const order = {
+        id: Date.now(),
+        user_id: currentUser?.id || null,
+        status: 'pendente',
+        total,
+        itens: items,
+        customer: {
+          nome: currentUser?.nome || '',
+          telefone: currentUser?.telefone || '',
+          email: currentUser?.email || '',
+          endereco: currentUser?.endereco || {}
+        },
+        date: new Date().toISOString()
+      }
+      
+      await upsertOrder(order)
+      setShopCart({})
+      alert('Pedido realizado com sucesso!')
+      
+      setAllOrders(prev => [order, ...prev])
+      setTab('pedidos')
+    } catch (e) {
+      console.error(e)
+      alert('Erro ao criar pedido. Tente novamente.')
+    } finally {
+      setCheckoutLoading(false)
+    }
+  }
 
   const initConta = () => {
     setTab('conta')
@@ -464,25 +515,49 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
                   <h3>Nenhum produto encontrado</h3>
                 </div>
               ) : (
-                <div className="admin-table-wrap">
-                  <table className="admin-table">
-                    <thead>
-                      <tr>
-                        <th>Produto</th>
-                        <th>Categoria</th>
-                        <th>Preço</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.map((p, idx) => (
-                        <tr key={p.id || idx}>
-                          <td className="td-prod-name" data-label="Produto">{p.nome}</td>
-                          <td data-label="Categoria">{p.categoria || '-'}</td>
-                          <td className="td-price" data-label="Preço">{formatPreco(p.preco)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="user-shop-grid">
+                  {filtered.map((p, idx) => {
+                    const q = shopCart[p.id] || 0
+                    return (
+                      <div className="user-shop-card" key={p.id || idx}>
+                        <div className="card-cat">{p.categoria || 'Geral'}</div>
+                        <h4 className="card-name">{p.nome}</h4>
+                        <div className="card-price">{formatPreco(p.preco)}</div>
+                        <div className="card-actions">
+                          {q > 0 ? (
+                            <div className="qty-control">
+                              <button onClick={() => setShopCart(prev => ({ ...prev, [p.id]: prev[p.id] - 1 }))}><i className="fa-solid fa-minus"></i></button>
+                              <span>{q}</span>
+                              <button onClick={() => setShopCart(prev => ({ ...prev, [p.id]: prev[p.id] + 1 }))}><i className="fa-solid fa-plus"></i></button>
+                            </div>
+                          ) : (
+                            <button className="btn-add-cart" onClick={() => setShopCart(prev => ({ ...prev, [p.id]: 1 }))}>Adicionar</button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+            {(() => {
+              const itemsCount = Object.values(shopCart).reduce((a, b) => a + b, 0)
+              const totalAmount = Object.entries(shopCart).reduce((acc, [id, qty]) => {
+                const p = produtos.find(x => x.id === id || String(x.id) === String(id))
+                return acc + (p ? Number(p.preco) * qty : 0)
+              }, 0)
+              
+              if (itemsCount === 0) return null
+              
+              return (
+                <div className="user-shop-cart-bar">
+                  <div className="cart-info">
+                    <span className="cart-count">{itemsCount} iten{itemsCount !== 1 ? 's' : ''}</span>
+                    <span className="cart-total">{formatPreco(totalAmount)}</span>
+                  </div>
+                  <button className="btn-checkout" onClick={handleShopCheckout} disabled={checkoutLoading}>
+                    {checkoutLoading ? 'Processando...' : 'Finalizar Pedido'} <i className="fa-solid fa-arrow-right"></i>
+                  </button>
                 </div>
               )
             })()}
