@@ -181,8 +181,8 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
   useEffect(() => {
     if (!currentUser?.telefone) return
     supabase.from('usuarios').select('id').eq('telefone', currentUser.telefone).single().then(({ data: user }) => {
-      if (!user) return
-      supabase.from('pedidos').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).then(async ({ data }) => {
+      const query = user ? `user_id.eq.${user.id},data->customer->>telefone.eq.${currentUser.telefone}` : `data->customer->>telefone.eq.${currentUser.telefone}`
+      supabase.from('pedidos').select('*').or(query).order('created_at', { ascending: false }).then(async ({ data }) => {
         if (data?.length) {
           const orders = data.map(r => r.data || r)
           setAllOrders(orders)
