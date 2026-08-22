@@ -424,8 +424,12 @@ export async function deleteProducts(ids) {
   if (!ids || ids.length === 0) return
   const mapped = [...new Set(ids)].map(Number)
   try {
-    const { error } = await supabase.rpc('admin_delete_products', { product_ids: mapped })
-    if (error) console.error('Erro deleteProducts (rpc):', error)
+    const { error: err1 } = await supabase.from('produtos').delete().in('id', mapped)
+    if (err1) {
+      console.warn('Erro deleteProducts fallback para rpc:', err1)
+      const { error } = await supabase.rpc('admin_delete_products', { product_ids: mapped })
+      if (error) console.error('Erro deleteProducts (rpc):', error)
+    }
   } catch (e) {
     console.error('Erro deleteProducts:', e)
   }

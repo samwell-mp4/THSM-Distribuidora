@@ -48,12 +48,12 @@ export default function AddressForm({ value, onChange, showErrors, requiredField
   const [cepError, setCepError] = useState('')
 
   const required = requiredFields
-    ? { cep: !cep, cidade: !cidade, rua: !rua, numero: !numero }
+    ? { cep: !cep || cep.replace(/\D/g, '').length !== 8, cidade: !cidade, rua: !rua, numero: !numero }
     : { cep: false, cidade: false, rua: false, numero: false }
 
   const emitChange = useCallback((updates) => {
-    onChange({ cep: cep.replace(/\D/g, ''), estado, cidade, bairro, rua, numero, complemento, ...updates })
-  }, [cep, estado, cidade, bairro, rua, numero, complemento, onChange])
+    onChange({ ...value, cep: cep.replace(/\D/g, ''), estado, cidade, bairro, rua, numero, complemento, ...updates })
+  }, [value, cep, estado, cidade, bairro, rua, numero, complemento, onChange])
 
   // Sync from value prop
   useEffect(() => {
@@ -139,7 +139,7 @@ export default function AddressForm({ value, onChange, showErrors, requiredField
             </button>
           </div>
           {cepError && <span className="field-error-msg">{cepError}</span>}
-          {showErrors && required.cep && <span className="field-error-msg">CEP é obrigatório</span>}
+          {showErrors && required.cep && <span className="field-error-msg">{!cep ? 'CEP é obrigatório' : 'CEP inválido'}</span>}
         </div>
       </div>
 

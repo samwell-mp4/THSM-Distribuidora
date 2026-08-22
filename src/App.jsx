@@ -1492,7 +1492,7 @@ fetchProductsDB()
               </div>
               <AddressForm value={addressRequiredEndereco} onChange={(addr) => { setAddressRequiredEndereco(addr); setTriedSaveRequired(false) }} showErrors={triedSaveRequired} />
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.25rem' }}>
-                <button className="btn-next" style={{ flex: 1, justifyContent: 'center' }} disabled={savingAddress} onClick={() => { setTriedSaveRequired(true); if (addressRequiredEndereco.cep && addressRequiredEndereco.cidade && addressRequiredEndereco.rua && addressRequiredEndereco.numero) saveRequiredAddress() }}>
+                <button className="btn-next" style={{ flex: 1, justifyContent: 'center' }} disabled={savingAddress} onClick={() => { setTriedSaveRequired(true); if (addressRequiredEndereco.cep && addressRequiredEndereco.cep.replace(/\D/g, '').length === 8 && addressRequiredEndereco.cidade && addressRequiredEndereco.rua && addressRequiredEndereco.numero) saveRequiredAddress() }}>
                   {savingAddress ? <><i className="fa-solid fa-spinner fa-spin"></i> Salvando...</> : <><i className="fa-solid fa-check"></i> Salvar e Continuar</>}
                 </button>
               </div>
@@ -1515,7 +1515,7 @@ fetchProductsDB()
               </div>
               <AddressForm value={addressEditEndereco} onChange={(addr) => { setAddressEditEndereco(addr); setTriedSaveEdit(false) }} showErrors={triedSaveEdit} />
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.25rem' }}>
-                <button className="btn-next" style={{ flex: 1, justifyContent: 'center' }} disabled={savingAddress} onClick={() => { setTriedSaveEdit(true); if (addressEditEndereco.cep && addressEditEndereco.cidade && addressEditEndereco.rua && addressEditEndereco.numero) saveAddressEdit() }}>
+                <button className="btn-next" style={{ flex: 1, justifyContent: 'center' }} disabled={savingAddress} onClick={() => { setTriedSaveEdit(true); if (addressEditEndereco.cep && addressEditEndereco.cep.replace(/\D/g, '').length === 8 && addressEditEndereco.cidade && addressEditEndereco.rua && addressEditEndereco.numero) saveAddressEdit() }}>
                   {savingAddress ? <><i className="fa-solid fa-spinner fa-spin"></i> Salvando...</> : <><i className="fa-solid fa-check"></i> Salvar</>}
                 </button>
               </div>

@@ -1077,7 +1077,8 @@ export default function Admin({ produtos, onVoltar }) {
       telefone: data.telefone,
       nome: data.nome,
       email: data.email || '',
-      endereco: mergedEndereco
+      endereco: mergedEndereco,
+      cpf: data.cpf || existingUser?.cpf || ''
     })
     if (savedUser) {
       order = { ...order, user_id: savedUser.id }
@@ -2650,7 +2651,7 @@ export default function Admin({ produtos, onVoltar }) {
                 <p className="admin-subtitle">{produtosAtuais.length} produtos cadastrados</p>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                <button className="admin-btn" style={{ background: '#2563eb', color: 'white', borderColor: '#2563eb', fontSize: '0.78rem', padding: '0.35rem 0.7rem' }} onClick={() => setEditingProd({ id: Date.now(), nome: '', preco: 0, estoque: 0, imagem: '', categoria: '', descricao: '', variantes: {}, _new: true })}>
+                <button className="admin-btn" style={{ background: '#2563eb', color: 'white', borderColor: '#2563eb', fontSize: '0.78rem', padding: '0.35rem 0.7rem' }} onClick={() => setEditingProd({ id: Math.floor(Math.random() * 1000000000), nome: '', preco: 0, estoque: 0, imagem: '', categoria: '', descricao: '', variantes: {}, _new: true })}>
                   <i className="fa-solid fa-plus"></i> Novo Produto
                 </button>
                 <button className="admin-btn" style={{ background: '#059669', color: 'white', borderColor: '#059669', fontSize: '0.78rem', padding: '0.35rem 0.7rem' }} onClick={() => { setEditingKit(null); setShowKitModal(true) }}>
