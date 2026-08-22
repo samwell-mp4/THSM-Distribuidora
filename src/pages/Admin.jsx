@@ -533,6 +533,7 @@ export default function Admin({ produtos, onVoltar }) {
   const [identityPreview, setIdentityPreview] = useState('')
   const [addressPreview, setAddressPreview] = useState('')
   const [finFilter, setFinFilter] = useState('todos')
+  const [finSort, setFinSort] = useState({ key: null, direction: 'asc' })
   const [finEdit, setFinEdit] = useState(null)
   const [finView, setFinView] = useState('lista')
   const [finTab, setFinTab] = useState('receber')
@@ -2046,12 +2047,46 @@ export default function Admin({ produtos, onVoltar }) {
   // =============================================
   // FINANCIAL
   // =============================================
+  const handleFinSort = (key) => {
+    setFinSort(prev => {
+      if (prev.key === key) {
+        if (prev.direction === 'asc') return { key, direction: 'desc' }
+        return { key: null, direction: 'asc' }
+      }
+      return { key, direction: 'asc' }
+    })
+  }
+
+  const renderSortIcon = (key) => {
+    if (finSort.key !== key) return <i className="fa-solid fa-sort" style={{ opacity: 0.3, marginLeft: '5px' }}></i>
+    return <i className={`fa-solid fa-sort-${finSort.direction === 'asc' ? 'up' : 'down'}`} style={{ marginLeft: '5px' }}></i>
+  }
+
   const filteredFin = useMemo(() => {
     let result = financial
     if (finFilter !== 'todos') result = result.filter(f => f.status === finFilter)
     result = result.filter(f => inPeriod(f.dueDate, finPeriod, finPeriodMonth, finRangeStart, finRangeEnd))
+    if (finSort.key) {
+      result = [...result].sort((a, b) => {
+        let valA = a[finSort.key]
+        let valB = b[finSort.key]
+        if (finSort.key === 'customerName' || finSort.key === 'itemName' || finSort.key === 'paymentMethod' || finSort.key === 'status') {
+          valA = (valA || '').toLowerCase()
+          valB = (valB || '').toLowerCase()
+        } else if (finSort.key === 'dueDate') {
+          valA = new Date(valA || '2099-12-31').getTime()
+          valB = new Date(valB || '2099-12-31').getTime()
+        } else if (finSort.key === 'qty' || finSort.key === 'value' || finSort.key === 'custo') {
+          valA = Number(valA || 0)
+          valB = Number(valB || 0)
+        }
+        if (valA < valB) return finSort.direction === 'asc' ? -1 : 1
+        if (valA > valB) return finSort.direction === 'asc' ? 1 : -1
+        return 0
+      })
+    }
     return result
-  }, [financial, finFilter, finPeriod, finPeriodMonth, finRangeStart, finRangeEnd])
+  }, [financial, finFilter, finPeriod, finPeriodMonth, finRangeStart, finRangeEnd, finSort])
 
   const finTotal = useMemo(() => {
     const pendente = financial.filter(f => f.status === 'pendente').reduce((s, f) => s + f.value, 0)
@@ -3945,15 +3980,15 @@ export default function Admin({ produtos, onVoltar }) {
                       <table className="admin-table">
                         <thead>
                           <tr>
-                            <th>Cliente</th>
-                            <th>Item</th>
-                            <th>Qtd</th>
-                            <th>Valor</th>
-                            <th>Custo</th>
-                            <th>Vencimento</th>
+                            <th onClick={() => handleFinSort('customerName')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Cliente {renderSortIcon('customerName')}</th>
+                            <th onClick={() => handleFinSort('itemName')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Item {renderSortIcon('itemName')}</th>
+                            <th onClick={() => handleFinSort('qty')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Qtd {renderSortIcon('qty')}</th>
+                            <th onClick={() => handleFinSort('value')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Valor {renderSortIcon('value')}</th>
+                            <th onClick={() => handleFinSort('custo')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Custo {renderSortIcon('custo')}</th>
+                            <th onClick={() => handleFinSort('dueDate')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Vencimento {renderSortIcon('dueDate')}</th>
                             <th>Dias</th>
-                            <th>Status</th>
-                            <th>Forma</th>
+                            <th onClick={() => handleFinSort('status')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Status {renderSortIcon('status')}</th>
+                            <th onClick={() => handleFinSort('paymentMethod')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Forma {renderSortIcon('paymentMethod')}</th>
                             <th>Pagamento</th>
                             <th>Ações</th>
                           </tr>
@@ -4256,6 +4291,7 @@ export default function Admin({ produtos, onVoltar }) {
       {showOrderDetail && (
         <OrderDetailModal
           order={showOrderDetail}
+          usuarios={usuarios}
           financial={financial.filter(f => f.orderId === showOrderDetail.id)}
           produtos={produtosAtuais}
           onClose={() => setShowOrderDetail(null)}
@@ -6485,12 +6521,12 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
   const [prodPage, setProdPage] = useState(1)
 
   const filteredUsers = useMemo(() => {
-    const t = userSearch.toLowerCase().trim()
+    const t = userSearch.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
     if (!t) return []
     return usuarios.filter(u =>
-      u.nome?.toLowerCase().includes(t) ||
+      u.nome?.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(t) ||
       u.telefone?.includes(t) ||
-      (u.email || '').toLowerCase().includes(t)
+      (u.email || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(t)
     ).slice(0, 20)
   }, [usuarios, userSearch])
 
@@ -6642,7 +6678,6 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
                   <div className="form-group">
                     <label>Buscar cliente existente</label>
                     <div className="admin-search-prod">
-                      <i className="fa-solid fa-search"></i>
                       <input type="text" placeholder="Digite nome, telefone ou email..." value={userSearch} onChange={e => setUserSearch(e.target.value)} style={{ width: '100%' }} />
                     </div>
                     {filteredUsers.length > 0 && (
@@ -6896,7 +6931,7 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
 // =============================================
 // MODAL: ORDER DETAIL (with pre-pedido review + pendente edit)
 // =============================================
-function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange, onUpdateDue, onPreApprovar, onEditAndConfirm, onEditSave, onSyncCusto, onOpenDelivery, onUpdateCustomer, onCancelOrder }) {
+function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onStatusChange, onUpdateDue, onPreApprovar, onEditAndConfirm, onEditSave, onSyncCusto, onOpenDelivery, onUpdateCustomer, onCancelOrder }) {
   const [rejectedItems, setRejectedItems] = useState(new Set())
   const [editMode, setEditMode] = useState(false)
   const [editedItems, setEditedItems] = useState(order.items.map(i => ({ ...i })))
@@ -6913,6 +6948,17 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
     })()
   })
   const [customerEdit, setCustomerEdit] = useState(false)
+  const [userSearch, setUserSearch] = useState('')
+  const filteredUsers = useMemo(() => {
+    if (!usuarios) return []
+    const t = userSearch.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+    if (!t) return []
+    return usuarios.filter(u =>
+      u.nome?.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(t) ||
+      u.telefone?.includes(t) ||
+      (u.email || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(t)
+    ).slice(0, 10)
+  }, [usuarios, userSearch])
   const [editCustomer, setEditCustomer] = useState({
     nome: order.customer?.nome || '',
     email: order.customer?.email || '',
@@ -7163,6 +7209,29 @@ function OrderDetailModal({ order, financial, produtos, onClose, onStatusChange,
             </h4>
             {customerEdit ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div style={{ marginBottom: '0.5rem', borderBottom: '1px solid var(--admin-border)', paddingBottom: '0.5rem' }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 600 }}>Buscar outro cliente rapidamente:</label>
+                  <input type="text" placeholder="Digite nome, telefone ou email..." value={userSearch} onChange={e => setUserSearch(e.target.value)} style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', marginTop: '0.2rem' }} />
+                  {filteredUsers.length > 0 && (
+                    <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid var(--admin-border)', borderRadius: '6px', marginTop: '0.2rem', background: 'var(--admin-bg)' }}>
+                      {filteredUsers.map(u => (
+                        <div key={u.id} style={{ cursor: 'pointer', padding: '0.4rem 0.6rem', borderBottom: '1px solid var(--admin-border)', fontSize: '0.8rem' }} onClick={() => {
+                          setEditCustomer({
+                            id: u.id,
+                            nome: u.nome || '',
+                            email: u.email || '',
+                            telefone: u.telefone || '',
+                            cpf: u.cpf || '',
+                            endereco: { ...(u.endereco || {}) }
+                          })
+                          setUserSearch('')
+                        }}>
+                          <strong>{u.nome}</strong> - {u.telefone}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <div><strong style={{ fontSize: '0.78rem' }}>Nome:</strong>
                   <input type="text" value={editCustomer.nome} onChange={e => setEditCustomer(p => ({ ...p, nome: e.target.value }))} style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', marginTop: '0.2rem' }} />
                 </div>
