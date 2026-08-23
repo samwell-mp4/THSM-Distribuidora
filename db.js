@@ -2,6 +2,11 @@ import pg from 'pg';
 import fs from 'fs/promises';
 import path from 'path';
 
+// Parse Postgres bigint (int8) as JS number to avoid string/number ID mismatches
+pg.types.setTypeParser(pg.types.builtins.INT8, (val) => parseInt(val, 10));
+// Parse Postgres numeric as JS float
+pg.types.setTypeParser(pg.types.builtins.NUMERIC, (val) => parseFloat(val));
+
 const connectionString = process.env.DATABASE_URL || 'postgres://postgres:Sa03146555!@plug_sales_dispatch_app_thsm_distribuidora_postgress:5432/plug_sales_dispatch_app?sslmode=disable';
 
 const pool = new pg.Pool({
