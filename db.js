@@ -141,6 +141,25 @@ export async function initDb() {
     await client.query('CREATE INDEX IF NOT EXISTS idx_leads_telefone ON leads(telefone)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads(created_at DESC)');
 
+    // 8. PRODUTOS DELETADOS (Tombstone Tracking Table)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS produtos_deletados (
+        id bigint PRIMARY KEY,
+        created_at timestamptz DEFAULT now()
+      )
+    `);
+
+    // Migration: Move existing null/deleted products to produtos_deletados and clean them up
+    await client.query(`
+      INSERT INTO produtos_deletados (id)
+      SELECT id FROM produtos WHERE deleted = true OR nome IS NULL OR nome = ''
+      ON CONFLICT (id) DO NOTHING
+    `);
+
+    await client.query(`
+      DELETE FROM produtos WHERE deleted = true OR nome IS NULL OR nome = ''
+    `);
+
     // RLS: disable RLS since this is a trusted backend
     await client.query('ALTER TABLE usuarios DISABLE ROW LEVEL SECURITY');
     await client.query('ALTER TABLE pedidos DISABLE ROW LEVEL SECURITY');
@@ -187,9 +206,9 @@ export async function initDb() {
       AS $$
       BEGIN
         DELETE FROM produtos WHERE id = ANY(product_ids);
-        INSERT INTO produtos (id, deleted)
-        SELECT DISTINCT id, true FROM unnest(product_ids) AS t(id)
-        ON CONFLICT (id) DO UPDATE SET deleted = true;
+        INSERT INTO produtos_deletados (id)
+        SELECT DISTINCT id FROM unnest(product_ids) AS t(id)
+        ON CONFLICT (id) DO NOTHING;
       END;
       $$ LANGUAGE plpgsql;
     `);
@@ -340,10 +359,28 @@ export async function executeQuery(queryDesc) {
         return { data: [], count: countVal, error: null };
       }
 
+      if (table === 'produtos') {
+        const unionSql = `
+          SELECT id, nome, descricao, preco, preco_custo, estoque, imagem, categoria, variantes, "semDevolucao", updated_at, false AS deleted
+          FROM "produtos" ${whereClause}
+          UNION ALL
+          SELECT id, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, true AS deleted
+          FROM "produtos_deletados"
+          ${orderClause} ${limitOffsetClause}
+        `;
+        const res = await pool.query(unionSql, values);
+        let data = res.rows;
+        if (single) {
+          if (data.length === 0) return { data: null, error: { message: 'Row not found' } };
+          data = data[0];
+        } else if (maybeSingle) {
+          data = data.length > 0 ? data[0] : null;
+        }
+        return { data, count: data.length, error: null };
+      }
+
       const sql = `SELECT ${selectCols} FROM "${table}" ${whereClause} ${orderClause} ${limitOffsetClause}`;
       const res = await pool.query(sql, values);
-      
-      let data = res.rows;
       if (single) {
         if (data.length === 0) {
           return { data: null, error: { message: 'Row not found' } };
@@ -464,6 +501,13 @@ export async function executeQuery(queryDesc) {
     if (action === 'delete') {
       const sql = `DELETE FROM "${table}" ${whereClause} RETURNING *`;
       const res = await pool.query(sql, values);
+      if (table === 'produtos' && res.rows.length > 0) {
+        const deletedIds = res.rows.map(r => r.id);
+        await pool.query(
+          `INSERT INTO "produtos_deletados" (id) SELECT DISTINCT id FROM unnest($1::bigint[]) ON CONFLICT DO NOTHING`,
+          [deletedIds]
+        );
+      }
       return { data: res.rows, error: null };
     }
 
