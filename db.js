@@ -377,7 +377,7 @@ export async function executeQuery(queryDesc) {
           SELECT id, nome, descricao, preco, preco_custo, estoque, imagem, categoria, variantes, "semDevolucao", updated_at, false AS deleted
           FROM "produtos" ${whereClause}
           UNION ALL
-          SELECT id, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, true AS deleted
+          SELECT id, NULL::text, NULL::text, NULL::numeric, NULL::numeric, NULL::integer, NULL::text, NULL::text, NULL::jsonb, NULL::boolean, NULL::timestamptz, true AS deleted
           FROM "produtos_deletados"
           ${orderClause} ${limitOffsetClause}
         `;
