@@ -96,11 +96,19 @@ export async function initDb() {
         imagem text,
         categoria text,
         variantes jsonb DEFAULT '{}'::jsonb,
-        semDevolucao boolean DEFAULT false,
+        "semDevolucao" boolean DEFAULT false,
         deleted boolean DEFAULT false,
         updated_at timestamptz DEFAULT now()
       )
     `);
+
+    // Ensure camelCase RENAME for semDevolucao
+    try {
+      await client.query('ALTER TABLE produtos RENAME COLUMN semdevolucao TO "semDevolucao"');
+      console.log('Renamed column semdevolucao to "semDevolucao" case-sensitive.');
+    } catch (err) {
+      // Already renamed or column does not exist in old case
+    }
 
     // 5b. DESPESAS
     await client.query(`
