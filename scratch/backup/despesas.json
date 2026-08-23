@@ -1,0 +1,274 @@
+[
+  {
+    "id": 1787230589581,
+    "status": "pago",
+    "data": {
+      "id": 1787230589581,
+      "tipo": "Alimentação",
+      "value": 59,
+      "status": "pago",
+      "dueDate": "2026-08-19",
+      "paidDate": "2026-08-20",
+      "createdAt": 1787230589581,
+      "descricao": "Almoço Ubá",
+      "paymentMethod": "dinheiro"
+    },
+    "created_at": "2026-08-20T12:56:31.012779+00:00"
+  },
+  {
+    "id": 1787230552492,
+    "status": "pago",
+    "data": {
+      "id": 1787230552492,
+      "tipo": "hotel",
+      "value": 160,
+      "status": "pago",
+      "dueDate": "2026-08-20",
+      "paidDate": "2026-08-20",
+      "createdAt": 1787230552492,
+      "descricao": "Hotel Leopoldina",
+      "paymentMethod": "dinheiro"
+    },
+    "created_at": "2026-08-20T12:55:53.455548+00:00"
+  },
+  {
+    "id": 1787230515613,
+    "status": "pago",
+    "data": {
+      "id": 1787230515613,
+      "tipo": "Combustível",
+      "value": 350,
+      "status": "pago",
+      "dueDate": "2026-08-20",
+      "paidDate": "2026-08-20",
+      "createdAt": 1787230515613,
+      "descricao": "Van",
+      "paymentMethod": "dinheiro"
+    },
+    "created_at": "2026-08-20T12:55:16.392286+00:00"
+  },
+  {
+    "id": 1787013869109,
+    "status": "pago",
+    "data": {
+      "id": 1787013869109,
+      "tipo": "Alimentação",
+      "value": 76,
+      "status": "pago",
+      "dueDate": "2026-08-18",
+      "paidDate": "2026-08-18",
+      "createdAt": 1787013869109,
+      "descricao": "Pizza JF",
+      "paymentMethod": "dinheiro"
+    },
+    "created_at": "2026-08-18T00:44:30.232427+00:00"
+  },
+  {
+    "id": 1786994256601,
+    "status": "pago",
+    "data": {
+      "id": 1786994256601,
+      "tipo": "Alimentação",
+      "value": 24,
+      "status": "pago",
+      "dueDate": "2026-08-17",
+      "paidDate": "2026-08-17",
+      "createdAt": 1786994256601,
+      "descricao": "Lanche",
+      "paymentMethod": "dinheiro"
+    },
+    "created_at": "2026-08-17T19:17:37.437647+00:00"
+  },
+  {
+    "id": 1786959744426,
+    "status": "pago",
+    "data": {
+      "id": 1786959744426,
+      "tipo": "Combustível",
+      "value": 609,
+      "status": "pago",
+      "dueDate": "2026-08-17",
+      "paidDate": "2026-08-17",
+      "createdAt": 1786959744426,
+      "descricao": "Diesel van",
+      "paymentMethod": "dinheiro"
+    },
+    "created_at": "2026-08-17T09:42:25.217548+00:00"
+  },
+  {
+    "id": 1787074060762,
+    "status": "pago",
+    "data": {
+      "id": 1787074060762,
+      "tipo": "Alimentação",
+      "value": 48,
+      "status": "pago",
+      "dueDate": "2026-08-18",
+      "paidDate": "2026-08-18",
+      "createdAt": 1787074060762,
+      "descricao": "Almoço JF",
+      "paymentMethod": "pix"
+    },
+    "created_at": "2026-08-18T17:27:41.865361+00:00"
+  },
+  {
+    "id": 1786481372720,
+    "status": "pago",
+    "data": {
+      "id": 1786481372720,
+      "tipo": "Outros",
+      "value": 150,
+      "status": "pago",
+      "dueDate": "2026-08-11",
+      "paidDate": "2026-08-11",
+      "createdAt": 1786481372720,
+      "descricao": "Lavagem van",
+      "paymentMethod": "dinheiro"
+    },
+    "created_at": "2026-08-11T20:49:32.530846+00:00"
+  },
+  {
+    "id": 1786198223343,
+    "status": "pago",
+    "data": {
+      "id": 1786198223343,
+      "tipo": "Combustível",
+      "value": 110,
+      "status": "pago",
+      "dueDate": "2026-08-07",
+      "paidDate": "2026-08-08",
+      "createdAt": 1786198223343,
+      "descricao": "Amarok",
+      "paymentMethod": "dinheiro"
+    },
+    "created_at": "2026-08-08T14:10:23.959002+00:00"
+  },
+  {
+    "id": 1787013852854,
+    "status": "pago",
+    "data": {
+      "id": 1787013852854,
+      "tipo": "hotel",
+      "value": 130,
+      "status": "pago",
+      "dueDate": "2026-08-18",
+      "paidDate": "2026-08-18",
+      "createdAt": 1787013852854,
+      "descricao": "Hotel JF",
+      "paymentMethod": "dinheiro"
+    },
+    "created_at": "2026-08-18T00:44:13.705413+00:00"
+  },
+  {
+    "id": 1786815745556,
+    "status": "pago",
+    "data": {
+      "id": 1786815745556,
+      "tipo": "Combustível",
+      "value": 200,
+      "status": "pago",
+      "dueDate": "2026-08-15",
+      "paidDate": "2026-08-15",
+      "createdAt": 1786815745556,
+      "descricao": "Amarok",
+      "paymentMethod": "pix"
+    },
+    "created_at": "2026-08-15T17:42:26.992286+00:00"
+  },
+  {
+    "id": 1785594468734,
+    "status": "pago",
+    "data": {
+      "id": 1785594468734,
+      "tipo": "Embalagens",
+      "value": 9.5,
+      "status": "pago",
+      "dueDate": "2026-08-01",
+      "paidDate": "2026-08-01",
+      "createdAt": 1785594468734,
+      "descricao": "Papelaria",
+      "paymentMethod": "pix"
+    },
+    "created_at": "2026-08-01T14:27:48.894702+00:00"
+  },
+  {
+    "id": 1787230602797,
+    "status": "pago",
+    "data": {
+      "id": 1787230602797,
+      "tipo": "Alimentação",
+      "value": 86,
+      "status": "pago",
+      "dueDate": "2026-08-20",
+      "paidDate": "2026-08-20",
+      "createdAt": 1787230602797,
+      "descricao": "Lanche Leopoldina",
+      "paymentMethod": "dinheiro"
+    },
+    "created_at": "2026-08-20T12:56:43.607908+00:00"
+  },
+  {
+    "id": 1786536447876,
+    "status": "pago",
+    "data": {
+      "id": 1786536447876,
+      "tipo": "Manutenção de veículos",
+      "value": 60,
+      "status": "pago",
+      "dueDate": "2026-08-12",
+      "paidDate": "2026-08-12",
+      "createdAt": 1786536447876,
+      "descricao": "Lâmpadas van",
+      "paymentMethod": "pix"
+    },
+    "created_at": "2026-08-12T12:07:28.972863+00:00"
+  },
+  {
+    "id": 1787240899158,
+    "status": "pago",
+    "data": {
+      "id": 1787240899158,
+      "tipo": "Alimentação",
+      "value": 60,
+      "status": "pago",
+      "dueDate": "2026-08-20",
+      "paidDate": "2026-08-20",
+      "createdAt": 1787240899158,
+      "descricao": "Almoço Cataguases",
+      "paymentMethod": "dinheiro"
+    },
+    "created_at": "2026-08-20T15:48:19.991881+00:00"
+  },
+  {
+    "id": 1786971370980,
+    "status": "pago",
+    "data": {
+      "id": 1786971370980,
+      "tipo": "Alimentação",
+      "value": 32,
+      "status": "pago",
+      "dueDate": "2026-08-17",
+      "paidDate": "2026-08-17",
+      "createdAt": 1786971370980,
+      "descricao": "Lanche",
+      "paymentMethod": "dinheiro"
+    },
+    "created_at": "2026-08-17T12:56:11.814276+00:00"
+  },
+  {
+    "id": 1787267200049,
+    "status": "pago",
+    "data": {
+      "id": 1787267200049,
+      "tipo": "Alimentação",
+      "value": 10.26,
+      "status": "pago",
+      "dueDate": "2026-08-20",
+      "paidDate": "2026-08-20",
+      "createdAt": 1787267200049,
+      "descricao": "Lanche",
+      "paymentMethod": "dinheiro"
+    },
+    "created_at": "2026-08-20T23:06:40.883646+00:00"
+  }
+]

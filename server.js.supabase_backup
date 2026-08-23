@@ -1,27 +1,14 @@
 import express from 'express'
-import { initDb, executeQuery } from './db.js'
+import { createClient } from '@supabase/supabase-js'
 
-// Initialize database schema
-initDb().catch(err => console.error('Database initialization error:', err));
+const SUPABASE_URL = 'https://zncuyrimrkzbidvxyonk.supabase.co'
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpuY3V5cmltcmt6Ymlkdnh5b25rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTMzOTksImV4cCI6MjA5OTMyOTM5OX0.gJ_NxaMO7fTpxwdFNNU4Phnn9E4qtOlyaMGugryL1iE'
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 
 const app = express()
 app.use(express.json())
 
-// DB Query Proxy Endpoint
-app.post('/api/db', async (req, res) => {
-  try {
-    const result = await executeQuery(req.body)
-    if (result.error) {
-      return res.status(400).json(result)
-    }
-    res.json(result)
-  } catch (err) {
-    console.error('API /api/db error:', err.message)
-    res.status(500).json({ data: null, error: { message: err.message } })
-  }
-})
-
-// Create user endpoint (WhatsApp Bot Integration)
 app.post('/api/criar-usuario', async (req, res) => {
   try {
     const body = req.body
@@ -33,13 +20,7 @@ app.post('/api/criar-usuario', async (req, res) => {
     const nome = dados.nome || body.nome || ''
 
     // Check if user already exists (to preserve existing password)
-    const { data: existing } = await executeQuery({
-      action: 'select',
-      table: 'usuarios',
-      args: 'endereco',
-      filters: [{ type: 'eq', column: 'telefone', value: telefone }],
-      maybeSingle: true
-    })
+    const { data: existing } = await supabase.from('usuarios').select('endereco').eq('telefone', telefone).maybeSingle()
     const existingSenha = existing?.endereco?.senha || ''
 
     // Generate password: padrao unico 1234
@@ -60,26 +41,22 @@ app.post('/api/criar-usuario', async (req, res) => {
       senha
     }
 
-    const { data, error } = await executeQuery({
-      action: 'upsert',
-      table: 'usuarios',
-      args: {
-        values: { telefone, nome, endereco },
-        options: { onConflict: 'telefone' }
-      },
-      single: true
-    })
+    const { data, error } = await supabase
+      .from('usuarios')
+      .upsert({ telefone, nome, endereco }, { onConflict: 'telefone' })
+      .select()
+      .single()
 
     if (error) {
-      console.error('DB error during user creation:', error.message)
+      console.error('Supabase error:', error)
       return res.status(500).json({ error: error.message })
     }
 
-    const loginLink = `https://thsmdistribuidora.com/?login=${Buffer.from(telefone).toString('base64')}`
+        const loginLink = `https://thsmdistribuidora.com/?login=${Buffer.from(telefone).toString('base64')}`
 
     res.json({ success: true, usuario: data, senha_gerada: existingSenha ? false : true, loginLink })
   } catch (err) {
-    console.error('Server error:', err.message)
+    console.error('Server error:', err)
     res.status(500).json({ error: err.message })
   }
 })
