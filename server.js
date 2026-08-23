@@ -1,5 +1,5 @@
 import express from 'express'
-import { initDb, executeQuery } from './db.js'
+import { initDb, executeQuery, restoreDbData } from './db.js'
 
 // Initialize database schema
 initDb().catch(err => console.error('Database initialization error:', err));
@@ -7,6 +7,17 @@ initDb().catch(err => console.error('Database initialization error:', err));
 const app = express()
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ limit: '50mb', extended: true }))
+
+// Trigger database restore from local JSON backups
+app.get('/api/restore-db', async (req, res) => {
+  try {
+    const results = await restoreDbData()
+    res.json({ success: true, results })
+  } catch (err) {
+    console.error('API /api/restore-db error:', err.message)
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
 
 // DB Query Proxy Endpoint
 app.post('/api/db', async (req, res) => {

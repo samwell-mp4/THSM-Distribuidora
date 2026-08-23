@@ -1,4 +1,6 @@
 import pg from 'pg';
+import fs from 'fs/promises';
+import path from 'path';
 
 const connectionString = process.env.DATABASE_URL || 'postgres://postgres:Sa03146555!@plug_sales_dispatch_app_thsm_distribuidora_postgress:5432/plug_sales_dispatch_app?sslmode=disable';
 
@@ -470,4 +472,73 @@ export async function executeQuery(queryDesc) {
     console.error(`Database error on table ${table}, action ${action}:`, err.message);
     return { data: null, error: { message: err.message, code: err.code } };
   }
+}
+
+export async function restoreDbData() {
+  const tables = [
+    { name: 'usuarios', pkey: 'id' },
+    { name: 'pedidos', pkey: 'id' },
+    { name: 'financeiro', pkey: 'id' },
+    { name: 'rotas_contatos', pkey: 'id' },
+    { name: 'rotas_edits', pkey: 'id' },
+    { name: 'produtos', pkey: 'id' },
+    { name: 'despesas', pkey: 'id' },
+    { name: 'login_tokens', pkey: 'id' },
+    { name: 'leads', pkey: 'id' }
+  ];
+
+  const results = [];
+  for (const table of tables) {
+    const filePath = path.join('scratch', 'backup', `${table.name}.json`);
+    try {
+      await fs.access(filePath);
+    } catch {
+      results.push(`Table "${table.name}": no backup file found.`);
+      continue;
+    }
+
+    const content = await fs.readFile(filePath, 'utf-8');
+    const rows = JSON.parse(content);
+    if (rows.length === 0) {
+      results.push(`Table "${table.name}": 0 rows to restore.`);
+      continue;
+    }
+
+    const CHUNK_SIZE = 100;
+    for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+      const chunk = rows.slice(i, i + CHUNK_SIZE);
+      const keys = Object.keys(chunk[0]);
+      const colsStr = keys.map(k => `"${k}"`).join(', ');
+
+      const values = [];
+      const valuePlaceholders = [];
+
+      for (const row of chunk) {
+        const placeholders = [];
+        for (const key of keys) {
+          let val = row[key];
+          if (typeof val === 'object' && val !== null) {
+            val = JSON.stringify(val);
+          }
+          values.push(val);
+          placeholders.push(`$${values.length}`);
+        }
+        valuePlaceholders.push(`(${placeholders.join(', ')})`);
+      }
+
+      const updateCols = keys.filter(k => k !== table.pkey);
+      let onConflict = '';
+      if (updateCols.length > 0) {
+        const updateSets = updateCols.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ');
+        onConflict = `ON CONFLICT ("${table.pkey}") DO UPDATE SET ${updateSets}`;
+      } else {
+        onConflict = `ON CONFLICT ("${table.pkey}") DO NOTHING`;
+      }
+
+      const sql = `INSERT INTO "${table.name}" (${colsStr}) VALUES ${valuePlaceholders.join(', ')} ${onConflict}`;
+      await pool.query(sql, values);
+    }
+    results.push(`Table "${table.name}": successfully restored ${rows.length} rows.`);
+  }
+  return results;
 }
