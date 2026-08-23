@@ -19,6 +19,17 @@ app.get('/api/restore-db', async (req, res) => {
   }
 })
 
+// Temporary test endpoint to inspect database rows
+app.get('/api/test-db', async (req, res) => {
+  try {
+    const result = await executeQuery({ action: 'select', table: 'produtos' })
+    const sample = result.data.filter(p => !p.nome || p.deleted)
+    res.json({ total: result.data.length, sample: sample.slice(0, 10) })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // DB Query Proxy Endpoint
 app.post('/api/db', async (req, res) => {
   try {
