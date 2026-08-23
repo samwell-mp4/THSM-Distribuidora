@@ -533,6 +533,20 @@ export async function executeQuery(queryDesc) {
 }
 
 export async function restoreDbData() {
+  console.log('Restoring database from backups, purging existing tables...');
+  
+  // Clean all tables in reverse dependency order
+  await pool.query('DELETE FROM financeiro');
+  await pool.query('DELETE FROM pedidos');
+  await pool.query('DELETE FROM usuarios');
+  await pool.query('DELETE FROM rotas_contatos');
+  await pool.query('DELETE FROM rotas_edits');
+  await pool.query('DELETE FROM produtos');
+  await pool.query('DELETE FROM produtos_deletados');
+  await pool.query('DELETE FROM despesas');
+  await pool.query('DELETE FROM login_tokens');
+  await pool.query('DELETE FROM leads');
+
   const tables = [
     { name: 'usuarios', pkey: 'id' },
     { name: 'pedidos', pkey: 'id' },
@@ -556,11 +570,24 @@ export async function restoreDbData() {
     }
 
     const content = await fs.readFile(filePath, 'utf-8');
-    const rows = JSON.parse(content);
+    let rows = JSON.parse(content);
     if (rows.length === 0) {
       results.push(`Table "${table.name}": 0 rows to restore.`);
       continue;
     }
+
+    // Normalize rows keys (e.g. semdevolucao -> "semDevolucao")
+    rows = rows.map(row => {
+      const normalized = {};
+      for (const k of Object.keys(row)) {
+        if (k === 'semdevolucao') {
+          normalized['semDevolucao'] = row[k];
+        } else {
+          normalized[k] = row[k];
+        }
+      }
+      return normalized;
+    });
 
     const CHUNK_SIZE = 100;
     for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
