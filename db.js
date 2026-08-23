@@ -394,6 +394,7 @@ export async function executeQuery(queryDesc) {
 
       const sql = `SELECT ${selectCols} FROM "${table}" ${whereClause} ${orderClause} ${limitOffsetClause}`;
       const res = await pool.query(sql, values);
+      let data = res.rows;
       if (single) {
         if (data.length === 0) {
           return { data: null, error: { message: 'Row not found' } };
