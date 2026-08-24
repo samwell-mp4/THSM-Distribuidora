@@ -169,12 +169,35 @@ export async function upsertUser(user) {
   const raw = (user.telefone || '').replace(/@.*$/, '').replace(/\D/g, '')
   if (!raw) { console.error('upsertUser: telefone vazio'); return null }
   const telefone = raw.startsWith('55') ? raw : '55' + raw
-  const clean = { ...user, telefone }
+
+  // Ensure CPF is stored inside endereco
+  const endereco = { ...(user.endereco || {}) }
+  if (user.cpf && !endereco.cpf) {
+    endereco.cpf = user.cpf
+  }
+
+  // Construct valid database columns only
+  const dbUser = {
+    telefone,
+    nome: user.nome || '',
+    email: user.email || '',
+    endereco
+  }
+
+  // Preserve ID if it's a valid UUID
+  if (user.id && typeof user.id === 'string' && user.id.length > 30 && user.id !== 'null') {
+    dbUser.id = user.id
+  }
+
+  if (user.created_at) {
+    dbUser.created_at = user.created_at
+  }
+
   let lastError = null
   try {
     for (let attempt = 1; attempt <= 3; attempt++) {
-      const { data, error } = await supabase.from('usuarios').upsert(clean, { onConflict: 'telefone' }).select().single()
-      if (!error) return data || clean
+      const { data, error } = await supabase.from('usuarios').upsert(dbUser, { onConflict: 'telefone' }).select().single()
+      if (!error) return { ...user, ...data }
       lastError = error
       if (attempt < 3) await new Promise(r => setTimeout(r, 600 * attempt))
     }
@@ -185,10 +208,10 @@ export async function upsertUser(user) {
   // Sem rede: guarda pendente para reprocessar quando voltar
   try {
     const pendentes = JSON.parse(localStorage.getItem('thsm_pending_users') || '[]')
-    pendentes.push({ ...clean, savedAt: Date.now() })
+    pendentes.push({ ...dbUser, savedAt: Date.now() })
     localStorage.setItem('thsm_pending_users', JSON.stringify(pendentes))
   } catch {}
-  return clean
+  return { ...user, telefone }
 }
 
 export async function findUserByPhone(telefone) {
@@ -549,12 +572,16 @@ export async function upsertDespesas(records) {
 export async function upsertProducts(products) {
   let records = Object.entries(products).map(([id, changes]) => {
     const { variantes, ...rest } = changes
-    return {
+    const rec = {
       id: Number(id),
       ...rest,
-      variantes: variantes || {},
       updated_at: new Date().toISOString()
     }
+    // Only include variants column if it is explicitly being modified
+    if (variantes !== undefined) {
+      rec.variantes = variantes
+    }
+    return rec
   })
   if (records.length === 0) return
   for (let attempt = 1; attempt <= 4; attempt++) {

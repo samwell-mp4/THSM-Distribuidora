@@ -330,7 +330,20 @@ fetchProductsDB()
         const enviados = []
         for (const u of pendentes) {
           const { telefone } = u
-          const { data, error } = await supabase.from('usuarios').upsert(u, { onConflict: 'telefone' }).select().single()
+          const dbUser = {
+            id: u.id,
+            telefone,
+            nome: u.nome,
+            email: u.email || '',
+            endereco: u.endereco || {}
+          }
+          if (!dbUser.id || dbUser.id === 'null' || typeof dbUser.id !== 'string' || dbUser.id.length < 30) {
+            delete dbUser.id
+          }
+          if (u.cpf && !dbUser.endereco.cpf) {
+            dbUser.endereco.cpf = u.cpf
+          }
+          const { data, error } = await supabase.from('usuarios').upsert(dbUser, { onConflict: 'telefone' }).select().single()
           if (!error || error.code === '23505') {
             enviados.push(telefone)
           }
@@ -650,8 +663,7 @@ fetchProductsDB()
         telefone,
         nome: customer.nome,
         email: customer.email,
-        cpf: customer.cpf,
-        endereco: { ...(customer.endereco || {}), senha: customer.senha, origem: 'Registro do Site' }
+        endereco: { ...(customer.endereco || {}), cpf: customer.cpf, senha: customer.senha, origem: 'Registro do Site' }
       }).select().single()
       if (error) { showToast('Erro ao criar cadastro', 'error'); return null }
       setUsuarios(prev => [...prev, data])
@@ -805,7 +817,15 @@ fetchProductsDB()
 
   // Admin & UserDash views
   if (route === 'admin' && adminAuth?.loggedIn) return <Admin produtos={produtos} onVoltar={() => { navigate('/'); localStorage.removeItem(LS_ADMIN); setAdminAuth(null) }} />
-  if (route === 'userdash') return <UserDashboard produtos={produtosMerged} onVoltar={() => navigate('/')} initialOrderId={initialOrderId} />
+  if (route === 'userdash') return (
+    <UserDashboard
+      produtos={produtosMerged}
+      onVoltar={() => navigate('/')}
+      initialOrderId={initialOrderId}
+      currentUser={currentUser}
+      onUpdateUser={setCurrentUser}
+    />
+  )
 
   return (
     <div className="app">

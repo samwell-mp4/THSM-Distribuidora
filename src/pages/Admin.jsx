@@ -945,11 +945,15 @@ export default function Admin({ produtos, onVoltar }) {
             newsFromDB.push({ id: prod.id, nome: prod.nome || '', preco: prod.preco || 0, estoque: prod.estoque || 0, imagem: prod.imagem || '', categoria: prod.categoria || '', descricao: '', variantes: prod.variantes || {}, semDevolucao: !!prod.semDevolucao, preco_custo: prod.preco_custo ?? null })
           }
           const override = {}
+          if (prod.nome !== null && prod.nome !== '') override.nome = prod.nome
+          if (prod.descricao !== null) override.descricao = prod.descricao
           if (prod.preco !== null) override.preco = prod.preco
           if (prod.estoque !== null) override.estoque = prod.estoque
           if (prod.imagem !== null && typeof prod.imagem === 'string' && !prod.imagem.startsWith('data:') && prod.imagem.length < 2048) override.imagem = prod.imagem
           if (prod.categoria !== null) override.categoria = prod.categoria
           if (prod.preco_custo !== null) override.preco_custo = prod.preco_custo
+          if (prod.semDevolucao !== null) override.semDevolucao = !!prod.semDevolucao
+          if (prod.variantes !== null) override.variantes = prod.variantes
           if (Object.keys(override).length > 0) fromDB[prod.id] = override
           if (prod.variantes && Object.keys(prod.variantes).length > 0) {
             variantsDB[prod.id] = prod.variantes

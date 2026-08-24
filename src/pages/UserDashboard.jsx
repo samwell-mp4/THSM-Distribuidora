@@ -33,7 +33,7 @@ function setLS(key, data) {
   try { localStorage.setItem(key, JSON.stringify(data)) } catch (e) { console.warn('setLS falha:', key, e) }
 }
 
-export default function UserDashboard({ produtos = [], onVoltar, initialOrderId }) {
+export default function UserDashboard({ produtos = [], onVoltar, initialOrderId, currentUser, onUpdateUser }) {
   const [tab, setTab] = useState(() => sessionStorage.getItem('thsm_user_tab') || 'pedidos')
   useEffect(() => { sessionStorage.setItem('thsm_user_tab', tab) }, [tab])
   const [finFilter, setFinFilter] = useState('todas')
@@ -61,12 +61,20 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
   const [finSearch, setFinSearch] = useState('')
   const [finDateStart, setFinDateStart] = useState('')
   const [finDateEnd, setFinDateEnd] = useState('')
-  const [editNome, setEditNome] = useState('')
-  const [editEmail, setEditEmail] = useState('')
-  const [editTelefone, setEditTelefone] = useState('')
-  const [editCpf, setEditCpf] = useState('')
-  const [editSenha, setEditSenha] = useState('')
-  const [editEndereco, setEditEndereco] = useState({ cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
+  const [editNome, setEditNome] = useState(() => currentUser?.nome || '')
+  const [editEmail, setEditEmail] = useState(() => currentUser?.email || '')
+  const [editTelefone, setEditTelefone] = useState(() => currentUser?.telefone || '')
+  const [editCpf, setEditCpf] = useState(() => currentUser?.cpf || currentUser?.endereco?.cpf || '')
+  const [editSenha, setEditSenha] = useState(() => currentUser?.endereco?.senha || '')
+  const [editEndereco, setEditEndereco] = useState(() => ({
+    cep: currentUser?.endereco?.cep || '',
+    estado: currentUser?.endereco?.estado || '',
+    cidade: currentUser?.endereco?.cidade || '',
+    bairro: currentUser?.endereco?.bairro || '',
+    rua: currentUser?.endereco?.rua || '',
+    numero: currentUser?.endereco?.numero || '',
+    complemento: currentUser?.endereco?.complemento || ''
+  }))
   const [savingProfile, setSavingProfile] = useState(false)
   const [shopCart, setShopCart] = useState({})
   const [checkoutLoading, setCheckoutLoading] = useState(false)
@@ -139,6 +147,25 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
     })
   }
 
+  useEffect(() => {
+    if (currentUser) {
+      setEditNome(currentUser.nome || '')
+      setEditEmail(currentUser.email || '')
+      setEditTelefone(currentUser.telefone || '')
+      setEditCpf(currentUser.cpf || currentUser.endereco?.cpf || '')
+      setEditSenha(currentUser.endereco?.senha || '')
+      setEditEndereco({
+        cep: currentUser.endereco?.cep || '',
+        estado: currentUser.endereco?.estado || '',
+        cidade: currentUser.endereco?.cidade || '',
+        bairro: currentUser.endereco?.bairro || '',
+        rua: currentUser.endereco?.rua || '',
+        numero: currentUser.endereco?.numero || '',
+        complemento: currentUser.endereco?.complemento || ''
+      })
+    }
+  }, [currentUser])
+
   const saveProfile = async () => {
     if (!editNome.trim()) { alert('Nome é obrigatório'); return }
     if (!editCpf.trim()) { alert('CPF é obrigatório'); return }
@@ -146,16 +173,21 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
     try {
       const updated = {
         ...currentUser,
-        id: currentUser.id,
+        id: currentUser?.id,
         nome: editNome.trim(),
         email: editEmail.trim(),
         telefone: editTelefone.replace(/\D/g, ''),
         cpf: editCpf.trim(),
-        endereco: { ...(currentUser.endereco || {}), ...editEndereco, senha: editSenha || currentUser.endereco?.senha || '' }
+        endereco: { ...(currentUser?.endereco || {}), ...editEndereco, cpf: editCpf.trim(), senha: editSenha || currentUser?.endereco?.senha || '' }
       }
-      await upsertUser(updated)
-      setLS(LS_SESSAO, updated)
-      alert('Dados salvos com sucesso!')
+      const saved = await upsertUser(updated)
+      if (saved) {
+        setLS(LS_SESSAO, saved)
+        if (onUpdateUser) onUpdateUser(saved)
+        alert('Dados salvos com sucesso!')
+      } else {
+        alert('Erro ao salvar. Tente novamente.')
+      }
     } catch (e) {
       console.error('Erro ao salvar perfil:', e)
       alert('Erro ao salvar. Tente novamente.')
@@ -163,10 +195,6 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId 
       setSavingProfile(false)
     }
   }
-
-  const currentUser = useMemo(() => {
-    try { const d = localStorage.getItem(LS_SESSAO); return d ? JSON.parse(d) : null } catch { return null }
-  }, [])
 
   const [allOrders, setAllOrders] = useState(() => getLS(LS_ORDERS))
   const [financial, setFinancial] = useState(() => getLS(LS_FINANCIAL))
