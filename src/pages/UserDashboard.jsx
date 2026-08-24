@@ -1011,41 +1011,74 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
       )}
 
       {tab === 'conta' && (
-        <div className="admin-section">
+        <div className="admin-section conta-section">
           <div className="admin-header-row">
             <div>
               <h1>Minha Conta</h1>
               <p className="admin-subtitle">Edite suas informações pessoais</p>
             </div>
           </div>
-          <div className="conta-form">
-            <div className="form-group">
-              <label>Nome</label>
-              <input type="text" value={editNome} onChange={e => setEditNome(e.target.value)} placeholder={currentUser?.nome || 'Seu nome'} />
+          <div className="conta-card">
+            <div className="conta-form">
+              <div className="form-grid-2">
+                <div className="form-group">
+                  <label><i className="fa-solid fa-user"></i> Nome completo</label>
+                  <div className="input-icon-wrapper">
+                    <i className="fa-solid fa-user input-icon"></i>
+                    <input type="text" value={editNome} onChange={e => setEditNome(e.target.value)} placeholder={currentUser?.nome || 'Seu nome'} />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label><i className="fa-solid fa-envelope"></i> Email</label>
+                  <div className="input-icon-wrapper">
+                    <i className="fa-solid fa-envelope input-icon"></i>
+                    <input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder={currentUser?.email || 'seu@email.com'} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-grid-2">
+                <div className="form-group">
+                  <label><i className="fa-solid fa-phone"></i> Telefone / WhatsApp</label>
+                  <div className="input-icon-wrapper">
+                    <i className="fa-solid fa-phone input-icon"></i>
+                    <input type="text" value={editTelefone} onChange={e => setEditTelefone(e.target.value)} placeholder={currentUser?.telefone || '(31) 99999-9999'} />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label><i className="fa-solid fa-id-card"></i> CPF *</label>
+                  <div className="input-icon-wrapper">
+                    <i className="fa-solid fa-id-card input-icon"></i>
+                    <input type="text" value={editCpf} onChange={e => setEditCpf(e.target.value)} placeholder={currentUser?.cpf || currentUser?.endereco?.cpf || '000.000.000-00'} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label><i className="fa-solid fa-lock"></i> Senha</label>
+                <div className="input-icon-wrapper">
+                  <i className="fa-solid fa-lock input-icon"></i>
+                  <input type="password" value={editSenha} onChange={e => setEditSenha(e.target.value)} placeholder="••••••" />
+                </div>
+              </div>
+
+              <div className="section-divider"></div>
+
+              <h3 className="form-section-title"><i className="fa-solid fa-map-location-dot"></i> Endereço de Entrega</h3>
+              <div className="form-group">
+                <AddressForm value={editEndereco} onChange={(addr) => setEditEndereco(addr)} />
+              </div>
+
+              <div className="form-actions">
+                <button className="btn-next conta-save-btn" disabled={savingProfile} onClick={saveProfile}>
+                  {savingProfile ? (
+                    <span><i className="fa-solid fa-spinner fa-spin"></i> Salvando...</span>
+                  ) : (
+                    <span><i className="fa-solid fa-check-double"></i> Salvar Alterações</span>
+                  )}
+                </button>
+              </div>
             </div>
-            <div className="form-group">
-              <label>Email</label>
-              <input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder={currentUser?.email || 'seu@email.com'} />
-            </div>
-            <div className="form-group">
-              <label>Telefone / WhatsApp</label>
-              <input type="text" value={editTelefone} onChange={e => setEditTelefone(e.target.value)} placeholder={currentUser?.telefone || '(31) 99999-9999'} />
-            </div>
-            <div className="form-group">
-              <label>CPF *</label>
-              <input type="text" value={editCpf} onChange={e => setEditCpf(e.target.value)} placeholder={currentUser?.cpf || currentUser?.endereco?.cpf || '000.000.000-00'} />
-            </div>
-            <div className="form-group">
-              <label>Senha</label>
-              <input type="password" value={editSenha} onChange={e => setEditSenha(e.target.value)} placeholder="••••••" />
-            </div>
-            <div className="form-group">
-              <label>Endereço</label>
-              <AddressForm value={editEndereco} onChange={(addr) => setEditEndereco(addr)} />
-            </div>
-            <button className="btn-next conta-save-btn" disabled={savingProfile} onClick={saveProfile}>
-              {savingProfile ? <span><i className="fa-solid fa-spinner fa-spin"></i> Salvando...</span> : <span><i className="fa-solid fa-check"></i> Salvar Alterações</span>}
-            </button>
           </div>
         </div>
       )}

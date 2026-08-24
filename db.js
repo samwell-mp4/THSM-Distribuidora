@@ -245,11 +245,49 @@ export async function initDb() {
 
     await client.query('COMMIT');
     console.log('Database schema checked/created successfully.');
+    await normalizeUserPhones(client);
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Failed to initialize database schema:', err.message);
   } finally {
     client.release();
+  }
+}
+
+async function normalizeUserPhones(client) {
+  console.log('Normalizing and deduplicating user phone numbers...');
+  try {
+    const { rows: users } = await client.query('SELECT id, telefone FROM usuarios');
+    const toDelete = [];
+    const toUpdatePhone = [];
+    for (const user of users) {
+      const phone = user.telefone;
+      if (phone && !phone.startsWith('55') && /^\d+$/.test(phone)) {
+        const phone55 = '55' + phone;
+        const counterpart = users.find(u => u.telefone === phone55);
+        if (counterpart) {
+          // Move orders referencing duplicate user to the main counterpart user
+          await client.query('UPDATE pedidos SET user_id = $1 WHERE user_id = $2', [counterpart.id, user.id]);
+          // Mark duplicate user for deletion
+          toDelete.push(user.id);
+        } else {
+          // Update duplicate phone number to include prefix
+          toUpdatePhone.push({ id: user.id, phone55 });
+        }
+      }
+    }
+    if (toDelete.length > 0) {
+      await client.query('DELETE FROM usuarios WHERE id = ANY($1)', [toDelete]);
+      console.log(`Deduplication: Deleted ${toDelete.length} duplicate user records.`);
+    }
+    for (const item of toUpdatePhone) {
+      await client.query('UPDATE usuarios SET telefone = $1 WHERE id = $2', [item.phone55, item.id]);
+    }
+    if (toUpdatePhone.length > 0) {
+      console.log(`Normalization: Prefixed ${toUpdatePhone.length} user phones with 55.`);
+    }
+  } catch (err) {
+    console.error('Failed to normalize user phones:', err.message);
   }
 }
 
