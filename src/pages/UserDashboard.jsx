@@ -176,7 +176,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
         id: currentUser?.id,
         nome: editNome.trim(),
         email: editEmail.trim(),
-        telefone: editTelefone.replace(/\D/g, ''),
+        telefone: currentUser.telefone.replace(/\D/g, ''),
         cpf: editCpf.trim(),
         endereco: { ...(currentUser?.endereco || {}), ...editEndereco, cpf: editCpf.trim(), senha: editSenha || currentUser?.endereco?.senha || '' }
       }
