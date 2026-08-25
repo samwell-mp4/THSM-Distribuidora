@@ -1,0 +1,16 @@
+<USER_REQUEST>
+chat você fez a maior merda seu fdppp você vai pegar olha presta atenção, entra nessa planilha nela tem diversos produtos as linhas que forem nesse padrão 176			0	NULL	1000			{}	FALSE	FALSE	2026-08-25 18:39:49.577+00 ( e so mudar o ID você vai deletar elas ) agora se tiver preco de custo você vai manter o produto, dentro do nosso produtos.json vai ter algumas linhas com as mesma descrições e você vai comparar e excluir as duplicadas mantendo a que tiver preço se tiver (foto de imagem priorizar ela) sendo assim você vai criar apenas 1 catalago e enviar ele no supabase sem duplicidade de catalagos oque vai mudar nesse unico é o roles
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-08-25T16:03:05-03:00.
+
+The user's current state is as follows:
+Active Document: c:\Users\Usuario\thsm distribuidora\catalogo-thsm\src\data\produtos.json (LANGUAGE_JSON)
+Cursor is on line: 1602
+Other open documents:
+- c:\Users\Usuario\thsm distribuidora\catalogo-thsm\src\data\produtos.json (LANGUAGE_JSON)
+- c:\Users\Usuario\thsm distribuidora\catalogo-thsm\src\pages\UserDashboard.jsx (LANGUAGE_JAVASCRIPT)
+Browser State:
+  Page CF46004B2FBA6BD6F6B14D6A847910F4 (W3Schools Tryit Editor) - https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_textarea [ACTIVE]
+    Viewport: 1562x754, Page Height: 753
+</ADDITIONAL_METADATA>

@@ -409,16 +409,12 @@ import AddressForm from '../components/AddressForm'
 import MapView from '../components/MapView'
 import CentralAnalise from '../components/CentralAnalise'
 
-export default function Admin({ produtos, onVoltar }) {
+export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [tab, setTab] = useState(() => sessionStorage.getItem('thsm_admin_tab') || 'dashboard')
   useEffect(() => { sessionStorage.setItem('thsm_admin_tab', tab) }, [tab])
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [orders, setOrders] = useState([])
-  const [deletedOrderIds, setDeletedOrderIds] = useState([])
-  const deletedOrderIdsRef = useRef(null)
-  useEffect(() => { deletedOrderIdsRef.current = new Set(deletedOrderIds) }, [deletedOrderIds])
-  useEffect(() => { /* Sem persistência local de ids deletados */ }, [deletedOrderIds])
-  const [prodChanges, setProdChanges] = useState({})
+  // States removidos: deletedOrderIds, prodChanges
   const [financial, setFinancial] = useState([])
   const [toast, setToast] = useState(null)
 
@@ -636,8 +632,7 @@ export default function Admin({ produtos, onVoltar }) {
   const [kits, setKits] = useState(() => LS.get('thsm_kits', []))
   const [showKitModal, setShowKitModal] = useState(false)
   const [editingKit, setEditingKit] = useState(null)
-  const [newProducts, setNewProducts] = useState(() => LS.get('thsm_admin_new_products', []))
-  const [deletedProdIds, setDeletedProdIds] = useState(() => LS.get('thsm_admin_deleted_products', []))
+  // States removidos: newProducts, deletedProdIds
   const PROD_PER_PAGE = 20
 
   const showToast = (msg, type = 'success') => {
@@ -700,25 +695,7 @@ export default function Admin({ produtos, onVoltar }) {
   useEffect(() => {
     flushPendingOrders()
   }, [])
-  useEffect(() => {
-    if (isInitialSyncing) return
-    if (firstProdsSync.current) { firstProdsSync.current = false; return }
-    LS.set(STORAGE_PRODUCTS, prodChanges)
-    if (Object.keys(prodChanges).length === 0) return
-    const t = setTimeout(() => upsertProducts(prodChanges), 700)
-    return () => clearTimeout(t)
-  }, [prodChanges, isInitialSyncing])
-  useEffect(() => {
-    if (isInitialSyncing) return
-    if (newProducts.length > 0) {
-      const obj = {}
-      newProducts.forEach(p => {
-        const { _new, ...clean } = p
-        obj[p.id] = clean
-      })
-      upsertProducts(obj)
-    }
-  }, [newProducts, isInitialSyncing])
+  // Removido sync local antigo de prodChanges e newProducts
   useEffect(() => { LS.set(STORAGE_CUSTOM_ROTAS, customRotas) }, [customRotas])
   useEffect(() => { LS.set(STORAGE_CUSTOM_CATS, customCategorias) }, [customCategorias])
   useEffect(() => { LS.set(STORAGE_CUSTOM_TIPOS, customDespesaTipos) }, [customDespesaTipos])
@@ -933,76 +910,8 @@ export default function Admin({ produtos, onVoltar }) {
       }
       LS.set('thsm_usuarios', u); setUsuarios(u)
       if (r.length) { setRotas(r) } else { fetchRotas() }
-      if (p.length) {
-        const fromDB = {}
-        const variantsDB = {}
-        const prodIdsFromJSON = new Set(produtos.map(x => x.id))
-        const newsFromDB = []
-        const deletedFromDB = []
-        p.forEach(prod => {
-          if (prod.deleted) { deletedFromDB.push(prod.id); return }
-          if (!prodIdsFromJSON.has(prod.id)) {
-            newsFromDB.push({ id: prod.id, nome: prod.nome || '', preco: prod.preco || 0, estoque: prod.estoque || 0, imagem: prod.imagem || '', categoria: prod.categoria || '', descricao: '', variantes: prod.variantes || {}, semDevolucao: !!prod.semDevolucao, preco_custo: prod.preco_custo ?? null })
-          }
-          const override = {}
-          if (prod.nome !== null && prod.nome !== '') override.nome = prod.nome
-          if (prod.descricao !== null) override.descricao = prod.descricao
-          if (prod.preco !== null) override.preco = prod.preco
-          if (prod.estoque !== null) override.estoque = prod.estoque
-          if (prod.imagem !== null && typeof prod.imagem === 'string' && !prod.imagem.startsWith('data:') && prod.imagem.length < 2048) override.imagem = prod.imagem
-          if (prod.categoria !== null) override.categoria = prod.categoria
-          if (prod.preco_custo !== null) override.preco_custo = prod.preco_custo
-          if (prod.semDevolucao !== null) override.semDevolucao = !!prod.semDevolucao
-          if (prod.variantes !== null) override.variantes = prod.variantes
-          if (Object.keys(override).length > 0) fromDB[prod.id] = override
-          if (prod.variantes && Object.keys(prod.variantes).length > 0) {
-            variantsDB[prod.id] = prod.variantes
-          }
-        })
-        if (deletedFromDB.length > 0) {
-          setDeletedProdIds(prev => {
-            const next = Array.from(new Set([...prev, ...deletedFromDB]))
-            LS.set('thsm_admin_deleted_products', next)
-            return next
-          })
-        }
-        if (newsFromDB.length > 0) {
-          setNewProducts(prev => {
-            const map = new Map()
-            newsFromDB.forEach(np => map.set(np.id, np))
-            prev.forEach(np => map.set(np.id, np))
-            const merged = Array.from(map.values())
-            LS.set('thsm_admin_new_products', merged)
-            return merged
-          })
-        }
-        if (Object.keys(variantsDB).length > 0) {
-          try {
-            const existing = JSON.parse(localStorage.getItem('thsm_prod_variants') || '{}')
-            localStorage.setItem('thsm_prod_variants', JSON.stringify({ ...existing, ...variantsDB }))
-          } catch { }
-        }
-        setProdChanges(prev => {
-          const merged = { ...fromDB, ...prev }
-          const novoJson = JSON.stringify(merged)
-          if (novoJson.length > 400000) {
-            const compact = {}
-            Object.entries(merged).forEach(([id, o]) => {
-              const newObj = { ...o }
-              if (newObj.imagem && newObj.imagem.startsWith('data:')) {
-                delete newObj.imagem
-              }
-              if (newObj.imagem === '') {
-                delete newObj.imagem
-              }
-              compact[id] = newObj
-            })
-            LS.set(STORAGE_PRODUCTS, compact)
-          } else {
-            LS.set(STORAGE_PRODUCTS, merged)
-          }
-          return merged
-        })
+      if (p && p.length) {
+        if (typeof refreshProducts === 'function') refreshProducts()
       }
     }).catch(e => { console.error('syncAllForAdmin error:', e) })
       .finally(() => {
@@ -1030,17 +939,9 @@ export default function Admin({ produtos, onVoltar }) {
     if (rotas.length > 0 && !expandedRota) setExpandedRota(rotas[0].rota)
   }, [rotas, expandedRota])
 
-  useEffect(() => { LS.set('thsm_admin_new_products', newProducts) }, [newProducts])
-  useEffect(() => { LS.set('thsm_admin_deleted_products', deletedProdIds) }, [deletedProdIds])
-
   const produtosAtuais = useMemo(() => {
-    const base = produtos.map(p => ({
-      ...p,
-      ...(prodChanges[p.id] || {})
-    }))
-    const news = newProducts.map(p => ({ ...p, ...(prodChanges[p.id] || {}) }))
-    return [...news, ...base].filter(p => !deletedProdIds.includes(p.id))
-  }, [produtos, prodChanges, newProducts, deletedProdIds])
+    return produtos || []
+  }, [produtos])
 
   // =============================================
   // ORDERS
@@ -1051,15 +952,11 @@ export default function Admin({ produtos, onVoltar }) {
     setSavingOrder(true)
     const items = data.items
 
-    // Update product cost updates in prodChanges
+    // Update product cost no DB directly
     items.forEach(i => {
       const numCusto = Number(i.preco_custo)
       if (i.id != null && !isNaN(numCusto) && numCusto >= 0) {
-        setProdChanges(prev => {
-          const next = { ...prev, [i.id]: { ...(prev[i.id] || {}), preco_custo: numCusto } }
-          LS.set(STORAGE_PRODUCTS, next)
-          return next
-        })
+        updateProduct(i.id, { preco_custo: numCusto })
       }
     })
 
@@ -1932,13 +1829,12 @@ export default function Admin({ produtos, onVoltar }) {
   // PRODUCTS
   // =============================================
   const updateProduct = (id, changes) => {
-    setProdChanges(prev => {
-      const next = { ...prev, [id]: { ...(prev[id] || {}), ...changes } }
-      LS.set(STORAGE_PRODUCTS, next)
-      return next
-    })
+    const p = produtos.find(x => x.id === id) || { id }
+    const payload = { [id]: { ...p, ...changes } }
+    upsertProducts(payload)
     showToast('Produto atualizado!')
     if (editingProd) setEditingProd(null)
+    setTimeout(() => { if (typeof refreshProducts === 'function') refreshProducts() }, 500)
   }
 
   const categoriasProd = useMemo(() => ['TODOS', ...[...new Set([...produtosAtuais.map(p => p.categoria), ...customCategorias].filter(Boolean))].sort()], [produtosAtuais, customCategorias])
@@ -2038,11 +1934,10 @@ export default function Admin({ produtos, onVoltar }) {
     const idList = [...ids]
     if (idList.length === 0) return
     if (!confirm(`Excluir permanentemente ${idList.length} produto(s)?\nEsta ação não pode ser desfeita.`)) return
-    setDeletedProdIds(prev => [...prev, ...idList])
-    setNewProducts(prev => prev.filter(p => !idList.includes(p.id)))
     supabaseDeleteProducts(idList)
     showToast(`${idList.length} produto(s) excluído(s)`)
     setProdSelectedIds(new Set())
+    setTimeout(() => { if (typeof refreshProducts === 'function') refreshProducts() }, 500)
   }
 
   const bulkProdAction = (action) => {
@@ -4453,16 +4348,7 @@ export default function Admin({ produtos, onVoltar }) {
           }}
           onSyncCusto={(prodId, custo) => {
             if (prodId == null) return
-            setProdChanges(prev => {
-              const hasProd = produtosAtuais.some(p => p.id === prodId || p.id === String(prodId))
-              if (!hasProd) return prev
-              const next = {
-                ...prev,
-                [prodId]: { ...(prev[prodId] || {}), preco_custo: custo === null ? null : Number(custo) }
-              }
-              if (custo === null && prev[prodId] && Object.keys(prev[prodId]).length === 0) delete next[prodId]
-              return next
-            })
+            updateProduct(prodId, { preco_custo: custo === null ? null : Number(custo) })
           }}
           onUpdateCustomer={(id, customerData) => updateOrderCustomer(id, customerData)}
           onCancelOrder={(id) => cancelOrder(id)}
@@ -5062,17 +4948,7 @@ export default function Admin({ produtos, onVoltar }) {
             showToast(`Categoria "${nome}" criada!`)
           }}
           onSave={(changes) => {
-            if (editingProd._new) {
-              const newId = editingProd.id
-              setNewProducts(prev => {
-                const exists = prev.find(p => p.id === newId)
-                if (exists) return prev.map(p => p.id === newId ? { ...p, ...changes, _new: true } : p)
-                return [{ ...changes, id: newId, _new: true }, ...prev]
-              })
-              setEditingProd(null)
-            } else {
-              updateProduct(editingProd.id, changes)
-            }
+            updateProduct(editingProd.id, changes)
           }}
           onClose={() => setEditingProd(null)}
         />
