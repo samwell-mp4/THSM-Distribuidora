@@ -519,12 +519,6 @@ export async function executeQuery(queryDesc) {
         }
       }
 
-      // Ensure rows have valid UUID ids for new inserts
-      for (const row of rows) {
-        if (!row.id || typeof row.id !== 'string' || row.id.length < 30 || row.id === 'null') {
-          row.id = crypto.randomUUID();
-        }
-      }
 
       const keys = Object.keys(rows[0]);
       const colsStr = keys.map(k => `"${k}"`).join(', ');
