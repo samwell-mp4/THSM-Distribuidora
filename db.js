@@ -9,7 +9,7 @@ pg.types.setTypeParser(pg.types.builtins.NUMERIC, (val) => parseFloat(val));
 
 const connectionString = process.env.DATABASE_URL || 'postgres://postgres:Sa03146555!@plug_sales_dispatch_app_thsm_distribuidora_postgress:5432/plug_sales_dispatch_app?sslmode=disable';
 
-const pool = new pg.Pool({
+export const pool = new pg.Pool({
   connectionString
 });
 

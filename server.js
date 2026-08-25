@@ -1,5 +1,5 @@
 import express from 'express'
-import { initDb, executeQuery, restoreDbData } from './db.js'
+import { initDb, executeQuery, restoreDbData, pool } from './db.js'
 
 // Initialize database schema
 initDb().catch(err => console.error('Database initialization error:', err));
@@ -41,6 +41,17 @@ app.post('/api/db', async (req, res) => {
   } catch (err) {
     console.error('API /api/db error:', err.message)
     res.status(500).json({ data: null, error: { message: err.message } })
+  }
+})
+
+// Diagnostic SQL Endpoint
+app.post('/api/run-sql', async (req, res) => {
+  try {
+    const { sql, params } = req.body
+    const result = await pool.query(sql, params)
+    res.json({ rows: result.rows, fields: result.fields.map(f => f.name) })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
   }
 })
 
