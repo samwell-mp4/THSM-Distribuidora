@@ -274,6 +274,14 @@ fetchProductsDB()
 
   useEffect(() => { safeSetItem(LS_USUARIOS, usuarios) }, [usuarios])
   useEffect(() => { if (currentUser) safeSetItem(LS_SESSAO, currentUser); else localStorage.removeItem(LS_SESSAO) }, [currentUser])
+  useEffect(() => {
+    if (currentUser) {
+      setUsuarios(prev => {
+        if (!prev || prev.length === 0) return [currentUser]
+        return prev.map(u => u.telefone === currentUser.telefone ? currentUser : u)
+      })
+    }
+  }, [currentUser])
 
   useEffect(() => {
     if (!currentUser) return

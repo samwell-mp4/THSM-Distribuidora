@@ -1019,46 +1019,46 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
             </div>
           </div>
           <div className="conta-card">
-            <div className="conta-form">
+            <div className="conta-form" autoComplete="off">
               <div className="form-grid-2">
                 <div className="form-group">
                   <label><i className="fa-solid fa-user"></i> Nome completo</label>
                   <div className="input-icon-wrapper">
                     <i className="fa-solid fa-user input-icon"></i>
-                    <input type="text" value={editNome} onChange={e => setEditNome(e.target.value)} placeholder={currentUser?.nome || 'Seu nome'} />
+                    <input type="text" value={editNome} onChange={e => setEditNome(e.target.value)} placeholder={currentUser?.nome || 'Seu nome'} autoComplete="new-name" />
                   </div>
                 </div>
                 <div className="form-group">
                   <label><i className="fa-solid fa-envelope"></i> Email</label>
                   <div className="input-icon-wrapper">
                     <i className="fa-solid fa-envelope input-icon"></i>
-                    <input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder={currentUser?.email || 'seu@email.com'} />
+                    <input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder={currentUser?.email || 'seu@email.com'} autoComplete="new-email" />
                   </div>
                 </div>
               </div>
 
               <div className="form-grid-2">
                 <div className="form-group">
-                  <label><i className="fa-solid fa-phone"></i> Telefone / WhatsApp</label>
+                  <label><i className="fa-solid fa-phone"></i> Telefone / WhatsApp (Identificador de Login)</label>
                   <div className="input-icon-wrapper">
-                    <i className="fa-solid fa-phone input-icon"></i>
-                    <input type="text" value={editTelefone} onChange={e => setEditTelefone(e.target.value)} placeholder={currentUser?.telefone || '(31) 99999-9999'} />
+                    <i className="fa-solid fa-lock input-icon" style={{ color: '#9ca3af' }}></i>
+                    <input type="text" value={editTelefone} disabled style={{ backgroundColor: '#e5e7eb', cursor: 'not-allowed', color: '#6b7280' }} placeholder={currentUser?.telefone || '(31) 99999-9999'} />
                   </div>
                 </div>
                 <div className="form-group">
                   <label><i className="fa-solid fa-id-card"></i> CPF *</label>
                   <div className="input-icon-wrapper">
                     <i className="fa-solid fa-id-card input-icon"></i>
-                    <input type="text" value={editCpf} onChange={e => setEditCpf(e.target.value)} placeholder={currentUser?.cpf || currentUser?.endereco?.cpf || '000.000.000-00'} />
+                    <input type="text" value={editCpf} onChange={e => setEditCpf(e.target.value)} placeholder={currentUser?.cpf || currentUser?.endereco?.cpf || '000.000.000-00'} autoComplete="new-cpf" />
                   </div>
                 </div>
               </div>
 
               <div className="form-group">
-                <label><i className="fa-solid fa-lock"></i> Senha</label>
+                <label><i className="fa-solid fa-lock"></i> Nova Senha</label>
                 <div className="input-icon-wrapper">
                   <i className="fa-solid fa-lock input-icon"></i>
-                  <input type="password" value={editSenha} onChange={e => setEditSenha(e.target.value)} placeholder="••••••" />
+                  <input type="password" value={editSenha} onChange={e => setEditSenha(e.target.value)} placeholder="••••••" autoComplete="new-password" />
                 </div>
               </div>
 

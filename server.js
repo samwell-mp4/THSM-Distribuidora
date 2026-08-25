@@ -1,5 +1,5 @@
 import express from 'express'
-import { initDb, executeQuery, restoreDbData, pool } from './db.js'
+import { initDb, executeQuery, restoreDbData } from './db.js'
 
 // Initialize database schema
 initDb().catch(err => console.error('Database initialization error:', err));
@@ -22,7 +22,9 @@ app.get('/api/restore-db', async (req, res) => {
 // Temporary test endpoint to inspect database rows
 app.get('/api/test-db', async (req, res) => {
   try {
-    res.json({ test_deploy: true, message: "Deploy is active!" })
+    const result = await executeQuery({ action: 'select', table: 'produtos' })
+    const sample = result.data.filter(p => !p.nome || p.deleted)
+    res.json({ total: result.data.length, sample: sample.slice(0, 10) })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -39,17 +41,6 @@ app.post('/api/db', async (req, res) => {
   } catch (err) {
     console.error('API /api/db error:', err.message)
     res.status(500).json({ data: null, error: { message: err.message } })
-  }
-})
-
-// Diagnostic SQL Endpoint
-app.post('/api/run-sql', async (req, res) => {
-  try {
-    const { sql, params } = req.body
-    const result = await pool.query(sql, params)
-    res.json({ rows: result.rows, fields: result.fields.map(f => f.name) })
-  } catch (err) {
-    res.status(500).json({ error: err.message })
   }
 })
 

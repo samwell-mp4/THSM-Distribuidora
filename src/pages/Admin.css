@@ -161,8 +161,7 @@
    MINHA CONTA (PREMIUM LAYOUT)
    ========================================== */
 .conta-section {
-  max-width: 800px;
-  margin: 0 auto;
+  width: 100%;
   padding: 0.5rem 1rem 3.5rem; /* bottom padding for mobile bottom nav */
 }
 
@@ -172,7 +171,8 @@
   padding: 2.25rem 2rem;
   box-shadow: 0 10px 25px -5px rgba(139, 92, 246, 0.08), 0 8px 16px -6px rgba(0, 0, 0, 0.03);
   border: 1px solid rgba(229, 231, 235, 0.7);
-  margin-top: 1.5rem;
+  max-width: 800px;
+  margin: 1.5rem auto 2rem;
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
