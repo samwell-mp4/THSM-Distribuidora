@@ -1457,23 +1457,42 @@ export default function Admin({ produtos, onVoltar }) {
   const saveUserEdit = async () => {
     if (!editUserData) return
     const payload = {
-      telefone: editUserData.telefone,
-      nome: editUserData.nome,
-      email: editUserData.email || '',
-      endereco: { ...(editUserData.endereco || {}) }
+      ...selectedUserDetail,
+      ...editUserData,
+      endereco: {
+        ...(selectedUserDetail?.endereco || {}),
+        ...(editUserData.endereco || {})
+      }
     }
     if (editUserData.senha) payload.endereco.senha = editUserData.senha
     else if (selectedUserDetail?.endereco?.senha) payload.endereco.senha = selectedUserDetail.endereco.senha
 
-    const saved = await upsertUser(payload)
-    if (saved) {
-      setUsuarios(prev => prev.map(u => u.telefone === saved.telefone ? saved : u))
-      setSelectedUserDetail(saved)
-      setEditingUser(false)
-      setEditUserData(null)
-      showToast('Usuário atualizado com sucesso!')
-    } else {
-      showToast('Erro ao salvar usuário', 'error')
+    try {
+      const response = await fetch('https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/att-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      if (response.ok) {
+        let responseData = {}
+        try { responseData = await response.json() } catch(err) {}
+
+        if (responseData.status === 'erro' || responseData.status === 'error') {
+          showToast('Erro retornado pelo webhook: ' + (responseData.message || ''), 'error')
+        } else {
+          setUsuarios(prev => prev.map(u => u.telefone === payload.telefone ? payload : u))
+          setSelectedUserDetail(payload)
+          setEditingUser(false)
+          setEditUserData(null)
+          showToast('Usuário atualizado com sucesso!')
+        }
+      } else {
+        showToast('Erro HTTP ao salvar no webhook', 'error')
+      }
+    } catch (e) {
+      console.error(e)
+      showToast('Erro ao salvar. Verifique sua conexão.', 'error')
     }
   }
 
@@ -1481,20 +1500,37 @@ export default function Admin({ produtos, onVoltar }) {
     if (!pwTarget) return
     const nova = (pwNew || '').trim()
     if (nova.length < 3) { showToast('A senha deve ter pelo menos 3 caracteres', 'error'); return }
-    const saved = await upsertUser({
-      telefone: pwTarget.telefone,
-      nome: pwTarget.nome,
-      email: pwTarget.email || '',
+    const payload = {
+      ...pwTarget,
       endereco: { ...(pwTarget.endereco || {}), senha: nova }
-    })
-    if (saved) {
-      setUsuarios(prev => prev.map(u => u.telefone === saved.telefone ? saved : u))
-      if (selectedUserDetail?.telefone === saved.telefone) setSelectedUserDetail(saved)
-      setPwTarget(null)
-      setPwNew('')
-      showToast(`Senha de ${saved.nome} alterada com sucesso!`)
-    } else {
-      showToast('Erro ao alterar a senha', 'error')
+    }
+    
+    try {
+      const response = await fetch('https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/att-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      if (response.ok) {
+        let responseData = {}
+        try { responseData = await response.json() } catch(err) {}
+
+        if (responseData.status === 'erro' || responseData.status === 'error') {
+          showToast('Erro retornado pelo webhook: ' + (responseData.message || ''), 'error')
+        } else {
+          setUsuarios(prev => prev.map(u => u.telefone === payload.telefone ? payload : u))
+          if (selectedUserDetail?.telefone === payload.telefone) setSelectedUserDetail(payload)
+          setPwTarget(null)
+          setPwNew('')
+          showToast(`Senha de ${payload.nome} alterada com sucesso!`)
+        }
+      } else {
+        showToast('Erro HTTP ao alterar a senha', 'error')
+      }
+    } catch (e) {
+      console.error(e)
+      showToast('Erro de conexão ao alterar a senha', 'error')
     }
   }
 
