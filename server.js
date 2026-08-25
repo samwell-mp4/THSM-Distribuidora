@@ -22,9 +22,7 @@ app.get('/api/restore-db', async (req, res) => {
 // Temporary test endpoint to inspect database rows
 app.get('/api/test-db', async (req, res) => {
   try {
-    const result = await executeQuery({ action: 'select', table: 'produtos' })
-    const sample = result.data.filter(p => !p.nome || p.deleted)
-    res.json({ total: result.data.length, sample: sample.slice(0, 10) })
+    res.json({ test_deploy: true, message: "Deploy is active!" })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
