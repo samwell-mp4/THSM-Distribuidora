@@ -147,7 +147,17 @@ const fetchProductsDB = useCallback(() => {
         const novoJson = JSON.stringify(merged)
         if (novoJson.length > 400000) {
           const compact = {}
-          Object.entries(merged).forEach(([id, o]) => { if (o.imagem && o.imagem.startsWith('data:')) o = { ...o, imagem: '' }; compact[id] = o })
+          Object.entries(merged).forEach(([id, o]) => {
+            const newObj = { ...o }
+            if (newObj.imagem && newObj.imagem.startsWith('data:')) {
+              delete newObj.imagem
+            }
+            // Remove empty image strings to avoid overwriting DB
+            if (newObj.imagem === '') {
+              delete newObj.imagem
+            }
+            compact[id] = newObj
+          })
           safeSetItem('thsm_admin_produtos', compact)
         } else {
           safeSetItem('thsm_admin_produtos', merged)
@@ -174,8 +184,14 @@ fetchProductsDB()
         const obj = JSON.parse(raw)
         const compact = {}
         Object.entries(obj).forEach(([id, o]) => {
-          if (o && typeof o === 'object' && o.imagem && o.imagem.startsWith('data:')) o = { ...o, imagem: '' }
-          compact[id] = o
+          if (o && typeof o === 'object') {
+            const newObj = { ...o }
+            if (newObj.imagem && newObj.imagem.startsWith('data:')) delete newObj.imagem
+            if (newObj.imagem === '') delete newObj.imagem
+            compact[id] = newObj
+          } else {
+            compact[id] = o
+          }
         })
         localStorage.removeItem('thsm_admin_produtos')
         localStorage.setItem('thsm_admin_produtos', JSON.stringify(compact))
@@ -384,11 +400,23 @@ fetchProductsDB()
 
   const produtosMerged = useMemo(() => {
     let deleted = []
+    let localNews = []
     try { deleted = JSON.parse(localStorage.getItem('thsm_admin_deleted_products')) || [] } catch {}
+    try { localNews = JSON.parse(localStorage.getItem('thsm_admin_new_products')) || [] } catch {}
+    
+    // Clean up empty images from local state to prevent them from wiping DB images
+    Object.keys(prodChangesApp).forEach(id => {
+      if (prodChangesApp[id].imagem === '') delete prodChangesApp[id].imagem
+    })
+
     const deletedSet = new Set([...deleted, ...dbDeletedIds])
     const overridden = produtos.map(p => ({ ...p, ...(prodChangesApp[p.id] || {}) }))
     const news = dbNewProducts.map(p => ({ ...p, ...(prodChangesApp[p.id] || {}) }))
-    return [...news, ...overridden].filter(p => !deletedSet.has(p.id))
+    const localNewsMerged = localNews.map(p => ({ ...p, ...(prodChangesApp[p.id] || {}) }))
+    
+    // Merge everything, avoiding duplicates between dbNewProducts and localNews
+    const allNews = [...localNewsMerged, ...news].filter((v, i, a) => a.findIndex(t => t.id === v.id) === i)
+    return [...allNews, ...overridden].filter(p => !deletedSet.has(p.id))
   }, [produtos, prodChangesApp, dbNewProducts, dbDeletedIds, route])
 
   const categorias = useMemo(() => ['TODOS', 'Encomendas da Empresa', ...[...new Set(produtosMerged.map(p => p.categoria))].sort()], [produtosMerged])
@@ -840,7 +868,7 @@ fetchProductsDB()
   }
 
   // Admin & UserDash views
-  if (route === 'admin' && adminAuth?.loggedIn) return <Admin produtos={produtos} onVoltar={() => { navigate('/'); localStorage.removeItem(LS_ADMIN); setAdminAuth(null) }} />
+  if (route === 'admin' && adminAuth?.loggedIn) return <Admin produtos={produtosMerged} onVoltar={() => { navigate('/'); localStorage.removeItem(LS_ADMIN); setAdminAuth(null) }} />
   if (route === 'userdash') return (
     <UserDashboard
       produtos={produtosMerged}

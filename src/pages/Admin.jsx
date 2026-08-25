@@ -987,7 +987,16 @@ export default function Admin({ produtos, onVoltar }) {
           const novoJson = JSON.stringify(merged)
           if (novoJson.length > 400000) {
             const compact = {}
-            Object.entries(merged).forEach(([id, o]) => { if (o.imagem && o.imagem.startsWith('data:')) o = { ...o, imagem: '' }; compact[id] = o })
+            Object.entries(merged).forEach(([id, o]) => {
+              const newObj = { ...o }
+              if (newObj.imagem && newObj.imagem.startsWith('data:')) {
+                delete newObj.imagem
+              }
+              if (newObj.imagem === '') {
+                delete newObj.imagem
+              }
+              compact[id] = newObj
+            })
             LS.set(STORAGE_PRODUCTS, compact)
           } else {
             LS.set(STORAGE_PRODUCTS, merged)
