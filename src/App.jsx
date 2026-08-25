@@ -347,14 +347,10 @@ fetchProductsDB()
         for (const u of pendentes) {
           const { telefone } = u
           const dbUser = {
-            id: u.id,
             telefone,
             nome: u.nome,
             email: u.email || '',
             endereco: u.endereco || {}
-          }
-          if (!dbUser.id || dbUser.id === 'null' || typeof dbUser.id !== 'string' || dbUser.id.length < 30) {
-            delete dbUser.id
           }
           if (u.cpf && !dbUser.endereco.cpf) {
             dbUser.endereco.cpf = u.cpf

@@ -190,21 +190,12 @@ export async function upsertUser(user) {
     endereco.cpf = user.cpf
   }
 
-  // Construct valid database columns only
+  // Construct valid database columns only (id and created_at are managed by DB on conflict)
   const dbUser = {
     telefone,
     nome: user.nome || '',
     email: user.email || '',
     endereco
-  }
-
-  // Preserve ID if it's a valid UUID
-  if (user.id && typeof user.id === 'string' && user.id.length > 30 && user.id !== 'null') {
-    dbUser.id = user.id
-  }
-
-  if (user.created_at) {
-    dbUser.created_at = user.created_at
   }
 
   let lastError = null
