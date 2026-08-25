@@ -1,6 +1,7 @@
 import pg from 'pg';
 import fs from 'fs/promises';
 import path from 'path';
+import crypto from 'crypto';
 
 // Parse Postgres bigint (int8) as JS number to avoid string/number ID mismatches
 pg.types.setTypeParser(pg.types.builtins.INT8, (val) => parseInt(val, 10));
@@ -513,6 +514,13 @@ export async function executeQuery(queryDesc) {
           } catch (err) {
             console.error('Explicit UPDATE error in upsert:', err.message);
           }
+        }
+      }
+
+      // Ensure rows have valid UUID ids for new inserts
+      for (const row of rows) {
+        if (!row.id || typeof row.id !== 'string' || row.id.length < 30 || row.id === 'null') {
+          row.id = crypto.randomUUID();
         }
       }
 
