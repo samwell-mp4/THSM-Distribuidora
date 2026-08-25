@@ -186,15 +186,31 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
         cpf: editCpf.trim(),
         endereco: { ...(currentUser?.endereco || {}), ...editEndereco, cpf: editCpf.trim(), senha: editSenha || currentUser?.endereco?.senha || '' }
       }
-      console.log('[Minha Conta] Tentando salvar dados para:', normUserPhone, updated)
-      const saved = await upsertUser(updated)
-      if (saved && samePhone(saved.telefone, currentUser.telefone)) {
-        console.log('[Minha Conta] Salvo com sucesso:', saved)
-        setLS(LS_SESSAO, saved)
-        if (onUpdateUser) onUpdateUser(saved)
-        alert('Dados salvos com sucesso!')
+      console.log('[Minha Conta] Tentando salvar dados via webhook para:', normUserPhone, updated)
+      
+      const response = await fetch('https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/att-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updated)
+      })
+
+      if (response.ok) {
+        let responseData = {}
+        try { responseData = await response.json() } catch(err) {}
+
+        if (responseData.status === 'erro' || responseData.status === 'error') {
+          console.error('[Minha Conta] Erro retornado pelo webhook:', responseData)
+          alert('Erro ao salvar no servidor. Verifique e tente novamente.')
+        } else {
+          console.log('[Minha Conta] Salvo com sucesso via webhook')
+          setLS(LS_SESSAO, updated)
+          if (onUpdateUser) onUpdateUser(updated)
+          alert('Dados salvos com sucesso!')
+        }
       } else {
-        console.error('[Minha Conta] Resposta do upsertUser desalinhada ou nula:', saved)
+        console.error('[Minha Conta] Falha HTTP no webhook:', response.status)
         alert('Erro ao salvar no servidor. Verifique sua conexão e tente novamente.')
       }
     } catch (e) {
