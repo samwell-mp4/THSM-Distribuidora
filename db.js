@@ -108,12 +108,14 @@ export async function initDb() {
       )
     `);
 
-    // Ensure camelCase RENAME for semDevolucao
-    try {
+    // Safely check if column semdevolucao exists before altering to avoid aborting postgres transaction
+    const colCheck = await client.query(`
+      SELECT column_name FROM information_schema.columns 
+      WHERE table_name = 'produtos' AND column_name = 'semdevolucao'
+    `);
+    if (colCheck.rows && colCheck.rows.length > 0) {
       await client.query('ALTER TABLE produtos RENAME COLUMN semdevolucao TO "semDevolucao"');
       console.log('Renamed column semdevolucao to "semDevolucao" case-sensitive.');
-    } catch (err) {
-      // Already renamed or column does not exist in old case
     }
 
     // 5b. DESPESAS
