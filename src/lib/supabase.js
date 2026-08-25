@@ -211,7 +211,7 @@ export async function upsertUser(user) {
     pendentes.push({ ...dbUser, savedAt: Date.now() })
     localStorage.setItem('thsm_pending_users', JSON.stringify(pendentes))
   } catch {}
-  return { ...user, telefone }
+  return null
 }
 
 export async function findUserByPhone(telefone) {

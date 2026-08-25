@@ -290,15 +290,21 @@ fetchProductsDB()
     if (!currentUser) return
     setSavingNome(true)
     try {
-      const atualizado = { ...currentUser, nome: nomeTxt }
-      setCurrentUser(atualizado)
-      setUsuarios(prev => prev.some(u => u.telefone === atualizado.telefone) ? prev.map(u => u.telefone === atualizado.telefone ? atualizado : u) : [atualizado, ...prev])
-      await upsertUser({
-        telefone: atualizado.telefone,
+      const payload = {
+        ...currentUser,
         nome: nomeTxt,
-        email: atualizado.email || '',
-        endereco: { ...(atualizado.endereco || {}), senha: atualizado.endereco?.senha || '', cpf: atualizado.cpf || atualizado.endereco?.cpf || '' }
+        endereco: { ...(currentUser.endereco || {}), senha: currentUser.endereco?.senha || '', cpf: currentUser.cpf || currentUser.endereco?.cpf || '' }
+      }
+      const saved = await upsertUser({
+        id: currentUser.id,
+        telefone: payload.telefone,
+        nome: nomeTxt,
+        email: payload.email || '',
+        endereco: payload.endereco
       })
+      if (!saved) throw new Error('Erro ao salvar nome no servidor')
+      setCurrentUser(saved)
+      setUsuarios(prev => prev.some(u => u.telefone === saved.telefone) ? prev.map(u => u.telefone === saved.telefone ? saved : u) : [saved, ...prev])
       setShowNomeObrigatorio(false)
       showToast('Nome atualizado com sucesso!')
     } catch (e) {
@@ -566,12 +572,17 @@ fetchProductsDB()
     let user = usuarios.find(u => u.telefone === recoverTelefone)
     if (user) {
       const updated = { ...user, endereco: { ...(user.endereco || {}), senha: recoverNewPassword } }
-      await upsertUser({ telefone: recoverTelefone, nome: user.nome, email: user.email || '', endereco: updated.endereco })
+      const saved = await upsertUser({ id: user.id, telefone: recoverTelefone, nome: user.nome, email: user.email || '', endereco: updated.endereco })
+      if (!saved) { showToast('Erro ao salvar nova senha no servidor. Tente novamente.', 'error'); return }
       setUsuarios(prev => prev.map(u => u.telefone === recoverTelefone ? updated : u))
     } else {
       const { data } = await supabase.from('usuarios').select('*').eq('telefone', recoverTelefone).maybeSingle()
       if (data) {
-        await upsertUser({ telefone: recoverTelefone, nome: data.nome, email: data.email || '', endereco: { ...(data.endereco || {}), senha: recoverNewPassword } })
+        const saved = await upsertUser({ id: data.id, telefone: recoverTelefone, nome: data.nome, email: data.email || '', endereco: { ...(data.endereco || {}), senha: recoverNewPassword } })
+        if (!saved) { showToast('Erro ao salvar nova senha no servidor. Tente novamente.', 'error'); return }
+      } else {
+        showToast('Usuário não encontrado', 'error')
+        return
       }
     }
 
@@ -588,8 +599,9 @@ fetchProductsDB()
     setSavingAddress(true)
     try {
       const updated = { ...currentUser, endereco: { ...(currentUser?.endereco || {}), ...addr } }
-      await upsertUser(updated)
-      setCurrentUser(updated)
+      const saved = await upsertUser(updated)
+      if (!saved) throw new Error('Erro ao salvar endereço no servidor')
+      setCurrentUser(saved)
       setShowAddressRequired(false)
       showToast('Endereço salvo com sucesso!')
       navigate('/')
@@ -607,8 +619,9 @@ fetchProductsDB()
     setSavingAddress(true)
     try {
       const updated = { ...currentUser, endereco: { ...(currentUser?.endereco || {}), ...addr } }
-      await upsertUser(updated)
-      setCurrentUser(updated)
+      const saved = await upsertUser(updated)
+      if (!saved) throw new Error('Erro ao salvar endereço no servidor')
+      setCurrentUser(saved)
       setShowAddressEdit(false)
       showToast('Endereço atualizado!')
     } catch (e) {
@@ -641,17 +654,21 @@ fetchProductsDB()
       const deveAtualizar = (customer.nome && customer.nome !== existente.nome) ||
         (customer.cpf && customer.cpf !== (existente.cpf || existente.endereco?.cpf)) ||
         (customer.endereco && Object.keys(customer.endereco).length > 0 && JSON.stringify(customer.endereco) !== JSON.stringify(existente.endereco || {}))
-      const atualizado = { ...existente, endereco }
+      let atualizado = { ...existente, endereco }
       if (deveAtualizar) {
-        await upsertUser({
+        const payload = {
           telefone: existente.telefone,
           nome: customer.nome || existente.nome,
           email: customer.email || existente.email || '',
           endereco: { ...endereco, cpf: customer.cpf || existente.cpf || endereco.cpf || '' }
-        })
-        atualizado.nome = customer.nome || existente.nome
-        atualizado.email = customer.email || existente.email || ''
-        atualizado.cpf = customer.cpf || existente.cpf || ''
+        }
+        if (existente.id) payload.id = existente.id
+        const saved = await upsertUser(payload)
+        if (!saved) {
+          showToast('Erro ao atualizar seus dados cadastrais. Tente novamente.', 'error')
+          return null
+        }
+        atualizado = saved
       }
       setUsuarios(prev => prev.some(u => u.telefone === existente.telefone) ? prev.map(u => u.telefone === existente.telefone ? atualizado : u) : [...prev, atualizado])
       setCurrentUser(atualizado)

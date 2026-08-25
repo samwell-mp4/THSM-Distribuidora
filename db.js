@@ -506,7 +506,7 @@ export async function executeQuery(queryDesc) {
       if (options.ignoreDuplicates) {
         onConflictClause = `ON CONFLICT ("${conflictCol}") DO NOTHING`;
       } else {
-        const updateCols = keys.filter(k => k !== conflictCol);
+        const updateCols = keys.filter(k => k !== conflictCol && k !== 'id' && k !== 'created_at');
         if (updateCols.length > 0) {
           const updateSets = updateCols.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ');
           onConflictClause = `ON CONFLICT ("${conflictCol}") DO UPDATE SET ${updateSets}`;
