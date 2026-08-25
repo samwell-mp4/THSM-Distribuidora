@@ -5,7 +5,7 @@ import AddressForm from './components/AddressForm'
 import UserDashboard from './pages/UserDashboard'
 import KitPage from './pages/KitPage'
 import LandingPage from './pages/LandingPage'
-import { supabase, upsertOrder, upsertUser, generateLoginToken, consumeLoginToken, flushPendingOrders } from './lib/supabase'
+import { supabase, upsertOrder, upsertUser, generateLoginToken, consumeLoginToken, flushPendingOrders, normTel, samePhone } from './lib/supabase'
 import './App.css'
 
 const LS_USUARIOS = 'thsm_usuarios'
@@ -278,7 +278,7 @@ fetchProductsDB()
     if (currentUser) {
       setUsuarios(prev => {
         if (!prev || prev.length === 0) return [currentUser]
-        return prev.map(u => u.telefone === currentUser.telefone ? currentUser : u)
+        return prev.map(u => samePhone(u.telefone, currentUser.telefone) ? currentUser : u)
       })
     }
   }, [currentUser])
@@ -330,8 +330,10 @@ fetchProductsDB()
         const session = localStorage.getItem(LS_SESSAO)
         if (session) {
           const cur = JSON.parse(session)
-          const fresh = data.find(u => u.telefone === cur.telefone)
-          if (fresh) setCurrentUser(fresh)
+          if (cur && cur.telefone) {
+            const fresh = data.find(u => samePhone(u.telefone, cur.telefone))
+            if (fresh) setCurrentUser(fresh)
+          }
         }
       }
     }).catch(() => {})
@@ -446,10 +448,11 @@ fetchProductsDB()
       }
     } else {
       const raw = loginEmail.replace(/\D/g, '')
-      const telefone = raw.startsWith('55') ? raw : '55' + raw
-      user = usuarios.find(u => u.telefone === telefone)
+      user = usuarios.find(u => samePhone(u.telefone, raw))
       if (!user) {
-        const { data } = await supabase.from('usuarios').select('*').eq('telefone', telefone).maybeSingle()
+        const telefone55 = raw.startsWith('55') ? raw : '55' + raw
+        const rawOnly = raw.replace(/^55/, '')
+        const { data } = await supabase.from('usuarios').select('*').or(`telefone.eq.${telefone55},telefone.eq.${rawOnly}`).maybeSingle()
         user = data
       }
     }
@@ -646,11 +649,11 @@ fetchProductsDB()
     if (!telefone) { showToast('Informe seu telefone', 'error'); return null }
 
     // Já logado na sessão atual: usa a conta direto sem pedir senha de novo
-    if (currentUser && currentUser.telefone === telefone) {
+    if (currentUser && samePhone(currentUser.telefone, telefone)) {
       return currentUser
     }
 
-    let existente = usuarios.find(u => u.telefone === telefone)
+    let existente = usuarios.find(u => samePhone(u.telefone, telefone))
     if (!existente) {
       const { data } = await supabase.from('usuarios').select('*').eq('telefone', telefone).maybeSingle()
       if (data) existente = data

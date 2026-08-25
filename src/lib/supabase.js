@@ -164,6 +164,20 @@ function toDateInput(val) {
   return val
 }
 
+export function normTel(t) {
+  if (!t) return ''
+  const digits = String(t).replace(/\D/g, '')
+  if (!digits) return ''
+  return digits.startsWith('55') ? digits : '55' + digits
+}
+
+export function samePhone(a, b) {
+  if (!a || !b) return false
+  const da = String(a).replace(/\D/g, '').replace(/^55/, '')
+  const db = String(b).replace(/\D/g, '').replace(/^55/, '')
+  return da === db && da.length >= 8
+}
+
 // ---- USERS ----
 export async function upsertUser(user) {
   const raw = (user.telefone || '').replace(/@.*$/, '').replace(/\D/g, '')

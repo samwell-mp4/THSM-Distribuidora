@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { supabase, upsertOrder, upsertFinancial, deleteOrder as supabaseDeleteOrder, upsertUser, flushPendingOrders } from '../lib/supabase'
+import { supabase, upsertOrder, upsertFinancial, deleteOrder as supabaseDeleteOrder, upsertUser, flushPendingOrders, samePhone } from '../lib/supabase'
 import { compressImageDataUrl } from '../lib/image'
 import AddressForm from '../components/AddressForm'
 
@@ -167,29 +167,38 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
   }, [currentUser])
 
   const saveProfile = async () => {
+    if (!currentUser || !currentUser.telefone) {
+      alert('Sessão inválida ou expirada. Faça login novamente.')
+      return
+    }
     if (!editNome.trim()) { alert('Nome é obrigatório'); return }
     if (!editCpf.trim()) { alert('CPF é obrigatório'); return }
     setSavingProfile(true)
     try {
+      const userPhone = String(currentUser.telefone).replace(/\D/g, '')
+      const normUserPhone = userPhone.startsWith('55') ? userPhone : '55' + userPhone
       const updated = {
         ...currentUser,
         id: currentUser?.id,
         nome: editNome.trim(),
         email: editEmail.trim(),
-        telefone: currentUser.telefone.replace(/\D/g, ''),
+        telefone: normUserPhone,
         cpf: editCpf.trim(),
         endereco: { ...(currentUser?.endereco || {}), ...editEndereco, cpf: editCpf.trim(), senha: editSenha || currentUser?.endereco?.senha || '' }
       }
+      console.log('[Minha Conta] Tentando salvar dados para:', normUserPhone, updated)
       const saved = await upsertUser(updated)
-      if (saved) {
+      if (saved && samePhone(saved.telefone, currentUser.telefone)) {
+        console.log('[Minha Conta] Salvo com sucesso:', saved)
         setLS(LS_SESSAO, saved)
         if (onUpdateUser) onUpdateUser(saved)
         alert('Dados salvos com sucesso!')
       } else {
-        alert('Erro ao salvar. Tente novamente.')
+        console.error('[Minha Conta] Resposta do upsertUser desalinhada ou nula:', saved)
+        alert('Erro ao salvar no servidor. Verifique sua conexão e tente novamente.')
       }
     } catch (e) {
-      console.error('Erro ao salvar perfil:', e)
+      console.error('[Minha Conta] Erro de exceção em saveProfile:', e)
       alert('Erro ao salvar. Tente novamente.')
     } finally {
       setSavingProfile(false)
