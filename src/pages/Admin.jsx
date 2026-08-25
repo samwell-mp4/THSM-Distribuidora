@@ -414,7 +414,10 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   useEffect(() => { sessionStorage.setItem('thsm_admin_tab', tab) }, [tab])
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [orders, setOrders] = useState([])
-  // States removidos: deletedOrderIds, prodChanges
+  const [deletedOrderIds, setDeletedOrderIds] = useState([])
+  const deletedOrderIdsRef = useRef(null)
+  useEffect(() => { deletedOrderIdsRef.current = new Set(deletedOrderIds) }, [deletedOrderIds])
+  useEffect(() => { /* Sem persistência local de ids deletados */ }, [deletedOrderIds])
   const [financial, setFinancial] = useState([])
   const [toast, setToast] = useState(null)
 
