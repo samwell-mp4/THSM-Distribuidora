@@ -133,11 +133,13 @@ const fetchProductsDB = useCallback(() => {
           })
         }
         const override = {}
-        if (prod.preco !== null) override.preco = prod.preco
+        // Só pega o preço do banco se for maior que 0
+        if (prod.preco !== null && prod.preco > 0) override.preco = prod.preco
         if (prod.estoque !== null) override.estoque = prod.estoque
-        if (prod.imagem !== null && typeof prod.imagem === 'string' && !prod.imagem.startsWith('data:') && prod.imagem.length < 2048) override.imagem = prod.imagem
-        if (prod.categoria !== null) override.categoria = prod.categoria
-        if (prod.preco_custo !== null) override.preco_custo = prod.preco_custo
+        // Só pega a imagem do banco se for uma string válida e não vazia
+        if (prod.imagem && typeof prod.imagem === 'string' && prod.imagem.trim() !== '' && !prod.imagem.startsWith('data:') && prod.imagem.length < 2048) override.imagem = prod.imagem
+        if (prod.categoria && prod.categoria.trim() !== '') override.categoria = prod.categoria
+        if (prod.preco_custo !== null && prod.preco_custo > 0) override.preco_custo = prod.preco_custo
         if (Object.keys(override).length > 0) fromDB[prod.id] = override
       })
       setDbNewProducts(news)
@@ -416,7 +418,15 @@ fetchProductsDB()
     
     // Merge everything, avoiding duplicates between dbNewProducts and localNews
     const allNews = [...localNewsMerged, ...news].filter((v, i, a) => a.findIndex(t => t.id === v.id) === i)
-    return [...allNews, ...overridden].filter(p => !deletedSet.has(p.id))
+    return [...allNews, ...overridden].filter(p => {
+      if (deletedSet.has(p.id)) return false
+      // Ignorar produtos vazios ou corrompidos
+      if (!p.id || String(p.id).trim() === '') return false
+      if (!p.nome || String(p.nome).trim() === '') return false
+      // Ignorar produtos com preço zerado e estoque zerado (sem numero e zerados)
+      if (Number(p.preco) <= 0 && Number(p.estoque) <= 0) return false
+      return true
+    })
   }, [produtos, prodChangesApp, dbNewProducts, dbDeletedIds, route])
 
   const categorias = useMemo(() => ['TODOS', 'Encomendas da Empresa', ...[...new Set(produtosMerged.map(p => p.categoria))].sort()], [produtosMerged])
