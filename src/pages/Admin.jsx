@@ -1831,13 +1831,19 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   // =============================================
   // PRODUCTS
   // =============================================
-  const updateProduct = (id, changes) => {
+  const updateProduct = async (id, changes) => {
     const p = produtos.find(x => x.id === id) || { id }
     const payload = { [id]: { ...p, ...changes } }
-    upsertProducts(payload)
+    await upsertProducts(payload)
     showToast('Produto atualizado!')
     if (editingProd) setEditingProd(null)
-    setTimeout(() => { if (typeof refreshProducts === 'function') refreshProducts() }, 500)
+    if (typeof refreshProducts === 'function') refreshProducts()
+  }
+
+  const updateMultipleProducts = async (payload) => {
+    await upsertProducts(payload)
+    showToast('Produtos atualizados!')
+    if (typeof refreshProducts === 'function') refreshProducts()
   }
 
   const categoriasProd = useMemo(() => ['TODOS', ...[...new Set([...produtosAtuais.map(p => p.categoria), ...customCategorias].filter(Boolean))].sort()], [produtosAtuais, customCategorias])
@@ -1933,25 +1939,34 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     setProdImageErrors(prev => ({ ...prev, [id]: true }))
   }
 
-  const deleteSelectedProducts = (ids) => {
+  const deleteSelectedProducts = async (ids) => {
     const idList = [...ids]
     if (idList.length === 0) return
     if (!confirm(`Excluir permanentemente ${idList.length} produto(s)?\nEsta ação não pode ser desfeita.`)) return
-    supabaseDeleteProducts(idList)
+    await supabaseDeleteProducts(idList)
     showToast(`${idList.length} produto(s) excluído(s)`)
     setProdSelectedIds(new Set())
-    setTimeout(() => { if (typeof refreshProducts === 'function') refreshProducts() }, 500)
+    if (typeof refreshProducts === 'function') refreshProducts()
   }
 
   const bulkProdAction = (action) => {
     if (prodSelectedIds.size === 0) { showToast('Selecione pelo menos um produto', 'error'); return }
+    const buildPayload = (changes) => {
+      const payload = {}
+      prodSelectedIds.forEach(id => {
+        const p = produtos.find(x => x.id === id) || { id }
+        payload[id] = { ...p, ...changes }
+      })
+      return payload
+    }
+
     if (action === 'zerar') {
       if (!confirm(`Zerar estoque de ${prodSelectedIds.size} produto(s)?`)) return
-      prodSelectedIds.forEach(id => updateProduct(id, { estoque: 0 }))
+      updateMultipleProducts(buildPayload({ estoque: 0 }))
       showToast(`Estoque zerado para ${prodSelectedIds.size} produto(s)`)
     } else if (action === 'ocultar') {
       if (!confirm(`Marcar ${prodSelectedIds.size} produto(s) como indisponível?`)) return
-      prodSelectedIds.forEach(id => updateProduct(id, { estoque: 0 }))
+      updateMultipleProducts(buildPayload({ estoque: 0 }))
       showToast(`${prodSelectedIds.size} produto(s) marcados como indisponível`)
     } else if (action === 'preco') {
       setShowBulkPrice(true)
@@ -1963,7 +1978,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       const allOn = [...prodSelectedIds].every(id => produtosAtuais.find(p => p.id === id)?.semDevolucao)
       const target = !allOn
       if (!confirm(`Marcar ${prodSelectedIds.size} produto(s) como ${target ? 'SEM DEVOLUÇÃO' : 'COM devolução'}?`)) return
-      prodSelectedIds.forEach(id => updateProduct(id, { semDevolucao: target }))
+      updateMultipleProducts(buildPayload({ semDevolucao: target }))
       showToast(`${prodSelectedIds.size} produto(s) marcados como ${target ? 'SEM DEVOLUÇÃO' : 'COM devolução'}`)
     }
     setProdSelectedIds(new Set())
@@ -1973,7 +1988,14 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     const val = parseFloat(bulkPriceValue)
     if (isNaN(val) || val < 0) { showToast('Valor inválido', 'error'); return }
     if (!confirm(`Definir preço R$ ${val.toFixed(2).replace('.', ',')} para ${prodSelectedIds.size} produto(s)?`)) return
-    prodSelectedIds.forEach(id => updateProduct(id, { preco: val }))
+    
+    const payload = {}
+    prodSelectedIds.forEach(id => {
+      const p = produtos.find(x => x.id === id) || { id }
+      payload[id] = { ...p, preco: val }
+    })
+    updateMultipleProducts(payload)
+    
     showToast(`Preço atualizado para ${prodSelectedIds.size} produto(s)`)
     setProdSelectedIds(new Set())
     setShowBulkPrice(false)
@@ -1984,7 +2006,14 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     const val = parseInt(bulkStockValue, 10)
     if (isNaN(val) || val < 0) { showToast('Valor inválido', 'error'); return }
     if (!confirm(`Definir estoque ${val} para ${prodSelectedIds.size} produto(s)?`)) return
-    prodSelectedIds.forEach(id => updateProduct(id, { estoque: val }))
+    
+    const payload = {}
+    prodSelectedIds.forEach(id => {
+      const p = produtos.find(x => x.id === id) || { id }
+      payload[id] = { ...p, estoque: val }
+    })
+    updateMultipleProducts(payload)
+    
     showToast(`Estoque atualizado para ${prodSelectedIds.size} produto(s)`)
     setProdSelectedIds(new Set())
     setShowBulkStock(false)
