@@ -1114,7 +1114,7 @@ function App() {
                 </div>
                 {cartItems.length > 0 && (() => {
                   const cartCats = new Set(cartItems.map(i => i.categoria).filter(Boolean))
-                  const related = produtos
+                  const related = produtosMerged
                     .filter(p => cartCats.has(p.categoria) && !cart[p.id] && p.preco > 0)
                     .slice(0, 5)
                   if (related.length === 0) return null

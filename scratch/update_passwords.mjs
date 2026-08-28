@@ -1,26 +1,67 @@
-import { createClient } from '@supabase/supabase-js'
-
-const SUPABASE_URL = 'https://zncuyrimrkzbidvxyonk.supabase.co'
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpuY3V5cmltcmt6Ymlkdnh5b25rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTMzOTksImV4cCI6MjA5OTMyOTM5OX0.gJ_NxaMO7fTpxwdFNNU4Phnn9E4qtOlyaMGugryL1iE'
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-
-async function run() {
-  const { data: users, error } = await supabase.from('usuarios').select('*')
-  if (error) {
-    console.error('Error fetching users:', error)
-    return
+async function updatePasswords() {
+  console.log('Fetching all users from production API...');
+  
+  // 1. Fetch all users
+  const res = await fetch('https://thsmdistribuidora.com/api/db', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'select',
+      table: 'usuarios'
+    })
+  });
+  
+  const result = await res.json();
+  if (result.error) {
+    console.error('Error fetching users:', result.error);
+    return;
   }
-  console.log(`Found ${users.length} users. Phones:`, users.slice(0, 5).map(u => u.telefone))
-
-  for (const u of users) {
-    const newEndereco = { ...(u.endereco || {}), senha: '1234' }
-    const { error: updateError } = await supabase.from('usuarios').update({ endereco: newEndereco }).eq('telefone', u.telefone)
-    if (updateError) {
-      console.error(`Error updating user ${u.telefone}:`, updateError)
+  
+  const users = result.data || [];
+  console.log(`Found ${users.length} users. Updating passwords to 1234...`);
+  
+  // 2. Update each user
+  let updatedCount = 0;
+  for (let i = 0; i < users.length; i++) {
+    const user = users[i];
+    const endereco = user.endereco || {};
+    endereco.senha = '1234';
+    
+    try {
+      const updateRes = await fetch('https://thsmdistribuidora.com/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'upsert',
+          table: 'usuarios',
+          args: {
+            values: { 
+              telefone: user.telefone, 
+              nome: user.nome, 
+              email: user.email,
+              endereco: endereco 
+            },
+            options: { onConflict: 'telefone' }
+          },
+          single: true
+        })
+      });
+      
+      const updateResult = await updateRes.json();
+      if (updateResult.error) {
+        console.error(`Failed to update user ${user.telefone}:`, updateResult.error);
+      } else {
+        updatedCount++;
+        if (updatedCount % 50 === 0) {
+          console.log(`Updated ${updatedCount}/${users.length} users...`);
+        }
+      }
+    } catch (e) {
+      console.error(`Exception updating user ${user.telefone}:`, e.message);
     }
   }
-  console.log('Finished updating passwords.')
+  
+  console.log(`Successfully updated ${updatedCount} out of ${users.length} users.`);
 }
 
-run()
+updatePasswords();
