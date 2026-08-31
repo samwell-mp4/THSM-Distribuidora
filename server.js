@@ -50,8 +50,11 @@ app.post('/api/criar-usuario', async (req, res) => {
     const body = req.body
     const dados = typeof body.dados === 'string' ? JSON.parse(body.dados) : (body.dados || {})
 
-    const telefone = (body.telefone || '').replace(/@s\.whatsapp\.net$/, '').replace(/\D/g, '')
-    if (!telefone) return res.status(400).json({ error: 'telefone é obrigatório' })
+    let rawPhone = (body.telefone || '').replace(/@s\.whatsapp\.net$/, '').replace(/\D/g, '')
+    if (!rawPhone) return res.status(400).json({ error: 'telefone é obrigatório' })
+    if (rawPhone.startsWith('55') && (rawPhone.length === 12 || rawPhone.length === 13)) rawPhone = rawPhone.slice(2)
+    if (rawPhone.length === 10) rawPhone = rawPhone.slice(0, 2) + '9' + rawPhone.slice(2)
+    const telefone = '55' + rawPhone
 
     const nome = dados.nome || body.nome || ''
 

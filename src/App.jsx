@@ -386,9 +386,11 @@ function App() {
       const raw = loginEmail.replace(/\D/g, '')
       user = usuarios.find(u => samePhone(u.telefone, raw))
       if (!user) {
-        const telefone55 = raw.startsWith('55') ? raw : '55' + raw
-        const rawOnly = raw.replace(/^55/, '')
-        const { data } = await supabase.from('usuarios').select('*').or(`telefone.eq.${telefone55},telefone.eq.${rawOnly}`).maybeSingle()
+        const norm = normTel(raw)
+        const rawOnly = norm.replace(/^55/, '')
+        const unNorm8 = rawOnly.length === 11 && rawOnly[2] === '9' ? rawOnly.slice(0, 2) + rawOnly.slice(3) : rawOnly
+        const unNorm8_55 = '55' + unNorm8
+        const { data } = await supabase.from('usuarios').select('*').or(`telefone.eq.${norm},telefone.eq.${rawOnly},telefone.eq.${unNorm8},telefone.eq.${unNorm8_55}`).maybeSingle()
         user = data
       }
     }
@@ -413,40 +415,35 @@ function App() {
   }
 
   const fazerRegistro = async () => {
-    const raw = loginEmail.replace(/\D/g, '')
-    const telefone = raw.startsWith('55') ? raw : '55' + raw
-    if (!telefone || telefone.replace(/\D/g, '').length < 11) { showToast('Telefone inválido', 'error'); return }
-    if (usuarios.find(u => u.telefone === telefone)) { showToast('Telefone já cadastrado', 'error'); return }
+    const isEmailInput = loginEmail.includes('@')
+    const telefone = isEmailInput ? '' : normTel(loginEmail)
+
+    if (!telefone && !isEmailInput) { showToast('Telefone inválido', 'error'); return }
+    if (telefone && telefone.replace(/\D/g, '').length < 11) { showToast('Telefone inválido (informe DDD + número)', 'error'); return }
     if (!loginNome.trim()) { showToast('Informe seu nome completo', 'error'); return }
+    
+    if (telefone && usuarios.find(u => samePhone(u.telefone, telefone))) {
+      showToast('Telefone já cadastrado. Faça login.', 'error')
+      setIsRegistering(false)
+      return
+    }
+
     const nome = loginNome.trim()
-    let data = null
-    let error = null
-    try {
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        const res = await supabase.from('usuarios').insert({
-          telefone,
-          nome,
-          email: loginEmail.includes('@') ? loginEmail : '',
-          endereco: { senha: loginSenha || '' }
-        }).select().maybeSingle()
-        ;({ data, error } = res)
-        if (data) break
-        if (error && !['23505'].includes(error.code) && attempt < 3) {
-          await new Promise(r => setTimeout(r, 700 * attempt))
-          continue
-        }
-        break
-      }
-    } catch (e) {
-      error = e
+    const payload = {
+      telefone,
+      nome,
+      email: isEmailInput ? loginEmail : '',
+      endereco: { senha: loginSenha || '', origem: 'Registro do Site' }
     }
-    if (error) {
-      if (error.code === '23505') { showToast('Telefone já cadastrado', 'error'); return }
-      showToast('Sem conexão. Sua conta foi salva localmente.', 'success')
+
+    const saved = await upsertUser(payload)
+    if (!saved) {
+      showToast('Erro ao criar cadastro. Tente novamente.', 'error')
+      return
     }
-    if (!data) data = { telefone, nome, email: loginEmail.includes('@') ? loginEmail : '', endereco: { senha: loginSenha || '' } }
-    setUsuarios(prev => prev.some(u => u.telefone === telefone) ? prev : [...prev, data])
-    setCurrentUser(data)
+
+    setUsuarios(prev => prev.some(u => samePhone(u.telefone, saved.telefone)) ? prev.map(u => samePhone(u.telefone, saved.telefone) ? saved : u) : [...prev, saved])
+    setCurrentUser(saved)
     setShowLogin(false)
     setLoginEmail('')
     setLoginSenha('')
@@ -456,7 +453,7 @@ function App() {
       setForceOrderLogin(false)
       navigate('/minha-conta')
     }
-    const addr = data.endereco || {}
+    const addr = saved.endereco || {}
     if (!addr.cep || !addr.cidade || !addr.rua || !addr.numero) {
       setAddressRequiredEndereco({ cep: addr.cep || '', estado: addr.estado || '', cidade: addr.cidade || '', bairro: addr.bairro || '', rua: addr.rua || '', numero: addr.numero || '', complemento: addr.complemento || '' })
       setShowAddressRequired(true)
@@ -580,8 +577,7 @@ function App() {
   }
 
   const autoLoginOuRegistro = async () => {
-    const raw = customer.telefone.replace(/\D/g, '')
-    const telefone = raw.startsWith('55') ? raw : '55' + raw
+    const telefone = normTel(customer.telefone)
     if (!telefone) { showToast('Informe seu telefone', 'error'); return null }
 
     // Já logado na sessão atual: usa a conta direto sem pedir senha de novo
@@ -591,48 +587,47 @@ function App() {
 
     let existente = usuarios.find(u => samePhone(u.telefone, telefone))
     if (!existente) {
-      const { data } = await supabase.from('usuarios').select('*').eq('telefone', telefone).maybeSingle()
+      const rawOnly = telefone.replace(/^55/, '')
+      const unNorm8 = rawOnly.length === 11 && rawOnly[2] === '9' ? rawOnly.slice(0, 2) + rawOnly.slice(3) : rawOnly
+      const unNorm8_55 = '55' + unNorm8
+      const { data } = await supabase.from('usuarios').select('*').or(`telefone.eq.${telefone},telefone.eq.${rawOnly},telefone.eq.${unNorm8},telefone.eq.${unNorm8_55}`).maybeSingle()
       if (data) existente = data
     }
     if (existente) {
       const senha = existente.endereco?.senha
-      if (senha && customer.senha !== senha) { showToast('Senha incorreta', 'error'); return null }
+      if (senha && customer.senha && customer.senha !== senha) { showToast('Senha incorreta', 'error'); return null }
       const endereco = { ...(existente.endereco || {}), ...(customer.endereco || {}) }
-      const deveAtualizar = (customer.nome && customer.nome !== existente.nome) ||
-        (customer.cpf && customer.cpf !== (existente.cpf || existente.endereco?.cpf)) ||
-        (customer.endereco && Object.keys(customer.endereco).length > 0 && JSON.stringify(customer.endereco) !== JSON.stringify(existente.endereco || {}))
-      let atualizado = { ...existente, endereco }
-      if (deveAtualizar) {
-        const payload = {
-          telefone: existente.telefone,
-          nome: customer.nome || existente.nome,
-          email: customer.email || existente.email || '',
-          endereco: { ...endereco, cpf: customer.cpf || existente.cpf || endereco.cpf || '' }
-        }
-        if (existente.id) payload.id = existente.id
-        const saved = await upsertUser(payload)
-        if (!saved) {
-          showToast('Erro ao atualizar seus dados cadastrais. Tente novamente.', 'error')
-          return null
-        }
-        atualizado = saved
+      if (customer.senha) endereco.senha = customer.senha
+
+      const payload = {
+        id: existente.id,
+        telefone: existente.telefone || telefone,
+        nome: customer.nome || existente.nome,
+        email: customer.email || existente.email || '',
+        endereco: { ...endereco, cpf: customer.cpf || existente.cpf || endereco.cpf || '' }
       }
-      setUsuarios(prev => prev.some(u => u.telefone === existente.telefone) ? prev.map(u => u.telefone === existente.telefone ? atualizado : u) : [...prev, atualizado])
-      setCurrentUser(atualizado)
-      return atualizado
+      const saved = await upsertUser(payload)
+      if (!saved) {
+        showToast('Erro ao atualizar seus dados cadastrais. Tente novamente.', 'error')
+        return null
+      }
+      setUsuarios(prev => prev.some(u => samePhone(u.telefone, saved.telefone)) ? prev.map(u => samePhone(u.telefone, saved.telefone) ? saved : u) : [...prev, saved])
+      setCurrentUser(saved)
+      return saved
     }
+
     if (!customer.senha) { showToast('Escolha uma senha', 'error'); return null }
     try {
-      const { data, error } = await supabase.from('usuarios').insert({
+      const saved = await upsertUser({
         telefone,
         nome: customer.nome,
-        email: customer.email,
+        email: customer.email || '',
         endereco: { ...(customer.endereco || {}), cpf: customer.cpf, senha: customer.senha, origem: 'Registro do Site' }
-      }).select().single()
-      if (error) { showToast('Erro ao criar cadastro', 'error'); return null }
-      setUsuarios(prev => [...prev, data])
-      setCurrentUser(data)
-      return data
+      })
+      if (!saved) { showToast('Erro ao criar cadastro', 'error'); return null }
+      setUsuarios(prev => [...prev, saved])
+      setCurrentUser(saved)
+      return saved
     } catch (e) {
       console.error('Erro autoLoginOuRegistro:', e)
       showToast('Erro ao criar cadastro', 'error')
@@ -735,11 +730,11 @@ function App() {
     if (!user) { showToast('Erro ao identificar usuário', 'error'); return }
     const items = cartItems.map(i => ({ ...i, tipo: 'aprazo' }))
     const total = items.reduce((s, i) => s + i.preco * i.qty, 0)
-    const rawPhone = customer.telefone.replace(/\D/g, '')
-    const telefone = rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone
+    const telefone = normTel(customer.telefone)
+    const userId = user.id || null
     const order = {
       id: Date.now(),
-      user_id: user.id,
+      user_id: userId,
       date: new Date().toISOString().split('T')[0],
       customer: { nome: customer.nome, email: customer.email, telefone, cpf: customer.cpf, endereco: customer.endereco },
       items,
@@ -751,7 +746,7 @@ function App() {
       pre_approved_at: null,
       created_at: new Date().toISOString()
     }
-    await upsertOrder({ ...order, user_id: user.id })
+    await upsertOrder({ ...order, user_id: userId })
     setCart({})
     setCheckout(null)
     showToast('Pedido enviado com sucesso!')

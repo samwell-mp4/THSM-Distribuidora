@@ -4,7 +4,7 @@ import {
   supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser,
   deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads,
   upsertProducts, upsertDespesas, generateLoginToken, getAllRotaEdits, upsertRotaEdits, deleteRotaEdit as supabaseDeleteRotaEdit,
-  deleteProducts as supabaseDeleteProducts, flushPendingOrders, deleteOnlyFinancialByOrder
+  deleteProducts as supabaseDeleteProducts, flushPendingOrders, deleteOnlyFinancialByOrder, samePhone, normTel, normalizePhoneDigits
 } from '../lib/supabase'
 import { compressImageDataUrl, capPhotoSize } from '../lib/image'
 
@@ -870,57 +870,63 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   useEffect(() => { LS.set('thsm_rota_edits', rotaEdits) }, [rotaEdits])
 
   useEffect(() => {
+    const doSync = () => {
+      syncAllForAdmin().then(({ orders: o, financial: f, users: u, rotas: r, products: p, despesas: d, rotaEdits: re }) => {
+        if (re.length) setRotaEdits(prev => {
+          const map = new Map()
+          re.forEach(edit => map.set(edit.id, edit))
+          prev.forEach(edit => map.set(edit.id, edit))
+          const merged = Array.from(map.values())
+          LS.set('thsm_rota_edits', merged)
+          return merged
+        })
+        if (o.length) {
+          setOrders(prev => {
+            const map = new Map()
+            prev.forEach(ord => map.set(ord.id, ord))
+            o.forEach(ord => map.set(ord.id, ord))
+            const del = deletedOrderIdsRef.current || new Set()
+            const merged = Array.from(map.values()).filter(ord => !del.has(ord.id))
+            LS.set(STORAGE_ORDERS, merged)
+            return merged
+          })
+        }
+        if (f.length) {
+          setFinancial(prev => {
+            const map = new Map()
+            prev.forEach(fin => map.set(fin.id, fin))
+            f.forEach(fin => map.set(fin.id, fin))
+            const merged = Array.from(map.values())
+            LS.set(STORAGE_FINANCIAL, merged)
+            return merged
+          })
+        }
+        if (d.length) {
+          setDespesas(prev => {
+            const map = new Map()
+            prev.forEach(des => map.set(des.id, des))
+            d.forEach(des => map.set(des.id, des))
+            const merged = Array.from(map.values())
+            LS.set(STORAGE_DESPESAS, merged)
+            return merged
+          })
+        }
+        if (u.length) { LS.set('thsm_usuarios', u); setUsuarios(u) }
+        if (r.length) { setRotas(r) } else { fetchRotas() }
+        if (p && p.length) {
+          if (typeof refreshProducts === 'function') refreshProducts()
+        }
+      }).catch(e => { console.error('syncAllForAdmin error:', e) })
+        .finally(() => {
+          setSyncingUsers(false)
+          setIsInitialSyncing(false)
+        })
+    }
+
     setSyncingUsers(true)
-    syncAllForAdmin().then(({ orders: o, financial: f, users: u, rotas: r, products: p, despesas: d, rotaEdits: re }) => {
-      if (re.length) setRotaEdits(prev => {
-        const map = new Map()
-        re.forEach(edit => map.set(edit.id, edit))
-        prev.forEach(edit => map.set(edit.id, edit))
-        const merged = Array.from(map.values())
-        LS.set('thsm_rota_edits', merged)
-        return merged
-      })
-      if (o.length) {
-        setOrders(prev => {
-          const map = new Map()
-          o.forEach(ord => map.set(ord.id, ord))
-          prev.forEach(ord => map.set(ord.id, ord))
-          const del = deletedOrderIdsRef.current || new Set()
-          const merged = Array.from(map.values()).filter(ord => !del.has(ord.id))
-          LS.set(STORAGE_ORDERS, merged)
-          return merged
-        })
-      }
-      if (f.length) {
-        setFinancial(prev => {
-          const map = new Map()
-          f.forEach(fin => map.set(fin.id, fin))
-          prev.forEach(fin => map.set(fin.id, fin))
-          const merged = Array.from(map.values())
-          LS.set(STORAGE_FINANCIAL, merged)
-          return merged
-        })
-      }
-      if (d.length) {
-        setDespesas(prev => {
-          const map = new Map()
-          d.forEach(des => map.set(des.id, des))
-          prev.forEach(des => map.set(des.id, des))
-          const merged = Array.from(map.values())
-          LS.set(STORAGE_DESPESAS, merged)
-          return merged
-        })
-      }
-      LS.set('thsm_usuarios', u); setUsuarios(u)
-      if (r.length) { setRotas(r) } else { fetchRotas() }
-      if (p && p.length) {
-        if (typeof refreshProducts === 'function') refreshProducts()
-      }
-    }).catch(e => { console.error('syncAllForAdmin error:', e) })
-      .finally(() => {
-        setSyncingUsers(false)
-        setIsInitialSyncing(false)
-      })
+    doSync()
+    const pollInterval = setInterval(doSync, 10000)
+
     getAllLeads().then(setLeads).catch(() => { })
       // Reenvia leads salvos localmente (fallback quando site ficou offline)
       ; (async () => {
@@ -935,6 +941,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           if (enviados.length) localStorage.setItem('thsm_pending_leads', JSON.stringify(pendentes.filter(p => !enviados.includes(p))))
         } catch { }
       })()
+
+    return () => clearInterval(pollInterval)
   }, [])
 
   // Auto-expand first rota when rotas load
@@ -5541,7 +5549,7 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
 
   const inativos = useMemo(() => {
     const arr = usuarios.map(u => {
-      const pedidosUser = orders.filter(o => o.customer?.telefone === u.telefone || o.user_id === u.id)
+      const pedidosUser = orders.filter(o => samePhone(o.customer?.telefone, u.telefone) || (u.id && o.user_id === u.id))
       const ult = pedidosUser.map(o => o.date || '').filter(Boolean).sort().pop() || ''
       return { nome: u.nome || '-', telefone: u.telefone || '-', ultima: ult }
     })
@@ -6082,7 +6090,7 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
             <thead><tr><th>Cliente</th><th>Telefone</th><th>Cidade</th><th>Rota</th><th>Nº pedidos</th><th>Último pedido</th></tr></thead>
             <tbody>
               {usuarios.map(u => {
-                const pedidosUser = orders.filter(o => o.customer?.telefone === u.telefone || o.user_id === u.id)
+                const pedidosUser = orders.filter(o => samePhone(o.customer?.telefone, u.telefone) || (u.id && o.user_id === u.id))
                 const ult = pedidosUser.map(o => o.date || '').filter(Boolean).sort().pop() || null
                 const semPedido = pedidosUser.length === 0
                 return (

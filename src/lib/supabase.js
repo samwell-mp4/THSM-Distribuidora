@@ -1,4 +1,4 @@
-import { capPhotoSize } from './image'
+import { capPhotoSize } from './image.js'
 
 class SupabaseQueryBuilder {
   constructor(table) {
@@ -164,25 +164,45 @@ function toDateInput(val) {
   return val
 }
 
-export function normTel(t) {
-  if (!t) return ''
-  const digits = String(t).replace(/\D/g, '')
+export function normalizePhoneDigits(phone) {
+  if (!phone) return ''
+  let digits = String(phone).replace(/\D/g, '')
   if (!digits) return ''
-  return digits.startsWith('55') ? digits : '55' + digits
+
+  if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+    digits = digits.slice(2)
+  }
+
+  // If 10 digits (2-digit DDD + 8-digit number), insert mandatory '9' after DDD
+  if (digits.length === 10) {
+    digits = digits.slice(0, 2) + '9' + digits.slice(2)
+  }
+
+  return '55' + digits
+}
+
+export function normTel(t) {
+  return normalizePhoneDigits(t)
 }
 
 export function samePhone(a, b) {
   if (!a || !b) return false
-  const da = String(a).replace(/\D/g, '').replace(/^55/, '')
-  const db = String(b).replace(/\D/g, '').replace(/^55/, '')
+  const na = normalizePhoneDigits(a)
+  const nb = normalizePhoneDigits(b)
+  if (na && nb && na === nb) return true
+
+  let da = String(a).replace(/\D/g, '').replace(/^55/, '')
+  let db = String(b).replace(/\D/g, '').replace(/^55/, '')
+  if (da.length === 10) da = da.slice(0, 2) + '9' + da.slice(2)
+  if (db.length === 10) db = db.slice(0, 2) + '9' + db.slice(2)
   return da === db && da.length >= 8
 }
 
 // ---- USERS ----
 export async function upsertUser(user) {
-  const raw = (user.telefone || '').replace(/@.*$/, '').replace(/\D/g, '')
+  const raw = (user.telefone || '').replace(/@.*$/, '')
   if (!raw) { console.error('upsertUser: telefone vazio'); return null }
-  const telefone = raw.startsWith('55') ? raw : '55' + raw
+  const telefone = normalizePhoneDigits(raw)
 
   // Ensure CPF is stored inside endereco
   const endereco = { ...(user.endereco || {}) }
@@ -190,13 +210,14 @@ export async function upsertUser(user) {
     endereco.cpf = user.cpf
   }
 
-  // Construct valid database columns only (id and created_at are managed by DB on conflict)
+  // Construct valid database columns only
   const dbUser = {
     telefone,
     nome: user.nome || '',
     email: user.email || '',
     endereco
   }
+  if (user.id) dbUser.id = user.id
 
   let lastError = null
   try {
@@ -279,9 +300,14 @@ function writePendingOrders(list) {
 }
 
 function orderRecord(o) {
+  let uid = o.user_id || o.userId || null
+  if (typeof uid !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid)) {
+    uid = null
+  }
+
   return {
-    id: o.id,
-    user_id: o.user_id || o.userId || null,
+    id: Number(o.id),
+    user_id: uid,
     status: o.status || 'pendente',
     created_at: toDateInput(o.created_at || o.createdAt),
     data: {
