@@ -870,7 +870,10 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   useEffect(() => { LS.set('thsm_rota_edits', rotaEdits) }, [rotaEdits])
 
   useEffect(() => {
+    let isSyncing = false
     const doSync = () => {
+      if (isSyncing) return
+      isSyncing = true
       syncAllForAdmin().then(({ orders: o, financial: f, users: u, rotas: r, products: p, despesas: d, rotaEdits: re }) => {
         if (re.length) setRotaEdits(prev => {
           const map = new Map()
@@ -918,6 +921,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         }
       }).catch(e => { console.error('syncAllForAdmin error:', e) })
         .finally(() => {
+          isSyncing = false
           setSyncingUsers(false)
           setIsInitialSyncing(false)
         })

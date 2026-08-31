@@ -112,8 +112,20 @@ app.post('/api/criar-usuario', async (req, res) => {
 
 app.use(express.static('dist'))
 
-app.get('*', (_req, res) => {
-  res.sendFile('index.html', { root: 'dist' })
+// Express Error Handling Middleware to catch aborted requests gracefully
+app.use((err, req, res, next) => {
+  if (err && (err.type === 'request.aborted' || err.code === 'ECONNABORTED' || err.message?.includes('aborted'))) {
+    // Client aborted request before completion; ignore gracefully without logging noise
+    return
+  }
+  if (err) {
+    console.error('Express error:', err.message || err)
+    if (!res.headersSent) {
+      res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' })
+    }
+  } else {
+    next()
+  }
 })
 
 const PORT = process.env.PORT || 3000
