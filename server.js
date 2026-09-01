@@ -1,5 +1,5 @@
 import express from 'express'
-import { initDb, executeQuery, restoreDbData } from './db.js'
+import { initDb, executeQuery, restoreDbData, pool } from './db.js'
 
 // Initialize database schema
 initDb().catch(err => console.error('Database initialization error:', err));
@@ -7,6 +7,45 @@ initDb().catch(err => console.error('Database initialization error:', err));
 const app = express()
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ limit: '50mb', extended: true }))
+
+// GET API endpoint for fluxo_whatsapp (PostgREST / Supabase REST compatibility & API endpoint)
+const handleFluxoWhatsappQuery = async (req, res) => {
+  try {
+    let rawPhone = req.query.telefone || req.query.phone || ''
+    if (typeof rawPhone === 'string' && rawPhone.startsWith('eq.')) {
+      rawPhone = rawPhone.slice(3)
+    }
+
+    const cleanDigits = String(rawPhone || '').replace(/\D/g, '')
+    const normPhone = cleanDigits ? (cleanDigits.startsWith('55') ? cleanDigits : '55' + cleanDigits) : ''
+    const rawNo55 = cleanDigits ? cleanDigits.replace(/^55/, '') : ''
+
+    let sql = 'SELECT * FROM "fluxo_whatsapp"'
+    const params = []
+
+    if (rawPhone) {
+      params.push(
+        String(rawPhone),
+        `${String(rawPhone).replace(/@.*$/, '')}@s.whatsapp.net`,
+        normPhone,
+        `${normPhone}@s.whatsapp.net`,
+        rawNo55,
+        `${rawNo55}@s.whatsapp.net`
+      )
+      sql += ' WHERE "telefone" = $1 OR "telefone" = $2 OR "telefone" = $3 OR "telefone" = $4 OR "telefone" = $5 OR "telefone" = $6'
+    }
+
+    sql += ' ORDER BY "id" DESC LIMIT 50'
+    const result = await pool.query(sql, params.length ? params : undefined)
+    res.json(result.rows || [])
+  } catch (err) {
+    console.error('Error querying fluxo_whatsapp:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+}
+
+app.get('/rest/v1/fluxo_whatsapp', handleFluxoWhatsappQuery)
+app.get('/api/fluxo_whatsapp', handleFluxoWhatsappQuery)
 
 // Trigger database restore from local JSON backups
 app.get('/api/restore-db', async (req, res) => {

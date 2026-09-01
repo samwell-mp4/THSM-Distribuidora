@@ -1836,7 +1836,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   useEffect(() => { setUserPage(1) }, [userSearch, userCityFilter, userOrigemFilter, userEnderecoSearch, selectedUserEmail])
 
   const userCities = useMemo(() => {
-    const cidades = [...new Set(usuarios.map(u => u.endereco?.cidade).filter(Boolean))]
+    const cidades = [...new Set((usuarios || []).map(u => u.endereco?.cidade).filter(Boolean))]
     return ['TODAS', ...cidades.sort((a, b) => a.localeCompare(b, 'pt-BR'))]
   }, [usuarios])
 
@@ -6490,12 +6490,14 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
   const [prodPage, setProdPage] = useState(1)
 
   const filteredUsers = useMemo(() => {
-    const t = userSearch.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+    const t = (userSearch || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
     if (!t) return []
-    return usuarios.filter(u =>
-      u.nome?.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(t) ||
-      u.telefone?.includes(t) ||
-      (u.email || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(t)
+    return (usuarios || []).filter(u =>
+      u && (
+        String(u.nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(t) ||
+        String(u.telefone || '').includes(t) ||
+        String(u.email || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(t)
+      )
     ).slice(0, 20)
   }, [usuarios, userSearch])
 
@@ -6530,8 +6532,8 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
   }
 
   const filteredProds = useMemo(() => {
-    const t = search.toLowerCase().trim()
-    return t ? produtos.filter(p => p.nome.toLowerCase().includes(t)) : produtos
+    const t = (search || '').toLowerCase().trim()
+    return t ? (produtos || []).filter(p => p && String(p.nome || p.displayName || '').toLowerCase().includes(t)) : (produtos || [])
   }, [produtos, search])
 
   const paginatedProds = useMemo(() => {
@@ -6920,12 +6922,14 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
   const [userSearch, setUserSearch] = useState('')
   const filteredUsers = useMemo(() => {
     if (!usuarios) return []
-    const t = userSearch.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+    const t = (userSearch || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
     if (!t) return []
     return usuarios.filter(u =>
-      u.nome?.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(t) ||
-      u.telefone?.includes(t) ||
-      (u.email || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(t)
+      u && (
+        String(u.nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(t) ||
+        String(u.telefone || '').includes(t) ||
+        String(u.email || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(t)
+      )
     ).slice(0, 10)
   }, [usuarios, userSearch])
   const [editCustomer, setEditCustomer] = useState({
@@ -7010,15 +7014,15 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
   const editTotal = editedItems.filter(i => i.qty > 0).reduce((s, i) => s + i.preco * i.qty, 0)
 
   const filteredAddProds = useMemo(() => {
-    const t = addSearch.toLowerCase().trim()
+    const t = (addSearch || '').toLowerCase().trim()
     if (!t) return []
-    return produtos.filter(p => p.nome.toLowerCase().includes(t)).slice(0, 10)
+    return (produtos || []).filter(p => p && String(p.nome || p.displayName || '').toLowerCase().includes(t)).slice(0, 10)
   }, [produtos, addSearch])
 
   const filteredPreAddProds = useMemo(() => {
-    const t = preAddSearch.toLowerCase().trim()
+    const t = (preAddSearch || '').toLowerCase().trim()
     if (!t) return []
-    return produtos.filter(p => p.nome.toLowerCase().includes(t)).slice(0, 10)
+    return (produtos || []).filter(p => p && String(p.nome || p.displayName || '').toLowerCase().includes(t)).slice(0, 10)
   }, [produtos, preAddSearch])
 
   const addToPreReplacement = (p) => {
@@ -7528,8 +7532,8 @@ function KitModal({ produtos, kit, onSave, onClose }) {
   const [search, setSearch] = useState('')
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim()
-    return q ? produtos.filter(p => p.nome.toLowerCase().includes(q) || (p.categoria || '').toLowerCase().includes(q)) : produtos
+    const q = (search || '').toLowerCase().trim()
+    return q ? (produtos || []).filter(p => p && (String(p.nome || p.displayName || '').toLowerCase().includes(q) || String(p.categoria || '').toLowerCase().includes(q))) : (produtos || [])
   }, [produtos, search])
 
   const toggle = (id) => {

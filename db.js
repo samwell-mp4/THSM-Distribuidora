@@ -176,6 +176,25 @@ export async function initDb() {
       DELETE FROM produtos WHERE deleted = true OR nome IS NULL OR nome = ''
     `);
 
+    // 9. FLUXO_WHATSAPP
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fluxo_whatsapp (
+        id bigint PRIMARY KEY,
+        telefone text,
+        fluxo text,
+        etapa text,
+        ultima_pergunta text,
+        concluido boolean DEFAULT false,
+        dados jsonb DEFAULT '{}'::jsonb,
+        criado_em timestamptz,
+        atualizado_em timestamptz,
+        ultima_interacao timestamptz
+      )
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS idx_fluxo_whatsapp_telefone ON fluxo_whatsapp(telefone)');
+
+    await importFluxoWhatsappCsv(client);
+
     // RLS: disable RLS since this is a trusted backend
     await client.query('ALTER TABLE usuarios DISABLE ROW LEVEL SECURITY');
     await client.query('ALTER TABLE pedidos DISABLE ROW LEVEL SECURITY');
@@ -737,4 +756,94 @@ export async function restoreDbData() {
     results.push(`Table "${table.name}": successfully restored ${rows.length} rows.`);
   }
   return results;
+}
+
+export async function importFluxoWhatsappCsv(clientArg) {
+  const csvPath = path.resolve('fluxo_whatsapp.csv');
+  try {
+    const exists = await fs.access(csvPath).then(() => true).catch(() => false);
+    if (!exists) {
+      console.log('fluxo_whatsapp.csv not found, skipping CSV import.');
+      return;
+    }
+
+    const client = clientArg || pool;
+    const content = await fs.readFile(csvPath, 'utf8');
+    const lines = content.split(/\r?\n/);
+    if (lines.length <= 1) return;
+
+    console.log(`Importing ${lines.length - 1} records from fluxo_whatsapp.csv...`);
+    let count = 0;
+    let currentLine = '';
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.trim()) continue;
+
+      currentLine += (currentLine ? '\n' : '') + line;
+      const quoteCount = (currentLine.match(/"/g) || []).length;
+      if (quoteCount % 2 !== 0) continue;
+
+      const cols = [];
+      let inQuotes = false;
+      let field = '';
+      for (let j = 0; j < currentLine.length; j++) {
+        const char = currentLine[j];
+        if (char === '"') {
+          if (inQuotes && currentLine[j + 1] === '"') {
+            field += '"';
+            j++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          cols.push(field);
+          field = '';
+        } else {
+          field += char;
+        }
+      }
+      cols.push(field);
+      currentLine = '';
+
+      if (cols.length >= 10) {
+        const id = parseInt(cols[0], 10);
+        if (isNaN(id)) continue;
+        const telefone = cols[1]?.trim() || '';
+        const fluxo = cols[2]?.trim() || '';
+        const etapa = cols[3]?.trim() || '';
+        const ultima_pergunta = cols[4]?.trim() || '';
+        const concluido = cols[5]?.trim() === 'true';
+        let dados = '{}';
+        try {
+          if (cols[6]?.trim()) {
+            JSON.parse(cols[6].trim());
+            dados = cols[6].trim();
+          }
+        } catch {}
+        const criado_em = cols[7]?.trim() || null;
+        const atualizado_em = cols[8]?.trim() || null;
+        const ultima_interacao = cols[9]?.trim() || null;
+
+        await client.query(`
+          INSERT INTO fluxo_whatsapp (id, telefone, fluxo, etapa, ultima_pergunta, concluido, dados, criado_em, atualizado_em, ultima_interacao)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          ON CONFLICT (id) DO UPDATE SET
+            telefone = EXCLUDED.telefone,
+            fluxo = EXCLUDED.fluxo,
+            etapa = EXCLUDED.etapa,
+            ultima_pergunta = EXCLUDED.ultima_pergunta,
+            concluido = EXCLUDED.concluido,
+            dados = EXCLUDED.dados,
+            criado_em = EXCLUDED.criado_em,
+            atualizado_em = EXCLUDED.atualizado_em,
+            ultima_interacao = EXCLUDED.ultima_interacao
+        `, [id, telefone, fluxo, etapa, ultima_pergunta, concluido, dados, criado_em, atualizado_em, ultima_interacao]);
+        count++;
+      }
+    }
+    console.log(`Imported/Updated ${count} rows into fluxo_whatsapp table.`);
+  } catch (err) {
+    console.error('Error importing fluxo_whatsapp.csv:', err.message);
+  }
 }
