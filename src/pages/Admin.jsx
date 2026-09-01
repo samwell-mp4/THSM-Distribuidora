@@ -27,14 +27,14 @@ const LS = {
     try {
       localStorage.setItem(key, JSON.stringify(val))
     } catch (e) {
-      console.warn('LS.set quota/falha:', key, e)
       try {
-        localStorage.removeItem('thsm_admin_orders')
-        localStorage.removeItem('thsm_admin_financeiro')
-        localStorage.removeItem('thsm_admin_produtos')
-        localStorage.setItem(key, JSON.stringify(val))
+        let str = JSON.stringify(val)
+        if (Array.isArray(val) && val.length > 100) {
+          str = JSON.stringify(val.slice(0, 100))
+        }
+        localStorage.setItem(key, str)
       } catch (inner) {
-        console.error('Falha crítica de localStorage mesmo limpando cache:', inner)
+        console.warn('LocalStorage quota limit reached for key:', key)
       }
     }
   }
@@ -1867,25 +1867,37 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   }
 
   const filteredProds = useMemo(() => {
-    const t = prodSearch.toLowerCase().trim()
+    const t = (prodSearch || '').toLowerCase().trim()
     const [pMin, pMax] = prodPriceRange
-    return produtosAtuais.filter(p => {
-      if (t && !p.nome.toLowerCase().includes(t) && !p.categoria.toLowerCase().includes(t)) return false
+    return (produtosAtuais || []).filter(p => {
+      if (!p) return false
+      const nome = String(p.nome || p.displayName || '')
+      const cat = String(p.categoria || '')
+      if (t && !nome.toLowerCase().includes(t) && !cat.toLowerCase().includes(t)) return false
       if (prodCatFilter === 'Encomendas da Empresa') {
         if (!p.semDevolucao) return false
-      } else if (prodCatFilter !== 'TODOS' && p.categoria !== prodCatFilter) return false
-      if (prodStockFilter === 'in' && p.estoque <= 0) return false
-      if (prodStockFilter === 'out' && p.estoque > 0) return false
-      if (p.preco < pMin || p.preco > pMax) return false
+      } else if (prodCatFilter !== 'TODOS' && cat !== prodCatFilter) return false
+      if (prodStockFilter === 'in' && (Number(p.estoque) || 0) <= 0) return false
+      if (prodStockFilter === 'out' && (Number(p.estoque) || 0) > 0) return false
+      const preco = Number(p.preco) || 0
+      if (preco < pMin || preco > pMax) return false
       return true
     }).sort((a, b) => {
-      let va, vb
+      let va = String(a?.nome || a?.displayName || '')
+      let vb = String(b?.nome || b?.displayName || '')
       switch (prodSort.field) {
-        case 'nome': va = a.nome; vb = b.nome; return prodSort.dir === 'asc' ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR')
-        case 'categoria': va = a.categoria; vb = b.categoria; return prodSort.dir === 'asc' ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR')
-        case 'preco': return prodSort.dir === 'asc' ? a.preco - b.preco : b.preco - a.preco
-        case 'estoque': return prodSort.dir === 'asc' ? (a.estoque || 0) - (b.estoque || 0) : (b.estoque || 0) - (a.estoque || 0)
-        default: return a.nome.localeCompare(b.nome, 'pt-BR')
+        case 'nome':
+          return prodSort.dir === 'asc' ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR')
+        case 'categoria':
+          va = String(a?.categoria || '')
+          vb = String(b?.categoria || '')
+          return prodSort.dir === 'asc' ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR')
+        case 'preco':
+          return prodSort.dir === 'asc' ? (Number(a?.preco) || 0) - (Number(b?.preco) || 0) : (Number(b?.preco) || 0) - (Number(a?.preco) || 0)
+        case 'estoque':
+          return prodSort.dir === 'asc' ? (Number(a?.estoque) || 0) - (Number(b?.estoque) || 0) : (Number(b?.estoque) || 0) - (Number(a?.estoque) || 0)
+        default:
+          return va.localeCompare(vb, 'pt-BR')
       }
     })
   }, [produtosAtuais, prodSearch, prodCatFilter, prodStockFilter, prodPriceRange, prodSort])
