@@ -398,9 +398,7 @@ function App() {
       if (!user) {
         const norm = normTel(raw)
         const rawOnly = norm.replace(/^55/, '')
-        const unNorm8 = rawOnly.length === 11 && rawOnly[2] === '9' ? rawOnly.slice(0, 2) + rawOnly.slice(3) : rawOnly
-        const unNorm8_55 = '55' + unNorm8
-        const { data } = await supabase.from('usuarios').select('*').or(`telefone.eq.${norm},telefone.eq.${rawOnly},telefone.eq.${unNorm8},telefone.eq.${unNorm8_55}`).maybeSingle()
+        const { data } = await supabase.from('usuarios').select('*').or(`telefone.eq.${norm},telefone.eq.${rawOnly}`).maybeSingle()
         user = data
       }
     }
@@ -624,9 +622,7 @@ function App() {
     let existente = usuarios.find(u => samePhone(u.telefone, telefone))
     if (!existente) {
       const rawOnly = telefone.replace(/^55/, '')
-      const unNorm8 = rawOnly.length === 11 && rawOnly[2] === '9' ? rawOnly.slice(0, 2) + rawOnly.slice(3) : rawOnly
-      const unNorm8_55 = '55' + unNorm8
-      const { data } = await supabase.from('usuarios').select('*').or(`telefone.eq.${telefone},telefone.eq.${rawOnly},telefone.eq.${unNorm8},telefone.eq.${unNorm8_55}`).maybeSingle()
+      const { data } = await supabase.from('usuarios').select('*').or(`telefone.eq.${telefone},telefone.eq.${rawOnly}`).maybeSingle()
       if (data) existente = data
     }
     if (existente) {

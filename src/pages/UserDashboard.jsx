@@ -175,12 +175,13 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
     if (!editCpf.trim()) { alert('CPF é obrigatório'); return }
     setSavingProfile(true)
     try {
+      const userPhone = editTelefone ? editTelefone : currentUser.telefone
       const updatedPayload = {
         ...currentUser,
         id: currentUser?.id,
         nome: editNome.trim(),
         email: editEmail.trim(),
-        telefone: currentUser.telefone,
+        telefone: userPhone,
         cpf: editCpf.trim(),
         endereco: { ...(currentUser?.endereco || {}), ...editEndereco, cpf: editCpf.trim(), senha: editSenha || currentUser?.endereco?.senha || '' }
       }
