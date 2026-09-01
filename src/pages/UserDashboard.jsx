@@ -176,16 +176,17 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
     setSavingProfile(true)
     try {
       const userPhone = editTelefone ? editTelefone : currentUser.telefone
+      const userId = samePhone(currentUser.telefone, userPhone) ? currentUser.id : null
       const updatedPayload = {
         ...currentUser,
-        id: currentUser?.id,
+        id: userId,
         nome: editNome.trim(),
         email: editEmail.trim(),
         telefone: userPhone,
         cpf: editCpf.trim(),
         endereco: { ...(currentUser?.endereco || {}), ...editEndereco, cpf: editCpf.trim(), senha: editSenha || currentUser?.endereco?.senha || '' }
       }
-      console.log('[Minha Conta] Salvando dados via webhook e DB:', updatedPayload)
+      console.log('[Minha Conta] Salvando dados via webhook:', updatedPayload)
       
       const saved = await saveUserViaWebhook(updatedPayload)
       setLS(LS_SESSAO, saved)

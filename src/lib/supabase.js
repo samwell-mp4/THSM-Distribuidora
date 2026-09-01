@@ -237,9 +237,17 @@ export async function saveUserViaWebhook(userPayload) {
     console.error('[saveUserViaWebhook] Exceção no webhook att-user:', err)
   }
 
-  // 2. Also persist in database via upsertUser (strictly by id or telefone)
-  const saved = await upsertUser(payload)
-  return saved || payload
+  // 2. Also persist in database via upsertUser, but DO NOT overwrite payload with a mismatched user record
+  try {
+    const saved = await upsertUser(payload)
+    if (saved && (saved.id === payload.id || samePhone(saved.telefone, payload.telefone))) {
+      return { ...payload, ...saved }
+    }
+  } catch (e) {
+    console.error('[saveUserViaWebhook] db upsert error:', e)
+  }
+
+  return payload
 }
 export async function upsertUser(user) {
   const raw = (user.telefone || '').replace(/@.*$/, '')
