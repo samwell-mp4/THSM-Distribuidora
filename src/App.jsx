@@ -4,7 +4,7 @@ import AddressForm from './components/AddressForm'
 import UserDashboard from './pages/UserDashboard'
 import KitPage from './pages/KitPage'
 import LandingPage from './pages/LandingPage'
-import { supabase, upsertOrder, upsertUser, generateLoginToken, consumeLoginToken, flushPendingOrders, normTel, samePhone } from './lib/supabase'
+import { supabase, upsertOrder, upsertUser, saveUserViaWebhook, generateLoginToken, consumeLoginToken, flushPendingOrders, normTel, samePhone } from './lib/supabase'
 import './App.css'
 
 const LS_USUARIOS = 'thsm_usuarios'
@@ -247,19 +247,15 @@ function App() {
     try {
       const payload = {
         ...currentUser,
+        id: currentUser.id,
+        telefone: currentUser.telefone,
         nome: nomeTxt,
+        email: currentUser.email || '',
         endereco: { ...(currentUser.endereco || {}), senha: currentUser.endereco?.senha || '', cpf: currentUser.cpf || currentUser.endereco?.cpf || '' }
       }
-      const saved = await upsertUser({
-        id: currentUser.id,
-        telefone: payload.telefone,
-        nome: nomeTxt,
-        email: payload.email || '',
-        endereco: payload.endereco
-      })
+      const saved = await saveUserViaWebhook(payload)
       if (!saved) throw new Error('Erro ao salvar nome no servidor')
       setCurrentUser(saved)
-      setUsuarios(prev => prev.some(u => u.telefone === saved.telefone) ? prev.map(u => u.telefone === saved.telefone ? saved : u) : [saved, ...prev])
       setShowNomeObrigatorio(false)
       showToast('Nome atualizado com sucesso!')
     } catch (e) {
@@ -567,9 +563,10 @@ function App() {
         telefone: currentUser.telefone,
         nome: currentUser.nome || '',
         email: currentUser.email || '',
+        cpf: currentUser.cpf || currentUser.endereco?.cpf || '',
         endereco: { ...(currentUser?.endereco || {}), ...addr }
       }
-      const saved = await upsertUser(updated)
+      const saved = await saveUserViaWebhook(updated)
       if (!saved) throw new Error('Erro ao salvar endereço no servidor')
       setCurrentUser(saved)
       setShowAddressRequired(false)
@@ -584,12 +581,25 @@ function App() {
   }
 
   const saveAddressEdit = async () => {
+    if (!currentUser || (!currentUser.id && !currentUser.telefone)) {
+      showToast('Sessão inválida. Faça login novamente.', 'error')
+      setShowAddressEdit(false)
+      setCurrentUser(null)
+      return
+    }
     const addr = addressEditEndereco
     if (!addr.cep || !addr.cidade || !addr.rua || !addr.numero) { showToast('Preencha CEP, cidade, rua e número', 'error'); return }
     setSavingAddress(true)
     try {
-      const updated = { ...currentUser, endereco: { ...(currentUser?.endereco || {}), ...addr } }
-      const saved = await upsertUser(updated)
+      const updated = {
+        id: currentUser.id,
+        telefone: currentUser.telefone,
+        nome: currentUser.nome || '',
+        email: currentUser.email || '',
+        cpf: currentUser.cpf || currentUser.endereco?.cpf || '',
+        endereco: { ...(currentUser?.endereco || {}), ...addr }
+      }
+      const saved = await saveUserViaWebhook(updated)
       if (!saved) throw new Error('Erro ao salvar endereço no servidor')
       setCurrentUser(saved)
       setShowAddressEdit(false)

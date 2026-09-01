@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { supabase, upsertOrder, upsertFinancial, deleteOrder as supabaseDeleteOrder, upsertUser, flushPendingOrders, samePhone } from '../lib/supabase'
+import { supabase, upsertOrder, upsertFinancial, deleteOrder as supabaseDeleteOrder, upsertUser, saveUserViaWebhook, flushPendingOrders, samePhone } from '../lib/supabase'
 import { compressImageDataUrl } from '../lib/image'
 import AddressForm from '../components/AddressForm'
 
@@ -175,44 +175,21 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
     if (!editCpf.trim()) { alert('CPF é obrigatório'); return }
     setSavingProfile(true)
     try {
-      const userPhone = String(currentUser.telefone).replace(/\D/g, '')
-      const normUserPhone = userPhone.startsWith('55') ? userPhone : '55' + userPhone
-      const updated = {
+      const updatedPayload = {
         ...currentUser,
         id: currentUser?.id,
         nome: editNome.trim(),
         email: editEmail.trim(),
-        telefone: normUserPhone,
+        telefone: currentUser.telefone,
         cpf: editCpf.trim(),
         endereco: { ...(currentUser?.endereco || {}), ...editEndereco, cpf: editCpf.trim(), senha: editSenha || currentUser?.endereco?.senha || '' }
       }
-      console.log('[Minha Conta] Tentando salvar dados via webhook para:', normUserPhone, updated)
+      console.log('[Minha Conta] Salvando dados via webhook e DB:', updatedPayload)
       
-      const response = await fetch('https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/att-user', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(updated)
-      })
-
-      if (response.ok) {
-        let responseData = {}
-        try { responseData = await response.json() } catch(err) {}
-
-        if (responseData.status === 'erro' || responseData.status === 'error') {
-          console.error('[Minha Conta] Erro retornado pelo webhook:', responseData)
-          alert('Erro ao salvar no servidor. Verifique e tente novamente.')
-        } else {
-          console.log('[Minha Conta] Salvo com sucesso via webhook')
-          setLS(LS_SESSAO, updated)
-          if (onUpdateUser) onUpdateUser(updated)
-          alert('Dados salvos com sucesso!')
-        }
-      } else {
-        console.error('[Minha Conta] Falha HTTP no webhook:', response.status)
-        alert('Erro ao salvar no servidor. Verifique sua conexão e tente novamente.')
-      }
+      const saved = await saveUserViaWebhook(updatedPayload)
+      setLS(LS_SESSAO, saved)
+      if (onUpdateUser) onUpdateUser(saved)
+      alert('Dados salvos com sucesso!')
     } catch (e) {
       console.error('[Minha Conta] Erro de exceção em saveProfile:', e)
       alert('Erro ao salvar. Tente novamente.')

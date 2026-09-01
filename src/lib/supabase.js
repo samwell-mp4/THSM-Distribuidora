@@ -202,7 +202,45 @@ export function samePhone(a, b) {
   return cleanA === cleanB && cleanA.length === 11
 }
 
-// ---- USERS ----
+export async function saveUserViaWebhook(userPayload) {
+  if (!userPayload || !userPayload.telefone) return null
+  const userPhone = String(userPayload.telefone).replace(/\D/g, '')
+  const normUserPhone = userPhone.startsWith('55') ? userPhone : '55' + userPhone
+  const payload = {
+    ...userPayload,
+    id: userPayload.id || null,
+    nome: userPayload.nome || '',
+    email: userPayload.email || '',
+    telefone: normUserPhone,
+    cpf: userPayload.cpf || userPayload.endereco?.cpf || '',
+    endereco: {
+      ...(userPayload.endereco || {}),
+      cpf: userPayload.cpf || userPayload.endereco?.cpf || '',
+      senha: userPayload.senha || userPayload.endereco?.senha || ''
+    }
+  }
+
+  // 1. Post to Webhook att-user
+  try {
+    const response = await fetch('https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/att-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    if (response.ok) {
+      const responseData = await response.json().catch(() => ({}))
+      if (responseData.status === 'erro' || responseData.status === 'error') {
+        console.error('[saveUserViaWebhook] Erro retornado pelo webhook:', responseData)
+      }
+    }
+  } catch (err) {
+    console.error('[saveUserViaWebhook] Exceção no webhook att-user:', err)
+  }
+
+  // 2. Also persist in database via upsertUser (strictly by id or telefone)
+  const saved = await upsertUser(payload)
+  return saved || payload
+}
 export async function upsertUser(user) {
   const raw = (user.telefone || '').replace(/@.*$/, '')
   if (!raw) { console.error('upsertUser: telefone vazio'); return null }
