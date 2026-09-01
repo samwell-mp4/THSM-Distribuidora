@@ -270,20 +270,24 @@ function App() {
     }
   }
   useEffect(() => {
-    supabase.from('usuarios').select('*').then(({ data }) => {
-      if (data?.length) {
-        safeSetItem(LS_USUARIOS, data)
-        setUsuarios(data)
-        const session = localStorage.getItem(LS_SESSAO)
-        if (session) {
-          const cur = JSON.parse(session)
-          if (cur && cur.telefone) {
-            const fresh = data.find(u => samePhone(u.telefone, cur.telefone))
-            if (fresh) setCurrentUser(fresh)
-          }
+    const session = localStorage.getItem(LS_SESSAO)
+    if (session) {
+      try {
+        const cur = JSON.parse(session)
+        if (cur && (cur.id || cur.telefone)) {
+          let q = supabase.from('usuarios').select('*')
+          if (cur.id) q = q.eq('id', cur.id)
+          else q = q.eq('telefone', normTel(cur.telefone))
+          q.maybeSingle().then(({ data }) => {
+            if (data && data.id) {
+              if (cur.id && data.id !== cur.id) return
+              if (cur.telefone && !samePhone(data.telefone, cur.telefone)) return
+              setCurrentUser(data)
+            }
+          }).catch(() => {})
         }
-      }
-    }).catch(() => {})
+      } catch {}
+    }
     fetchProductsDB()
     // Reenvia cadastros que falharam por falta de conexão
     ;(async () => {
@@ -329,26 +333,36 @@ function App() {
     setTimeout(() => setToast(null), 2500)
   }, [])
 
-  // produtosMerged removido, usando o state atualizado diretamente
-
-  const categorias = useMemo(() => ['TODOS', 'Encomendas da Empresa', ...[...new Set(produtosMerged.map(p => p.categoria))].sort()], [produtosMerged])
+  const categorias = useMemo(() => [
+    'TODOS',
+    'Encomendas da Empresa',
+    ...[...new Set((produtosMerged || []).map(p => p?.categoria).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'pt-BR'))
+  ], [produtosMerged])
 
   const filtered = useMemo(() => {
-    const term = search.toLowerCase().trim()
-    return produtosMerged.filter(p => {
-      if (term && !p.nome.toLowerCase().includes(term) && !p.categoria.toLowerCase().includes(term)) return false
+    const term = (search || '').toLowerCase().trim()
+    return (produtosMerged || []).filter(p => {
+      if (!p) return false
+      const nome = String(p.nome || '')
+      const cat = String(p.categoria || '')
+      if (term && !nome.toLowerCase().includes(term) && !cat.toLowerCase().includes(term)) return false
       if (categoria === 'Encomendas da Empresa') {
         if (!p.semDevolucao) return false
-      } else if (categoria !== 'TODOS' && p.categoria !== categoria) return false
-      if (p.preco < priceRange[0] || p.preco > priceRange[1]) return false
-      if (onlyInStock && p.estoque <= 0) return false
+      } else if (categoria !== 'TODOS' && cat !== categoria) return false
+      const preco = Number(p.preco) || 0
+      if (preco < priceRange[0] || preco > priceRange[1]) return false
+      if (onlyInStock && (Number(p.estoque) || 0) <= 0) return false
       return true
     }).sort((a, b) => {
+      const nameA = String(a?.nome || '')
+      const nameB = String(b?.nome || '')
+      const precoA = Number(a?.preco) || 0
+      const precoB = Number(b?.preco) || 0
       switch (sortBy) {
-        case 'preco-asc': return a.preco - b.preco
-        case 'preco-desc': return b.preco - a.preco
-        case 'nome-desc': return b.nome.localeCompare(a.nome, 'pt-BR')
-        default: return a.nome.localeCompare(b.nome, 'pt-BR')
+        case 'preco-asc': return precoA - precoB
+        case 'preco-desc': return precoB - precoA
+        case 'nome-desc': return nameB.localeCompare(nameA, 'pt-BR')
+        default: return nameA.localeCompare(nameB, 'pt-BR')
       }
     })
   }, [search, categoria, priceRange, onlyInStock, sortBy, produtosMerged])
@@ -538,11 +552,23 @@ function App() {
   }
 
   const saveRequiredAddress = async () => {
+    if (!currentUser || (!currentUser.id && !currentUser.telefone)) {
+      showToast('Sessão inválida. Faça login novamente.', 'error')
+      setShowAddressRequired(false)
+      setCurrentUser(null)
+      return
+    }
     const addr = addressRequiredEndereco
     if (!addr.cep || !addr.cidade || !addr.rua || !addr.numero) { showToast('Preencha CEP, cidade, rua e número', 'error'); return }
     setSavingAddress(true)
     try {
-      const updated = { ...currentUser, endereco: { ...(currentUser?.endereco || {}), ...addr } }
+      const updated = {
+        id: currentUser.id,
+        telefone: currentUser.telefone,
+        nome: currentUser.nome || '',
+        email: currentUser.email || '',
+        endereco: { ...(currentUser?.endereco || {}), ...addr }
+      }
       const saved = await upsertUser(updated)
       if (!saved) throw new Error('Erro ao salvar endereço no servidor')
       setCurrentUser(saved)

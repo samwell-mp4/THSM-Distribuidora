@@ -191,11 +191,15 @@ export function samePhone(a, b) {
   const nb = normalizePhoneDigits(b)
   if (na && nb && na === nb) return true
 
-  let da = String(a).replace(/\D/g, '').replace(/^55/, '')
-  let db = String(b).replace(/\D/g, '').replace(/^55/, '')
-  if (da.length === 10) da = da.slice(0, 2) + '9' + da.slice(2)
-  if (db.length === 10) db = db.slice(0, 2) + '9' + db.slice(2)
-  return da === db && da.length >= 8
+  const da = String(a).replace(/\D/g, '')
+  const db = String(b).replace(/\D/g, '')
+  if (da.length < 10 || db.length < 10) return false
+
+  let cleanA = da.replace(/^55/, '')
+  let cleanB = db.replace(/^55/, '')
+  if (cleanA.length === 10) cleanA = cleanA.slice(0, 2) + '9' + cleanA.slice(2)
+  if (cleanB.length === 10) cleanB = cleanB.slice(0, 2) + '9' + cleanB.slice(2)
+  return cleanA === cleanB && cleanA.length === 11
 }
 
 // ---- USERS ----
@@ -219,11 +223,13 @@ export async function upsertUser(user) {
   }
   if (user.id) dbUser.id = user.id
 
+  const onConflict = user.id ? 'id' : 'telefone'
+
   let lastError = null
   try {
     for (let attempt = 1; attempt <= 3; attempt++) {
-      const { data, error } = await supabase.from('usuarios').upsert(dbUser, { onConflict: 'telefone' }).select().single()
-      if (!error) return { ...user, ...data }
+      const { data, error } = await supabase.from('usuarios').upsert(dbUser, { onConflict }).select().single()
+      if (!error && data) return { ...user, ...data }
       lastError = error
       if (attempt < 3) await new Promise(r => setTimeout(r, 600 * attempt))
     }

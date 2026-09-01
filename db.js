@@ -503,12 +503,35 @@ export async function executeQuery(queryDesc) {
         return { data: isArray ? [] : null, error: null };
       }
 
-      // Fast-path: Explicit targeted UPDATE by phone number to prevent ON CONFLICT primary key collisions
-      if (!isArray && options.onConflict === 'telefone' && inputValues.telefone) {
-        const rawTel = String(inputValues.telefone).replace(/\D/g, '');
-        const normTel = rawTel.startsWith('55') ? rawTel : '55' + rawTel;
-        const rawTelNo55 = rawTel.replace(/^55/, '');
+      // Fast-path 1: Targeted UPDATE by primary key UUID "id" if present (prevents user cross-contamination)
+      if (!isArray && inputValues.id) {
+        const updateKeys = Object.keys(inputValues).filter(k => k !== 'id' && k !== 'created_at');
+        if (updateKeys.length > 0) {
+          const updateValues = [];
+          const setPhrases = updateKeys.map((k, i) => {
+            let val = inputValues[k];
+            if (typeof val === 'object' && val !== null) val = JSON.stringify(val);
+            updateValues.push(val);
+            return `"${k}" = $${i + 1}`;
+          });
+          updateValues.push(inputValues.id);
+          const updateSql = `UPDATE "${table}" SET ${setPhrases.join(', ')} WHERE "id" = $${updateValues.length} RETURNING *;`;
+          try {
+            const updateRes = await pool.query(updateSql, updateValues);
+            if (updateRes.rows && updateRes.rows.length > 0) {
+              let data = updateRes.rows[0];
+              if (single) data = Array.isArray(data) ? data[0] : data;
+              return { data, error: null };
+            }
+          } catch (err) {
+            console.error('Targeted UPDATE by ID error in upsert:', err.message);
+          }
+        }
+      }
 
+      // Fast-path 2: Targeted UPDATE by single normalized phone number if id is not present
+      if (!isArray && options.onConflict === 'telefone' && inputValues.telefone && !inputValues.id) {
+        const normTel = cleanAndNormalizePhone(inputValues.telefone);
         const updateKeys = Object.keys(inputValues).filter(k => k !== 'telefone' && k !== 'id' && k !== 'created_at');
         if (updateKeys.length > 0) {
           const updateValues = [];
@@ -519,9 +542,7 @@ export async function executeQuery(queryDesc) {
             return `"${k}" = $${i + 1}`;
           });
           updateValues.push(normTel);
-          updateValues.push(rawTelNo55);
-          const updateSql = `UPDATE "${table}" SET ${setPhrases.join(', ')} WHERE "telefone" = $${updateValues.length - 1} OR "telefone" = $${updateValues.length} RETURNING *;`;
-          
+          const updateSql = `UPDATE "${table}" SET ${setPhrases.join(', ')} WHERE "telefone" = $${updateValues.length} RETURNING *;`;
           try {
             const updateRes = await pool.query(updateSql, updateValues);
             if (updateRes.rows && updateRes.rows.length > 0) {
@@ -530,7 +551,7 @@ export async function executeQuery(queryDesc) {
               return { data, error: null };
             }
           } catch (err) {
-            console.error('Explicit UPDATE error in upsert:', err.message);
+            console.error('Targeted UPDATE by phone error in upsert:', err.message);
           }
         }
       }
