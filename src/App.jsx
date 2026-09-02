@@ -7,7 +7,6 @@ import LandingPage from './pages/LandingPage'
 import { supabase, upsertOrder, upsertUser, saveUserViaWebhook, generateLoginToken, consumeLoginToken, flushPendingOrders, normTel, samePhone } from './lib/supabase'
 import './App.css'
 
-const LS_USUARIOS = 'thsm_usuarios'
 const LS_SESSAO = 'thsm_sessao'
 const LS_ORDERS = 'thsm_admin_orders'
 const LS_ADMIN = 'thsm_admin_auth'
@@ -64,10 +63,6 @@ function App() {
   const [forceOrderLogin, setForceOrderLogin] = useState(false)
   const [showNomeObrigatorio, setShowNomeObrigatorio] = useState(false)
   const [nomeObrigatorioValue, setNomeObrigatorioValue] = useState('')
-  const [savingNome, setSavingNome] = useState(false)
-  const [usuarios, setUsuarios] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(LS_USUARIOS)) || [] } catch { return [] }
-  })
   const [currentUser, setCurrentUser] = useState(() => {
     try { const d = localStorage.getItem(LS_SESSAO); return d ? JSON.parse(d) : null } catch { return null }
   })
@@ -217,17 +212,9 @@ function App() {
     }
   }
 
-  // Auth
-
-  useEffect(() => { safeSetItem(LS_USUARIOS, usuarios) }, [usuarios])
-  useEffect(() => { if (currentUser) safeSetItem(LS_SESSAO, currentUser); else localStorage.removeItem(LS_SESSAO) }, [currentUser])
   useEffect(() => {
-    if (currentUser) {
-      setUsuarios(prev => {
-        if (!prev || prev.length === 0) return [currentUser]
-        return prev.map(u => samePhone(u.telefone, currentUser.telefone) ? currentUser : u)
-      })
-    }
+    localStorage.removeItem('thsm_usuarios')
+    if (currentUser) safeSetItem(LS_SESSAO, currentUser); else localStorage.removeItem(LS_SESSAO)
   }, [currentUser])
 
   useEffect(() => {
@@ -385,28 +372,28 @@ function App() {
 
   // --- Auth ---
   const fazerLogin = async () => {
+    const isEmailInput = loginEmail.includes('@')
     let user = null
-    if (loginEmail.includes('@')) {
-      user = usuarios.find(u => u.email === loginEmail)
-      if (!user) {
-        const { data } = await supabase.from('usuarios').select('*').ilike('email', loginEmail).maybeSingle()
-        user = data
-      }
+
+    if (isEmailInput) {
+      const emailClean = loginEmail.trim().toLowerCase()
+      const { data, error } = await supabase.from('usuarios').select('*').ilike('email', emailClean).maybeSingle()
+      if (!error && data) user = data
     } else {
-      const raw = loginEmail.replace(/\D/g, '')
-      user = usuarios.find(u => samePhone(u.telefone, raw))
-      if (!user) {
-        const norm = normTel(raw)
-        const rawOnly = norm.replace(/^55/, '')
-        const { data } = await supabase.from('usuarios').select('*').or(`telefone.eq.${norm},telefone.eq.${rawOnly}`).maybeSingle()
-        user = data
+      const norm = normTel(loginEmail)
+      const rawOnly = norm.replace(/^55/, '')
+      if (norm) {
+        const { data, error } = await supabase.from('usuarios').select('*').or(`telefone.eq.${norm},telefone.eq.${rawOnly}`).maybeSingle()
+        if (!error && data) user = data
       }
     }
 
     if (!user) { showToast('Login não existe ou incorreto', 'error'); return }
     const senha = user.endereco?.senha
     if (senha && loginSenha !== senha) { showToast('Senha incorreta', 'error'); return }
+
     setCurrentUser(user)
+    safeSetItem(LS_SESSAO, user)
     setShowLogin(false)
     setLoginEmail('')
     setLoginSenha('')
@@ -429,29 +416,41 @@ function App() {
     if (!telefone && !isEmailInput) { showToast('Telefone inválido', 'error'); return }
     if (telefone && telefone.replace(/\D/g, '').length < 11) { showToast('Telefone inválido (informe DDD + número)', 'error'); return }
     if (!loginNome.trim()) { showToast('Informe seu nome completo', 'error'); return }
-    
-    if (telefone && usuarios.find(u => samePhone(u.telefone, telefone))) {
-      showToast('Telefone já cadastrado. Faça login.', 'error')
-      setIsRegistering(false)
-      return
+    if (!loginSenha) { showToast('Informe uma senha para sua conta', 'error'); return }
+
+    if (telefone) {
+      const rawOnly = telefone.replace(/^55/, '')
+      const { data: existing } = await supabase.from('usuarios').select('*').or(`telefone.eq.${telefone},telefone.eq.${rawOnly}`).maybeSingle()
+      if (existing) {
+        showToast('Telefone já cadastrado. Faça login.', 'error')
+        setIsRegistering(false)
+        return
+      }
+    } else if (isEmailInput) {
+      const { data: existing } = await supabase.from('usuarios').select('*').ilike('email', loginEmail.trim()).maybeSingle()
+      if (existing) {
+        showToast('E-mail já cadastrado. Faça login.', 'error')
+        setIsRegistering(false)
+        return
+      }
     }
 
     const nome = loginNome.trim()
     const payload = {
       telefone,
       nome,
-      email: isEmailInput ? loginEmail : '',
+      email: isEmailInput ? loginEmail.trim() : '',
       endereco: { senha: loginSenha || '', origem: 'Registro do Site' }
     }
 
-    const saved = await upsertUser(payload)
-    if (!saved) {
-      showToast('Erro ao criar cadastro. Tente novamente.', 'error')
+    const saved = await saveUserViaWebhook(payload)
+    if (!saved || (!saved.id && !saved.telefone)) {
+      showToast('Erro ao criar cadastro no banco de dados. Tente novamente.', 'error')
       return
     }
 
-    setUsuarios(prev => prev.some(u => samePhone(u.telefone, saved.telefone)) ? prev.map(u => samePhone(u.telefone, saved.telefone) ? saved : u) : [...prev, saved])
     setCurrentUser(saved)
+    safeSetItem(LS_SESSAO, saved)
     setShowLogin(false)
     setLoginEmail('')
     setLoginSenha('')
@@ -477,42 +476,36 @@ function App() {
 
   const requestPasswordRecover = async () => {
     const raw = forgotPhone.replace(/\D/g, '')
-    const telefone = raw.startsWith('55') ? raw : '55' + raw
-    if (!telefone || telefone.replace(/\D/g, '').length < 11) { showToast('Telefone inválido', 'error'); return }
+    const telefone = normTel(raw)
+    const rawOnly = telefone.replace(/^55/, '')
+    if (!telefone || raw.length < 10) { showToast('Informe um telefone válido', 'error'); return }
 
-    let user = usuarios.find(u => u.telefone === telefone)
-    if (!user) {
-      const { data } = await supabase.from('usuarios').select('*').eq('telefone', telefone).maybeSingle()
-      if (!data) { showToast('Telefone não cadastrado', 'error'); return }
-      user = data
-    }
+    const { data: user } = await supabase.from('usuarios').select('*').or(`telefone.eq.${telefone},telefone.eq.${rawOnly}`).maybeSingle()
+    if (!user) { showToast('Telefone não encontrado no sistema', 'error'); return }
 
-    const token = await generateLoginToken(telefone)
-    if (!token) { showToast('Erro ao gerar link de recuperação', 'error'); return }
-
-    const recoveryLink = `${window.location.origin}${window.location.pathname}?recover=${token}`
-    const nome = user.nome || 'Cliente'
-    const userEmail = user.email || ''
-    const baseMsg = `Olá, ${nome}! Recebemos seu pedido de recuperação de senha.\n\nClique no link abaixo para definir uma nova senha:\n${recoveryLink}\n\nEste link é válido por 24 horas.`
-
-    fetch(WEBHOOK_RECOVER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        event: 'recuperar-senha',
-        telefone,
-        nome,
-        email: userEmail,
-        recoveryLink,
-        whatsappMessage: baseMsg,
-        emailSubject: 'Recuperação de senha - THSM Distribuidora',
-        emailMessage: userEmail ? baseMsg : ''
+    setSendingRecover(true)
+    try {
+      const token = await generateLoginToken(user.telefone)
+      const res = await fetch(WEBHOOK_RECOVER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telefone: user.telefone,
+          nome: user.nome,
+          token,
+          link_recuperacao: `${window.location.origin}/?recover=${token}`
+        })
       })
-    }).catch(() => {})
-
-    showToast(userEmail ? 'Link enviado por WhatsApp e e-mail!' : 'Link enviado via WhatsApp!')
-    setShowForgotPassword(false)
-    setForgotPhone('')
+      if (!res.ok) throw new Error('Falha no envio')
+      showToast('Instruções enviadas para seu WhatsApp!')
+      setShowForgot(false)
+      setForgotPhone('')
+    } catch (e) {
+      console.error('Erro ao enviar recuperação:', e)
+      showToast('Erro ao enviar mensagens. Tente novamente.', 'error')
+    } finally {
+      setSendingRecover(false)
+    }
   }
 
   const saveNewPassword = async () => {
@@ -521,22 +514,26 @@ function App() {
       return
     }
 
-    let user = usuarios.find(u => u.telefone === recoverTelefone)
-    if (user) {
-      const updated = { ...user, endereco: { ...(user.endereco || {}), senha: recoverNewPassword } }
-      const saved = await upsertUser({ id: user.id, telefone: recoverTelefone, nome: user.nome, email: user.email || '', endereco: updated.endereco })
-      if (!saved) { showToast('Erro ao salvar nova senha no servidor. Tente novamente.', 'error'); return }
-      setUsuarios(prev => prev.map(u => u.telefone === recoverTelefone ? updated : u))
-    } else {
-      const { data } = await supabase.from('usuarios').select('*').eq('telefone', recoverTelefone).maybeSingle()
-      if (data) {
-        const saved = await upsertUser({ id: data.id, telefone: recoverTelefone, nome: data.nome, email: data.email || '', endereco: { ...(data.endereco || {}), senha: recoverNewPassword } })
-        if (!saved) { showToast('Erro ao salvar nova senha no servidor. Tente novamente.', 'error'); return }
-      } else {
-        showToast('Usuário não encontrado', 'error')
-        return
-      }
+    const norm = normTel(recoverTelefone)
+    const rawOnly = norm.replace(/^55/, '')
+    const { data: user } = await supabase.from('usuarios').select('*').or(`telefone.eq.${norm},telefone.eq.${rawOnly}`).maybeSingle()
+
+    if (!user) {
+      showToast('Usuário não encontrado', 'error')
+      return
     }
+
+    const payload = {
+      ...user,
+      id: user.id,
+      telefone: user.telefone,
+      nome: user.nome,
+      email: user.email || '',
+      endereco: { ...(user.endereco || {}), senha: recoverNewPassword }
+    }
+
+    const saved = await saveUserViaWebhook(payload)
+    if (!saved) { showToast('Erro ao salvar nova senha no servidor. Tente novamente.', 'error'); return }
 
     showToast('Senha redefinida com sucesso! Faça login com sua nova senha.')
     setShowRecoverPassword(false)
@@ -614,17 +611,13 @@ function App() {
     const telefone = normTel(customer.telefone)
     if (!telefone) { showToast('Informe seu telefone', 'error'); return null }
 
-    // Já logado na sessão atual: usa a conta direto sem pedir senha de novo
     if (currentUser && samePhone(currentUser.telefone, telefone)) {
       return currentUser
     }
 
-    let existente = usuarios.find(u => samePhone(u.telefone, telefone))
-    if (!existente) {
-      const rawOnly = telefone.replace(/^55/, '')
-      const { data } = await supabase.from('usuarios').select('*').or(`telefone.eq.${telefone},telefone.eq.${rawOnly}`).maybeSingle()
-      if (data) existente = data
-    }
+    const rawOnly = telefone.replace(/^55/, '')
+    const { data: existente } = await supabase.from('usuarios').select('*').or(`telefone.eq.${telefone},telefone.eq.${rawOnly}`).maybeSingle()
+
     if (existente) {
       const senha = existente.endereco?.senha
       if (senha && customer.senha && customer.senha !== senha) { showToast('Senha incorreta', 'error'); return null }
@@ -638,27 +631,27 @@ function App() {
         email: customer.email || existente.email || '',
         endereco: { ...endereco, cpf: customer.cpf || existente.cpf || endereco.cpf || '' }
       }
-      const saved = await upsertUser(payload)
+      const saved = await saveUserViaWebhook(payload)
       if (!saved) {
         showToast('Erro ao atualizar seus dados cadastrais. Tente novamente.', 'error')
         return null
       }
-      setUsuarios(prev => prev.some(u => samePhone(u.telefone, saved.telefone)) ? prev.map(u => samePhone(u.telefone, saved.telefone) ? saved : u) : [...prev, saved])
       setCurrentUser(saved)
+      safeSetItem(LS_SESSAO, saved)
       return saved
     }
 
     if (!customer.senha) { showToast('Escolha uma senha', 'error'); return null }
     try {
-      const saved = await upsertUser({
+      const saved = await saveUserViaWebhook({
         telefone,
-        nome: customer.nome,
+        nome: customer.nome || 'Cliente',
         email: customer.email || '',
         endereco: { ...(customer.endereco || {}), cpf: customer.cpf, senha: customer.senha, origem: 'Registro do Site' }
       })
       if (!saved) { showToast('Erro ao criar cadastro', 'error'); return null }
-      setUsuarios(prev => [...prev, saved])
       setCurrentUser(saved)
+      safeSetItem(LS_SESSAO, saved)
       return saved
     } catch (e) {
       console.error('Erro autoLoginOuRegistro:', e)
