@@ -275,6 +275,7 @@ export async function initDb() {
     await client.query('COMMIT');
     console.log('Database schema checked/created successfully.');
     await normalizeUserPhones(client);
+    await reconcileOrdersUsersDb(client);
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Failed to initialize database schema:', err.message);
@@ -333,6 +334,100 @@ async function normalizeUserPhones(client) {
     }
   } catch (err) {
     console.error('Failed to normalize user phones:', err.message);
+  }
+}
+
+export async function reconcileOrdersUsersDb(clientOrPool = pool) {
+  console.log('Reconciling orders without user_id with users table...');
+  try {
+    const { rows: ordersWithoutUser } = await clientOrPool.query(`
+      SELECT id, data FROM pedidos WHERE user_id IS NULL
+    `);
+
+    if (!ordersWithoutUser || ordersWithoutUser.length === 0) {
+      console.log('No orders missing user_id found.');
+      return { totalSemId: 0, vinculados: 0, novosUsuarios: 0, pedidosAtualizados: 0 };
+    }
+
+    const { rows: allUsers } = await clientOrPool.query('SELECT id, telefone FROM usuarios');
+    const phoneToUser = new Map();
+    for (const u of allUsers) {
+      const p = cleanAndNormalizePhone(u.telefone);
+      if (p) phoneToUser.set(p, u);
+    }
+
+    let vinculados = 0;
+    let novosUsuarios = 0;
+    let pedidosAtualizados = 0;
+
+    for (const ord of ordersWithoutUser) {
+      const d = ord.data || {};
+      const rawTel = d.customer?.telefone || d.telefone || d.phone || d.whatsapp;
+      const normTel = cleanAndNormalizePhone(rawTel);
+
+      if (!normTel) continue;
+
+      let user = phoneToUser.get(normTel);
+      if (!user) {
+        // Create user in usuarios table
+        const nome = (d.customer?.nome || d.nome || 'Cliente').trim();
+        const endereco = d.customer?.endereco || d.endereco || {};
+        const cpf = d.customer?.cpf || d.cpf || endereco.cpf || '';
+        const email = d.customer?.email || d.email || '';
+
+        const fullEndereco = {
+          ...endereco,
+          cpf,
+          origem: 'Importado de Pedido'
+        };
+
+        const insertUserRes = await clientOrPool.query(`
+          INSERT INTO usuarios (telefone, nome, email, endereco)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (telefone) DO UPDATE SET
+            nome = CASE WHEN usuarios.nome = '' OR usuarios.nome = 'Cliente' THEN EXCLUDED.nome ELSE usuarios.nome END
+          RETURNING id, telefone
+        `, [normTel, nome, email, JSON.stringify(fullEndereco)]);
+
+        if (insertUserRes.rows && insertUserRes.rows.length > 0) {
+          user = insertUserRes.rows[0];
+          phoneToUser.set(normTel, user);
+          novosUsuarios++;
+        }
+      } else {
+        vinculados++;
+      }
+
+      if (user && user.id) {
+        const updatedData = {
+          ...d,
+          user_id: user.id,
+          customer: {
+            ...(d.customer || {}),
+            user_id: user.id
+          }
+        };
+
+        await clientOrPool.query(`
+          UPDATE pedidos
+          SET user_id = $1, data = $2
+          WHERE id = $3
+        `, [user.id, JSON.stringify(updatedData), ord.id]);
+
+        pedidosAtualizados++;
+      }
+    }
+
+    console.log(`Reconciliation complete: ${pedidosAtualizados} orders reconciled (${vinculados} existing users, ${novosUsuarios} new users created).`);
+    return {
+      totalSemId: ordersWithoutUser.length,
+      vinculados,
+      novosUsuarios,
+      pedidosAtualizados
+    };
+  } catch (err) {
+    console.error('Failed to reconcile orders with users:', err.message);
+    return { error: err.message };
   }
 }
 

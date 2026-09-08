@@ -1,7 +1,7 @@
 import express from 'express'
 import fs from 'fs'
 import path from 'path'
-import { initDb, executeQuery, restoreDbData, pool } from './db.js'
+import { initDb, executeQuery, restoreDbData, pool, reconcileOrdersUsersDb } from './db.js'
 
 // Initialize database schema
 initDb().catch(err => console.error('Database initialization error:', err));
@@ -122,6 +122,17 @@ app.get('/api/restore-db', async (req, res) => {
     res.json({ success: true, results })
   } catch (err) {
     console.error('API /api/restore-db error:', err.message)
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+// Endpoint to reconcile orders missing user_id
+app.all('/api/reconcile-orders', async (req, res) => {
+  try {
+    const result = await reconcileOrdersUsersDb()
+    res.json({ success: true, result })
+  } catch (err) {
+    console.error('API /api/reconcile-orders error:', err.message)
     res.status(500).json({ success: false, error: err.message })
   }
 })

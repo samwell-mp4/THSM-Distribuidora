@@ -606,6 +606,111 @@ export async function syncContatosToUsuarios(contatos) {
   return batch.length
 }
 
+// ---- RECONCILIAÇÃO DE PEDIDOS COM USUÁRIOS ----
+export async function reconcileOrdersUsers() {
+  try {
+    // 0. Tentar fast-path via endpoint no servidor
+    try {
+      const res = await fetch('/api/reconcile-orders')
+      if (res.ok) {
+        const json = await res.json()
+        if (json.success && json.result && !json.result.error) {
+          return json.result
+        }
+      }
+    } catch {}
+
+    // 1. Buscar todos os pedidos sem user_id
+    const { data: rawOrders } = await supabase.from('pedidos').select('*')
+    const allUsers = await getAllUsers()
+    
+    // Mapear telefones normalizados para usuários existentes
+    const userByPhone = new Map()
+    allUsers.forEach(u => {
+      const p = normalizePhoneDigits(u.telefone)
+      if (p) userByPhone.set(p, u)
+    })
+
+    const semUserId = (rawOrders || []).filter(o => !o.user_id)
+    if (semUserId.length === 0) {
+      return { totalSemId: 0, vinculados: 0, novosUsuarios: 0, pedidosAtualizados: 0 }
+    }
+
+    let vinculados = 0
+    let novosUsuarios = 0
+    let pedidosAtualizados = 0
+
+    // Agrupar pedidos por telefone normalizado
+    for (const ord of semUserId) {
+      const d = ord.data || {}
+      const rawTel = d.customer?.telefone || d.telefone || d.phone || d.whatsapp
+      const normTel = normalizePhoneDigits(rawTel)
+
+      if (!normTel) continue
+
+      let user = userByPhone.get(normTel)
+      if (!user) {
+        // Criar usuário no banco se ainda não existir
+        const nomeCliente = d.customer?.nome || d.nome || 'Cliente'
+        const enderecoCliente = d.customer?.endereco || d.endereco || {}
+        const cpfCliente = d.customer?.cpf || d.cpf || ''
+
+        const newUserPayload = {
+          telefone: normTel,
+          nome: nomeCliente,
+          email: d.customer?.email || d.email || '',
+          cpf: cpfCliente,
+          endereco: {
+            ...enderecoCliente,
+            cpf: cpfCliente,
+            origem: 'Importado de Pedido'
+          }
+        }
+
+        const createdUser = await upsertUser(newUserPayload)
+        if (createdUser && createdUser.id) {
+          user = createdUser
+          userByPhone.set(normTel, user)
+          novosUsuarios++
+        }
+      } else {
+        vinculados++
+      }
+
+      if (user && user.id) {
+        // Atualizar pedido no banco com user_id
+        const updatedData = {
+          ...d,
+          user_id: user.id,
+          customer: {
+            ...(d.customer || {}),
+            user_id: user.id
+          }
+        }
+
+        const { error: errUpdate } = await supabase.from('pedidos').update({
+          user_id: user.id,
+          data: updatedData
+        }).eq('id', ord.id)
+
+        if (!errUpdate) {
+          pedidosAtualizados++
+        }
+      }
+    }
+
+    return {
+      totalSemId: semUserId.length,
+      vinculados,
+      novosUsuarios,
+      pedidosAtualizados
+    }
+  } catch (err) {
+    console.error('Erro na conciliação de pedidos com usuários:', err)
+    return { error: err.message }
+  }
+}
+
 // ---- LEADS ----
 export async function getAllLeads() {
   const { data } = await supabase.from('leads').select('*').order('created_at', { ascending: false })

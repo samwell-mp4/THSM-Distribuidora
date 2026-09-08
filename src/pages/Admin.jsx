@@ -5,7 +5,7 @@ import {
   deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads,
   upsertProducts, upsertDespesas, generateLoginToken, getAllRotaEdits, upsertRotaEdits, deleteRotaEdit as supabaseDeleteRotaEdit,
   deleteProducts as supabaseDeleteProducts, flushPendingOrders, deleteOnlyFinancialByOrder, samePhone, normTel, normalizePhoneDigits,
-  formatImageUrl
+  formatImageUrl, reconcileOrdersUsers
 } from '../lib/supabase'
 import { compressImageDataUrl, capPhotoSize } from '../lib/image'
 
@@ -637,7 +637,42 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [showKitModal, setShowKitModal] = useState(false)
   const [editingKit, setEditingKit] = useState(null)
   // States removidos: newProducts, deletedProdIds
-  const PROD_PER_PAGE = 20
+  const [reconcilingOrders, setReconcilingOrders] = useState(false)
+
+  const handleReconcileOrders = async () => {
+    if (reconcilingOrders) return
+    setReconcilingOrders(true)
+    showToast('Iniciando conciliação de pedidos...')
+    try {
+      const res = await reconcileOrdersUsers()
+      if (res.error) {
+        showToast(`Erro na conciliação: ${res.error}`, 'error')
+      } else if (res.pedidosAtualizados === 0 && res.totalSemId === 0) {
+        showToast('Todos os pedidos já possuem ID de usuário vinculado!')
+      } else {
+        showToast(`Conciliados ${res.pedidosAtualizados} pedido(s)! (${res.novosUsuarios} novos usuários cadastrados)`)
+        // Atualiza pedidos e usuários na tela
+        const [o, u] = await Promise.all([
+          supabase.from('pedidos').select('*'),
+          getAllUsers()
+        ])
+        if (o.data) {
+          const fixed = o.data.map(r => r.data && typeof r.data === 'object' ? { ...r.data, user_id: r.user_id, status: r.status } : r)
+          setOrders(fixed)
+          LS.set(STORAGE_ORDERS, fixed)
+        }
+        if (u) {
+          setUsuarios(u)
+          LS.set('thsm_usuarios', u)
+        }
+      }
+    } catch (e) {
+      console.error(e)
+      showToast('Erro ao conciliar pedidos.', 'error')
+    } finally {
+      setReconcilingOrders(false)
+    }
+  }
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type })
@@ -2491,6 +2526,9 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                     </button>
                   </span>
                 )}
+                <button className="admin-btn admin-btn-sec" disabled={reconcilingOrders} onClick={handleReconcileOrders} title="Localiza pedidos sem ID e vincula aos usuários existentes ou cadastra os novos clientes">
+                  <i className={`fa-solid ${reconcilingOrders ? 'fa-spinner fa-spin' : 'fa-link'}`}></i> {reconcilingOrders ? 'Conciliando...' : 'Conciliar Clientes/Pedidos'}
+                </button>
                 <button className="admin-btn admin-btn-primary" onClick={() => setShowAddOrder(true)}>
                   <i className="fa-solid fa-plus"></i> Novo Pedido
                 </button>
