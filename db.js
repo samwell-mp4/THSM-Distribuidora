@@ -265,6 +265,13 @@ export async function initDb() {
       $$ LANGUAGE plpgsql;
     `);
 
+    // 8. Normalizar caminhos de imagem locais
+    await client.query(`
+      UPDATE produtos 
+      SET imagem = '/fotos/' || regexp_replace(imagem, '^.*/', '') 
+      WHERE imagem LIKE '%minharota.net%'
+    `);
+
     await client.query('COMMIT');
     console.log('Database schema checked/created successfully.');
     await normalizeUserPhones(client);

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { formatImageUrl } from '../lib/supabase'
 
 function formatPreco(v) {
   return `R$ ${Number(v).toFixed(2).replace('.', ',')}`
@@ -52,7 +53,7 @@ export default function KitPage({ kit, produtos, onVoltar }) {
               <div key={p.id} className="kit-card" style={{ animationDelay: `${i * 40}ms` }}>
                 <div className="kit-card-img">
                   {p.imagem ? (
-                    <img src={p.imagem} alt={p.nome} loading="lazy" onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex' }} />
+                    <img src={formatImageUrl(p.imagem)} alt={p.nome} loading="lazy" onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex' }} />
                   ) : null}
                   <div className="kit-card-img-fallback" style={{ display: p.imagem ? 'none' : 'flex' }}>
                     <i className="fa-solid fa-image"></i>

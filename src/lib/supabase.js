@@ -739,3 +739,16 @@ export async function syncAllForAdmin() {
     rotaEdits: rotaEdits.status === 'fulfilled' ? rotaEdits.value : []
   }
 }
+
+export function formatImageUrl(url) {
+  if (!url || typeof url !== 'string') return ''
+  const trimmed = url.trim()
+  if (!trimmed) return ''
+  if (trimmed.startsWith('data:')) return trimmed
+  if (trimmed.includes('minharota.net/controller/fotos/')) {
+    const filename = trimmed.substring(trimmed.lastIndexOf('/') + 1)
+    return `/fotos/${filename}`
+  }
+  return trimmed
+}
+

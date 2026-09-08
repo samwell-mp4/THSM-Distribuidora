@@ -4,7 +4,8 @@ import {
   supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser,
   deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads,
   upsertProducts, upsertDespesas, generateLoginToken, getAllRotaEdits, upsertRotaEdits, deleteRotaEdit as supabaseDeleteRotaEdit,
-  deleteProducts as supabaseDeleteProducts, flushPendingOrders, deleteOnlyFinancialByOrder, samePhone, normTel, normalizePhoneDigits
+  deleteProducts as supabaseDeleteProducts, flushPendingOrders, deleteOnlyFinancialByOrder, samePhone, normTel, normalizePhoneDigits,
+  formatImageUrl
 } from '../lib/supabase'
 import { compressImageDataUrl, capPhotoSize } from '../lib/image'
 
@@ -2804,7 +2805,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                       </div>
                       <div className="admin-prod-card-img" onClick={() => setEditingProd(p)}>
                         {p.imagem && !prodImageErrors[p.id] ? (
-                          <img src={p.imagem} alt={p.nome} loading="lazy" onError={() => toggleProdImageError(p.id)} />
+                          <img src={formatImageUrl(p.imagem)} alt={p.nome} loading="lazy" onError={() => toggleProdImageError(p.id)} />
                         ) : (
                           <div className="admin-prod-card-img-fallback"><i className="fa-solid fa-image"></i></div>
                         )}
@@ -2880,7 +2881,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                           </td>
                           <td>
                             <div className="prod-thumb">
-                              {p.imagem ? <img src={p.imagem} alt={p.nome} /> : <i className="fa-solid fa-image"></i>}
+                              {p.imagem ? <img src={formatImageUrl(p.imagem)} alt={p.nome} /> : <i className="fa-solid fa-image"></i>}
                             </div>
                           </td>
                           <td className="td-prod-name">{p.nome}{p.semDevolucao && <span className="prod-nodev-tag">SEM DEVOLUÇÃO</span>}</td>
@@ -2947,7 +2948,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                     {prodCartItems.map(item => (
                       <div key={item.id} className="admin-cart-item">
                         <div className="admin-cart-item-img">
-                          {item.imagem ? <img src={item.imagem} alt={item.nome} /> : <i className="fa-solid fa-image"></i>}
+                          {item.imagem ? <img src={formatImageUrl(item.imagem)} alt={item.nome} /> : <i className="fa-solid fa-image"></i>}
                         </div>
                         <div className="admin-cart-item-info">
                           <span className="admin-cart-item-name">{item.nome}</span>

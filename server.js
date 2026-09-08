@@ -1,4 +1,6 @@
 import express from 'express'
+import fs from 'fs'
+import path from 'path'
 import { initDb, executeQuery, restoreDbData, pool } from './db.js'
 
 // Initialize database schema
@@ -7,6 +9,72 @@ initDb().catch(err => console.error('Database initialization error:', err));
 const app = express()
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ limit: '50mb', extended: true }))
+
+// Image static serving and upstream proxy fallback
+const FOTOS_DIR = path.resolve('public/fotos')
+if (!fs.existsSync(FOTOS_DIR)) {
+  fs.mkdirSync(FOTOS_DIR, { recursive: true })
+}
+
+const handleImageRequest = async (req, res) => {
+  try {
+    const filename = req.params.filename
+    if (!filename || !/^[a-zA-Z0-9_\-\.]+$/.test(filename)) {
+      return res.status(400).send('Invalid image name')
+    }
+
+    const localFile = path.join(FOTOS_DIR, filename)
+
+    // 1. Return from disk if present
+    if (fs.existsSync(localFile)) {
+      const stat = fs.statSync(localFile)
+      if (stat.size > 200) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+        res.setHeader('Content-Type', filename.endsWith('.webp') ? 'image/webp' : 'image/jpeg')
+        return fs.createReadStream(localFile).pipe(res)
+      }
+    }
+
+    // 2. Fetch upstream from Minha Rota with required Referer
+    const upstreamUrl = `https://thsmdistribuidora.minharota.net/controller/fotos/${filename}`
+    const upstreamRes = await fetch(upstreamUrl, {
+      headers: {
+        'Referer': 'https://thsmdistribuidora.minharota.net/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    })
+
+    if (!upstreamRes.ok) {
+      return res.status(upstreamRes.status).send('Imagem não encontrada')
+    }
+
+    const contentType = upstreamRes.headers.get('content-type') || (filename.endsWith('.webp') ? 'image/webp' : 'image/jpeg')
+    const buffer = Buffer.from(await upstreamRes.arrayBuffer())
+
+    if (buffer.length > 200) {
+      fs.writeFile(localFile, buffer, (err) => {
+        if (err) console.error('Error caching image to public/fotos:', err)
+      })
+      // Also write to dist/fotos if dist exists
+      const distFile = path.resolve('dist/fotos', filename)
+      if (fs.existsSync(path.resolve('dist/fotos'))) {
+        fs.writeFile(distFile, buffer, () => {})
+      }
+    }
+
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+    res.setHeader('Content-Type', contentType)
+    res.send(buffer)
+  } catch (err) {
+    console.error('Image proxy error:', err.message)
+    res.status(502).send('Error retrieving image')
+  }
+}
+
+app.get('/fotos/:filename', handleImageRequest)
+app.get('/api/foto/:filename', handleImageRequest)
+app.get('/controller/fotos/:filename', handleImageRequest)
+
 
 // GET API endpoint for fluxo_whatsapp (PostgREST / Supabase REST compatibility & API endpoint)
 const handleFluxoWhatsappQuery = async (req, res) => {

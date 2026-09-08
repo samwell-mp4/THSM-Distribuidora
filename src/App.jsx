@@ -4,7 +4,7 @@ import AddressForm from './components/AddressForm'
 import UserDashboard from './pages/UserDashboard'
 import KitPage from './pages/KitPage'
 import LandingPage from './pages/LandingPage'
-import { supabase, upsertOrder, upsertUser, saveUserViaWebhook, generateLoginToken, consumeLoginToken, flushPendingOrders, normTel, samePhone } from './lib/supabase'
+import { supabase, upsertOrder, upsertUser, saveUserViaWebhook, generateLoginToken, consumeLoginToken, flushPendingOrders, normTel, samePhone, formatImageUrl } from './lib/supabase'
 import './App.css'
 
 const LS_SESSAO = 'thsm_sessao'
@@ -956,7 +956,7 @@ function App() {
                 <div key={p.id} className="card" style={{ animationDelay: `${(i % ITEMS_PER_PAGE) * 25}ms` }}>
                   <div className="card-img" onClick={() => setSelected(p)}>
                     {p.imagem && !imageErrors[p.id] ? (
-                      <img src={p.imagem} alt={p.nome} loading="lazy" onError={() => handleImageError(p.id)} />
+                      <img src={formatImageUrl(p.imagem)} alt={p.nome} loading="lazy" onError={() => handleImageError(p.id)} />
                     ) : (
                       <div className="card-img-fallback"><i className="fa-solid fa-image"></i></div>
                     )}
@@ -1010,7 +1010,7 @@ function App() {
               <button className="modal-close" onClick={() => { setSelected(null); setSelectedVariants(prev => { const { [selected.id]: _, ...rest } = prev; return rest }) }}><i className="fa-solid fa-xmark"></i></button>
             <div className="modal-img">
               {selected.imagem && !imageErrors[selected.id] ? (
-                <img src={selected.imagem} alt={selected.nome} onError={() => handleImageError(selected.id)} />
+                <img src={formatImageUrl(selected.imagem)} alt={selected.nome} onError={() => handleImageError(selected.id)} />
               ) : (
                 <div className="modal-img-fallback"><i className="fa-solid fa-image"></i></div>
               )}
@@ -1107,7 +1107,7 @@ function App() {
                     <div key={item.cartKey || item.id} className="cart-item">
                       <div className="cart-item-img">
                         {item.imagem && !imageErrors[item.id]
-                          ? <img src={item.imagem} alt={item.nome} onError={() => handleImageError(item.id)} />
+                          ? <img src={formatImageUrl(item.imagem)} alt={item.nome} onError={() => handleImageError(item.id)} />
                           : <div className="cart-item-img-fallback"><i className="fa-solid fa-image"></i></div>}
                       </div>
                       <div className="cart-item-info">
@@ -1145,7 +1145,7 @@ function App() {
                         <div key={p.id} className="cart-related-item">
                           <div className="cart-related-img">
                             {p.imagem
-                              ? <img src={p.imagem} alt={p.nome} onError={e => { e.target.style.display = 'none' }} />
+                              ? <img src={formatImageUrl(p.imagem)} alt={p.nome} onError={e => { e.target.style.display = 'none' }} />
                               : <i className="fa-solid fa-box"></i>}
                           </div>
                           <div className="cart-related-info">
