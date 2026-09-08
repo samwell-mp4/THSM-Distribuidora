@@ -65,6 +65,20 @@ function formatDate(str) {
   return d.toLocaleDateString('pt-BR')
 }
 
+function getOrderTime(o) {
+  if (!o) return 0
+  if (typeof o.createdAt === 'number') return o.createdAt
+  if (o.created_at) {
+    const t = new Date(o.created_at).getTime()
+    if (!isNaN(t)) return t
+  }
+  if (o.date) {
+    const t = new Date(o.date + 'T12:00:00').getTime()
+    if (!isNaN(t)) return t
+  }
+  return Number(o.id) || 0
+}
+
 function diffDays(a, b) {
   return Math.floor((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / (1000 * 60 * 60 * 24))
 }
@@ -1572,7 +1586,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const userOrdersDetail = useMemo(() => {
     if (!selectedUserDetail) return []
     return orders.filter(o => o.customer?.telefone === selectedUserDetail.telefone || o.user_id === selectedUserDetail.id)
-      .sort((a, b) => (b.createdAt || b.date || 0) - (a.createdAt || a.date || 0))
+      .sort((a, b) => getOrderTime(b) - getOrderTime(a))
   }, [orders, selectedUserDetail])
 
   const rotaDeTelefone = useMemo(() => {
@@ -1625,7 +1639,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         case 'vencimento': return orderSort.dir === 'asc' ? (a.dataVencimento || '').localeCompare(b.dataVencimento || '') : (b.dataVencimento || '').localeCompare(a.dataVencimento || '')
         case 'itens': va = a.items?.reduce((s, i) => s + i.qty, 0) || 0; vb = b.items?.reduce((s, i) => s + i.qty, 0) || 0; return orderSort.dir === 'asc' ? va - vb : vb - va
         case 'total': return orderSort.dir === 'asc' ? (a.total || 0) - (b.total || 0) : (b.total || 0) - (a.total || 0)
-        default: return (b.createdAt || 0) - (a.createdAt || 0)
+        default: return getOrderTime(b) - getOrderTime(a)
       }
     })
     return result
@@ -3267,7 +3281,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 {(() => {
                   const totalPedidos = userOrdersDetail.length
                   const totalGasto = userOrdersDetail.reduce((s, o) => s + o.total, 0)
-                  const ultimoPedido = userOrdersDetail.length > 0 ? userOrdersDetail.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0] : null
+                  const ultimoPedido = userOrdersDetail.length > 0 ? userOrdersDetail.sort((a, b) => getOrderTime(b) - getOrderTime(a))[0] : null
                   return (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.65rem', marginBottom: '1.25rem' }}>
                       <div className="admin-card" style={{ padding: '0.85rem 1rem', borderLeft: '4px solid var(--accent)', textAlign: 'center' }}>
