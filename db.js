@@ -619,9 +619,41 @@ export async function executeQuery(queryDesc) {
       const inputValues = args.values;
       const options = args.options || {};
       const isArray = Array.isArray(inputValues);
-      const rows = isArray ? inputValues : [inputValues];
+      let rows = isArray ? inputValues : [inputValues];
       if (rows.length === 0) {
         return { data: isArray ? [] : null, error: null };
+      }
+
+      if (table === 'financeiro') {
+        const orderIds = [...new Set(rows.map(r => r.order_id || r.orderId).filter(Boolean))];
+        if (orderIds.length > 0) {
+          try {
+            const existingOrders = await pool.query(`SELECT id FROM pedidos WHERE id = ANY($1::bigint[])`, [orderIds]);
+            const validSet = new Set(existingOrders.rows.map(r => String(r.id)));
+            rows = rows.filter(r => {
+              const oid = r.order_id || r.orderId;
+              return !oid || validSet.has(String(oid));
+            });
+            if (rows.length === 0) {
+              return { data: isArray ? [] : null, error: null };
+            }
+          } catch (e) {
+            console.error('Error validating financeiro order_ids:', e.message);
+          }
+        }
+      }
+
+      if (table === 'pedidos') {
+        const userIds = [...new Set(rows.map(r => r.user_id).filter(Boolean))];
+        if (userIds.length > 0) {
+          try {
+            const existingUsers = await pool.query(`SELECT id FROM usuarios WHERE id = ANY($1::uuid[])`, [userIds]);
+            const validUserSet = new Set(existingUsers.rows.map(r => String(r.id)));
+            rows = rows.map(r => r.user_id && !validUserSet.has(String(r.user_id)) ? { ...r, user_id: null } : r);
+          } catch (e) {
+            console.error('Error validating pedidos user_ids:', e.message);
+          }
+        }
       }
 
       // Fast-path 1: Targeted UPDATE by primary key UUID "id" if present (prevents user cross-contamination)
