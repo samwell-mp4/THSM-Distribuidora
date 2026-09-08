@@ -5,6 +5,7 @@ class SupabaseQueryBuilder {
     this.table = table;
     this.method = null;
     this.args = null;
+    this.selectColumns = null;
     this.filters = [];
     this.orders = [];
     this.rangeVal = null;
@@ -15,6 +16,13 @@ class SupabaseQueryBuilder {
   }
   
   select(columns = '*', options = {}) {
+    // If a mutation method is already set (insert, upsert, update, delete), do NOT overwrite method or args!
+    if (this.method && ['insert', 'upsert', 'update', 'delete'].includes(this.method)) {
+      this.selectColumns = columns;
+      if (options.count) this.countVal = options.count;
+      if (options.head) this.headVal = options.head;
+      return this;
+    }
     this.method = 'select';
     this.args = columns;
     if (options.count) this.countVal = options.count;
@@ -104,6 +112,7 @@ class SupabaseQueryBuilder {
           action: this.method,
           table: this.table,
           args: this.args,
+          select: this.selectColumns,
           filters: this.filters,
           orders: this.orders,
           range: this.rangeVal,
@@ -275,7 +284,7 @@ export async function upsertUser(user) {
   try {
     for (let attempt = 1; attempt <= 3; attempt++) {
       const { data, error } = await supabase.from('usuarios').upsert(dbUser, { onConflict }).select().single()
-      if (!error && data) return { ...user, ...data }
+      if (!error && data && samePhone(data.telefone, telefone)) return { ...user, ...data }
       lastError = error
       if (attempt < 3) await new Promise(r => setTimeout(r, 600 * attempt))
     }
@@ -376,6 +385,12 @@ async function upsertOrderBatch(records, attempts = 3) {
       const { error } = await supabase.from('pedidos').upsert(records, { onConflict: 'id' })
       if (!error) return true
       console.error('Erro upsert pedidos:', attempt, error)
+      if (error && (error.code === '23503' || error.message?.includes('foreign key constraint') || error.message?.includes('pedidos_user_id_fkey'))) {
+        // user_id FK constraint failed (e.g. user id not registered); retry with user_id = null so order is safely saved
+        const fallback = records.map(r => ({ ...r, user_id: null }))
+        const { error: err2 } = await supabase.from('pedidos').upsert(fallback, { onConflict: 'id' })
+        if (!err2) return true
+      }
     } catch (e) {
       console.error('Exceção upsert pedidos:', attempt, e)
     }
@@ -654,15 +669,22 @@ export async function upsertDespesas(records) {
 
 export async function upsertProducts(products) {
   let records = Object.entries(products).map(([id, changes]) => {
-    const { variantes, ...rest } = changes
+    const { variantes, _new, ...rest } = changes
     const rec = {
       id: Number(id),
-      ...rest,
+      nome: rest.nome != null ? String(rest.nome) : '',
+      descricao: rest.descricao != null ? String(rest.descricao) : '',
+      preco: rest.preco != null ? Number(rest.preco) : 0,
+      preco_custo: rest.preco_custo != null && rest.preco_custo !== '' ? Number(rest.preco_custo) : null,
+      estoque: rest.estoque != null ? Number(rest.estoque) : 0,
+      imagem: rest.imagem != null ? String(rest.imagem) : '',
+      categoria: rest.categoria != null ? String(rest.categoria) : '',
+      semDevolucao: !!rest.semDevolucao,
       updated_at: new Date().toISOString()
     }
     // Only include variants column if it is explicitly being modified
     if (variantes !== undefined) {
-      rec.variantes = variantes
+      rec.variantes = variantes || {}
     }
     return rec
   })

@@ -107,12 +107,19 @@ function App() {
         if (p.deleted) return false
         if (!p.id || String(p.id).trim() === '') return false
         if (!p.nome || String(p.nome).trim() === '') return false
-        if (Number(p.preco) <= 0 && Number(p.estoque) <= 0) return false
         return true
       })
       setProdutosMerged(valid)
     }).catch(() => {})
   }, [])
+
+  const getProdVariants = useCallback((p) => {
+    if (!p) return {}
+    if (p.variantes && typeof p.variantes === 'object' && Object.keys(p.variantes).length > 0) {
+      return p.variantes
+    }
+    return prodVariants[p.id] || {}
+  }, [prodVariants])
 
   useEffect(() => {
     const onFocus = () => {
@@ -149,28 +156,22 @@ function App() {
     if (loginToken) {
       const doLogin = async (telefone) => {
         sessionStorage.setItem('thsm_user_tab', 'pedidos')
-        let user = usuarios.find(u => u.telefone === telefone)
-        if (!user) {
-          const { data } = await supabase.from('usuarios').select('*').eq('telefone', telefone).maybeSingle()
-          if (data) {
-            user = data
-            setUsuarios(prev => {
-              const merged = [...prev.filter(u => u.telefone !== data.telefone), data]
-              safeSetItem(LS_USUARIOS, merged)
-              return merged
-            })
-          }
-        }
+        const norm = normTel(telefone)
+        const rawOnly = norm.replace(/^55/, '')
+        const { data: user } = await supabase.from('usuarios').select('*').or(`telefone.eq.${norm},telefone.eq.${rawOnly}`).maybeSingle()
         if (user) {
           setCurrentUser(user)
+          safeSetItem(LS_SESSAO, user)
           showToast(`Bem-vindo, ${user.nome}!`)
           const addr = user.endereco || {}
           if (!addr.cep || !addr.cidade || !addr.rua || !addr.numero) {
             setAddressRequiredEndereco({ cep: addr.cep || '', estado: addr.estado || '', cidade: addr.cidade || '', bairro: addr.bairro || '', rua: addr.rua || '', numero: addr.numero || '', complemento: addr.complemento || '' })
             setShowAddressRequired(true)
           } else {
-            navigate('/')
+            navigate('/minha-conta')
           }
+        } else {
+          showToast('Usuário não encontrado', 'error')
         }
       }
       try {
@@ -307,9 +308,8 @@ function App() {
   }, [route, adminAuth])
 
   useEffect(() => {
-    try { const d = JSON.parse(localStorage.getItem('thsm_admin_produtos')); if (d) setProdChangesApp(d) } catch {}
     fetchProductsDB()
-  }, [route])
+  }, [route, fetchProductsDB])
 
   const showToast = useCallback((msg, type = 'success') => {
     setToast({ msg, type })
@@ -971,9 +971,9 @@ function App() {
                   <div className="card-body">
                     <h3 className="card-title" onClick={() => setSelected(p)}>{p.nome}</h3>
                     <div className="card-price">{formatPreco(p.preco)}</div>
-                    {prodVariants[p.id] && Object.keys(prodVariants[p.id]).length > 0 && (
+                    {Object.keys(getProdVariants(p)).length > 0 && (
                       <div className="card-variants-hint" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.35rem', textAlign: 'center' }}>
-                        <i className="fa-solid fa-tag"></i> {Object.keys(prodVariants[p.id]).join(', ')}
+                        <i className="fa-solid fa-tag"></i> {Object.keys(getProdVariants(p)).join(', ')}
                       </div>
                     )}
                     <button className={`btn-add ${cart[p.id] ? 'in-cart' : ''}`} onClick={() => setSelected(p)} disabled={p.estoque <= 0}>
@@ -1037,12 +1037,12 @@ function App() {
                   <p>{selected.descricao}</p>
                 </div>
               )}
-              {prodVariants[selected.id] && Object.keys(prodVariants[selected.id]).length > 0 && (
+              {Object.keys(getProdVariants(selected)).length > 0 && (
                 <div className="modal-variants" style={{ marginBottom: '0.75rem' }}>
                   <h4 style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>
                     <i className="fa-solid fa-tags"></i> Variações
                   </h4>
-                  {Object.entries(prodVariants[selected.id]).map(([type, options]) => (
+                  {Object.entries(getProdVariants(selected)).map(([type, options]) => (
                     <div key={type} style={{ marginBottom: '0.5rem' }}>
                       <label style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: '0.25rem', textTransform: 'uppercase' }}>{type}</label>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>

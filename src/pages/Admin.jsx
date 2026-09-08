@@ -929,7 +929,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
     setSyncingUsers(true)
     doSync()
-    const pollInterval = setInterval(doSync, 10000)
+    const pollInterval = setInterval(doSync, 20000)
 
     getAllLeads().then(setLeads).catch(() => { })
       // Reenvia leads salvos localmente (fallback quando site ficou offline)
@@ -954,9 +954,12 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     if (rotas.length > 0 && !expandedRota) setExpandedRota(rotas[0].rota)
   }, [rotas, expandedRota])
 
+  const [adminLocalProds, setAdminLocalProds] = useState(null)
+  useEffect(() => { setAdminLocalProds(produtos || []) }, [produtos])
+
   const produtosAtuais = useMemo(() => {
-    return produtos || []
-  }, [produtos])
+    return adminLocalProds || produtos || []
+  }, [adminLocalProds, produtos])
 
   // =============================================
   // ORDERS
@@ -1009,7 +1012,6 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     if (savedUser) {
       order = { ...order, user_id: savedUser.id }
       setOrders(prev => prev.map(o => o.id === orderId ? order : o))
-      upsertOrder(order)
       setUsuarios(prev => {
         const idx = prev.findIndex(u => u.telefone === savedUser.telefone)
         if (idx >= 0) {
@@ -1020,6 +1022,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         return [savedUser, ...prev]
       })
     }
+    // Always persist order to PostgreSQL
+    await upsertOrder(order)
 
     // Create financial records for "a prazo" items
     const finRecords = items.filter(i => i.tipo === 'aprazo').map(i => {
@@ -1040,6 +1044,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     })
     if (finRecords.length > 0) {
       setFinancial(prev => [...finRecords, ...prev])
+      await upsertFinancial(finRecords)
     }
 
     showToast('Pedido adicionado com sucesso!')
@@ -1844,10 +1849,25 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   // PRODUCTS
   // =============================================
   const updateProduct = async (id, changes) => {
-    const p = produtos.find(x => x.id === id) || { id }
-    const payload = { [id]: { ...p, ...changes } }
+    const existing = produtosAtuais.find(x => x.id === id) || { id }
+    const updated = { ...existing, ...changes }
+    delete updated._new
+
+    // Immediate optimistic update in Admin
+    setAdminLocalProds(prev => {
+      const list = prev || produtos || []
+      const idx = list.findIndex(x => x.id === id)
+      if (idx >= 0) {
+        const next = [...list]
+        next[idx] = updated
+        return next
+      }
+      return [updated, ...list]
+    })
+
+    const payload = { [id]: updated }
     await upsertProducts(payload)
-    showToast('Produto atualizado!')
+    showToast('Produto salvo com sucesso!')
     if (editingProd) setEditingProd(null)
     if (typeof refreshProducts === 'function') refreshProducts()
   }
@@ -7635,10 +7655,7 @@ function EditProductModal({ product, categorias = [], onAddCategoria, onSave, on
   const [categoria, setCategoria] = useState(product.categoria)
   const [descricao, setDescricao] = useState(product.descricao || '')
   const [variantes, setVariantes] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('thsm_prod_variants') || '{}')
-      return saved[product.id] || product.variantes || {}
-    } catch { return product.variantes || {} }
+    return product.variantes && typeof product.variantes === 'object' ? product.variantes : {}
   })
   const [semDevolucao, setSemDevolucao] = useState(!!product.semDevolucao)
   const [newVarTypeName, setNewVarTypeName] = useState('')
@@ -7647,8 +7664,11 @@ function EditProductModal({ product, categorias = [], onAddCategoria, onSave, on
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onloadend = () => {
-      if (typeof reader.result === 'string') setImagem(reader.result)
+    reader.onloadend = async () => {
+      if (typeof reader.result === 'string') {
+        const compressed = await compressImageDataUrl(reader.result, 1000, 0.75)
+        setImagem(compressed)
+      }
     }
     reader.readAsDataURL(file)
     e.target.value = ''
@@ -7707,13 +7727,17 @@ function EditProductModal({ product, categorias = [], onAddCategoria, onSave, on
       const opts = v.filter(o => o.trim())
       if (opts.length > 0) cleaned[k] = opts
     })
-    try {
-      const all = JSON.parse(localStorage.getItem('thsm_prod_variants') || '{}')
-      if (Object.keys(cleaned).length > 0) all[product.id] = cleaned
-      else delete all[product.id]
-      localStorage.setItem('thsm_prod_variants', JSON.stringify(all))
-    } catch { }
-    onSave({ nome: nome.trim(), preco: Number(preco), preco_custo: precoCusto === '' ? null : Number(precoCusto), estoque: Number(estoque), imagem, categoria, descricao, variantes: cleaned, semDevolucao })
+    onSave({
+      nome: nome.trim(),
+      preco: Number(preco),
+      preco_custo: precoCusto === '' ? null : Number(precoCusto),
+      estoque: Number(estoque),
+      imagem,
+      categoria,
+      descricao,
+      variantes: cleaned,
+      semDevolucao
+    })
   }
 
   return (

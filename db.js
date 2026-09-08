@@ -648,7 +648,7 @@ export async function executeQuery(queryDesc) {
       if (table === 'produtos' && res.rows.length > 0) {
         const deletedIds = res.rows.map(r => r.id);
         await pool.query(
-          `INSERT INTO "produtos_deletados" (id) SELECT DISTINCT id FROM unnest($1::bigint[]) ON CONFLICT DO NOTHING`,
+          `INSERT INTO "produtos_deletados" (id) SELECT DISTINCT val FROM unnest($1::bigint[]) AS t(val) ON CONFLICT DO NOTHING`,
           [deletedIds]
         );
       }

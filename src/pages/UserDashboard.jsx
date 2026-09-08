@@ -3,8 +3,8 @@ import { supabase, upsertOrder, upsertFinancial, deleteOrder as supabaseDeleteOr
 import { compressImageDataUrl } from '../lib/image'
 import AddressForm from '../components/AddressForm'
 
-const LS_ORDERS = 'thsm_admin_orders'
-const LS_FINANCIAL = 'thsm_admin_financeiro'
+const LS_ORDERS = 'thsm_user_orders'
+const LS_FINANCIAL = 'thsm_user_financial'
 const LS_SESSAO = 'thsm_sessao'
 
 function formatPreco(v) {
@@ -263,26 +263,33 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
 
   useEffect(() => {
     if (!currentUser?.telefone) return
-    supabase.from('usuarios').select('id').eq('telefone', currentUser.telefone).single().then(({ data: user }) => {
-      const query = user ? `user_id.eq.${user.id},data->customer->>telefone.eq.${currentUser.telefone}` : `data->customer->>telefone.eq.${currentUser.telefone}`
-      supabase.from('pedidos').select('*').or(query).order('created_at', { ascending: false }).then(async ({ data }) => {
-        if (data?.length) {
-          const orders = data.map(r => r.data || r)
-          setAllOrders(orders)
-          setLS(LS_ORDERS, orders)
-          const orderIds = orders.filter(o => o.id).map(o => o.id)
-          if (orderIds.length > 0) {
-            const { data: finData } = await supabase.from('financeiro').select('*').in('order_id', orderIds)
-            if (finData?.length) {
-              const finRecords = finData.map(f => f.data || f)
-              setFinancial(finRecords)
-              setLS(LS_FINANCIAL, finRecords)
-            }
+    const rawDigits = String(currentUser.telefone || '').replace(/\D/g, '')
+    const telWith55 = rawDigits.startsWith('55') ? rawDigits : '55' + rawDigits
+    const telNo55 = rawDigits.replace(/^55/, '')
+    const userId = currentUser.id || null
+
+    const conds = []
+    if (userId) conds.push(`user_id.eq.${userId}`)
+    if (telWith55) conds.push(`data->customer->>telefone.eq.${telWith55}`)
+    if (telNo55) conds.push(`data->customer->>telefone.eq.${telNo55}`)
+
+    supabase.from('pedidos').select('*').or(conds.join(',')).order('created_at', { ascending: false }).then(async ({ data }) => {
+      if (data) {
+        const orders = data.map(r => r.data && typeof r.data === 'object' ? { ...r.data, user_id: r.user_id, status: r.status } : r)
+        setAllOrders(orders)
+        setLS(LS_ORDERS, orders)
+        const orderIds = orders.filter(o => o && o.id).map(o => o.id)
+        if (orderIds.length > 0) {
+          const { data: finData } = await supabase.from('financeiro').select('*').in('order_id', orderIds)
+          if (finData) {
+            const finRecords = finData.map(f => f.data || f)
+            setFinancial(finRecords)
+            setLS(LS_FINANCIAL, finRecords)
           }
         }
-      })
+      }
     }).catch(() => {})
-  }, [currentUser?.telefone])
+  }, [currentUser])
 
   const userOrders = useMemo(() => {
     if (!currentUser) return []
@@ -398,7 +405,13 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
     setLS(LS_ORDERS, updatedOrders)
     setFinancial(updatedFinancial)
     setLS(LS_FINANCIAL, updatedFinancial)
-    upsertOrder(updatedOrders.find(o => o.id === showUserDelivery.id)).then(() => upsertFinancial(updatedFinancial)).catch(() => upsertFinancial(updatedFinancial))
+    const targetOrder = updatedOrders.find(o => o.id === showUserDelivery.id)
+    const orderFinancial = updatedFinancial.filter(f => f.orderId === showUserDelivery.id)
+    if (targetOrder) {
+      upsertOrder(targetOrder).then(() => {
+        if (orderFinancial.length > 0) upsertFinancial(orderFinancial)
+      }).catch(e => console.error('Erro ao salvar entrega finalizada:', e))
+    }
     setTimeout(() => {
       setFinalizing(false)
       setShowUserDelivery(null)
