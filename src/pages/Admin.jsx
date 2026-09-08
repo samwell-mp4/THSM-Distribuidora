@@ -579,6 +579,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [selectedUserIds, setSelectedUserIds] = useState(new Set())
   const [userMsgMenu, setUserMsgMenu] = useState(null)
   const USER_PAGE_SIZE = 50
+  const PROD_PER_PAGE = 50
   const [prodCatFilter, setProdCatFilter] = useState('TODOS')
   const [customCategorias, setCustomCategorias] = useState(() => LS.get(STORAGE_CUSTOM_CATS, []))
   const [customDespesaTipos, setCustomDespesaTipos] = useState(() => LS.get(STORAGE_CUSTOM_TIPOS, []))
