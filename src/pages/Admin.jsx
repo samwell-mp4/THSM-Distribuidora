@@ -204,6 +204,11 @@ function buildStatusWhatsApp(order, newStatus, extra = {}) {
 👤 Cliente: ${nome}
 ${msgDatas}
 ━━━━━━━━━━━━━━━━━━
+${msgItems}
+━━━━━━━━━━━━━━━━━━
+📦 Total de itens: ${totalQty}
+💰 Valor Total: R$ ${order.total.toFixed(2)}
+━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pré-pedido foi recebido e está em análise pela nossa equipe.
 Em breve você receberá a confirmação.
 ━━━━━━━━━━━━━━━━━━

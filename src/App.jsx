@@ -730,7 +730,18 @@ function App() {
       return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-BR')
     }
     const msgDatas = `📅 Data do pedido: ${formatDate(order.date || order.dataInicio || order.createdAt)}\n📅 Vencimento: ${formatDate(order.dataVencimento)}`
-    return `🆕 *${statusLabel}* 🆕\n━━━━━━━━━━━━━━━━━━\n📋 Pedido: ${id}\n👤 Cliente: ${nome}\n${msgDatas}\n━━━━━━━━━━━━━━━━━━\n${statusLabel}\n━━━━━━━━━━━━━━━━━━\n🔗 Acompanhe: ${link}`
+
+    const formatItemRow = (i) => {
+      const unitPrice = Number(i.preco || 0).toFixed(2)
+      const itemTotal = (Number(i.preco || 0) * (Number(i.qty) || 0)).toFixed(2)
+      return `  • ${i.nome} — ${i.qty}x R$ ${unitPrice} = R$ ${itemTotal}`
+    }
+
+    const msgItems = (order.items || []).map(formatItemRow).join('\n')
+    const totalQty = (order.items || []).reduce((s, i) => s + (Number(i.qty) || 0), 0)
+    const totalVal = Number(order.total || 0).toFixed(2)
+
+    return `🆕 *${statusLabel}* 🆕\n━━━━━━━━━━━━━━━━━━\n📋 Pedido: ${id}\n👤 Cliente: ${nome}\n${msgDatas}\n━━━━━━━━━━━━━━━━━━\n${msgItems}\n━━━━━━━━━━━━━━━━━━\n📦 Total de itens: ${totalQty}\n💰 Valor Total: R$ ${totalVal}\n━━━━━━━━━━━━━━━━━━\n${statusLabel}\n━━━━━━━━━━━━━━━━━━\n🔗 Acompanhe: ${link}`
   }
 
   const sendOrderWebhook = (order) => {

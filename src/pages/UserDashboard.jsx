@@ -716,9 +716,6 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
                               <button className="action-btn" title="Ver detalhes" onClick={() => setSelectedOrder(o)}>
                                 <i className="fa-solid fa-eye"></i>
                               </button>
-                              <button className="action-btn action-delete" title="Excluir" onClick={() => deleteOrder(o.id)}>
-                                <i className="fa-solid fa-trash"></i>
-                              </button>
                             </div>
                           </td>
                         </tr>
