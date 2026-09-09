@@ -428,12 +428,12 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [tab, setTab] = useState(() => sessionStorage.getItem('thsm_admin_tab') || 'dashboard')
   useEffect(() => { sessionStorage.setItem('thsm_admin_tab', tab) }, [tab])
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [orders, setOrders] = useState([])
+  const [orders, setOrders] = useState(() => LS.get(STORAGE_ORDERS, []))
   const [deletedOrderIds, setDeletedOrderIds] = useState([])
   const deletedOrderIdsRef = useRef(null)
   useEffect(() => { deletedOrderIdsRef.current = new Set(deletedOrderIds) }, [deletedOrderIds])
   useEffect(() => { /* Sem persistência local de ids deletados */ }, [deletedOrderIds])
-  const [financial, setFinancial] = useState([])
+  const [financial, setFinancial] = useState(() => LS.get(STORAGE_FINANCIAL, []))
   const [toast, setToast] = useState(null)
 
   const isFinalizada = useCallback((o) => {
@@ -555,7 +555,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [finPeriodMonth, setFinPeriodMonth] = useState(hoje().slice(0, 7))
   const [finRangeStart, setFinRangeStart] = useState('')
   const [finRangeEnd, setFinRangeEnd] = useState('')
-  const [despesas, setDespesas] = useState([])
+  const [despesas, setDespesas] = useState(() => LS.get(STORAGE_DESPESAS, []))
   const [despesaFilter, setDespesaFilter] = useState('todas')
   const [despPeriod, setDespPeriod] = useState('all')
   const [despPeriodMonth, setDespPeriodMonth] = useState(hoje().slice(0, 7))
@@ -572,7 +572,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [deliveryPaid, setDeliveryPaid] = useState('')
   const [deliveryDataInicio, setDeliveryDataInicio] = useState(() => hoje())
   const [deliveryDataVenc, setDeliveryDataVenc] = useState('')
-  const [usuarios, setUsuarios] = useState([])
+  const [usuarios, setUsuarios] = useState(() => LS.get('thsm_usuarios', []))
 
   const [syncingUsers, setSyncingUsers] = useState(false)
   const [isInitialSyncing, setIsInitialSyncing] = useState(true)
@@ -754,6 +754,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   useEffect(() => { LS.set(STORAGE_CUSTOM_CATS, customCategorias) }, [customCategorias])
   useEffect(() => { LS.set(STORAGE_CUSTOM_TIPOS, customDespesaTipos) }, [customDespesaTipos])
   useEffect(() => {
+    if (orders.length === 0 && isInitialSyncing) return
     const compact = orders.map(o => {
       if (!o.identityPhoto && !o.addressProof) return o
       return {
@@ -763,7 +764,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       }
     })
     LS.set(STORAGE_ORDERS, compact)
-  }, [orders])
+  }, [orders, isInitialSyncing])
 
   useEffect(() => {
     LS.set(STORAGE_FINANCIAL, financial)
@@ -1019,6 +1020,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const addOrder = async (data) => {
     if (savingOrder) return
     setSavingOrder(true)
+    try {
     const items = data.items
 
     // Update product cost no DB directly
@@ -1048,7 +1050,11 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       deliveryDataInicio: data.status === 'entregue' ? (data.dataPedido || hoje()) : null,
       payment: data.payment || null
     }
-    setOrders(prev => [order, ...prev])
+    setOrders(prev => {
+      const next = [order, ...prev]
+      LS.set(STORAGE_ORDERS, next)
+      return next
+    })
 
     // Upsert user to Supabase and update local list
     const existingUser = usuarios.find(u => u.telefone === data.telefone)
@@ -1062,7 +1068,11 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     })
     if (savedUser) {
       order = { ...order, user_id: savedUser.id }
-      setOrders(prev => prev.map(o => o.id === orderId ? order : o))
+      setOrders(prev => {
+        const next = prev.map(o => o.id === orderId ? order : o)
+        LS.set(STORAGE_ORDERS, next)
+        return next
+      })
       setUsuarios(prev => {
         const idx = prev.findIndex(u => u.telefone === savedUser.telefone)
         if (idx >= 0) {
@@ -1094,21 +1104,36 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       }
     })
     if (finRecords.length > 0) {
-      setFinancial(prev => [...finRecords, ...prev])
+      setFinancial(prev => {
+        const next = [...finRecords, ...prev]
+        LS.set(STORAGE_FINANCIAL, next)
+        return next
+      })
       await upsertFinancial(finRecords)
     }
 
     showToast('Pedido adicionado com sucesso!')
-    setShowAddOrder(false)
-    setSavingOrder(false)
-    sendStatusWebhook(order, order.status)
+      setShowAddOrder(false)
+      sendStatusWebhook(order, order.status)
+    } catch (err) {
+      console.error('Erro addOrder:', err)
+      showToast('Erro ao salvar pedido: ' + (err.message || 'Tente novamente'), 'error')
+    } finally {
+      setSavingOrder(false)
+    }
   }
 
-  const updateOrderStatus = (id, status, skipWebhook = false) => {
+  const updateOrderStatus = (id, status, skipWebhook = false, customDue = null) => {
     const order = orders.find(o => o.id === id)
     if (!order) return
 
-    let updated = { ...order, status, deliveredAt: status === 'entregue' ? Date.now() : order.deliveredAt }
+    const finalDue = customDue !== null ? (customDue || null) : (order.dataVencimento || null)
+    let updated = {
+      ...order,
+      status,
+      dataVencimento: finalDue,
+      deliveredAt: status === 'entregue' ? Date.now() : order.deliveredAt
+    }
     
     if (status !== 'entregue') {
       updated = {
@@ -1134,7 +1159,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
             qty: i.qty,
             value: i.preco * i.qty,
             precoCusto: (i.preco_custo || 0) * i.qty,
-            dueDate: order.dataVencimento || hoje(),
+            dueDate: finalDue || hoje(),
             paidDate: null,
             status: 'pendente',
             paymentMethod: ''
@@ -1145,7 +1170,11 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       })
     }
 
-    setOrders(prev => prev.map(o => o.id === id ? updated : o))
+    setOrders(prev => {
+      const next = prev.map(o => o.id === id ? updated : o)
+      LS.set(STORAGE_ORDERS, next)
+      return next
+    })
     upsertOrder(updated)
     showToast(`Pedido #${id} atualizado para "${status}"`)
     const STATUS_ORDER = ['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'entregue']
@@ -1188,7 +1217,12 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       dataVencimento: dataVencimento || order.dataVencimento || null,
       rejectedItems: rejectedItemIds.length > 0 ? rejectedItemIds.map(idx => order.items[idx]) : []
     }
-    setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o))
+    setOrders(prev => {
+      const next = prev.map(o => o.id === orderId ? updatedOrder : o)
+      LS.set(STORAGE_ORDERS, next)
+      return next
+    })
+    upsertOrder(updatedOrder)
     // Create financial records for approved a-prazo items
     const finRecords = remainingItems.filter(i => i.tipo === 'aprazo').map(i => {
       const dueDate = dataVencimento || (() => {
@@ -1209,7 +1243,14 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         status: 'pendente'
       }
     })
-    if (finRecords.length > 0) setFinancial(prev => [...finRecords, ...prev])
+    if (finRecords.length > 0) {
+      setFinancial(prev => {
+        const next = [...finRecords, ...prev]
+        LS.set(STORAGE_FINANCIAL, next)
+        return next
+      })
+      upsertFinancial(finRecords)
+    }
     showToast(`Pedido #${orderId} revisado e enviado para "Pendente"`)
     setShowOrderDetail(null)
   }
@@ -1915,6 +1956,15 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       }
       return [updated, ...list]
     })
+
+    // Also update cached products in localStorage
+    try {
+      const cached = JSON.parse(localStorage.getItem('thsm_cached_produtos') || '[]')
+      const cIdx = cached.findIndex(x => x.id === id)
+      if (cIdx >= 0) cached[cIdx] = updated
+      else cached.unshift(updated)
+      localStorage.setItem('thsm_cached_produtos', JSON.stringify(cached))
+    } catch {}
 
     const payload = { [id]: updated }
     await upsertProducts(payload)
@@ -2704,6 +2754,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                           <button className="action-btn" title="Ver detalhes" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-eye"></i></button>
                           {o.status === 'pre-pedido' && <button className="action-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }} title="Revisar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-clipboard-check"></i></button>}
                           {o.status === 'pre-pedido' && <button className="action-btn action-confirm" title="Confirmar (Próxima etapa)" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-check"></i></button>}
+                          {o.status === 'pre-pedido' && <button className="action-btn action-deliver" title="Enviar direto para Em Rota" onClick={() => { setShowRotaDue(o); setRotaDueDate(o.dataVencimento || '') }}><i className="fa-solid fa-truck"></i></button>}
                           {o.status === 'pendente' && <button className="action-btn action-confirm" title="Editar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-pen"></i></button>}
                           {o.status === 'pendente' && <button className="action-btn action-deliver" title="Em Rota (Próxima etapa)" onClick={() => { setShowRotaDue(o); setRotaDueDate(o.dataVencimento || '') }}><i className="fa-solid fa-truck"></i></button>}
                           {o.status === 'pendente' && (
@@ -4350,8 +4401,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
             <div className="modal-actions">
               <button className="admin-btn admin-btn-sec" onClick={() => setShowRotaDue(null)}>Cancelar</button>
               <button className="admin-btn admin-btn-primary" onClick={() => {
-                if (rotaDueDate) updateOrderDue(showRotaDue.id, rotaDueDate)
-                updateOrderStatus(showRotaDue.id, 'em-rota')
+                updateOrderStatus(showRotaDue.id, 'em-rota', false, rotaDueDate || showRotaDue.dataVencimento || null)
                 setShowRotaDue(null)
               }}>
                 <i className="fa-solid fa-truck"></i> Enviar para Rota

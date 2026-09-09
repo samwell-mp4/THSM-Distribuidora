@@ -365,14 +365,16 @@ function orderRecord(o) {
   if (typeof uid !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid)) {
     uid = null
   }
+  const st = o.status || 'pendente'
 
   return {
     id: Number(o.id),
     user_id: uid,
-    status: o.status || 'pendente',
+    status: st,
     created_at: toDateInput(o.created_at || o.createdAt),
     data: {
       ...o,
+      status: st,
       identityPhoto: capPhotoSize(o.identityPhoto),
       addressProof: capPhotoSize(o.addressProof)
     }

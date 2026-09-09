@@ -66,7 +66,14 @@ function App() {
   const [currentUser, setCurrentUser] = useState(() => {
     try { const d = localStorage.getItem(LS_SESSAO); return d ? JSON.parse(d) : null } catch { return null }
   })
-  const [produtosMerged, setProdutosMerged] = useState([])
+  const [produtosMerged, setProdutosMerged] = useState(() => {
+    try {
+      const cached = localStorage.getItem('thsm_cached_produtos')
+      return cached ? JSON.parse(cached) : []
+    } catch {
+      return []
+    }
+  })
   const [prodVariants, setProdVariants] = useState(() => {
     try { return JSON.parse(localStorage.getItem('thsm_prod_variants')) || {} } catch { return {} }
   })
@@ -110,6 +117,7 @@ function App() {
         return true
       })
       setProdutosMerged(valid)
+      try { localStorage.setItem('thsm_cached_produtos', JSON.stringify(valid)) } catch {}
     }).catch(() => {})
   }, [])
 

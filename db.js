@@ -745,6 +745,17 @@ export async function executeQuery(queryDesc) {
       const res = await pool.query(sql, values);
       let data = isArray ? res.rows : res.rows[0];
       
+      if (table === 'produtos') {
+        const prodIds = [...new Set(rows.map(r => r.id).filter(Boolean))];
+        if (prodIds.length > 0) {
+          try {
+            await pool.query(`DELETE FROM "produtos_deletados" WHERE id = ANY($1::bigint[])`, [prodIds]);
+          } catch (e) {
+            console.error('Error cleaning produtos_deletados on upsert:', e.message);
+          }
+        }
+      }
+
       if (!data || (isArray && data.length === 0)) {
         data = inputValues;
       }
