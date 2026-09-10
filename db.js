@@ -710,6 +710,17 @@ export async function executeQuery(queryDesc) {
       }
 
 
+      const conflictCol = options.onConflict || 'id';
+
+      // Sort rows deterministically by conflictCol to guarantee identical row-lock acquisition order and prevent deadlocks
+      if (rows.length > 1) {
+        rows.sort((a, b) => {
+          const va = String(a[conflictCol] ?? '');
+          const vb = String(b[conflictCol] ?? '');
+          return va.localeCompare(vb);
+        });
+      }
+
       const keys = Object.keys(rows[0]);
       const colsStr = keys.map(k => `"${k}"`).join(', ');
 
@@ -727,7 +738,6 @@ export async function executeQuery(queryDesc) {
         valuePlaceholders.push(`(${placeholders.join(', ')})`);
       }
 
-      const conflictCol = options.onConflict || 'id';
       let onConflictClause = '';
       if (options.ignoreDuplicates) {
         onConflictClause = `ON CONFLICT ("${conflictCol}") DO NOTHING`;
@@ -757,7 +767,21 @@ export async function executeQuery(queryDesc) {
       }
 
       const sql = `INSERT INTO "${table}" (${colsStr}) VALUES ${valuePlaceholders.join(', ')} ${onConflictClause} RETURNING *`;
-      const res = await pool.query(sql, values);
+      
+      let res;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          res = await pool.query(sql, values);
+          break;
+        } catch (queryErr) {
+          if ((queryErr.code === '40P01' || queryErr.message?.includes('deadlock detected')) && attempt < 3) {
+            console.warn(`[db] Deadlock detectado em "${table}", tentando novamente (tentativa ${attempt})...`);
+            await new Promise(r => setTimeout(r, 60 * attempt + Math.floor(Math.random() * 80)));
+            continue;
+          }
+          throw queryErr;
+        }
+      }
       let data = isArray ? res.rows : res.rows[0];
       
       if (table === 'produtos') {

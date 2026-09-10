@@ -504,16 +504,17 @@ async function upsertChunked(table, records, mapFn) {
   const seen = new Map()
   records.forEach(r => seen.set(r.id, r))
   const mapped = [...seen.values()].map(mapFn)
-  const CHUNK = 200
+  // Deterministic sorting to prevent deadlocks across concurrent requests
+  mapped.sort((a, b) => String(a.id).localeCompare(String(b.id)))
+  const CHUNK = 80
   for (let i = 0; i < mapped.length; i += CHUNK) {
     const slice = mapped.slice(i, i + CHUNK)
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= 4; attempt++) {
       const { error } = await supabase.from(table).upsert(slice, { onConflict: 'id' })
       if (!error) break
-      // 23503 = FK violation (ex.: financeiro antes do pedido existir). Aguarda e tenta de novo;
-      // a sincronização do pedido costuma chegar em seguida.
-      if ((error.code === '23503' || error.code === '57014' || !error.code) && attempt < 3) {
-        await new Promise(r => setTimeout(r, 1200 * attempt))
+      // 23503 = FK violation, 40P01 = Deadlock detected, 57014 = Query cancel/timeout
+      if ((error.code === '23503' || error.code === '40P01' || error.message?.includes('deadlock') || error.code === '57014' || !error.code) && attempt < 4) {
+        await new Promise(r => setTimeout(r, 300 * attempt + Math.floor(Math.random() * 200)))
         continue
       }
       console.error(`Erro upsert ${table}:`, error)

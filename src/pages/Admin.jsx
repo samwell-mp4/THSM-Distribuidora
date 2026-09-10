@@ -773,13 +773,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
   useEffect(() => {
     LS.set(STORAGE_FINANCIAL, financial)
-    if (isInitialSyncing) return
-    if (financial.length === 0) return
-    const t = setTimeout(() => {
-      upsertFinancial(financial)
-    }, 1400)
-    return () => clearTimeout(t)
-  }, [financial, isInitialSyncing])
+  }, [financial])
   useEffect(() => {
     LS.set(STORAGE_DESPESAS, despesas)
     if (isInitialSyncing) return
@@ -4685,7 +4679,10 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
               })
               const mergedFin = [...updated, ...newRecords]
               LS.set(STORAGE_FINANCIAL, mergedFin)
-              upsertFinancial(mergedFin)
+              const orderFinRecords = mergedFin.filter(f => String(f.orderId) === String(showOrderDetail.id))
+              if (orderFinRecords.length > 0) {
+                upsertFinancial(orderFinRecords)
+              }
               return mergedFin
             })
             showToast(currentStatus === 'em-rota' ? `Pedido #${showOrderDetail.id} finalizado e enviado para Entregues!` : `Pedido #${showOrderDetail.id} enviado para a rota!`)
@@ -4747,7 +4744,10 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
               })
               const mergedFin = [...updated, ...newRecords]
               LS.set(STORAGE_FINANCIAL, mergedFin)
-              upsertFinancial(mergedFin)
+              const orderFinRecords = mergedFin.filter(f => String(f.orderId) === String(showOrderDetail.id))
+              if (orderFinRecords.length > 0) {
+                upsertFinancial(orderFinRecords)
+              }
               return mergedFin
             })
             showToast('Itens salvos com sucesso!')
