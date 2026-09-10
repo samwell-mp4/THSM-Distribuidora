@@ -1031,3 +1031,48 @@ export async function importFluxoWhatsappCsv(clientArg) {
     console.error('Error importing fluxo_whatsapp.csv:', err.message);
   }
 }
+
+export async function recoverMissingProductPrices() {
+  console.log('Checking for products with missing or zero prices to recover from orders history...');
+  try {
+    const res = await pool.query(`
+      SELECT data->'items' AS items 
+      FROM pedidos 
+      WHERE data->'items' IS NOT NULL
+      ORDER BY created_at DESC
+      LIMIT 1000
+    `);
+
+    const priceMap = new Map();
+    for (const row of res.rows) {
+      const items = Array.isArray(row.items) ? row.items : [];
+      for (const item of items) {
+        const id = item.id != null ? Number(item.id) : null;
+        const preco = Number(item.preco);
+        if (id && !isNaN(id) && !isNaN(preco) && preco > 0 && !priceMap.has(id)) {
+          priceMap.set(id, preco);
+        }
+      }
+    }
+
+    if (priceMap.size === 0) {
+      console.log('[recoverMissingProductPrices] Nenhum item com preço válido encontrado nos pedidos.');
+      return { recovered: 0 };
+    }
+
+    let count = 0;
+    for (const [id, preco] of priceMap.entries()) {
+      const up = await pool.query(
+        `UPDATE produtos SET preco = $1 WHERE id = $2 AND (preco IS NULL OR preco = 0)`,
+        [preco, id]
+      );
+      count += up.rowCount;
+    }
+
+    console.log(`[recoverMissingProductPrices] Recuperados ${count} preços de produtos.`);
+    return { recovered: count, uniqueFound: priceMap.size };
+  } catch (e) {
+    console.error('[recoverMissingProductPrices] Erro:', e.message);
+    return { error: e.message };
+  }
+}
