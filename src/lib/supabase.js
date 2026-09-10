@@ -401,19 +401,36 @@ async function upsertOrderBatch(records, attempts = 3) {
   return false
 }
 
+const STATUS_RANK = {
+  'cancelado': 100,
+  'entregue': 50,
+  'em-rota': 40,
+  'em-andamento': 30,
+  'confirmado': 20,
+  'pendente': 10,
+  'pre-pedido': 0
+}
+
 function queueOrderWrite(order) {
   if (!order || order.id == null) return
   const compact = { ...order, identityPhoto: capPhotoSize(order.identityPhoto, 8000), addressProof: capPhotoSize(order.addressProof, 8000) }
   const pending = readPendingOrders()
-  const idx = pending.findIndex(p => p.id === order.id)
-  if (idx >= 0) pending[idx] = { ...pending[idx], ...compact }
-  else pending.push(compact)
+  const idx = pending.findIndex(p => String(p.id) === String(order.id))
+  if (idx >= 0) {
+    const oldRank = STATUS_RANK[pending[idx].status] ?? 0
+    const newRank = STATUS_RANK[compact.status] ?? 0
+    if (newRank >= oldRank) {
+      pending[idx] = { ...pending[idx], ...compact }
+    }
+  } else {
+    pending.push(compact)
+  }
   writePendingOrders(pending)
   setTimeout(() => { flushPendingOrders() }, 800)
 }
 
 function removePendingOrder(id) {
-  const pending = readPendingOrders().filter(p => p.id !== id)
+  const pending = readPendingOrders().filter(p => String(p.id) !== String(id))
   writePendingOrders(pending)
 }
 
@@ -424,10 +441,27 @@ export async function flushPendingOrders() {
   if (pending.length === 0) return
   flushingOrders = true
   try {
+    let currentAdminOrders = []
+    try {
+      currentAdminOrders = JSON.parse(localStorage.getItem('thsm_admin_orders') || '[]')
+    } catch {}
+
     const remaining = []
     for (const o of pending) {
-      const ok = await upsertOrderBatch([orderRecord(o)], 2)
-      if (!ok) remaining.push(o)
+      // Never flush an obsolete demoted status if admin orders has a higher or newer status
+      const existing = currentAdminOrders.find(a => String(a.id) === String(o.id))
+      let orderToSend = o
+      if (existing) {
+        const existRank = STATUS_RANK[existing.status] ?? 0
+        const pendRank = STATUS_RANK[o.status] ?? 0
+        if (existRank > pendRank) {
+          orderToSend = { ...o, ...existing, status: existing.status }
+        } else if (existRank === pendRank) {
+          orderToSend = { ...o, ...existing }
+        }
+      }
+      const ok = await upsertOrderBatch([orderRecord(orderToSend)], 2)
+      if (!ok) remaining.push(orderToSend)
     }
     writePendingOrders(remaining)
   } finally {
@@ -442,9 +476,26 @@ if (typeof window !== 'undefined') {
 
 export async function upsertOrder(order) {
   if (!order || order.id == null) return true
-  const ok = await upsertOrderBatch([orderRecord(order)])
-  if (ok) removePendingOrder(order.id)
-  else queueOrderWrite(order)
+  const now = Date.now()
+  const cleanOrder = {
+    ...order,
+    lastModified: order.lastModified || now,
+    updatedAt: order.updatedAt || now
+  }
+  // Instantly sync or remove from pending queue to prevent stale status overwrites
+  const pending = readPendingOrders()
+  const idx = pending.findIndex(p => String(p.id) === String(cleanOrder.id))
+  if (idx >= 0) {
+    const oldRank = STATUS_RANK[pending[idx].status] ?? 0
+    const newRank = STATUS_RANK[cleanOrder.status] ?? 0
+    if (newRank >= oldRank) {
+      pending[idx] = { ...pending[idx], ...cleanOrder }
+      writePendingOrders(pending)
+    }
+  }
+  const ok = await upsertOrderBatch([orderRecord(cleanOrder)])
+  if (ok) removePendingOrder(cleanOrder.id)
+  else queueOrderWrite(cleanOrder)
   return ok
 }
 

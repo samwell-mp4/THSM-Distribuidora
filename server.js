@@ -1,7 +1,7 @@
 import express from 'express'
 import fs from 'fs'
 import path from 'path'
-import { initDb, executeQuery, restoreDbData, pool, reconcileOrdersUsersDb } from './db.js'
+import { initDb, executeQuery, restoreDbData, pool, reconcileOrdersUsersDb, recoverMissingProductPrices } from './db.js'
 
 // Initialize database schema
 initDb().catch(err => console.error('Database initialization error:', err));
@@ -133,6 +133,17 @@ app.all('/api/reconcile-orders', async (req, res) => {
     res.json({ success: true, result })
   } catch (err) {
     console.error('API /api/reconcile-orders error:', err.message)
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+// Endpoint to recover missing product prices from order history
+app.all('/api/recover-prices', async (req, res) => {
+  try {
+    const result = await recoverMissingProductPrices()
+    res.json({ success: true, result })
+  } catch (err) {
+    console.error('API /api/recover-prices error:', err.message)
     res.status(500).json({ success: false, error: err.message })
   }
 })

@@ -29,7 +29,7 @@
   },
   {
     "id": 255,
-    "preco": null,
+    "preco": 180,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -43,7 +43,7 @@
   },
   {
     "id": 256,
-    "preco": null,
+    "preco": 240,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -71,7 +71,7 @@
   },
   {
     "id": 258,
-    "preco": null,
+    "preco": 240,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -127,7 +127,7 @@
   },
   {
     "id": 262,
-    "preco": null,
+    "preco": 25,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -141,7 +141,7 @@
   },
   {
     "id": 263,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -169,7 +169,7 @@
   },
   {
     "id": 265,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -183,7 +183,7 @@
   },
   {
     "id": 266,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -239,7 +239,7 @@
   },
   {
     "id": 267,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -267,7 +267,7 @@
   },
   {
     "id": 269,
-    "preco": null,
+    "preco": 15,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -295,7 +295,7 @@
   },
   {
     "id": 271,
-    "preco": null,
+    "preco": 45,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -309,7 +309,7 @@
   },
   {
     "id": 272,
-    "preco": null,
+    "preco": 240,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -323,7 +323,7 @@
   },
   {
     "id": 273,
-    "preco": null,
+    "preco": 110,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -337,7 +337,7 @@
   },
   {
     "id": 274,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -351,7 +351,7 @@
   },
   {
     "id": 275,
-    "preco": null,
+    "preco": 40,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -365,7 +365,7 @@
   },
   {
     "id": 276,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -379,7 +379,7 @@
   },
   {
     "id": 277,
-    "preco": null,
+    "preco": 26,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -407,7 +407,7 @@
   },
   {
     "id": 279,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -421,7 +421,7 @@
   },
   {
     "id": 280,
-    "preco": null,
+    "preco": 20,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -435,7 +435,7 @@
   },
   {
     "id": 281,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -449,7 +449,7 @@
   },
   {
     "id": 282,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -463,7 +463,7 @@
   },
   {
     "id": 283,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -477,7 +477,7 @@
   },
   {
     "id": 284,
-    "preco": null,
+    "preco": 15,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -491,7 +491,7 @@
   },
   {
     "id": 285,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -505,7 +505,7 @@
   },
   {
     "id": 286,
-    "preco": null,
+    "preco": 20,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -519,7 +519,7 @@
   },
   {
     "id": 197,
-    "preco": null,
+    "preco": 100,
     "estoque": 15,
     "imagem": null,
     "categoria": null,
@@ -547,7 +547,7 @@
   },
   {
     "id": 200,
-    "preco": null,
+    "preco": 36,
     "estoque": 15,
     "imagem": null,
     "categoria": null,
@@ -561,7 +561,7 @@
   },
   {
     "id": 239,
-    "preco": null,
+    "preco": 30,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -575,7 +575,7 @@
   },
   {
     "id": 240,
-    "preco": null,
+    "preco": 80,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -589,7 +589,7 @@
   },
   {
     "id": 241,
-    "preco": null,
+    "preco": 65,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -603,7 +603,7 @@
   },
   {
     "id": 242,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -631,7 +631,7 @@
   },
   {
     "id": 244,
-    "preco": null,
+    "preco": 150,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -645,7 +645,7 @@
   },
   {
     "id": 245,
-    "preco": null,
+    "preco": 299,
     "estoque": 15,
     "imagem": null,
     "categoria": null,
@@ -659,7 +659,7 @@
   },
   {
     "id": 247,
-    "preco": null,
+    "preco": 99,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -673,7 +673,7 @@
   },
   {
     "id": 392,
-    "preco": null,
+    "preco": 99,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -687,7 +687,7 @@
   },
   {
     "id": 451,
-    "preco": null,
+    "preco": 399,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -939,7 +939,7 @@
   },
   {
     "id": 292,
-    "preco": null,
+    "preco": 30,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -953,7 +953,7 @@
   },
   {
     "id": 386,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -995,7 +995,7 @@
   },
   {
     "id": 608,
-    "preco": null,
+    "preco": 99,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -1051,7 +1051,7 @@
   },
   {
     "id": 644,
-    "preco": null,
+    "preco": 199,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -1079,7 +1079,7 @@
   },
   {
     "id": 646,
-    "preco": null,
+    "preco": 99,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -1093,7 +1093,7 @@
   },
   {
     "id": 664,
-    "preco": null,
+    "preco": 280,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -1107,7 +1107,7 @@
   },
   {
     "id": 665,
-    "preco": null,
+    "preco": 280,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -1121,7 +1121,7 @@
   },
   {
     "id": 669,
-    "preco": null,
+    "preco": 199,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -1149,7 +1149,7 @@
   },
   {
     "id": 671,
-    "preco": null,
+    "preco": 199,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -1163,7 +1163,7 @@
   },
   {
     "id": 703,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -1177,7 +1177,7 @@
   },
   {
     "id": 291,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -1191,7 +1191,7 @@
   },
   {
     "id": 387,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -1205,7 +1205,7 @@
   },
   {
     "id": 388,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -1219,7 +1219,7 @@
   },
   {
     "id": 503,
-    "preco": null,
+    "preco": 240,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -1233,7 +1233,7 @@
   },
   {
     "id": 504,
-    "preco": null,
+    "preco": 50,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -1247,7 +1247,7 @@
   },
   {
     "id": 555,
-    "preco": null,
+    "preco": 50,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -1303,7 +1303,7 @@
   },
   {
     "id": 697,
-    "preco": null,
+    "preco": 35,
     "estoque": null,
     "imagem": null,
     "categoria": null,
@@ -1373,7 +1373,7 @@
   },
   {
     "id": 696,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -1387,7 +1387,7 @@
   },
   {
     "id": 698,
-    "preco": null,
+    "preco": 99,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -1401,7 +1401,7 @@
   },
   {
     "id": 699,
-    "preco": null,
+    "preco": 20,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -1415,7 +1415,7 @@
   },
   {
     "id": 701,
-    "preco": null,
+    "preco": 20,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -1429,7 +1429,7 @@
   },
   {
     "id": 691,
-    "preco": null,
+    "preco": 20,
     "estoque": null,
     "imagem": null,
     "categoria": null,
@@ -1443,7 +1443,7 @@
   },
   {
     "id": 232,
-    "preco": null,
+    "preco": 140,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -1457,7 +1457,7 @@
   },
   {
     "id": 389,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -1471,7 +1471,7 @@
   },
   {
     "id": 390,
-    "preco": null,
+    "preco": 80,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -1541,7 +1541,7 @@
   },
   {
     "id": 461,
-    "preco": null,
+    "preco": 240,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -1569,7 +1569,7 @@
   },
   {
     "id": 465,
-    "preco": null,
+    "preco": 299,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -1597,7 +1597,7 @@
   },
   {
     "id": 508,
-    "preco": null,
+    "preco": 150,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -1611,7 +1611,7 @@
   },
   {
     "id": 509,
-    "preco": null,
+    "preco": 199,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -1625,7 +1625,7 @@
   },
   {
     "id": 548,
-    "preco": null,
+    "preco": 100,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -1667,7 +1667,7 @@
   },
   {
     "id": 214,
-    "preco": null,
+    "preco": 399,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -1779,7 +1779,7 @@
   },
   {
     "id": 287,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -1793,7 +1793,7 @@
   },
   {
     "id": 288,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -1807,7 +1807,7 @@
   },
   {
     "id": 290,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -1821,7 +1821,7 @@
   },
   {
     "id": 318,
-    "preco": null,
+    "preco": 20,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -1835,7 +1835,7 @@
   },
   {
     "id": 319,
-    "preco": null,
+    "preco": 45,
     "estoque": 100,
     "imagem": null,
     "categoria": null,
@@ -1849,7 +1849,7 @@
   },
   {
     "id": 320,
-    "preco": null,
+    "preco": 45,
     "estoque": 100,
     "imagem": null,
     "categoria": null,
@@ -1863,7 +1863,7 @@
   },
   {
     "id": 321,
-    "preco": null,
+    "preco": 39,
     "estoque": 100,
     "imagem": null,
     "categoria": null,
@@ -1877,7 +1877,7 @@
   },
   {
     "id": 322,
-    "preco": null,
+    "preco": 70,
     "estoque": 100,
     "imagem": null,
     "categoria": null,
@@ -1891,7 +1891,7 @@
   },
   {
     "id": 323,
-    "preco": null,
+    "preco": 15,
     "estoque": 100,
     "imagem": null,
     "categoria": null,
@@ -1905,7 +1905,7 @@
   },
   {
     "id": 324,
-    "preco": null,
+    "preco": 15,
     "estoque": 100,
     "imagem": null,
     "categoria": null,
@@ -1919,7 +1919,7 @@
   },
   {
     "id": 325,
-    "preco": null,
+    "preco": 20,
     "estoque": 100,
     "imagem": null,
     "categoria": null,
@@ -1933,7 +1933,7 @@
   },
   {
     "id": 326,
-    "preco": null,
+    "preco": 25,
     "estoque": 100,
     "imagem": null,
     "categoria": null,
@@ -1947,7 +1947,7 @@
   },
   {
     "id": 327,
-    "preco": null,
+    "preco": 20,
     "estoque": 100,
     "imagem": null,
     "categoria": null,
@@ -1961,7 +1961,7 @@
   },
   {
     "id": 328,
-    "preco": null,
+    "preco": 35,
     "estoque": 100,
     "imagem": null,
     "categoria": null,
@@ -1975,7 +1975,7 @@
   },
   {
     "id": 329,
-    "preco": null,
+    "preco": 45,
     "estoque": 100,
     "imagem": null,
     "categoria": null,
@@ -1989,7 +1989,7 @@
   },
   {
     "id": 330,
-    "preco": null,
+    "preco": 15,
     "estoque": 100,
     "imagem": null,
     "categoria": null,
@@ -2003,7 +2003,7 @@
   },
   {
     "id": 331,
-    "preco": null,
+    "preco": 35,
     "estoque": 100,
     "imagem": null,
     "categoria": null,
@@ -2017,7 +2017,7 @@
   },
   {
     "id": 332,
-    "preco": null,
+    "preco": 45,
     "estoque": 100,
     "imagem": null,
     "categoria": null,
@@ -2031,7 +2031,7 @@
   },
   {
     "id": 333,
-    "preco": null,
+    "preco": 25,
     "estoque": 100,
     "imagem": null,
     "categoria": null,
@@ -2045,7 +2045,7 @@
   },
   {
     "id": 334,
-    "preco": null,
+    "preco": 20,
     "estoque": 100,
     "imagem": null,
     "categoria": null,
@@ -2073,7 +2073,7 @@
   },
   {
     "id": 336,
-    "preco": null,
+    "preco": 60,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -2087,7 +2087,7 @@
   },
   {
     "id": 337,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -2101,7 +2101,7 @@
   },
   {
     "id": 338,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -2115,7 +2115,7 @@
   },
   {
     "id": 339,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -2129,7 +2129,7 @@
   },
   {
     "id": 340,
-    "preco": null,
+    "preco": 30,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -2143,7 +2143,7 @@
   },
   {
     "id": 341,
-    "preco": null,
+    "preco": 10,
     "estoque": 15,
     "imagem": null,
     "categoria": null,
@@ -2171,7 +2171,7 @@
   },
   {
     "id": 343,
-    "preco": null,
+    "preco": 165,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -2199,7 +2199,7 @@
   },
   {
     "id": 345,
-    "preco": null,
+    "preco": 100,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -2339,7 +2339,7 @@
   },
   {
     "id": 289,
-    "preco": null,
+    "preco": 45,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -2367,7 +2367,7 @@
   },
   {
     "id": 513,
-    "preco": null,
+    "preco": 24,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -2381,7 +2381,7 @@
   },
   {
     "id": 514,
-    "preco": null,
+    "preco": 26,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -2451,7 +2451,7 @@
   },
   {
     "id": 702,
-    "preco": null,
+    "preco": 15,
     "estoque": 15,
     "imagem": null,
     "categoria": null,
@@ -2647,7 +2647,7 @@
   },
   {
     "id": 169,
-    "preco": null,
+    "preco": 25,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -2661,7 +2661,7 @@
   },
   {
     "id": 170,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -2675,7 +2675,7 @@
   },
   {
     "id": 171,
-    "preco": null,
+    "preco": 99,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -2689,7 +2689,7 @@
   },
   {
     "id": 172,
-    "preco": null,
+    "preco": 35,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -2703,7 +2703,7 @@
   },
   {
     "id": 231,
-    "preco": null,
+    "preco": 240,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -2773,7 +2773,7 @@
   },
   {
     "id": 173,
-    "preco": null,
+    "preco": 35,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -2787,7 +2787,7 @@
   },
   {
     "id": 178,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -2801,7 +2801,7 @@
   },
   {
     "id": 179,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -2815,7 +2815,7 @@
   },
   {
     "id": 180,
-    "preco": null,
+    "preco": 55,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -2843,7 +2843,7 @@
   },
   {
     "id": 385,
-    "preco": null,
+    "preco": 20,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -2927,7 +2927,7 @@
   },
   {
     "id": 181,
-    "preco": null,
+    "preco": 60,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -2941,7 +2941,7 @@
   },
   {
     "id": 182,
-    "preco": null,
+    "preco": 40,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -2955,7 +2955,7 @@
   },
   {
     "id": 183,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -2983,7 +2983,7 @@
   },
   {
     "id": 184,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -2997,7 +2997,7 @@
   },
   {
     "id": 293,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3011,7 +3011,7 @@
   },
   {
     "id": 294,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3025,7 +3025,7 @@
   },
   {
     "id": 295,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3039,7 +3039,7 @@
   },
   {
     "id": 296,
-    "preco": null,
+    "preco": 99,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -3053,7 +3053,7 @@
   },
   {
     "id": 297,
-    "preco": null,
+    "preco": 50,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -3067,7 +3067,7 @@
   },
   {
     "id": 298,
-    "preco": null,
+    "preco": 260,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -3081,7 +3081,7 @@
   },
   {
     "id": 299,
-    "preco": null,
+    "preco": 110,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -3095,7 +3095,7 @@
   },
   {
     "id": 300,
-    "preco": null,
+    "preco": 140,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -3109,7 +3109,7 @@
   },
   {
     "id": 301,
-    "preco": null,
+    "preco": 140,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -3151,7 +3151,7 @@
   },
   {
     "id": 304,
-    "preco": null,
+    "preco": 8,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -3165,7 +3165,7 @@
   },
   {
     "id": 305,
-    "preco": null,
+    "preco": 250,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -3179,7 +3179,7 @@
   },
   {
     "id": 306,
-    "preco": null,
+    "preco": 220,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -3207,7 +3207,7 @@
   },
   {
     "id": 308,
-    "preco": null,
+    "preco": 30,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3221,7 +3221,7 @@
   },
   {
     "id": 309,
-    "preco": null,
+    "preco": 35,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3235,7 +3235,7 @@
   },
   {
     "id": 310,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3249,7 +3249,7 @@
   },
   {
     "id": 311,
-    "preco": null,
+    "preco": 10,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3263,7 +3263,7 @@
   },
   {
     "id": 312,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3277,7 +3277,7 @@
   },
   {
     "id": 313,
-    "preco": null,
+    "preco": 20,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3291,7 +3291,7 @@
   },
   {
     "id": 314,
-    "preco": null,
+    "preco": 20,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3305,7 +3305,7 @@
   },
   {
     "id": 315,
-    "preco": null,
+    "preco": 20,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3319,7 +3319,7 @@
   },
   {
     "id": 316,
-    "preco": null,
+    "preco": 20,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3333,7 +3333,7 @@
   },
   {
     "id": 317,
-    "preco": null,
+    "preco": 25,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3347,7 +3347,7 @@
   },
   {
     "id": 185,
-    "preco": null,
+    "preco": 35,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3361,7 +3361,7 @@
   },
   {
     "id": 249,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3375,7 +3375,7 @@
   },
   {
     "id": 250,
-    "preco": null,
+    "preco": 40,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3389,7 +3389,7 @@
   },
   {
     "id": 174,
-    "preco": null,
+    "preco": 199,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -3403,7 +3403,7 @@
   },
   {
     "id": 175,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3417,7 +3417,7 @@
   },
   {
     "id": 176,
-    "preco": null,
+    "preco": 15,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3431,7 +3431,7 @@
   },
   {
     "id": 177,
-    "preco": null,
+    "preco": 15,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3445,7 +3445,7 @@
   },
   {
     "id": 346,
-    "preco": null,
+    "preco": 150,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -3459,7 +3459,7 @@
   },
   {
     "id": 347,
-    "preco": null,
+    "preco": 399,
     "estoque": 15,
     "imagem": null,
     "categoria": null,
@@ -3473,7 +3473,7 @@
   },
   {
     "id": 348,
-    "preco": null,
+    "preco": 399,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -3487,7 +3487,7 @@
   },
   {
     "id": 186,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3501,7 +3501,7 @@
   },
   {
     "id": 187,
-    "preco": null,
+    "preco": 80,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3515,7 +3515,7 @@
   },
   {
     "id": 401,
-    "preco": null,
+    "preco": 199,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -3529,7 +3529,7 @@
   },
   {
     "id": 403,
-    "preco": null,
+    "preco": 25,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -3543,7 +3543,7 @@
   },
   {
     "id": 406,
-    "preco": null,
+    "preco": 130,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -3557,7 +3557,7 @@
   },
   {
     "id": 515,
-    "preco": null,
+    "preco": 26,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -3585,7 +3585,7 @@
   },
   {
     "id": 189,
-    "preco": null,
+    "preco": 25,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3599,7 +3599,7 @@
   },
   {
     "id": 190,
-    "preco": null,
+    "preco": 30,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3613,7 +3613,7 @@
   },
   {
     "id": 349,
-    "preco": null,
+    "preco": 399,
     "estoque": 15,
     "imagem": null,
     "categoria": null,
@@ -3683,7 +3683,7 @@
   },
   {
     "id": 354,
-    "preco": null,
+    "preco": 80,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -3697,7 +3697,7 @@
   },
   {
     "id": 355,
-    "preco": null,
+    "preco": 75,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -3711,7 +3711,7 @@
   },
   {
     "id": 356,
-    "preco": null,
+    "preco": 299,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -3739,7 +3739,7 @@
   },
   {
     "id": 358,
-    "preco": null,
+    "preco": 125,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -3767,7 +3767,7 @@
   },
   {
     "id": 360,
-    "preco": null,
+    "preco": 70,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -3781,7 +3781,7 @@
   },
   {
     "id": 361,
-    "preco": null,
+    "preco": 399,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -3795,7 +3795,7 @@
   },
   {
     "id": 362,
-    "preco": null,
+    "preco": 15,
     "estoque": 15,
     "imagem": null,
     "categoria": null,
@@ -3823,7 +3823,7 @@
   },
   {
     "id": 364,
-    "preco": null,
+    "preco": 120,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -3837,7 +3837,7 @@
   },
   {
     "id": 365,
-    "preco": null,
+    "preco": 150,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -3865,7 +3865,7 @@
   },
   {
     "id": 368,
-    "preco": null,
+    "preco": 399,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -3907,7 +3907,7 @@
   },
   {
     "id": 192,
-    "preco": null,
+    "preco": 199,
     "estoque": 15,
     "imagem": null,
     "categoria": null,
@@ -3935,7 +3935,7 @@
   },
   {
     "id": 194,
-    "preco": null,
+    "preco": 200,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -3949,7 +3949,7 @@
   },
   {
     "id": 195,
-    "preco": null,
+    "preco": 25,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3963,7 +3963,7 @@
   },
   {
     "id": 196,
-    "preco": null,
+    "preco": 35,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -3977,7 +3977,7 @@
   },
   {
     "id": 198,
-    "preco": null,
+    "preco": 199,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -4047,7 +4047,7 @@
   },
   {
     "id": 204,
-    "preco": null,
+    "preco": 80,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -4117,7 +4117,7 @@
   },
   {
     "id": 371,
-    "preco": null,
+    "preco": 60,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -4131,7 +4131,7 @@
   },
   {
     "id": 372,
-    "preco": null,
+    "preco": 150,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -4145,7 +4145,7 @@
   },
   {
     "id": 373,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -4159,7 +4159,7 @@
   },
   {
     "id": 374,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -4187,7 +4187,7 @@
   },
   {
     "id": 376,
-    "preco": null,
+    "preco": 35,
     "estoque": 15,
     "imagem": null,
     "categoria": null,
@@ -4243,7 +4243,7 @@
   },
   {
     "id": 380,
-    "preco": null,
+    "preco": 60,
     "estoque": 15,
     "imagem": null,
     "categoria": null,
@@ -4285,7 +4285,7 @@
   },
   {
     "id": 383,
-    "preco": null,
+    "preco": 50,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -4313,7 +4313,7 @@
   },
   {
     "id": 206,
-    "preco": null,
+    "preco": 160,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -4341,7 +4341,7 @@
   },
   {
     "id": 208,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -4355,7 +4355,7 @@
   },
   {
     "id": 209,
-    "preco": null,
+    "preco": 50,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -4383,7 +4383,7 @@
   },
   {
     "id": 211,
-    "preco": null,
+    "preco": 80,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -4397,7 +4397,7 @@
   },
   {
     "id": 212,
-    "preco": null,
+    "preco": 65,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -4425,7 +4425,7 @@
   },
   {
     "id": 215,
-    "preco": null,
+    "preco": 25,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -4439,7 +4439,7 @@
   },
   {
     "id": 216,
-    "preco": null,
+    "preco": 99,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -4453,7 +4453,7 @@
   },
   {
     "id": 217,
-    "preco": null,
+    "preco": 240,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -4481,7 +4481,7 @@
   },
   {
     "id": 219,
-    "preco": null,
+    "preco": 120,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -4495,7 +4495,7 @@
   },
   {
     "id": 220,
-    "preco": null,
+    "preco": 120,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -4509,7 +4509,7 @@
   },
   {
     "id": 221,
-    "preco": null,
+    "preco": 199,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -4523,7 +4523,7 @@
   },
   {
     "id": 222,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -4537,7 +4537,7 @@
   },
   {
     "id": 223,
-    "preco": null,
+    "preco": 170,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -4551,7 +4551,7 @@
   },
   {
     "id": 224,
-    "preco": null,
+    "preco": 240,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -4565,7 +4565,7 @@
   },
   {
     "id": 225,
-    "preco": null,
+    "preco": 25,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -4579,7 +4579,7 @@
   },
   {
     "id": 226,
-    "preco": null,
+    "preco": 240,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -4593,7 +4593,7 @@
   },
   {
     "id": 227,
-    "preco": null,
+    "preco": 99,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -4607,7 +4607,7 @@
   },
   {
     "id": 228,
-    "preco": null,
+    "preco": 150,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -4621,7 +4621,7 @@
   },
   {
     "id": 229,
-    "preco": null,
+    "preco": 55,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -4635,7 +4635,7 @@
   },
   {
     "id": 230,
-    "preco": null,
+    "preco": 360,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -4663,7 +4663,7 @@
   },
   {
     "id": 536,
-    "preco": null,
+    "preco": 240,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -4719,7 +4719,7 @@
   },
   {
     "id": 404,
-    "preco": null,
+    "preco": 240,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -4733,7 +4733,7 @@
   },
   {
     "id": 409,
-    "preco": null,
+    "preco": 399,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -4747,7 +4747,7 @@
   },
   {
     "id": 410,
-    "preco": null,
+    "preco": 460,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -4761,7 +4761,7 @@
   },
   {
     "id": 411,
-    "preco": null,
+    "preco": 480,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -4775,7 +4775,7 @@
   },
   {
     "id": 412,
-    "preco": null,
+    "preco": 50,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -4831,7 +4831,7 @@
   },
   {
     "id": 522,
-    "preco": null,
+    "preco": 499,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -4859,7 +4859,7 @@
   },
   {
     "id": 679,
-    "preco": null,
+    "preco": 399,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -4873,7 +4873,7 @@
   },
   {
     "id": 681,
-    "preco": null,
+    "preco": 99,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -4887,7 +4887,7 @@
   },
   {
     "id": 682,
-    "preco": null,
+    "preco": 80,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -4901,7 +4901,7 @@
   },
   {
     "id": 683,
-    "preco": null,
+    "preco": 260,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -5013,7 +5013,7 @@
   },
   {
     "id": 405,
-    "preco": null,
+    "preco": 240,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -5027,7 +5027,7 @@
   },
   {
     "id": 446,
-    "preco": null,
+    "preco": 200,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -5041,7 +5041,7 @@
   },
   {
     "id": 447,
-    "preco": null,
+    "preco": 40,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -5055,7 +5055,7 @@
   },
   {
     "id": 448,
-    "preco": null,
+    "preco": 40,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -5069,7 +5069,7 @@
   },
   {
     "id": 449,
-    "preco": null,
+    "preco": 40,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -5083,7 +5083,7 @@
   },
   {
     "id": 450,
-    "preco": null,
+    "preco": 199,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -5097,7 +5097,7 @@
   },
   {
     "id": 452,
-    "preco": null,
+    "preco": 45,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -5111,7 +5111,7 @@
   },
   {
     "id": 453,
-    "preco": null,
+    "preco": 50,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -5125,7 +5125,7 @@
   },
   {
     "id": 454,
-    "preco": null,
+    "preco": 45,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -5139,7 +5139,7 @@
   },
   {
     "id": 455,
-    "preco": null,
+    "preco": 50,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -5167,7 +5167,7 @@
   },
   {
     "id": 460,
-    "preco": null,
+    "preco": 240,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -5251,7 +5251,7 @@
   },
   {
     "id": 252,
-    "preco": null,
+    "preco": 240,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -5265,7 +5265,7 @@
   },
   {
     "id": 233,
-    "preco": null,
+    "preco": 70,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -5279,7 +5279,7 @@
   },
   {
     "id": 419,
-    "preco": null,
+    "preco": 199,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -5293,7 +5293,7 @@
   },
   {
     "id": 420,
-    "preco": null,
+    "preco": 25,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -5307,7 +5307,7 @@
   },
   {
     "id": 421,
-    "preco": null,
+    "preco": 30,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -5335,7 +5335,7 @@
   },
   {
     "id": 423,
-    "preco": null,
+    "preco": 50,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -5349,7 +5349,7 @@
   },
   {
     "id": 424,
-    "preco": null,
+    "preco": 600,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -5363,7 +5363,7 @@
   },
   {
     "id": 425,
-    "preco": null,
+    "preco": 25,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -5377,7 +5377,7 @@
   },
   {
     "id": 426,
-    "preco": null,
+    "preco": 99,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -5405,7 +5405,7 @@
   },
   {
     "id": 428,
-    "preco": null,
+    "preco": 25,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -5419,7 +5419,7 @@
   },
   {
     "id": 429,
-    "preco": null,
+    "preco": 12,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -5447,7 +5447,7 @@
   },
   {
     "id": 431,
-    "preco": null,
+    "preco": 110,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -5475,7 +5475,7 @@
   },
   {
     "id": 399,
-    "preco": null,
+    "preco": 160,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -5489,7 +5489,7 @@
   },
   {
     "id": 486,
-    "preco": null,
+    "preco": 199,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -5503,7 +5503,7 @@
   },
   {
     "id": 488,
-    "preco": null,
+    "preco": 260,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -5629,7 +5629,7 @@
   },
   {
     "id": 396,
-    "preco": null,
+    "preco": 70,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -5657,7 +5657,7 @@
   },
   {
     "id": 398,
-    "preco": null,
+    "preco": 90,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -5671,7 +5671,7 @@
   },
   {
     "id": 400,
-    "preco": null,
+    "preco": 199,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -5685,7 +5685,7 @@
   },
   {
     "id": 402,
-    "preco": null,
+    "preco": 240,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -5699,7 +5699,7 @@
   },
   {
     "id": 407,
-    "preco": null,
+    "preco": 120,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -5741,7 +5741,7 @@
   },
   {
     "id": 480,
-    "preco": null,
+    "preco": 150,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -5797,7 +5797,7 @@
   },
   {
     "id": 234,
-    "preco": null,
+    "preco": 85,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -5811,7 +5811,7 @@
   },
   {
     "id": 235,
-    "preco": null,
+    "preco": 25,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -5825,7 +5825,7 @@
   },
   {
     "id": 236,
-    "preco": null,
+    "preco": 30,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -5853,7 +5853,7 @@
   },
   {
     "id": 238,
-    "preco": null,
+    "preco": 35,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -5895,7 +5895,7 @@
   },
   {
     "id": 416,
-    "preco": null,
+    "preco": 26,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -5937,7 +5937,7 @@
   },
   {
     "id": 432,
-    "preco": null,
+    "preco": 70,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -5951,7 +5951,7 @@
   },
   {
     "id": 433,
-    "preco": null,
+    "preco": 14,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -5965,7 +5965,7 @@
   },
   {
     "id": 434,
-    "preco": null,
+    "preco": 120,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -5993,7 +5993,7 @@
   },
   {
     "id": 436,
-    "preco": null,
+    "preco": 399,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -6007,7 +6007,7 @@
   },
   {
     "id": 437,
-    "preco": null,
+    "preco": 100,
     "estoque": 15,
     "imagem": null,
     "categoria": null,
@@ -6021,7 +6021,7 @@
   },
   {
     "id": 438,
-    "preco": null,
+    "preco": 199,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -6049,7 +6049,7 @@
   },
   {
     "id": 440,
-    "preco": null,
+    "preco": 140,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -6063,7 +6063,7 @@
   },
   {
     "id": 441,
-    "preco": null,
+    "preco": 70,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -6091,7 +6091,7 @@
   },
   {
     "id": 443,
-    "preco": null,
+    "preco": 25,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -6105,7 +6105,7 @@
   },
   {
     "id": 444,
-    "preco": null,
+    "preco": 250,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -6259,7 +6259,7 @@
   },
   {
     "id": 476,
-    "preco": null,
+    "preco": 99,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -6273,7 +6273,7 @@
   },
   {
     "id": 478,
-    "preco": null,
+    "preco": 199,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -6301,7 +6301,7 @@
   },
   {
     "id": 498,
-    "preco": null,
+    "preco": 50,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -6357,7 +6357,7 @@
   },
   {
     "id": 510,
-    "preco": null,
+    "preco": 120,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -6371,7 +6371,7 @@
   },
   {
     "id": 511,
-    "preco": null,
+    "preco": 165,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -6455,7 +6455,7 @@
   },
   {
     "id": 518,
-    "preco": null,
+    "preco": 399,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -6469,7 +6469,7 @@
   },
   {
     "id": 612,
-    "preco": null,
+    "preco": 99,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -6497,7 +6497,7 @@
   },
   {
     "id": 657,
-    "preco": null,
+    "preco": 250,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -6511,7 +6511,7 @@
   },
   {
     "id": 658,
-    "preco": null,
+    "preco": 120,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -6525,7 +6525,7 @@
   },
   {
     "id": 659,
-    "preco": null,
+    "preco": 50,
     "estoque": 15,
     "imagem": null,
     "categoria": null,
@@ -6553,7 +6553,7 @@
   },
   {
     "id": 661,
-    "preco": null,
+    "preco": 80,
     "estoque": 15,
     "imagem": null,
     "categoria": null,
@@ -6567,7 +6567,7 @@
   },
   {
     "id": 662,
-    "preco": null,
+    "preco": 199,
     "estoque": 15,
     "imagem": null,
     "categoria": null,
@@ -6609,7 +6609,7 @@
   },
   {
     "id": 540,
-    "preco": null,
+    "preco": 450,
     "estoque": 100,
     "imagem": null,
     "categoria": null,
@@ -6623,7 +6623,7 @@
   },
   {
     "id": 542,
-    "preco": null,
+    "preco": 399,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -6665,7 +6665,7 @@
   },
   {
     "id": 529,
-    "preco": null,
+    "preco": 199,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -6693,7 +6693,7 @@
   },
   {
     "id": 535,
-    "preco": null,
+    "preco": 299,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -6777,7 +6777,7 @@
   },
   {
     "id": 545,
-    "preco": null,
+    "preco": 220,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -6791,7 +6791,7 @@
   },
   {
     "id": 546,
-    "preco": null,
+    "preco": 150,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -6833,7 +6833,7 @@
   },
   {
     "id": 550,
-    "preco": null,
+    "preco": 99,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -6861,7 +6861,7 @@
   },
   {
     "id": 632,
-    "preco": null,
+    "preco": 60,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -6889,7 +6889,7 @@
   },
   {
     "id": 634,
-    "preco": null,
+    "preco": 110,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -6917,7 +6917,7 @@
   },
   {
     "id": 636,
-    "preco": null,
+    "preco": 30,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -7001,7 +7001,7 @@
   },
   {
     "id": 532,
-    "preco": null,
+    "preco": 35,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -7141,7 +7141,7 @@
   },
   {
     "id": 653,
-    "preco": null,
+    "preco": 70,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -7155,7 +7155,7 @@
   },
   {
     "id": 654,
-    "preco": null,
+    "preco": 199,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -7211,7 +7211,7 @@
   },
   {
     "id": 674,
-    "preco": null,
+    "preco": 499,
     "estoque": 1,
     "imagem": null,
     "categoria": null,
@@ -7225,7 +7225,7 @@
   },
   {
     "id": 675,
-    "preco": null,
+    "preco": 80,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -7267,7 +7267,7 @@
   },
   {
     "id": 680,
-    "preco": null,
+    "preco": 399,
     "estoque": 150,
     "imagem": null,
     "categoria": null,
@@ -7337,7 +7337,7 @@
   },
   {
     "id": 690,
-    "preco": null,
+    "preco": 15,
     "estoque": 15,
     "imagem": null,
     "categoria": null,
@@ -7351,7 +7351,7 @@
   },
   {
     "id": 692,
-    "preco": null,
+    "preco": 10,
     "estoque": 15,
     "imagem": null,
     "categoria": null,
@@ -7365,7 +7365,7 @@
   },
   {
     "id": 693,
-    "preco": null,
+    "preco": 25,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -7379,7 +7379,7 @@
   },
   {
     "id": 694,
-    "preco": null,
+    "preco": 25,
     "estoque": 1000,
     "imagem": null,
     "categoria": null,
@@ -7407,7 +7407,7 @@
   },
   {
     "id": 582,
-    "preco": null,
+    "preco": 89.99,
     "estoque": 1,
     "imagem": null,
     "categoria": null,
@@ -7463,7 +7463,7 @@
   },
   {
     "id": 586,
-    "preco": null,
+    "preco": 199,
     "estoque": 1,
     "imagem": null,
     "categoria": null,
@@ -7603,7 +7603,7 @@
   },
   {
     "id": 599,
-    "preco": null,
+    "preco": 130,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -7757,7 +7757,7 @@
   },
   {
     "id": 613,
-    "preco": null,
+    "preco": 199,
     "estoque": 2,
     "imagem": null,
     "categoria": null,
@@ -7785,7 +7785,7 @@
   },
   {
     "id": 615,
-    "preco": null,
+    "preco": 199,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -7827,7 +7827,7 @@
   },
   {
     "id": 572,
-    "preco": null,
+    "preco": 120,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -7967,7 +7967,7 @@
   },
   {
     "id": 606,
-    "preco": null,
+    "preco": 100,
     "estoque": 10,
     "imagem": null,
     "categoria": null,
@@ -8023,7 +8023,7 @@
   },
   {
     "id": 553,
-    "preco": null,
+    "preco": 399,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -8037,7 +8037,7 @@
   },
   {
     "id": 556,
-    "preco": null,
+    "preco": 299,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -8051,7 +8051,7 @@
   },
   {
     "id": 557,
-    "preco": null,
+    "preco": 250,
     "estoque": 20,
     "imagem": null,
     "categoria": null,
@@ -8205,7 +8205,7 @@
   },
   {
     "id": 618,
-    "preco": null,
+    "preco": 80,
     "estoque": 150,
     "imagem": null,
     "categoria": null,

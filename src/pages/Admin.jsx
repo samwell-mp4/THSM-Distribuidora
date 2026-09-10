@@ -5,7 +5,7 @@ import {
   deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads,
   upsertProducts, upsertDespesas, generateLoginToken, getAllRotaEdits, upsertRotaEdits, deleteRotaEdit as supabaseDeleteRotaEdit,
   deleteProducts as supabaseDeleteProducts, flushPendingOrders, deleteOnlyFinancialByOrder, samePhone, normTel, normalizePhoneDigits,
-  formatImageUrl, reconcileOrdersUsers
+  formatImageUrl, reconcileOrdersUsers, saveUserViaWebhook
 } from '../lib/supabase'
 import { compressImageDataUrl, capPhotoSize } from '../lib/image'
 
@@ -446,7 +446,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       o.paymentMethod ||
       o.payment ||
       (financial.some(f => f.orderId === o.id) &&
-       financial.filter(f => f.orderId === o.id).every(f => f.status === 'pago' || f.status === 'cancelado'))
+        financial.filter(f => f.orderId === o.id).every(f => f.status === 'pago' || f.status === 'cancelado'))
     )
   }, [financial])
 
@@ -458,7 +458,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     // 1. Restore items (add back returned quantities)
     const restoredItems = []
     const returnedMap = new Map((order.returnedItems || []).map(i => [i.id, i.qty]))
-    
+
     order.items.forEach(item => {
       const returnedQty = returnedMap.get(item.id) || 0
       restoredItems.push({
@@ -467,20 +467,20 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       })
       returnedMap.delete(item.id)
     })
-    
-    // Add back items that were completely returned (qty became 0)
-    ;(order.returnedItems || []).forEach(item => {
-      if (returnedMap.has(item.id)) {
-        restoredItems.push({
-          ...item,
-          qty: item.qty
-        })
-      }
-    })
+
+      // Add back items that were completely returned (qty became 0)
+      ; (order.returnedItems || []).forEach(item => {
+        if (returnedMap.has(item.id)) {
+          restoredItems.push({
+            ...item,
+            qty: item.qty
+          })
+        }
+      })
 
     const totalAvista = restoredItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
     const totalAprazo = restoredItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
-    
+
     const updatedOrder = {
       ...order,
       items: restoredItems,
@@ -506,7 +506,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     setFinancial(prev => {
       const otherRecords = prev.filter(f => f.orderId !== orderId)
       const orderAprazoItems = restoredItems.filter(i => i.tipo === 'aprazo')
-      
+
       const restoredFinancial = orderAprazoItems.map(i => {
         const existing = prev.find(f => f.id === orderId + '-' + i.id)
         return {
@@ -523,7 +523,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           paymentMethod: ''
         }
       })
-      
+
       const newFin = [...otherRecords, ...restoredFinancial]
       upsertFinancial(restoredFinancial) // upsert only the new restored ones
       return newFin
@@ -942,11 +942,60 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         })
         if (o.length) {
           setOrders(prev => {
+            const STATUS_RANK = {
+              'cancelado': 100,
+              'entregue': 50,
+              'em-rota': 40,
+              'em-andamento': 30,
+              'confirmado': 20,
+              'pendente': 10,
+              'pre-pedido': 0
+            }
             const map = new Map()
-            prev.forEach(ord => map.set(ord.id, ord))
-            o.forEach(ord => map.set(ord.id, ord))
+            // 1. Put all incoming remote orders in map
+            o.forEach(ord => map.set(String(ord.id), ord))
+
+            // 2. Protect local orders: NEVER demote status and NEVER overwrite newer local edits
+            prev.forEach(localOrd => {
+              const remoteOrd = map.get(String(localOrd.id))
+              if (!remoteOrd) {
+                map.set(String(localOrd.id), localOrd)
+                return
+              }
+
+              const localRank = STATUS_RANK[localOrd.status] ?? 0
+              const remoteRank = STATUS_RANK[remoteOrd.status] ?? 0
+
+              const localTime = Number(localOrd.lastModified || localOrd.updatedAt || localOrd.preApprovedAt || localOrd.createdAt || 0)
+              const remoteTime = Number(remoteOrd.lastModified || remoteOrd.updatedAt || remoteOrd.preApprovedAt || remoteOrd.createdAt || 0)
+
+              // If local status has advanced further (e.g. em-rota vs pre-pedido/pendente in DB), NEVER revert to lower status!
+              if (localRank > remoteRank) {
+                const preserved = {
+                  ...remoteOrd,
+                  ...localOrd,
+                  status: localOrd.status,
+                  items: (localOrd.items && localOrd.items.length > 0) ? localOrd.items : remoteOrd.items,
+                  total: (localOrd.total > 0) ? localOrd.total : remoteOrd.total
+                }
+                map.set(String(localOrd.id), preserved)
+                upsertOrder(preserved)
+              } else if (localRank === remoteRank) {
+                // Same rank: keep local edits if local is newer or has items
+                if (localTime >= remoteTime) {
+                  const preserved = {
+                    ...remoteOrd,
+                    ...localOrd,
+                    items: (localOrd.items && localOrd.items.length > 0) ? localOrd.items : remoteOrd.items,
+                    total: (localOrd.total > 0) ? localOrd.total : remoteOrd.total
+                  }
+                  map.set(String(localOrd.id), preserved)
+                }
+              }
+            })
+
             const del = deletedOrderIdsRef.current || new Set()
-            const merged = Array.from(map.values()).filter(ord => !del.has(ord.id))
+            const merged = Array.from(map.values()).filter(ord => !del.has(ord.id) && !del.has(String(ord.id)))
             LS.set(STORAGE_ORDERS, merged)
             return merged
           })
@@ -1018,6 +1067,33 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     return adminLocalProds || produtos || []
   }, [adminLocalProds, produtos])
 
+  // Map of known product prices from orders history and current products
+  const productPriceMap = useMemo(() => {
+    const map = new Map()
+    if (orders && Array.isArray(orders)) {
+      for (const o of orders) {
+        const items = o.items || o.data?.items || []
+        for (const i of items) {
+          const p = Number(i.preco)
+          if (p > 0) {
+            if (i.id != null && !map.has(String(i.id))) map.set(String(i.id), p)
+            const n = String(i.nome || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            if (n && !map.has(n)) map.set(n, p)
+          }
+        }
+      }
+    }
+    for (const p of (produtosAtuais || [])) {
+      const val = Number(p.preco)
+      if (val > 0) {
+        map.set(String(p.id), val)
+        const n = String(p.nome || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        if (n) map.set(n, val)
+      }
+    }
+    return map
+  }, [orders, produtosAtuais])
+
   // =============================================
   // ORDERS
   // =============================================
@@ -1026,100 +1102,137 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     if (savingOrder) return
     setSavingOrder(true)
     try {
-    const items = data.items
+      const items = (data.items || []).map(i => ({
+        ...i,
+        preco: Number(i.preco) || 0,
+        preco_custo: i.preco_custo != null && i.preco_custo !== '' ? Number(i.preco_custo) : null,
+        qty: Number(i.qty) || 1
+      }))
 
-    // Update product cost no DB directly
-    items.forEach(i => {
-      const numCusto = Number(i.preco_custo)
-      if (i.id != null && !isNaN(numCusto) && numCusto >= 0) {
-        updateProduct(i.id, { preco_custo: numCusto })
+      // Batch update cost in background ONLY for items where cost was explicitly modified by user
+      const changedCosts = {}
+      items.forEach(i => {
+        if (i.id != null && i.preco_custo != null && !isNaN(i.preco_custo) && i.preco_custo >= 0) {
+          const orig = produtosAtuais.find(p => p.id === i.id || String(p.id) === String(i.id))
+          if (orig && Number(orig.preco_custo) !== Number(i.preco_custo)) {
+            changedCosts[i.id] = { ...orig, preco_custo: i.preco_custo }
+          }
+        }
+      })
+      if (Object.keys(changedCosts).length > 0) {
+        upsertProducts(changedCosts).catch(e => console.warn('Erro batch update preco_custo:', e))
       }
-    })
 
-    const totalAvista = items.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
-    const totalAprazo = items.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
-    const orderId = Date.now()
-    let order = {
-      id: orderId,
-      date: data.dataPedido || hoje(),
-      customer: { nome: data.nome, telefone: data.telefone, cpf: data.cpf || '', endereco: data.endereco || { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' } },
-      items,
-      pagamento: data.pagamento,
-      totalAvista,
-      totalAprazo,
-      total: totalAvista + totalAprazo,
-      status: data.status || 'pendente',
-      createdAt: Date.now(),
-      dataVencimento: data.dataVencimento || null,
-      deliveredAt: data.status === 'entregue' ? Date.now() : null,
-      deliveryDataInicio: data.status === 'entregue' ? (data.dataPedido || hoje()) : null,
-      payment: data.payment || null
-    }
-    setOrders(prev => {
-      const next = [order, ...prev]
-      LS.set(STORAGE_ORDERS, next)
-      return next
-    })
+      const totalAvista = items.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
+      const totalAprazo = items.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
+      const orderId = Date.now()
 
-    // Upsert user to Supabase and update local list
-    const existingUser = usuarios.find(u => u.telefone === data.telefone)
-    const mergedEndereco = { ...(existingUser?.endereco || {}), ...(data.endereco || {}), cpf: data.cpf || existingUser?.endereco?.cpf || '', origem: existingUser?.endereco?.origem || 'Admin' }
-    const savedUser = await upsertUser({
-      telefone: data.telefone,
-      nome: data.nome,
-      email: data.email || '',
-      endereco: mergedEndereco,
-      cpf: data.cpf || existingUser?.cpf || ''
-    })
-    if (savedUser) {
-      order = { ...order, user_id: savedUser.id }
+      const existingUser = (usuarios || []).find(u => u && (u.telefone === data.telefone || samePhone(u.telefone, data.telefone)))
+
+      let order = {
+        id: orderId,
+        user_id: existingUser?.id || null,
+        date: data.dataPedido || hoje(),
+        customer: {
+          nome: data.nome,
+          telefone: data.telefone,
+          cpf: data.cpf || existingUser?.cpf || existingUser?.endereco?.cpf || '',
+          endereco: data.endereco || { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' }
+        },
+        items,
+        pagamento: data.pagamento,
+        totalAvista,
+        totalAprazo,
+        total: totalAvista + totalAprazo,
+        status: data.status || 'pendente',
+        createdAt: Date.now(),
+        dataVencimento: data.dataVencimento || null,
+        deliveredAt: data.status === 'entregue' ? Date.now() : null,
+        deliveryDataInicio: data.status === 'entregue' ? (data.dataPedido || hoje()) : null,
+        payment: data.payment || null
+      }
+
+      // Optimistic update: Save to UI state and close modal immediately!
       setOrders(prev => {
-        const next = prev.map(o => o.id === orderId ? order : o)
+        const next = [order, ...prev]
         LS.set(STORAGE_ORDERS, next)
         return next
       })
-      setUsuarios(prev => {
-        const idx = prev.findIndex(u => u.telefone === savedUser.telefone)
-        if (idx >= 0) {
-          const updated = [...prev]
-          updated[idx] = savedUser
-          return updated
-        }
-        return [savedUser, ...prev]
-      })
-    }
-    // Always persist order to PostgreSQL
-    await upsertOrder(order)
-
-    // Create financial records for "a prazo" items
-    const finRecords = items.filter(i => i.tipo === 'aprazo').map(i => {
-      const dueDate = data.dataVencimento || hoje()
-      const concluido = order.status === 'entregue'
-      return {
-        id: order.id + '-' + i.id,
-        orderId: order.id,
-        customerName: data.nome,
-        itemName: i.nome,
-        qty: i.qty,
-        value: i.preco * i.qty,
-        precoCusto: (i.preco_custo || 0) * i.qty,
-        dueDate,
-        paidDate: concluido ? hoje() : null,
-        status: concluido ? 'pago' : 'pendente'
-      }
-    })
-    if (finRecords.length > 0) {
-      setFinancial(prev => {
-        const next = [...finRecords, ...prev]
-        LS.set(STORAGE_FINANCIAL, next)
-        return next
-      })
-      await upsertFinancial(finRecords)
-    }
-
-    showToast('Pedido adicionado com sucesso!')
       setShowAddOrder(false)
-      sendStatusWebhook(order, order.status)
+      showToast('Pedido adicionado com sucesso!')
+
+      // Financial records for "a prazo" items
+      const finRecords = items.filter(i => i.tipo === 'aprazo').map(i => {
+        const dueDate = data.dataVencimento || hoje()
+        const concluido = order.status === 'entregue'
+        return {
+          id: order.id + '-' + i.id,
+          orderId: order.id,
+          customerName: data.nome,
+          itemName: i.nome,
+          qty: i.qty,
+          value: i.preco * i.qty,
+          precoCusto: (i.preco_custo || 0) * i.qty,
+          dueDate,
+          paidDate: concluido ? hoje() : null,
+          status: concluido ? 'pago' : 'pendente'
+        }
+      })
+      if (finRecords.length > 0) {
+        setFinancial(prev => {
+          const next = [...finRecords, ...prev]
+          LS.set(STORAGE_FINANCIAL, next)
+          return next
+        })
+      }
+
+      // Background persistence (User, Order, Financial, Webhook)
+      (async () => {
+        try {
+          const mergedEndereco = {
+            ...(existingUser?.endereco || {}),
+            ...(data.endereco || {}),
+            cpf: data.cpf || existingUser?.endereco?.cpf || '',
+            origem: existingUser?.endereco?.origem || 'Admin'
+          }
+          const savedUser = await upsertUser({
+            id: existingUser?.id,
+            telefone: data.telefone,
+            nome: data.nome,
+            email: data.email || '',
+            endereco: mergedEndereco,
+            cpf: data.cpf || existingUser?.cpf || ''
+          })
+
+          if (savedUser?.id && savedUser.id !== order.user_id) {
+            order = { ...order, user_id: savedUser.id }
+            setOrders(prev => {
+              const next = prev.map(o => o.id === orderId ? order : o)
+              LS.set(STORAGE_ORDERS, next)
+              return next
+            })
+            setUsuarios(prev => {
+              const idx = prev.findIndex(u => samePhone(u.telefone, savedUser.telefone))
+              if (idx >= 0) {
+                const updated = [...prev]
+                updated[idx] = savedUser
+                return updated
+              }
+              return [savedUser, ...prev]
+            })
+          }
+
+          await Promise.all([
+            upsertOrder(order),
+            finRecords.length > 0 ? upsertFinancial(finRecords) : Promise.resolve()
+          ])
+
+          sendStatusWebhook(order, order.status)
+        } catch (bgErr) {
+          console.error('Erro na persistência em segundo plano do pedido:', bgErr)
+        }
+      })()
+
     } catch (err) {
       console.error('Erro addOrder:', err)
       showToast('Erro ao salvar pedido: ' + (err.message || 'Tente novamente'), 'error')
@@ -1129,17 +1242,39 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   }
 
   const updateOrderStatus = (id, status, skipWebhook = false, customDue = null) => {
-    const order = orders.find(o => o.id === id)
+    const order = orders.find(o => String(o.id) === String(id))
     if (!order) return
 
+    const STATUS_RANK_MAP = {
+      'cancelado': 100,
+      'entregue': 50,
+      'em-rota': 40,
+      'em-andamento': 30,
+      'confirmado': 20,
+      'pendente': 10,
+      'pre-pedido': 0
+    }
+    const currentRank = STATUS_RANK_MAP[order.status] ?? 0
+    const targetRank = STATUS_RANK_MAP[status] ?? 0
+
+    // Strict guard: never allow demoting an order in route or delivered back to pending or pre-order
+    if (currentRank >= 40 && targetRank < 40) {
+      console.warn(`[updateOrderStatus] Tentativa bloqueada de rebaixar pedido #${id} de "${order.status}" para "${status}"`)
+      showToast(`O pedido #${id} já está em rota ou entregue e não pode ser rebaixado!`, 'error')
+      return
+    }
+
+    const now = Date.now()
     const finalDue = customDue !== null ? (customDue || null) : (order.dataVencimento || null)
     let updated = {
       ...order,
       status,
       dataVencimento: finalDue,
-      deliveredAt: status === 'entregue' ? Date.now() : order.deliveredAt
+      deliveredAt: status === 'entregue' ? now : order.deliveredAt,
+      lastModified: now,
+      updatedAt: now
     }
-    
+
     if (status !== 'entregue') {
       updated = {
         ...updated,
@@ -1151,10 +1286,10 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         paymentSplits: null,
         payment: null
       }
-      
+
       deleteOnlyFinancialByOrder(id).then(() => {
         setFinancial(prev => {
-          const otherRecords = prev.filter(f => f.orderId !== id)
+          const otherRecords = prev.filter(f => String(f.orderId) !== String(id))
           const orderAprazoItems = order.items.filter(i => i.tipo === 'aprazo')
           const restoredFinancial = orderAprazoItems.map(i => ({
             id: id + '-' + i.id,
@@ -1176,7 +1311,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     }
 
     setOrders(prev => {
-      const next = prev.map(o => o.id === id ? updated : o)
+      const next = prev.map(o => String(o.id) === String(id) ? updated : o)
       LS.set(STORAGE_ORDERS, next)
       return next
     })
@@ -1192,16 +1327,24 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   }
 
   const updateOrderDue = (id, due) => {
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, dataVencimento: due || null } : o))
+    setOrders(prev => prev.map(o => String(o.id) === String(id) ? { ...o, dataVencimento: due || null, lastModified: Date.now() } : o))
     setFinancial(prev => prev
-      .filter(f => f.orderId === id && f.status !== 'pago' && f.status !== 'cancelado')
+      .filter(f => String(f.orderId) === String(id) && f.status !== 'pago' && f.status !== 'cancelado')
       .map(f => ({ ...f, dueDate: due || f.dueDate })))
     showToast('Data de vencimento atualizada!')
   }
 
   const preApprovarPedido = (orderId, rejectedItemIds, replacements = [], dataVencimento = null) => {
-    const order = orders.find(o => o.id === orderId)
+    const order = orders.find(o => String(o.id) === String(orderId))
     if (!order) return
+
+    const STATUS_RANK_MAP = { 'cancelado': 100, 'entregue': 50, 'em-rota': 40, 'em-andamento': 30, 'confirmado': 20, 'pendente': 10, 'pre-pedido': 0 }
+    const currentRank = STATUS_RANK_MAP[order.status] ?? 0
+    if (currentRank >= 40) {
+      showToast(`Pedido #${orderId} já está em rota ou entregue e não pode ser rebaixado!`, 'error')
+      return
+    }
+
     const rejected = new Set(rejectedItemIds)
     let remainingItems = order.items.filter((_, idx) => !rejected.has(idx))
     if (replacements.length > 0) {
@@ -1219,11 +1362,13 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       total: totalAvista + totalAprazo,
       status: 'pendente',
       preApprovedAt: now,
+      lastModified: now,
+      updatedAt: now,
       dataVencimento: dataVencimento || order.dataVencimento || null,
       rejectedItems: rejectedItemIds.length > 0 ? rejectedItemIds.map(idx => order.items[idx]) : []
     }
     setOrders(prev => {
-      const next = prev.map(o => o.id === orderId ? updatedOrder : o)
+      const next = prev.map(o => String(o.id) === String(orderId) ? updatedOrder : o)
       LS.set(STORAGE_ORDERS, next)
       return next
     })
@@ -1260,29 +1405,90 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     setShowOrderDetail(null)
   }
 
-  const updateOrderCustomer = (id, customerData) => {
-    const telefone = customerData.telefone?.replace(/\D/g, '') || ''
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, customer: customerData } : o))
-    setShowOrderDetail(prev => prev?.id === id ? { ...prev, customer: customerData } : prev)
-    if (telefone) {
-      const existingUser = usuarios.find(u => u.telefone === telefone)
-      upsertUser({
-        telefone,
-        nome: customerData.nome,
-        email: customerData.email || '',
-        endereco: { ...(existingUser?.endereco || {}), ...customerData.endereco, cpf: customerData.cpf || existingUser?.endereco?.cpf || '' }
-      }).then(saved => {
-        if (saved) {
-          setUsuarios(prev => prev.map(u => u.telefone === saved.telefone ? saved : u))
-          setOrders(prev => prev.map(o =>
-            o.customer?.telefone?.replace(/\D/g, '') === telefone
-              ? { ...o, customer: { ...o.customer, nome: customerData.nome } }
-              : o
-          ))
-        }
-      })
+  const updateOrderCustomer = async (id, customerData) => {
+    const order = orders.find(o => String(o.id) === String(id))
+    if (!order) return
+
+    const rawPhone = (customerData.telefone || order.customer?.telefone || '').replace(/\D/g, '')
+    const normPhone = rawPhone ? (rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone) : ''
+
+    const cleanCpf = customerData.cpf || customerData.endereco?.cpf || order.customer?.cpf || order.customer?.endereco?.cpf || ''
+    const cleanEndereco = {
+      ...(customerData.endereco || {}),
+      cpf: cleanCpf
     }
-    showToast('Dados do cliente atualizados!')
+
+    const updatedCustomer = {
+      ...order.customer,
+      id: customerData.id || order.user_id || order.customer?.id || null,
+      nome: customerData.nome !== undefined ? customerData.nome : (order.customer?.nome || ''),
+      email: customerData.email !== undefined ? customerData.email : (order.customer?.email || ''),
+      telefone: normPhone || order.customer?.telefone || '',
+      cpf: cleanCpf,
+      endereco: cleanEndereco
+    }
+
+    const now = Date.now()
+    const updatedOrder = {
+      ...order,
+      customer: updatedCustomer,
+      user_id: customerData.id || order.user_id || null,
+      lastModified: now,
+      updatedAt: now
+    }
+
+    // 1. Instantly update React state & localStorage
+    setOrders(prev => {
+      const next = prev.map(o => String(o.id) === String(id) ? updatedOrder : o)
+      LS.set(STORAGE_ORDERS, next)
+      return next
+    })
+    setShowOrderDetail(prev => (prev && String(prev.id) === String(id)) ? { ...prev, customer: updatedCustomer, user_id: updatedOrder.user_id } : prev)
+
+    // 2. Persist order immediately to PostgreSQL
+    await upsertOrder(updatedOrder)
+
+    // 3. Post to Webhook att-user (n8n) and save user
+    if (normPhone) {
+      try {
+        const userPayload = {
+          id: customerData.id || order.user_id || null,
+          nome: updatedCustomer.nome,
+          email: updatedCustomer.email,
+          telefone: normPhone,
+          cpf: cleanCpf,
+          endereco: cleanEndereco
+        }
+        const savedUser = await saveUserViaWebhook(userPayload)
+        if (savedUser?.id && savedUser.id !== updatedOrder.user_id) {
+          const finalOrder = { ...updatedOrder, user_id: savedUser.id }
+          setOrders(prev => {
+            const next = prev.map(o => String(o.id) === String(id) ? finalOrder : o)
+            LS.set(STORAGE_ORDERS, next)
+            return next
+          })
+          await upsertOrder(finalOrder)
+        }
+        if (savedUser) {
+          setUsuarios(prev => {
+            const idx = prev.findIndex(u => samePhone(u.telefone, normPhone) || (savedUser.id && u.id === savedUser.id))
+            if (idx >= 0) {
+              const updated = [...prev]
+              updated[idx] = { ...updated[idx], ...savedUser }
+              LS.set('thsm_usuarios', updated)
+              return updated
+            }
+            const updated = [savedUser, ...prev]
+            LS.set('thsm_usuarios', updated)
+            return updated
+          })
+        }
+      } catch (webhookErr) {
+        console.error('[updateOrderCustomer] Erro ao enviar webhook att-user:', webhookErr)
+      }
+    }
+
+    showToast('Dados do cliente atualizados e salvos com sucesso!')
   }
 
   const cancelOrder = (id) => {
@@ -1499,7 +1705,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
       if (response.ok) {
         let responseData = {}
-        try { responseData = await response.json() } catch(err) {}
+        try { responseData = await response.json() } catch (err) { }
 
         if (responseData.status === 'erro' || responseData.status === 'error') {
           showToast('Erro retornado pelo webhook: ' + (responseData.message || ''), 'error')
@@ -1527,7 +1733,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       ...pwTarget,
       endereco: { ...(pwTarget.endereco || {}), senha: nova }
     }
-    
+
     try {
       const response = await fetch('https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/att-user', {
         method: 'POST',
@@ -1537,7 +1743,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
       if (response.ok) {
         let responseData = {}
-        try { responseData = await response.json() } catch(err) {}
+        try { responseData = await response.json() } catch (err) { }
 
         if (responseData.status === 'erro' || responseData.status === 'error') {
           showToast('Erro retornado pelo webhook: ' + (responseData.message || ''), 'error')
@@ -1969,7 +2175,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       if (cIdx >= 0) cached[cIdx] = updated
       else cached.unshift(updated)
       localStorage.setItem('thsm_cached_produtos', JSON.stringify(cached))
-    } catch {}
+    } catch { }
 
     const payload = { [id]: updated }
     await upsertProducts(payload)
@@ -2055,10 +2261,11 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   }
 
   const addToProdCart = (p) => {
+    const pPrice = Number(p.preco) > 0 ? Number(p.preco) : (productPriceMap?.get(String(p.id)) || productPriceMap?.get(String(p.nome || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')) || 0)
     setProdCart(prev => {
       const existing = prev[p.id]
       if (existing) return { ...prev, [p.id]: { ...existing, qty: existing.qty + 1 } }
-      return { ...prev, [p.id]: { id: p.id, nome: p.nome, preco: p.preco, preco_custo: p.preco_custo, imagem: p.imagem, tipo: 'aprazo', qty: 1, semDevolucao: !!p.semDevolucao } }
+      return { ...prev, [p.id]: { id: p.id, nome: p.nome, preco: pPrice, preco_custo: p.preco_custo, imagem: p.imagem, tipo: 'aprazo', qty: 1, semDevolucao: !!p.semDevolucao } }
     })
   }
 
@@ -2138,14 +2345,14 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     const val = parseFloat(bulkPriceValue)
     if (isNaN(val) || val < 0) { showToast('Valor inválido', 'error'); return }
     if (!confirm(`Definir preço R$ ${val.toFixed(2).replace('.', ',')} para ${prodSelectedIds.size} produto(s)?`)) return
-    
+
     const payload = {}
     prodSelectedIds.forEach(id => {
       const p = produtos.find(x => x.id === id) || { id }
       payload[id] = { ...p, preco: val }
     })
     updateMultipleProducts(payload)
-    
+
     showToast(`Preço atualizado para ${prodSelectedIds.size} produto(s)`)
     setProdSelectedIds(new Set())
     setShowBulkPrice(false)
@@ -2156,14 +2363,14 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     const val = parseInt(bulkStockValue, 10)
     if (isNaN(val) || val < 0) { showToast('Valor inválido', 'error'); return }
     if (!confirm(`Definir estoque ${val} para ${prodSelectedIds.size} produto(s)?`)) return
-    
+
     const payload = {}
     prodSelectedIds.forEach(id => {
       const p = produtos.find(x => x.id === id) || { id }
       payload[id] = { ...p, estoque: val }
     })
     updateMultipleProducts(payload)
-    
+
     showToast(`Estoque atualizado para ${prodSelectedIds.size} produto(s)`)
     setProdSelectedIds(new Set())
     setShowBulkStock(false)
@@ -2762,14 +2969,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                           {o.status === 'pre-pedido' && <button className="action-btn action-deliver" title="Enviar direto para Em Rota" onClick={() => { setShowRotaDue(o); setRotaDueDate(o.dataVencimento || '') }}><i className="fa-solid fa-truck"></i></button>}
                           {o.status === 'pendente' && <button className="action-btn action-confirm" title="Editar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-pen"></i></button>}
                           {o.status === 'pendente' && <button className="action-btn action-deliver" title="Em Rota (Próxima etapa)" onClick={() => { setShowRotaDue(o); setRotaDueDate(o.dataVencimento || '') }}><i className="fa-solid fa-truck"></i></button>}
-                          {o.status === 'pendente' && (
-                            <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Pré-Pedido" onClick={() => updateOrderStatus(o.id, 'pre-pedido')}><i className="fa-solid fa-undo"></i></button>
-                          )}
                           {o.status === 'em-rota' && (
                             <button className="action-btn action-confirm" title="Concluir (Próxima etapa)" onClick={() => updateOrderStatus(o.id, 'entregue')}><i className="fa-solid fa-check-double"></i></button>
-                          )}
-                          {o.status === 'em-rota' && (
-                            <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Pendente" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-undo"></i></button>
                           )}
                           {o.status === 'entregue' && !isFinalizada(o) && (
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Em Rota" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-undo"></i></button>
@@ -4304,6 +4505,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         <AddOrderModal
           produtos={produtosAtuais}
           usuarios={usuarios}
+          orders={orders}
+          productPriceMap={productPriceMap}
           initialCart={prodCart}
           preselectedUser={preselectedUserForOrder}
           onSave={(order) => { addOrder(order); clearProdCart() }}
@@ -4429,6 +4632,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           onPreApprovar={(rejectedIds, replacements, venc) => preApprovarPedido(showOrderDetail.id, rejectedIds, replacements, venc)}
           onOpenDelivery={(order) => { setShowDeliveryModal(order); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview(''); setDeliveryPayment('pix'); setDeliverySplits({ pix: '', dinheiro: '', cartao: '' }); setDeliveryDiscount(''); setDeliveryDiscountType('reais'); setDeliveryPaid(''); setDeliveryDataInicio(order.date || hoje()); setDeliveryDataVenc(order.dataVencimento || '') }}
           onEditAndConfirm={(editedItems, currentStatus) => {
+            const now = Date.now()
             const totalAvista = editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
             const totalAprazo = editedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
             const newStatus = currentStatus === 'entregue' || currentStatus === 'em-rota' ? 'entregue' : 'em-rota'
@@ -4439,12 +4643,18 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
               totalAprazo,
               total: totalAvista + totalAprazo,
               status: newStatus,
-              deliveredAt: newStatus === 'entregue' ? Date.now() : showOrderDetail.deliveredAt
+              deliveredAt: newStatus === 'entregue' ? now : showOrderDetail.deliveredAt,
+              lastModified: now,
+              updatedAt: now
             }
-            setOrders(prev => prev.map(o => o.id === showOrderDetail.id ? updatedOrder : o))
+            setOrders(prev => {
+              const next = prev.map(o => String(o.id) === String(showOrderDetail.id) ? updatedOrder : o)
+              LS.set(STORAGE_ORDERS, next)
+              return next
+            })
             upsertOrder(updatedOrder)
             setFinancial(prev => {
-              const existingIds = new Set(prev.filter(f => f.orderId === showOrderDetail.id).map(f => f.id))
+              const existingIds = new Set(prev.filter(f => String(f.orderId) === String(showOrderDetail.id)).map(f => f.id))
               const newRecords = editedItems
                 .filter(i => !existingIds.has(showOrderDetail.id + '-' + i.id))
                 .map(i => ({
@@ -4455,13 +4665,13 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                   qty: i.qty,
                   value: i.preco * i.qty,
                   precoCusto: (i.preco_custo || 0) * i.qty,
-                  dueDate: hoje(),
+                  dueDate: showOrderDetail.dataVencimento || hoje(),
                   paidDate: null,
                   status: i.tipo === 'aprazo' ? 'pendente' : 'pago',
                   paymentMethod: showOrderDetail.paymentMethod || ''
                 }))
               const updated = prev.map(f => {
-                if (f.orderId !== showOrderDetail.id) return f
+                if (String(f.orderId) !== String(showOrderDetail.id)) return f
                 const item = editedItems.find(i => f.id === showOrderDetail.id + '-' + i.id)
                 if (!item) return f
                 return {
@@ -4474,6 +4684,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 }
               })
               const mergedFin = [...updated, ...newRecords]
+              LS.set(STORAGE_FINANCIAL, mergedFin)
               upsertFinancial(mergedFin)
               return mergedFin
             })
@@ -4487,6 +4698,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
             }
           }}
           onEditSave={(editedItems) => {
+            const now = Date.now()
             const totalAvista = editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
             const totalAprazo = editedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
             const updatedOrder = {
@@ -4494,11 +4706,18 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
               items: editedItems,
               totalAvista,
               totalAprazo,
-              total: totalAvista + totalAprazo
+              total: totalAvista + totalAprazo,
+              lastModified: now,
+              updatedAt: now
             }
-            setOrders(prev => prev.map(o => o.id === showOrderDetail.id ? updatedOrder : o))
+            setOrders(prev => {
+              const next = prev.map(o => String(o.id) === String(showOrderDetail.id) ? updatedOrder : o)
+              LS.set(STORAGE_ORDERS, next)
+              return next
+            })
+            upsertOrder(updatedOrder)
             setFinancial(prev => {
-              const existingIds = new Set(prev.filter(f => f.orderId === showOrderDetail.id).map(f => f.id))
+              const existingIds = new Set(prev.filter(f => String(f.orderId) === String(showOrderDetail.id)).map(f => f.id))
               const newRecords = editedItems
                 .filter(i => !existingIds.has(showOrderDetail.id + '-' + i.id))
                 .map(i => ({
@@ -4509,13 +4728,13 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                   qty: i.qty,
                   value: i.preco * i.qty,
                   precoCusto: (i.preco_custo || 0) * i.qty,
-                  dueDate: hoje(),
+                  dueDate: showOrderDetail.dataVencimento || hoje(),
                   paidDate: showOrderDetail.deliveredAt ? hoje() : null,
                   status: showOrderDetail.status === 'entregue' ? 'pago' : (i.tipo === 'aprazo' ? 'pendente' : 'pago'),
                   paymentMethod: showOrderDetail.paymentMethod || ''
                 }))
               const updated = prev.map(f => {
-                if (f.orderId !== showOrderDetail.id) return f
+                if (String(f.orderId) !== String(showOrderDetail.id)) return f
                 const item = editedItems.find(i => f.id === showOrderDetail.id + '-' + i.id)
                 if (!item) return f
                 return {
@@ -4526,7 +4745,10 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                   paidDate: showOrderDetail.status === 'entregue' && !f.paidDate ? hoje() : f.paidDate
                 }
               })
-              return [...updated, ...newRecords]
+              const mergedFin = [...updated, ...newRecords]
+              LS.set(STORAGE_FINANCIAL, mergedFin)
+              upsertFinancial(mergedFin)
+              return mergedFin
             })
             showToast('Itens salvos com sucesso!')
             setShowOrderDetail({ ...updatedOrder, items: editedItems.map(i => ({ ...i })) })
@@ -6599,7 +6821,7 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
   )
 }
 
-function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSave, onClose }) {
+function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCart, preselectedUser, onSave, onClose }) {
   const [step, setStep] = useState(1)
   const [showNewForm, setShowNewForm] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -6619,10 +6841,31 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
   const [orderStatus, setOrderStatus] = useState('pendente')
   const [metodoPagamento, setMetodoPagamento] = useState('pix')
   const [valorPago, setValorPago] = useState('')
+
+  const getInitialPrice = useCallback((p) => {
+    if (!p) return 0
+    const direct = Number(p.preco)
+    if (!isNaN(direct) && direct > 0) return direct
+    if (productPriceMap) {
+      const byId = productPriceMap.get(String(p.id))
+      if (byId > 0) return byId
+      const n = String(p.nome || p.displayName || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      const byName = productPriceMap.get(n)
+      if (byName > 0) return byName
+    }
+    return 0
+  }, [productPriceMap])
+
   const [cart, setCart] = useState(() => {
     if (initialCart && Object.keys(initialCart).length > 0) {
       return Object.fromEntries(
-        Object.entries(initialCart).map(([id, item]) => [id, { ...item, tipo: item.tipo || 'avista' }])
+        Object.entries(initialCart).map(([id, item]) => {
+          let preco = Number(item.preco)
+          if (isNaN(preco) || preco <= 0) {
+            preco = getInitialPrice(item)
+          }
+          return [id, { ...item, preco, tipo: item.tipo || 'avista' }]
+        })
       )
     }
     return {}
@@ -6686,10 +6929,27 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
   useEffect(() => { setProdPage(1) }, [search])
 
   const cartItems = useMemo(() => Object.values(cart).filter(i => i.qty > 0), [cart])
-  const cartTotal = useMemo(() => cartItems.reduce((s, i) => s + i.preco * i.qty, 0), [cartItems])
+  const cartTotal = useMemo(() => cartItems.reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0), [cartItems])
 
   const addItem = (p) => {
-    setCart(prev => ({ ...prev, [p.id]: { id: p.id, nome: p.nome, preco: p.preco, preco_custo: p.preco_custo, imagem: p.imagem, qty: (prev[p.id]?.qty || 0) + 1, tipo: 'aprazo', semDevolucao: !!p.semDevolucao } }))
+    const resolvedPreco = getInitialPrice(p)
+    setCart(prev => {
+      const existing = prev[p.id]
+      const currentPrice = existing?.preco !== '' && existing?.preco != null && Number(existing.preco) > 0 ? existing.preco : (resolvedPreco > 0 ? resolvedPreco : 0)
+      return {
+        ...prev,
+        [p.id]: {
+          id: p.id,
+          nome: p.nome,
+          preco: currentPrice,
+          preco_custo: existing?.preco_custo ?? p.preco_custo ?? null,
+          imagem: p.imagem,
+          qty: (existing?.qty || 0) + 1,
+          tipo: existing?.tipo || 'aprazo',
+          semDevolucao: !!p.semDevolucao
+        }
+      }
+    })
   }
 
   const removeItem = (id) => {
@@ -6707,13 +6967,21 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
   }
 
   const setItemPreco = (id, val) => {
+    if (val === '') {
+      setCart(prev => prev[id] ? { ...prev, [id]: { ...prev[id], preco: '' } } : prev)
+      return
+    }
     const num = Number(String(val).replace(',', '.'))
-    setCart(prev => prev[id] ? { ...prev, [id]: { ...prev[id], preco: isNaN(num) ? 0 : num } } : prev)
+    setCart(prev => prev[id] ? { ...prev, [id]: { ...prev[id], preco: isNaN(num) ? '' : num } } : prev)
   }
 
   const setItemCusto = (id, val) => {
+    if (val === '') {
+      setCart(prev => prev[id] ? { ...prev, [id]: { ...prev[id], preco_custo: null } } : prev)
+      return
+    }
     const num = Number(String(val).replace(',', '.'))
-    setCart(prev => prev[id] ? { ...prev, [id]: { ...prev[id], preco_custo: isNaN(num) ? 0 : num } } : prev)
+    setCart(prev => prev[id] ? { ...prev, [id]: { ...prev[id], preco_custo: isNaN(num) ? null : num } } : prev)
   }
 
   const valorPagoNum = Number(String(valorPago).replace(',', '.')) || 0
@@ -6721,6 +6989,12 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
 
   const handleSave = () => {
     if (saving || cartItems.length === 0 || !nome.trim() || !telefone.trim()) return
+    const zeroPriceItems = cartItems.filter(i => i.preco === '' || !i.preco || Number(i.preco) <= 0)
+    if (zeroPriceItems.length > 0) {
+      alert(`Atenção: O produto "${zeroPriceItems[0].nome}" está com preço zerado. Por favor, volte ao passo 2 e informe o valor unitário antes de salvar o pedido.`)
+      setStep(2)
+      return
+    }
     setSaving(true)
     const isConcluido = orderStatus === 'entregue'
     onSave({
@@ -6730,7 +7004,12 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
       endereco,
       dataPedido,
       pagamento: pagamento === 'misto' ? 'misto' : (pagamento === 'aprazo' ? 'aprazo' : 'avista'),
-      items: cartItems.map(i => ({ ...i, tipo: pagamento === 'aprazo' ? 'aprazo' : (pagamento === 'avista' ? 'avista' : i.tipo) })),
+      items: cartItems.map(i => ({
+        ...i,
+        preco: Number(i.preco) || 0,
+        preco_custo: i.preco_custo != null && i.preco_custo !== '' ? Number(i.preco_custo) : null,
+        tipo: pagamento === 'aprazo' ? 'aprazo' : (pagamento === 'avista' ? 'avista' : i.tipo)
+      })),
       dataVencimento: (pagamento === 'aprazo' || pagamento === 'misto') ? dataVencimento : '',
       status: orderStatus,
       payment: isConcluido ? {
@@ -6887,11 +7166,18 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
               <div className="add-prod-list">
                 {paginatedProds.map(p => {
                   const inCart = cart[p.id]
+                  const initPrice = getInitialPrice(p)
                   return (
                     <div key={p.id} className={`add-prod-row ${inCart ? 'in-cart' : ''}`}>
                       <div className="add-prod-info">
                         <span className="add-prod-name">{p.nome}</span>
-                        <span className="add-prod-price">{formatPreco(p.preco)}</span>
+                        {initPrice > 0 ? (
+                          <span className="add-prod-price">{formatPreco(initPrice)}</span>
+                        ) : (
+                          <span className="add-prod-price" style={{ color: '#ef4444', fontWeight: 700, fontSize: '0.78rem' }}>
+                            <i className="fa-solid fa-triangle-exclamation"></i> Sem preço definido
+                          </span>
+                        )}
                       </div>
                       {inCart ? (
                         <div className="add-prod-controls">
@@ -6920,19 +7206,47 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
               {cartItems.length > 0 && (
                 <div className="add-prod-cart">
                   <p className="add-prod-cart-title">Itens do pedido — ajuste preço e custo:</p>
-                  {cartItems.map(i => (
-                    <div key={i.id} className="add-prod-cart-item">
-                      <span className="add-prod-cart-name">{i.nome} ({i.qty}x)</span>
-                      <div className="add-prod-cart-fields">
-                        <label>Preço (R$)
-                          <input type="number" step="0.01" min="0" value={i.preco} onChange={e => setItemPreco(i.id, e.target.value)} onClick={e => e.stopPropagation()} />
-                        </label>
-                        <label>Custo (R$)
-                          <input type="number" step="0.01" min="0" value={i.preco_custo ?? ''} placeholder="0" onChange={e => setItemCusto(i.id, e.target.value)} onClick={e => e.stopPropagation()} />
-                        </label>
+                  {cartItems.map(i => {
+                    const isZero = i.preco === '' || !i.preco || Number(i.preco) <= 0
+                    return (
+                      <div key={i.id} className={`add-prod-cart-item ${isZero ? 'has-zero-price' : ''}`} style={isZero ? { border: '1.5px solid #ef4444', background: '#fef2f2', borderRadius: '8px', padding: '0.5rem 0.75rem', marginBottom: '0.5rem' } : {}}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                          <span className="add-prod-cart-name" style={{ fontWeight: 600 }}>{i.nome} ({i.qty}x)</span>
+                          {isZero && (
+                            <span style={{ color: '#ef4444', fontSize: '0.75rem', fontWeight: 700 }}>
+                              <i className="fa-solid fa-circle-exclamation"></i> Preço obrigatório!
+                            </span>
+                          )}
+                        </div>
+                        <div className="add-prod-cart-fields">
+                          <label style={isZero ? { color: '#dc2626', fontWeight: 700 } : {}}>
+                            Preço Unitário (R$) *
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0.01"
+                              placeholder="0,00 (Obrigatório)"
+                              style={isZero ? { borderColor: '#ef4444', background: '#fff' } : {}}
+                              value={i.preco === '' ? '' : i.preco}
+                              onChange={e => setItemPreco(i.id, e.target.value)}
+                              onClick={e => e.stopPropagation()}
+                            />
+                          </label>
+                          <label>Custo (R$)
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={i.preco_custo ?? ''}
+                              placeholder="0,00"
+                              onChange={e => setItemCusto(i.id, e.target.value)}
+                              onClick={e => e.stopPropagation()}
+                            />
+                          </label>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
 
@@ -6943,9 +7257,27 @@ function AddOrderModal({ produtos, usuarios, initialCart, preselectedUser, onSav
                 </div>
               )}
 
+              {cartItems.some(i => i.preco === '' || !i.preco || Number(i.preco) <= 0) && (
+                <div style={{ background: '#fee2e2', border: '1px solid #ef4444', color: '#b91c1c', borderRadius: '8px', padding: '0.6rem 0.8rem', fontSize: '0.8rem', fontWeight: 600, marginTop: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <i className="fa-solid fa-triangle-exclamation"></i>
+                  <span>Atenção: produto(s) com preço zerado. Informe o valor unitário acima para avançar.</span>
+                </div>
+              )}
+
               <div className="modal-actions">
                 <button className="admin-btn admin-btn-sec" onClick={() => setStep(1)}><i className="fa-solid fa-arrow-left"></i> Voltar</button>
-                <button className="admin-btn admin-btn-primary" disabled={cartItems.length === 0} onClick={() => setStep(3)}>
+                <button
+                  className="admin-btn admin-btn-primary"
+                  disabled={cartItems.length === 0}
+                  onClick={() => {
+                    const zeroItems = cartItems.filter(i => i.preco === '' || !i.preco || Number(i.preco) <= 0)
+                    if (zeroItems.length > 0) {
+                      alert(`O produto "${zeroItems[0].nome}" está com preço zerado! Por favor, informe o valor unitário no campo destacado em vermelho antes de avançar.`)
+                      return
+                    }
+                    setStep(3)
+                  }}
+                >
                   Próximo <i className="fa-solid fa-arrow-right"></i>
                 </button>
               </div>
@@ -7074,12 +7406,26 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
     ).slice(0, 10)
   }, [usuarios, userSearch])
   const [editCustomer, setEditCustomer] = useState({
+    id: order.user_id || order.customer?.id || null,
     nome: order.customer?.nome || '',
     email: order.customer?.email || '',
     telefone: order.customer?.telefone || '',
-    cpf: order.customer?.cpf || '',
+    cpf: order.customer?.cpf || order.customer?.endereco?.cpf || '',
     endereco: { ...(order.customer?.endereco || {}) }
   })
+
+  useEffect(() => {
+    if (order) {
+      setEditCustomer({
+        id: order.user_id || order.customer?.id || null,
+        nome: order.customer?.nome || '',
+        email: order.customer?.email || '',
+        telefone: order.customer?.telefone || '',
+        cpf: order.customer?.cpf || order.customer?.endereco?.cpf || '',
+        endereco: { ...(order.customer?.endereco || {}) }
+      })
+    }
+  }, [order])
 
   const toggleReject = (idx) => {
     setRejectedItems(prev => {
@@ -7316,7 +7662,17 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
             <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               Cliente
               {!customerEdit && order.status !== 'entregue' && order.status !== 'cancelado' && (
-                <button className="action-btn" title="Editar dados do cliente" onClick={() => setCustomerEdit(true)} style={{ color: '#2563eb', fontSize: '0.75rem', padding: '0.2rem 0.4rem' }}>
+                <button className="action-btn" title="Editar dados do cliente" onClick={() => {
+                  setEditCustomer({
+                    id: order.user_id || order.customer?.id || null,
+                    nome: order.customer?.nome || '',
+                    email: order.customer?.email || '',
+                    telefone: order.customer?.telefone || '',
+                    cpf: order.customer?.cpf || order.customer?.endereco?.cpf || '',
+                    endereco: { ...(order.customer?.endereco || {}) }
+                  })
+                  setCustomerEdit(true)
+                }} style={{ color: '#2563eb', fontSize: '0.75rem', padding: '0.2rem 0.4rem' }}>
                   <i className="fa-solid fa-pencil"></i>
                 </button>
               )}
@@ -7611,20 +7967,10 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
           )}
 
           <div className="modal-actions">
-            {(order.status === 'pendente' || order.status === 'em-rota') && (
+            {(order.status === 'pre-pedido' || order.status === 'pendente' || order.status === 'em-rota') && (
               <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
                 onClick={() => { setEditMode(true); resetEditedItems() }}>
                 <i className="fa-solid fa-pen"></i> Editar Itens
-              </button>
-            )}
-            {order.status === 'pendente' && (
-              <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => onStatusChange('pre-pedido')}>
-                <i className="fa-solid fa-undo"></i> Voltar para Pré-Pedido
-              </button>
-            )}
-            {order.status === 'em-rota' && (
-              <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => onStatusChange('pendente')}>
-                <i className="fa-solid fa-undo"></i> Voltar para Pendente
               </button>
             )}
             {order.status === 'entregue' && (

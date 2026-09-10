@@ -657,7 +657,7 @@ export async function executeQuery(queryDesc) {
       }
 
       // Fast-path 1: Targeted UPDATE by primary key UUID "id" if present (prevents user cross-contamination)
-      if (!isArray && inputValues.id) {
+      if (!isArray && inputValues.id && table !== 'pedidos') {
         const updateKeys = Object.keys(inputValues).filter(k => k !== 'id' && k !== 'created_at');
         if (updateKeys.length > 0) {
           const updateValues = [];
@@ -734,8 +734,23 @@ export async function executeQuery(queryDesc) {
       } else {
         const updateCols = keys.filter(k => k !== conflictCol && k !== 'id' && k !== 'created_at');
         if (updateCols.length > 0) {
-          const updateSets = updateCols.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ');
-          onConflictClause = `ON CONFLICT ("${conflictCol}") DO UPDATE SET ${updateSets}`;
+          if (table === 'pedidos') {
+            const statusRankSql = `CASE "pedidos"."status" WHEN 'cancelado' THEN 100 WHEN 'entregue' THEN 50 WHEN 'em-rota' THEN 40 WHEN 'em-andamento' THEN 30 WHEN 'confirmado' THEN 20 WHEN 'pendente' THEN 10 ELSE 0 END`;
+            const excludedRankSql = `CASE EXCLUDED."status" WHEN 'cancelado' THEN 100 WHEN 'entregue' THEN 50 WHEN 'em-rota' THEN 40 WHEN 'em-andamento' THEN 30 WHEN 'confirmado' THEN 20 WHEN 'pendente' THEN 10 ELSE 0 END`;
+            const updateSets = updateCols.map(k => {
+              if (k === 'status') {
+                return `"status" = CASE WHEN (${statusRankSql}) > (${excludedRankSql}) THEN "pedidos"."status" ELSE EXCLUDED."status" END`;
+              }
+              if (k === 'data') {
+                return `"data" = CASE WHEN (${statusRankSql}) > (${excludedRankSql}) THEN "pedidos"."data" ELSE EXCLUDED."data" END`;
+              }
+              return `"${k}" = EXCLUDED."${k}"`;
+            }).join(', ');
+            onConflictClause = `ON CONFLICT ("${conflictCol}") DO UPDATE SET ${updateSets}`;
+          } else {
+            const updateSets = updateCols.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ');
+            onConflictClause = `ON CONFLICT ("${conflictCol}") DO UPDATE SET ${updateSets}`;
+          }
         } else {
           onConflictClause = `ON CONFLICT ("${conflictCol}") DO NOTHING`;
         }
