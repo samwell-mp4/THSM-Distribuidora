@@ -12,6 +12,8 @@ const LS_ORDERS = 'thsm_admin_orders'
 const LS_ADMIN = 'thsm_admin_auth'
 const WEBHOOK_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/novo-pedido'
 const WEBHOOK_RECOVER_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/recuperar-senha'
+const WHATSAPP_FORCE_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/whatsapp-force'
+const ADMIN_NOTIFY_PHONES = ['5531988868362', '5532988157834']
 const ADMIN_USER = 'thsmadmin'
 const ADMIN_PASS = 'th2026smdistribuidora!'
 
@@ -729,7 +731,33 @@ function App() {
       const d = new Date(String(str).length <= 10 ? str + 'T12:00:00' : str)
       return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-BR')
     }
-    const msgDatas = `📅 Data do pedido: ${formatDate(order.date || order.dataInicio || order.createdAt)}\n📅 Vencimento: ${formatDate(order.dataVencimento)}`
+    const formatTelefone = (tel) => {
+      if (!tel) return '—'
+      const clean = String(tel).replace(/\D/g, '')
+      const semDdi = clean.startsWith('55') && clean.length >= 12 ? clean.slice(2) : clean
+      if (semDdi.length === 11) {
+        return `(${semDdi.slice(0, 2)}) ${semDdi.slice(2, 7)}-${semDdi.slice(7)}`
+      }
+      if (semDdi.length === 10) {
+        return `(${semDdi.slice(0, 2)}) ${semDdi.slice(2, 6)}-${semDdi.slice(6)}`
+      }
+      return tel
+    }
+    const formatEndereco = (end) => {
+      if (!end) return '—'
+      if (typeof end === 'string') return end.trim() || '—'
+      const partes = [
+        end.rua ? (end.numero ? `${end.rua}, ${end.numero}` : end.rua) : '',
+        end.complemento,
+        end.bairro,
+        end.cidade ? (end.estado ? `${end.cidade} - ${end.estado}` : end.cidade) : '',
+        end.cep ? `CEP: ${end.cep}` : ''
+      ].filter(Boolean)
+      return partes.length > 0 ? partes.join(', ') : '—'
+    }
+    const tel = formatTelefone(order.customer?.telefone || order.telefone)
+    const end = formatEndereco(order.customer?.endereco || order.endereco)
+    const msgDatas = `📅 Data do pedido: ${formatDate(order.date || order.dataInicio || order.createdAt)}\n📅 Vencimento: ${formatDate(order.dataVencimento)}\n📞 Telefone: ${tel}\n🏠 Endereço: ${end}`
 
     const formatItemRow = (i) => {
       const unitPrice = Number(i.preco || 0).toFixed(2)
@@ -748,12 +776,17 @@ function App() {
     const rawPhone = (order.customer?.telefone || '').replace(/\D/g, '')
     const telefone = rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone
     const customer = { ...order.customer, telefone }
+    const whatsappMessage = buildWhatsAppMsg(order)
+
+    // 1. Webhook geral do pedido
     fetch(WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         event: 'atualizacao-pedido',
-        whatsappMessage: buildWhatsAppMsg(order),
+        whatsappMessage,
+        adminPhones: ADMIN_NOTIFY_PHONES,
+        admin_phones: ADMIN_NOTIFY_PHONES,
         order: {
           id: order.id,
           date: order.date,
@@ -767,6 +800,18 @@ function App() {
         }
       })
     }).catch(() => {})
+
+    // 2. Notificação espelho para os números administradores
+    ADMIN_NOTIFY_PHONES.forEach(adminTel => {
+      fetch(WHATSAPP_FORCE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telefone: adminTel,
+          message: `🔔 *[NOVO PEDIDO - THSM DISTRIBUIDORA]*\n\n${whatsappMessage}`
+        })
+      }).catch(() => {})
+    })
   }
 
   const finalizarCheckout = async () => {

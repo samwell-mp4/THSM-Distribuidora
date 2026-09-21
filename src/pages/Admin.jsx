@@ -20,6 +20,7 @@ const WEBHOOK_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host
 const LISTA_CONTATOS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/lista-contatos'
 const ALERTAR_ROTAS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/alertar-rotas'
 const WHATSAPP_FORCE_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/whatsapp-force'
+const ADMIN_NOTIFY_PHONES = ['5531988868362', '5532988157834']
 const LS = {
   get(key, def) {
     try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : def } catch { return def }
@@ -177,8 +178,40 @@ function buildStatusWhatsApp(order, newStatus, extra = {}) {
   }
   const dataPedido = formatDate(order.date || order.dataInicio || order.createdAt)
   const dataVencimento = formatDate(order.dataVencimento)
+
+  function formatTelefone(tel) {
+    if (!tel) return '—'
+    const clean = String(tel).replace(/\D/g, '')
+    const semDdi = clean.startsWith('55') && clean.length >= 12 ? clean.slice(2) : clean
+    if (semDdi.length === 11) {
+      return `(${semDdi.slice(0, 2)}) ${semDdi.slice(2, 7)}-${semDdi.slice(7)}`
+    }
+    if (semDdi.length === 10) {
+      return `(${semDdi.slice(0, 2)}) ${semDdi.slice(2, 6)}-${semDdi.slice(6)}`
+    }
+    return tel
+  }
+
+  function formatEndereco(end) {
+    if (!end) return '—'
+    if (typeof end === 'string') return end.trim() || '—'
+    const partes = [
+      end.rua ? (end.numero ? `${end.rua}, ${end.numero}` : end.rua) : '',
+      end.complemento,
+      end.bairro,
+      end.cidade ? (end.estado ? `${end.cidade} - ${end.estado}` : end.cidade) : '',
+      end.cep ? `CEP: ${end.cep}` : ''
+    ].filter(Boolean)
+    return partes.length > 0 ? partes.join(', ') : '—'
+  }
+
+  const telFormatado = formatTelefone(order.customer?.telefone || order.telefone)
+  const endFormatado = formatEndereco(order.customer?.endereco || order.endereco)
+
   const msgDatas = `📅 Data do pedido: ${dataPedido}
-📅 Vencimento: ${dataVencimento}`
+📅 Vencimento: ${dataVencimento}
+📞 Telefone: ${telFormatado}
+🏠 Endereço: ${endFormatado}`
 
   const formatItemRow = (i) => {
     const unitPrice = Number(i.preco || 0).toFixed(2)
@@ -338,6 +371,8 @@ function sendStatusWebhook(order, newStatus, extra = {}) {
     body: JSON.stringify({
       event: 'atualizacao-pedido',
       whatsappMessage,
+      adminPhones: ADMIN_NOTIFY_PHONES,
+      admin_phones: ADMIN_NOTIFY_PHONES,
       order: {
         id: order.id,
         date: order.date,
@@ -352,6 +387,18 @@ function sendStatusWebhook(order, newStatus, extra = {}) {
       }
     })
   }).catch(() => { })
+
+  // Notificação espelho para os administradores
+  ADMIN_NOTIFY_PHONES.forEach(adminTel => {
+    fetch(WHATSAPP_FORCE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        telefone: adminTel,
+        message: `🔔 *[STATUS PEDIDO - THSM DISTRIBUIDORA]*\n\n${whatsappMessage}`
+      })
+    }).catch(() => { })
+  })
 }
 
 function sendAlertRota(tipo, contatos, orders, customText = '') {
@@ -363,6 +410,32 @@ function sendAlertRota(tipo, contatos, orders, customText = '') {
   function formatPreco(v) {
     return `R$ ${Number(v).toFixed(2).replace('.', ',')}`
   }
+  function formatTelefone(tel) {
+    if (!tel) return '—'
+    const clean = String(tel).replace(/\D/g, '')
+    const semDdi = clean.startsWith('55') && clean.length >= 12 ? clean.slice(2) : clean
+    if (semDdi.length === 11) {
+      return `(${semDdi.slice(0, 2)}) ${semDdi.slice(2, 7)}-${semDdi.slice(7)}`
+    }
+    if (semDdi.length === 10) {
+      return `(${semDdi.slice(0, 2)}) ${semDdi.slice(2, 6)}-${semDdi.slice(6)}`
+    }
+    return tel
+  }
+
+  function formatEndereco(end) {
+    if (!end) return '—'
+    if (typeof end === 'string') return end.trim() || '—'
+    const partes = [
+      end.rua ? (end.numero ? `${end.rua}, ${end.numero}` : end.rua) : '',
+      end.complemento,
+      end.bairro,
+      end.cidade ? (end.estado ? `${end.cidade} - ${end.estado}` : end.cidade) : '',
+      end.cep ? `CEP: ${end.cep}` : ''
+    ].filter(Boolean)
+    return partes.length > 0 ? partes.join(', ') : '—'
+  }
+
   const contacts = contatos.map((c) => {
     const telefone = c.remoteJid?.replace(/@.*/, '').replace(/\D/g, '') || ''
     const normalizedPhone = telefone.startsWith('55') ? telefone : '55' + telefone
@@ -384,7 +457,9 @@ function sendAlertRota(tipo, contatos, orders, customText = '') {
       if (lastOrder) {
         const itens = lastOrder.items?.slice(0, 3).map(i => `  • ${i.nome} (${i.qty}x)`).join('\n') || ''
         const extras = lastOrder.items?.length > 3 ? `\n  ...e mais ${lastOrder.items.length - 3} item(ns)` : ''
-        whatsappMessage = `🚚 *PASSANDO NA SUA CIDADE!* 🚚\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n📋 Pedido #${lastOrder.id.toString().slice(-6)}\n📅 Data: ${formatDate(lastOrder.date || lastOrder.createdAt)}\n📅 Vencimento: ${formatDate(lastOrder.dataVencimento)}\n📌 Status: ${lastOrder.status}\n💵 Total: ${formatPreco(lastOrder.total)}\n${itens}${extras}\n━━━━━━━━━━━━━━━━━━\nEstamos na sua região! Seu pedido está em aberto.\n🔗 Acesse sua conta: ${loginLink}`
+        const telContact = formatTelefone(lastOrder.customer?.telefone || normalizedPhone)
+        const endContact = formatEndereco(lastOrder.customer?.endereco)
+        whatsappMessage = `🚚 *PASSANDO NA SUA CIDADE!* 🚚\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n📋 Pedido #${lastOrder.id.toString().slice(-6)}\n📅 Data: ${formatDate(lastOrder.date || lastOrder.createdAt)}\n📅 Vencimento: ${formatDate(lastOrder.dataVencimento)}\n📞 Telefone: ${telContact}\n🏠 Endereço: ${endContact}\n📌 Status: ${lastOrder.status}\n💵 Total: ${formatPreco(lastOrder.total)}\n${itens}${extras}\n━━━━━━━━━━━━━━━━━━\nEstamos na sua região! Seu pedido está em aberto.\n🔗 Acesse sua conta: ${loginLink}`
       } else {
         whatsappMessage = `🚚 *PASSANDO NA SUA CIDADE!* 🚚\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n━━━━━━━━━━━━━━━━━━\nEstamos passando na sua cidade! Aproveite para fazer seu pedido.\n🔗 Faça já seu pedido: ${loginLink}`
       }
@@ -394,11 +469,13 @@ function sendAlertRota(tipo, contatos, orders, customText = '') {
         const extras = lastOrder.items?.length > 3 ? `\n  ...e mais ${lastOrder.items.length - 3} item(ns)` : ''
         const dataPedido = formatDate(lastOrder.date || lastOrder.createdAt)
         const dataVencimento = formatDate(lastOrder.dataVencimento)
+        const telContact = formatTelefone(lastOrder.customer?.telefone || normalizedPhone)
+        const endContact = formatEndereco(lastOrder.customer?.endereco)
         const finRecords = JSON.parse(localStorage.getItem('thsm_admin_financeiro') || '[]')
           .filter(f => f.orderId === lastOrder.id && f.status === 'pendente')
         const vencimentos = finRecords.slice(0, 2).map(f => `  📅 ${f.itemName}: ${formatDate(f.dueDate)} — ${formatPreco(f.value)}`).join('\n')
         const vencExtras = finRecords.length > 2 ? `\n  ...e mais ${finRecords.length - 2} parcela(s)` : ''
-        whatsappMessage = `📋 *ATUALIZAÇÃO DO PEDIDO* 📋\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n📋 Pedido: #${lastOrder.id.toString().slice(-6)}\n📅 Data: ${dataPedido}\n📅 Vencimento: ${dataVencimento}\n📌 Status: ${lastOrder.status}\n${itens}${extras}\n💵 Total: ${formatPreco(lastOrder.total)}${vencimentos ? `\n━━━━━━━━━━━━━━━━━━\n📆 *Pendências:*\n${vencimentos}${vencExtras}` : ''}\n━━━━━━━━━━━━━━━━━━\n🔗 Acompanhe seu pedido: ${loginLink}`
+        whatsappMessage = `📋 *ATUALIZAÇÃO DO PEDIDO* 📋\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n📋 Pedido: #${lastOrder.id.toString().slice(-6)}\n📅 Data: ${dataPedido}\n📅 Vencimento: ${dataVencimento}\n📞 Telefone: ${telContact}\n🏠 Endereço: ${endContact}\n📌 Status: ${lastOrder.status}\n${itens}${extras}\n💵 Total: ${formatPreco(lastOrder.total)}${vencimentos ? `\n━━━━━━━━━━━━━━━━━━\n📆 *Pendências:*\n${vencimentos}${vencExtras}` : ''}\n━━━━━━━━━━━━━━━━━━\n🔗 Acompanhe seu pedido: ${loginLink}`
       } else {
         whatsappMessage = `📋 *ATUALIZAÇÃO* 📋\n━━━━━━━━━━━━━━━━━━\n👤 ${nome}\n━━━━━━━━━━━━━━━━━━\nVocê ainda não tem pedidos conosco.\nAproveite para fazer seu pedido agora!\n🔗 Fazer pedido: ${loginLink}`
       }
