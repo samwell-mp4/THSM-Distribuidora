@@ -556,8 +556,23 @@ export async function deleteUserByTelefone(telefone) {
 }
 
 function fixOrder(row) {
-  if (row.data && typeof row.data === 'object') return { ...row.data, user_id: row.user_id, status: row.status }
-  return row
+  if (!row) return row
+  const raw = row.data && typeof row.data === 'object' ? { ...row.data, user_id: row.user_id, status: row.status } : row
+  const rawItems = Array.isArray(raw.items) ? raw.items : Array.isArray(raw.itens) ? raw.itens : []
+  const items = rawItems.map(i => ({
+    ...i,
+    id: i.id != null ? i.id : Math.random(),
+    nome: i.nome || i.displayName || 'Item',
+    qty: Number(i.qty || i.quantidade || 1),
+    preco: Number(i.preco || i.price || 0),
+    tipo: i.tipo || 'aprazo'
+  }))
+  return {
+    ...raw,
+    items,
+    itens: items,
+    total: Number(raw.total != null ? raw.total : items.reduce((s, i) => s + i.preco * i.qty, 0))
+  }
 }
 
 // ---- FINANCIAL ----

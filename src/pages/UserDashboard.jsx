@@ -33,6 +33,25 @@ function setLS(key, data) {
   try { localStorage.setItem(key, JSON.stringify(data)) } catch (e) { console.warn('setLS falha:', key, e) }
 }
 
+function normalizeOrder(o) {
+  if (!o) return o
+  const rawItems = Array.isArray(o.items) ? o.items : Array.isArray(o.itens) ? o.itens : []
+  const items = rawItems.map(i => ({
+    ...i,
+    id: i.id != null ? i.id : Math.random(),
+    nome: i.nome || i.displayName || 'Item',
+    qty: Number(i.qty || i.quantidade || 1),
+    preco: Number(i.preco || i.price || 0),
+    tipo: i.tipo || 'aprazo'
+  }))
+  return {
+    ...o,
+    items,
+    itens: items,
+    total: Number(o.total != null ? o.total : items.reduce((s, i) => s + i.preco * i.qty, 0))
+  }
+}
+
 export default function UserDashboard({ produtos = [], onVoltar, initialOrderId, currentUser, onUpdateUser }) {
   const [tab, setTab] = useState(() => sessionStorage.getItem('thsm_user_tab') || 'pedidos')
   useEffect(() => { sessionStorage.setItem('thsm_user_tab', tab) }, [tab])
@@ -104,6 +123,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
         user_id: currentUser?.id || null,
         status: 'pendente',
         total,
+        items,
         itens: items,
         customer: {
           nome: currentUser?.nome || '',
@@ -118,7 +138,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
       setShopCart({})
       alert('Pedido realizado com sucesso!')
       
-      setAllOrders(prev => [order, ...prev])
+      setAllOrders(prev => [normalizeOrder(order), ...prev])
       setTab('pedidos')
     } catch (e) {
       console.error(e)
@@ -200,7 +220,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
     }
   }
 
-  const [allOrders, setAllOrders] = useState(() => getLS(LS_ORDERS))
+  const [allOrders, setAllOrders] = useState(() => (getLS(LS_ORDERS) || []).map(normalizeOrder))
   const [financial, setFinancial] = useState(() => getLS(LS_FINANCIAL))
   const [orderAccessMsg, setOrderAccessMsg] = useState('')
 
@@ -221,7 +241,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
     if (!order) return
     initialOrderHandled.current = true
     if (belongsToUser(order)) {
-      setSelectedOrder(order)
+      setSelectedOrder(normalizeOrder(order))
     } else {
       setOrderAccessMsg('Este pedido não pertence à conta logada. Entre com a conta que fez o pedido para acompanhá-lo.')
     }
@@ -235,7 +255,8 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
         initialOrderHandled.current = true
         return
       }
-      const order = data.data && typeof data.data === 'object' ? { ...data.data, user_id: data.user_id, status: data.status } : data
+      const raw = data.data && typeof data.data === 'object' ? { ...data.data, user_id: data.user_id, status: data.status } : data
+      const order = normalizeOrder(raw)
       setAllOrders(prev => prev.some(o => o.id === order.id) ? prev : [order, ...prev])
       if (currentUser) {
         if (belongsToUser(order)) {
@@ -275,7 +296,10 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
 
     supabase.from('pedidos').select('*').or(conds.join(',')).order('created_at', { ascending: false }).then(async ({ data }) => {
       if (data) {
-        const orders = data.map(r => r.data && typeof r.data === 'object' ? { ...r.data, user_id: r.user_id, status: r.status } : r)
+        const orders = data.map(r => {
+          const raw = r.data && typeof r.data === 'object' ? { ...r.data, user_id: r.user_id, status: r.status } : r
+          return normalizeOrder(raw)
+        })
         setAllOrders(orders)
         setLS(LS_ORDERS, orders)
         const orderIds = orders.filter(o => o && o.id).map(o => o.id)
@@ -303,7 +327,8 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
         if (userPhone && normPhone(o.customer?.telefone) === userPhone) return true
         return false
       })
-      .sort((a, b) => b.createdAt - a.createdAt)
+      .map(normalizeOrder)
+      .sort((a, b) => new Date(b.created_at || b.createdAt || b.date || 0) - new Date(a.created_at || a.createdAt || a.date || 0))
   }, [allOrders, currentUser])
 
   const userFinancial = useMemo(() => {
