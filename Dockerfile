@@ -8,6 +8,7 @@ RUN npm run build
 FROM node:20-alpine
 WORKDIR /app
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/public ./public
 COPY --from=build /app/server.js /app/db.js ./
 COPY --from=build /app/scratch ./scratch
 COPY --from=build /app/package*.json ./

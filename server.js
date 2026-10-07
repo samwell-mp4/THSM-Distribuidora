@@ -11,9 +11,35 @@ app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ limit: '50mb', extended: true }))
 
 // Image static serving and upstream proxy fallback
-const FOTOS_DIR = path.resolve('public/fotos')
-if (!fs.existsSync(FOTOS_DIR)) {
-  fs.mkdirSync(FOTOS_DIR, { recursive: true })
+const FOTOS_DIRS = [
+  path.resolve('dist/fotos'),
+  path.resolve('public/fotos'),
+  path.resolve('dist'),
+  path.resolve('public')
+]
+
+// Ensure directories exist
+FOTOS_DIRS.slice(0, 2).forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    try { fs.mkdirSync(dir, { recursive: true }) } catch {}
+  }
+})
+
+// Serve static fotos directly via Express
+app.use('/fotos', express.static(path.resolve('dist/fotos'), { maxAge: '1y', immutable: true }))
+app.use('/fotos', express.static(path.resolve('public/fotos'), { maxAge: '1y', immutable: true }))
+
+const findLocalFoto = (filename) => {
+  for (const dir of FOTOS_DIRS) {
+    const fullPath = path.join(dir, filename)
+    if (fs.existsSync(fullPath)) {
+      try {
+        const stat = fs.statSync(fullPath)
+        if (stat.size > 100) return fullPath
+      } catch {}
+    }
+  }
+  return null
 }
 
 const handleImageRequest = async (req, res) => {
@@ -23,48 +49,53 @@ const handleImageRequest = async (req, res) => {
       return res.status(400).send('Invalid image name')
     }
 
-    const localFile = path.join(FOTOS_DIR, filename)
-
-    // 1. Return from disk if present
-    if (fs.existsSync(localFile)) {
-      const stat = fs.statSync(localFile)
-      if (stat.size > 200) {
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
-        res.setHeader('Content-Type', filename.endsWith('.webp') ? 'image/webp' : 'image/jpeg')
-        return fs.createReadStream(localFile).pipe(res)
-      }
+    // 1. Return from disk if present in any fotos directory
+    const localFile = findLocalFoto(filename)
+    if (localFile) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+      res.setHeader('Content-Type', filename.endsWith('.webp') ? 'image/webp' : filename.endsWith('.png') ? 'image/png' : 'image/jpeg')
+      return fs.createReadStream(localFile).pipe(res)
     }
 
-    // 2. Fetch upstream from Minha Rota with required Referer
+    // 2. Fetch upstream from Minha Rota with required Referer if not found locally
     const upstreamUrl = `https://thsmdistribuidora.minharota.net/controller/fotos/${filename}`
-    const upstreamRes = await fetch(upstreamUrl, {
-      headers: {
-        'Referer': 'https://thsmdistribuidora.minharota.net/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    })
-
-    if (!upstreamRes.ok) {
-      return res.status(upstreamRes.status).send('Imagem não encontrada')
-    }
-
-    const contentType = upstreamRes.headers.get('content-type') || (filename.endsWith('.webp') ? 'image/webp' : 'image/jpeg')
-    const buffer = Buffer.from(await upstreamRes.arrayBuffer())
-
-    if (buffer.length > 200) {
-      fs.writeFile(localFile, buffer, (err) => {
-        if (err) console.error('Error caching image to public/fotos:', err)
+    try {
+      const upstreamRes = await fetch(upstreamUrl, {
+        headers: {
+          'Referer': 'https://thsmdistribuidora.minharota.net/',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
       })
-      // Also write to dist/fotos if dist exists
-      const distFile = path.resolve('dist/fotos', filename)
-      if (fs.existsSync(path.resolve('dist/fotos'))) {
-        fs.writeFile(distFile, buffer, () => {})
+
+      if (upstreamRes.ok) {
+        const contentType = upstreamRes.headers.get('content-type') || (filename.endsWith('.webp') ? 'image/webp' : 'image/jpeg')
+        const buffer = Buffer.from(await upstreamRes.arrayBuffer())
+
+        if (buffer.length > 200) {
+          const cachePath = path.resolve('public/fotos', filename)
+          fs.writeFile(cachePath, buffer, () => {})
+          const distPath = path.resolve('dist/fotos', filename)
+          if (fs.existsSync(path.resolve('dist/fotos'))) {
+            fs.writeFile(distPath, buffer, () => {})
+          }
+        }
+
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+        res.setHeader('Content-Type', contentType)
+        return res.send(buffer)
       }
+    } catch (upstreamErr) {
+      console.warn('Upstream image fetch failed:', upstreamErr.message)
     }
 
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
-    res.setHeader('Content-Type', contentType)
-    res.send(buffer)
+    // 3. Fallback: serve default THSM logo instead of broken image
+    const fallbackLogo = findLocalFoto('thsmdistribuidora.webp')
+    if (fallbackLogo) {
+      res.setHeader('Content-Type', 'image/webp')
+      return fs.createReadStream(fallbackLogo).pipe(res)
+    }
+
+    return res.status(404).send('Imagem não encontrada')
   } catch (err) {
     console.error('Image proxy error:', err.message)
     res.status(502).send('Error retrieving image')
