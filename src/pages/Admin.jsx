@@ -4598,6 +4598,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         isOpen={showOrderReportModal}
         onClose={() => setShowOrderReportModal(false)}
         orders={orders}
+        produtos={produtosAtuais}
         filteredOrdersFromScreen={filteredOrders}
         selectedOrderIds={selectedIds}
         usuarios={usuarios}
