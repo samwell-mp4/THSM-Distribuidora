@@ -505,6 +505,7 @@ function sendAlertRota(tipo, contatos, orders, customText = '') {
 import AddressForm from '../components/AddressForm'
 import MapView from '../components/MapView'
 import CentralAnalise from '../components/CentralAnalise'
+import OrderReportModal from '../components/OrderReportModal'
 
 export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [tab, setTab] = useState(() => sessionStorage.getItem('thsm_admin_tab') || 'dashboard')
@@ -619,6 +620,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [prodCartOpen, setProdCartOpen] = useState(false)
   const [prodImageErrors, setProdImageErrors] = useState({})
   const [showAddOrder, setShowAddOrder] = useState(false)
+  const [showOrderReportModal, setShowOrderReportModal] = useState(false)
   const [preselectedUserForOrder, setPreselectedUserForOrder] = useState(null)
   const [showOrderDetail, setShowOrderDetail] = useState(null)
   const [showRotaDue, setShowRotaDue] = useState(null)
@@ -2877,6 +2879,9 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 <button className="admin-btn admin-btn-sec" disabled={reconcilingOrders} onClick={handleReconcileOrders} title="Localiza pedidos sem ID e vincula aos usuários existentes ou cadastra os novos clientes">
                   <i className={`fa-solid ${reconcilingOrders ? 'fa-spinner fa-spin' : 'fa-link'}`}></i> {reconcilingOrders ? 'Conciliando...' : 'Conciliar Clientes/Pedidos'}
                 </button>
+                <button className="admin-btn" style={{ background: '#0284c7', color: 'white', borderColor: '#0284c7', fontSize: '0.8rem', padding: '0.45rem 0.85rem' }} onClick={() => setShowOrderReportModal(true)} title="Emitir Relatório de Pedidos em PDF ou Excel com filtros e resumo">
+                  <i className="fa-solid fa-file-invoice-dollar"></i> Relatório (PDF / Excel)
+                </button>
                 <button className="admin-btn admin-btn-primary" onClick={() => setShowAddOrder(true)}>
                   <i className="fa-solid fa-plus"></i> Novo Pedido
                 </button>
@@ -2977,6 +2982,9 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
               {selectedIds.size > 0 && (
                 <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)', fontWeight: 600 }}>{selectedIds.size} selecionado(s)</span>
+                  <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', background: '#0284c7', color: 'white', borderColor: '#0284c7' }} onClick={() => setShowOrderReportModal(true)} title="Emitir Relatório PDF ou Excel dos pedidos selecionados">
+                    <i className="fa-solid fa-file-pdf"></i> Relatório PDF/Excel ({selectedIds.size})
+                  </button>
                   <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} onClick={() => bulkAction('confirm')}>
                     <i className="fa-solid fa-check"></i> Confirmar
                   </button>
@@ -4584,6 +4592,19 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           onClose={() => { setShowAddOrder(false); setPreselectedUserForOrder(null); clearProdCart() }}
         />
       )}
+
+      {/* MODAL DE RELATÓRIO DE PEDIDOS (PDF E EXCEL) */}
+      <OrderReportModal
+        isOpen={showOrderReportModal}
+        onClose={() => setShowOrderReportModal(false)}
+        orders={orders}
+        filteredOrdersFromScreen={filteredOrders}
+        selectedOrderIds={selectedIds}
+        usuarios={usuarios}
+        rotas={rotas}
+        isFinalizada={isFinalizada}
+        showToast={showToast}
+      />
 
       {semDevReport && (
         <div className="admin-overlay semdev-overlay" onClick={() => setSemDevReport(null)}>
