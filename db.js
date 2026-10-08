@@ -745,8 +745,8 @@ export async function executeQuery(queryDesc) {
         const updateCols = keys.filter(k => k !== conflictCol && k !== 'id' && k !== 'created_at');
         if (updateCols.length > 0) {
           if (table === 'pedidos') {
-            const statusRankSql = `CASE "pedidos"."status" WHEN 'cancelado' THEN 100 WHEN 'entregue' THEN 50 WHEN 'em-rota' THEN 40 WHEN 'em-andamento' THEN 30 WHEN 'confirmado' THEN 20 WHEN 'pendente' THEN 10 ELSE 0 END`;
-            const excludedRankSql = `CASE EXCLUDED."status" WHEN 'cancelado' THEN 100 WHEN 'entregue' THEN 50 WHEN 'em-rota' THEN 40 WHEN 'em-andamento' THEN 30 WHEN 'confirmado' THEN 20 WHEN 'pendente' THEN 10 ELSE 0 END`;
+            const statusRankSql = `CASE "pedidos"."status" WHEN 'cancelado' THEN 100 WHEN 'concluido' THEN 70 WHEN 'acerto' THEN 60 WHEN 'entregue' THEN 50 WHEN 'em-rota' THEN 40 WHEN 'em-andamento' THEN 30 WHEN 'confirmado' THEN 20 WHEN 'pendente' THEN 10 ELSE 0 END`;
+            const excludedRankSql = `CASE EXCLUDED."status" WHEN 'cancelado' THEN 100 WHEN 'concluido' THEN 70 WHEN 'acerto' THEN 60 WHEN 'entregue' THEN 50 WHEN 'em-rota' THEN 40 WHEN 'em-andamento' THEN 30 WHEN 'confirmado' THEN 20 WHEN 'pendente' THEN 10 ELSE 0 END`;
             const updateSets = updateCols.map(k => {
               if (k === 'status') {
                 return `"status" = CASE WHEN (${statusRankSql}) > (${excludedRankSql}) THEN "pedidos"."status" ELSE EXCLUDED."status" END`;

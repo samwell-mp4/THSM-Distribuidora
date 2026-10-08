@@ -52,7 +52,9 @@ const STATUS_LABELS = {
   'confirmado': 'Confirmado',
   'em-andamento': 'Em Andamento',
   'em-rota': 'Em Rota',
-  'entregue': 'Concluído',
+  'entregue': 'Entregue',
+  'acerto': 'Acerto',
+  'concluido': 'Concluído',
   'cancelado': 'Cancelado'
 }
 
@@ -78,6 +80,22 @@ function getOrderTime(o) {
     if (!isNaN(t)) return t
   }
   return Number(o.id) || 0
+}
+
+function getOrderBaseItems(order) {
+  if (!order) return []
+  if (order.originalItems && order.originalItems.length > 0) return order.originalItems.map(i => ({ ...i }))
+  const map = new Map((order.items || []).map(i => [i.id, { ...i }]))
+  ;(order.returnedItems || []).forEach(r => {
+    const existing = map.get(r.id)
+    const retQty = Number(r.returnedQty || r.qty || 0)
+    if (existing) {
+      existing.qty = Number(existing.qty || 0) + retQty
+    } else {
+      map.set(r.id, { ...r, qty: retQty })
+    }
+  })
+  return Array.from(map.values())
 }
 
 function diffDays(a, b) {
@@ -301,30 +319,7 @@ ${msgItems}
 Olá ${nome}, seu pedido já foi separado. Só aguardar a entrega.
 🔗 Acesse seu pedido: ${link}`,
 
-    'entregue': extra.returnedItems?.length > 0
-      ? `✅ *PEDIDO FINALIZADO* ✅
-━━━━━━━━━━━━━━━━━━
-📋 Pedido: ${id}
-👤 Cliente: ${nome}
-${msgDatas}
-━━━━━━━━━━━━━━━━━━
-Olá ${nome}, seu pedido foi finalizado!
-📦 Itens entregues:
-${order.items.map(formatItemRow).join('\n')}
-📦 Itens devolvidos:
-${extra.returnedItems.map(formatReturnedItemRow).join('\n')}
-━━━━━━━━━━━━━━━━━━
-📦 Total de itens entregues: ${totalQty}
-💰 Total cobrado: R$ ${order.total.toFixed(2)}
-━━━━━━━━━━━━━━━━━━
-⚠️ *Importante:* Produtos embalados/lacrados não podem ser abertos. Não aceitamos devolução de produtos violados.
-Você tem até 24 horas para nos informar se houver algum item faltando ou com avaria.
-━━━━━━━━━━━━━━━━━━
-📲 *Confirme o recebimento:* Clique no link abaixo para visualizar sua comanda e confirmar os itens recebidos:
-${link}
-━━━━━━━━━━━━━━━━━━
-Obrigado pela preferência! 🎉`
-      : `✅ *PEDIDO ENTREGUE* ✅
+    'entregue': `✅ *PEDIDO ENTREGUE* ✅
 ━━━━━━━━━━━━━━━━━━
 📋 Pedido: ${id}
 👤 Cliente: ${nome}
@@ -343,6 +338,112 @@ Você tem até 24 horas para nos informar se houver algum item faltando ou com a
 ${link}
 ━━━━━━━━━━━━━━━━━━
 Obrigado pela preferência! 🎉`,
+
+    'acerto': (() => {
+      const returned = (extra.returnedItems || order.returnedItems || []).filter(i => (Number(i.returnedQty || i.qty) || 0) > 0)
+      const remaining = (order.items || []).filter(i => (Number(i.qty) || 0) > 0)
+      const totalQtyPaid = remaining.reduce((s, i) => s + (Number(i.qty) || 0), 0)
+
+      const devolvidosBlock = returned.length > 0
+        ? `📦 *ITENS DEVOLVIDOS*\n\n${returned.map(formatReturnedItemRow).join('\n\n')}\n\n\n`
+        : ''
+
+      const pagosBlock = remaining.length > 0
+        ? `📦 *ITENS PAGOS*\n${remaining.map(formatItemRow).join('\n')}\n`
+        : `📦 *ITENS PAGOS*\n  • Nenhum item\n`
+
+      const totalComandaNum = Number(extra.totalComanda != null ? extra.totalComanda : (order.total || 0))
+      const totalComandaStr = totalComandaNum.toFixed(2)
+
+      const valorAcertoNum = Number(
+        extra.valorAcerto != null
+          ? extra.valorAcerto
+          : (order.totalPago > 0
+              ? order.totalPago
+              : (order.valorAcerto > 0 ? order.valorAcerto : (order.desconto ? totalComandaNum : totalComandaNum * 0.70)))
+      )
+      const valorAcertoStr = valorAcertoNum.toFixed(2)
+
+      return `✅ *ACERTO* ✅
+━━━━━━━━━━━━━━━━━━
+📋 *Pedido:* ${id}
+👤 *Cliente:* ${nome}
+${msgDatas}
+━━━━━━━━━━━━━━━━━━
+Olá ${nome}, seu pedido foi finalizado!
+
+${devolvidosBlock}${pagosBlock}━━━━━━━━━━━━━━━━━━
+
+📦 *TOTAL DE ITENS PAGOS:* ${totalQtyPaid}
+
+💰 *TOTAL R$* ${totalComandaStr}
+💰 *ACERTO R$*${valorAcertoStr}
+━━━━━━━━━━━━━━━━━━
+⚠️ *Importante:* Produtos embalados/lacrados não podem ser abertos. Não aceitamos devolução de produtos violados.
+Você tem até 24 horas para nos informar se houver algum item faltando ou com avaria.
+━━━━━━━━━━━━━━━━━━
+📲 *Confirme o recebimento:* Clique no link abaixo para visualizar sua comanda e confirmar os itens recebidos:
+${link}
+━━━━━━━━━━━━━━━━━━
+Obrigado pela preferência! 🎉`
+    })(),
+
+    'concluido': (() => {
+      const remaining = (order.items || []).filter(i => (Number(i.qty) || 0) > 0)
+      const pagosBlock = remaining.length > 0
+        ? remaining.map(formatItemRow).join('\n')
+        : '  • Nenhum item'
+
+      const pm = (order.paymentMethod || extra.paymentMethod || 'pix').toLowerCase()
+      const splits = order.paymentSplits || extra.paymentSplits || {}
+      const totalPagoNum = Number(extra.totalPago != null ? extra.totalPago : (order.totalPago != null ? order.totalPago : order.total)) || 0
+      const formatBr = (n) => Number(n || 0).toFixed(2).replace('.', ',')
+
+      let paymentLines = []
+      if (pm === 'pix+dinheiro') {
+        const pixVal = Number(String(splits.pix || 0).replace(',', '.'))
+        const dinVal = Number(String(splits.dinheiro || 0).replace(',', '.'))
+        paymentLines.push(`💰 *PAGOU NO PIX R$${formatBr(pixVal)}*`)
+        paymentLines.push(`💰 *PAGOU NO DINHEIRO R$${formatBr(dinVal)}*`)
+      } else if (pm === 'pix+cartao') {
+        const pixVal = Number(String(splits.pix || 0).replace(',', '.'))
+        const carVal = Number(String(splits.cartao || 0).replace(',', '.'))
+        paymentLines.push(`💰 *PAGOU NO PIX R$${formatBr(pixVal)}*`)
+        paymentLines.push(`💰 *PAGOU NO CARTÃO R$${formatBr(carVal)}*`)
+      } else if (pm === 'cartao+dinheiro') {
+        const carVal = Number(String(splits.cartao || 0).replace(',', '.'))
+        const dinVal = Number(String(splits.dinheiro || 0).replace(',', '.'))
+        paymentLines.push(`💰 *PAGOU NO CARTÃO R$${formatBr(carVal)}*`)
+        paymentLines.push(`💰 *PAGOU NO DINHEIRO R$${formatBr(dinVal)}*`)
+      } else if (pm === 'dinheiro') {
+        paymentLines.push(`💰 *PAGOU NO DINHEIRO R$${formatBr(totalPagoNum)}*`)
+      } else if (pm === 'cartao') {
+        paymentLines.push(`💰 *PAGOU NO CARTÃO R$${formatBr(totalPagoNum)}*`)
+      } else {
+        paymentLines.push(`💰 *PAGOU NO PIX R$${formatBr(totalPagoNum)}*`)
+      }
+
+      paymentLines.push(`💰 *VALOR TOTAL PAGO R$${formatBr(totalPagoNum)}*`)
+      const paymentSection = paymentLines.join('\n\n')
+
+      const returned = (extra.returnedItems || order.returnedItems || []).filter(i => (Number(i.returnedQty || i.qty) || 0) > 0)
+      const devolucaoLine = returned.length > 0 ? `\n\n*DEVOLUÇÃO ✅*` : ''
+
+      return `✅ *PEDIDO FINALIZADO✅*
+━━━━━━━━━━━━━━━━━━
+📋 *Pedido:* ${id}
+👤 *Cliente:* ${nome}
+${msgDatas}
+━━━━━━━━━━━━━━━━━━
+📦 *ITENS PAGOS*
+
+${pagosBlock}
+
+━━━━━━━━━━━━━━━━━━
+${paymentSection}${devolucaoLine}
+━━━━━━━━━━━━━━━━━━
+Obrigado pela preferência! 🎉`
+    })(),
 
     'cancelado': `❌ *PEDIDO CANCELADO* ❌
 ━━━━━━━━━━━━━━━━━━
@@ -520,54 +621,54 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [toast, setToast] = useState(null)
 
   const isFinalizada = useCallback((o) => {
-    return o.status === 'entregue' && (
-      o.paymentMethod ||
-      o.payment ||
-      (financial.some(f => f.orderId === o.id) &&
-        financial.filter(f => f.orderId === o.id).every(f => f.status === 'pago' || f.status === 'cancelado'))
+    if (!o) return false
+    return o.status === 'concluido' || o.isFinalizado === true || (
+      o.status === 'entregue' && (
+        o.finalizadoAt ||
+        (financial.some(f => f.orderId === o.id) &&
+          financial.filter(f => f.orderId === o.id).every(f => f.status === 'pago' || f.status === 'cancelado'))
+      )
     )
   }, [financial])
+
+  const revertToEntregue = async (orderId) => {
+    const order = orders.find(o => o.id === orderId)
+    if (!order) return
+    if (!confirm('Deseja voltar este pedido para Entregues?')) return
+    const updated = {
+      ...order,
+      status: 'entregue',
+      isFinalizado: false,
+      lastModified: Date.now(),
+      updatedAt: Date.now()
+    }
+    setOrders(prev => prev.map(o => o.id === orderId ? updated : o))
+    await upsertOrder(updated)
+    showToast(`Pedido #${orderId} voltou para Entregues!`)
+    sendStatusWebhook(updated, 'entregue')
+  }
 
   const revertOrderFinalization = async (orderId) => {
     const order = orders.find(o => o.id === orderId)
     if (!order) return
-    if (!confirm('Deseja voltar este pedido para Entregues? (Isso irá reverter as devoluções e pagamentos)')) return
+    if (!confirm('Deseja voltar este pedido para Acertos? (Isso irá reverter as devoluções e pagamentos)')) return
 
     // 1. Restore items (add back returned quantities)
-    const restoredItems = []
-    const returnedMap = new Map((order.returnedItems || []).map(i => [i.id, i.qty]))
+    const baseItems = getOrderBaseItems(order)
 
-    order.items.forEach(item => {
-      const returnedQty = returnedMap.get(item.id) || 0
-      restoredItems.push({
-        ...item,
-        qty: item.qty + returnedQty
-      })
-      returnedMap.delete(item.id)
-    })
-
-      // Add back items that were completely returned (qty became 0)
-      ; (order.returnedItems || []).forEach(item => {
-        if (returnedMap.has(item.id)) {
-          restoredItems.push({
-            ...item,
-            qty: item.qty
-          })
-        }
-      })
-
-    const totalAvista = restoredItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
-    const totalAprazo = restoredItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
+    const totalAvista = baseItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
+    const totalAprazo = baseItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
 
     const updatedOrder = {
       ...order,
-      items: restoredItems,
+      items: baseItems,
       totalAvista,
       totalAprazo,
       total: totalAvista + totalAprazo,
       desconto: 0,
       totalPago: 0,
-      status: 'entregue',
+      status: 'acerto',
+      isFinalizado: false,
       returnedItems: [],
       totalReembolso: 0,
       paymentMethod: '',
@@ -583,7 +684,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
     setFinancial(prev => {
       const otherRecords = prev.filter(f => f.orderId !== orderId)
-      const orderAprazoItems = restoredItems.filter(i => i.tipo === 'aprazo')
+      const orderAprazoItems = baseItems.filter(i => i.tipo === 'aprazo')
 
       const restoredFinancial = orderAprazoItems.map(i => {
         const existing = prev.find(f => f.id === orderId + '-' + i.id)
@@ -607,8 +708,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       return newFin
     })
 
-    showToast(`Pedido #${orderId} voltou para Entregues! Pagamentos e devoluções revertidos.`)
-    sendStatusWebhook(updatedOrder, 'entregue')
+    showToast(`Pedido #${orderId} voltou para Acertos! Pagamentos e devoluções revertidos.`)
+    sendStatusWebhook(updatedOrder, 'acerto')
   }
 
   const [orderFilter, setOrderFilter] = useState('todos')
@@ -626,6 +727,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [showRotaDue, setShowRotaDue] = useState(null)
   const [rotaDueDate, setRotaDueDate] = useState('')
   const [showDeliveryModal, setShowDeliveryModal] = useState(null)
+  const [deliveryModalMode, setDeliveryModalMode] = useState('acerto')
   const [returnQuantities, setReturnQuantities] = useState({})
   const [payQuantities, setPayQuantities] = useState({})
   const [identityPreview, setIdentityPreview] = useState('')
@@ -1320,6 +1422,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
     const STATUS_RANK_MAP = {
       'cancelado': 100,
+      'concluido': 70,
+      'acerto': 60,
       'entregue': 50,
       'em-rota': 40,
       'em-andamento': 30,
@@ -1330,10 +1434,10 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     const currentRank = STATUS_RANK_MAP[order.status] ?? 0
     const targetRank = STATUS_RANK_MAP[status] ?? 0
 
-    // Strict guard: never allow demoting an order in route or delivered back to pending or pre-order
+    // Strict guard: never allow demoting an order in route, delivered or acerto back to pending or pre-order
     if (currentRank >= 40 && targetRank < 40) {
       console.warn(`[updateOrderStatus] Tentativa bloqueada de rebaixar pedido #${id} de "${order.status}" para "${status}"`)
-      showToast(`O pedido #${id} já está em rota ou entregue e não pode ser rebaixado!`, 'error')
+      showToast(`O pedido #${id} já está em rota, entregue ou em acerto e não pode ser rebaixado!`, 'error')
       return
     }
 
@@ -1348,7 +1452,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       updatedAt: now
     }
 
-    if (status !== 'entregue') {
+    if (status !== 'entregue' && status !== 'acerto' && status !== 'concluido') {
       updated = {
         ...updated,
         desconto: 0,
@@ -1390,7 +1494,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     })
     upsertOrder(updated)
     showToast(`Pedido #${id} atualizado para "${status}"`)
-    const STATUS_ORDER = ['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'entregue']
+    const STATUS_ORDER = ['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'entregue', 'acerto', 'concluido']
     const prevIndex = STATUS_ORDER.indexOf(order?.status)
     const nextIndex = STATUS_ORDER.indexOf(status)
     const isAdvance = prevIndex !== -1 && nextIndex > prevIndex
@@ -1411,10 +1515,10 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     const order = orders.find(o => String(o.id) === String(orderId))
     if (!order) return
 
-    const STATUS_RANK_MAP = { 'cancelado': 100, 'entregue': 50, 'em-rota': 40, 'em-andamento': 30, 'confirmado': 20, 'pendente': 10, 'pre-pedido': 0 }
+    const STATUS_RANK_MAP = { 'cancelado': 100, 'concluido': 70, 'acerto': 60, 'entregue': 50, 'em-rota': 40, 'em-andamento': 30, 'confirmado': 20, 'pendente': 10, 'pre-pedido': 0 }
     const currentRank = STATUS_RANK_MAP[order.status] ?? 0
     if (currentRank >= 40) {
-      showToast(`Pedido #${orderId} já está em rota ou entregue e não pode ser rebaixado!`, 'error')
+      showToast(`Pedido #${orderId} já está em rota, entregue ou em acerto e não pode ser rebaixado!`, 'error')
       return
     }
 
@@ -1618,114 +1722,159 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     reader.readAsDataURL(file)
   }
 
-  const finalizarComDevolucao = (orderId) => {
-    const order = orders.find(o => o.id === orderId)
+  const openAcertoModal = (o, mode = 'acerto') => {
+    const baseItems = getOrderBaseItems(o)
+    const retMap = {}
+    if (o.returnedItems && o.returnedItems.length > 0) {
+      o.returnedItems.forEach(r => {
+        retMap[r.id] = r.returnedQty || r.qty || 0
+      })
+    }
+    setReturnQuantities(retMap)
+    setPayQuantities({})
+    setIdentityPreview(o.identityPhoto || '')
+    setAddressPreview(o.addressProof || '')
+
+    const pm = o.paymentMethod || 'pix'
+    setDeliveryPayment(pm)
+    setDeliverySplits(o.paymentSplits || { pix: '', dinheiro: '', cartao: '' })
+
+    if (o.descontoPercent != null) {
+      setDeliveryDiscountType('percent')
+      setDeliveryDiscount(String(o.descontoPercent))
+    } else if (o.desconto > 0) {
+      setDeliveryDiscountType('reais')
+      setDeliveryDiscount(String(o.desconto))
+    } else {
+      setDeliveryDiscountType('percent')
+      setDeliveryDiscount('30')
+    }
+
+    if (o.totalPago != null && o.totalPago !== '') {
+      setDeliveryPaid(String(o.totalPago))
+    } else {
+      setDeliveryPaid('')
+    }
+
+    setDeliveryDataInicio(o.dataInicio || o.date || hoje())
+    setDeliveryDataVenc(o.dataVencimento || '')
+    setDeliveryModalMode(mode)
+    setShowDeliveryModal({ ...o, baseItems })
+  }
+
+  const salvarAcerto = async (orderId, finalize = false) => {
+    const order = orders.find(o => o.id === orderId) || showDeliveryModal
     if (!order) return
+
+    const baseItems = showDeliveryModal?.baseItems || getOrderBaseItems(order)
     const returnedItems = []
-    const remainingItems = order.items.filter(i => {
-      const qty = returnQuantities[i.id] || 0
-      if (qty > 0) returnedItems.push({ ...i, returnedQty: Math.min(qty, i.qty) })
-      return (i.qty - (returnQuantities[i.id] || 0)) > 0
+    const remainingItems = []
+
+    baseItems.forEach(i => {
+      const maxQty = Number(i.qty) || 0
+      const retQty = Math.max(0, Math.min(maxQty, Number(returnQuantities[i.id]) || 0))
+      if (retQty > 0) {
+        returnedItems.push({ ...i, returnedQty: retQty })
+      }
+      const keptQty = maxQty - retQty
+      if (keptQty > 0) {
+        remainingItems.push({ ...i, qty: keptQty })
+      }
     })
-    const adjustedItems = remainingItems.map(i => ({
-      ...i,
-      qty: i.qty - (returnQuantities[i.id] || 0)
-    }))
-    const totalAvista = adjustedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
-    const totalAprazo = adjustedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
+
+    const totalAvista = remainingItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0)
+    const totalAprazo = remainingItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0)
     const totalBase = totalAvista + totalAprazo
+
+    const discountNum = Number(String(deliveryDiscount).replace(',', '.')) || 0
     const desconto = deliveryDiscountType === 'percent'
-      ? (Math.min(100, Number(deliveryDiscount) || 0) / 100) * totalBase
-      : Math.max(0, Math.min(Number(deliveryDiscount) || 0, totalBase))
+      ? (Math.min(100, Math.max(0, discountNum)) / 100) * totalBase
+      : Math.max(0, Math.min(discountNum, totalBase))
+
     const totalCobrar = Math.round((totalBase - desconto) * 100) / 100
-    const totalPago = Math.max(0, Math.min(Number(deliveryPaid) || 0, totalCobrar))
-    const totalReembolso = order.items.reduce((s, i) => s + i.preco * (returnQuantities[i.id] || 0), 0)
+
+    const isSplit = deliveryPayment.includes('+')
+    let totalPagoCalc = 0
+    if (isSplit) {
+      totalPagoCalc = deliveryPayment.split('+').reduce((sum, m) => {
+        return sum + (Number(String(deliverySplits[m] || 0).replace(',', '.')) || 0)
+      }, 0)
+    } else {
+      totalPagoCalc = Number(String(deliveryPaid || 0).replace(',', '.')) || 0
+    }
+    const totalPago = Math.round(totalPagoCalc * 100) / 100
+    const totalReembolso = returnedItems.reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.returnedQty) || 0), 0)
+
+    const now = Date.now()
+    const newStatus = finalize ? 'concluido' : 'acerto'
+
     const updatedOrder = {
       ...order,
-      items: adjustedItems,
+      originalItems: baseItems.map(i => ({ ...i })),
+      items: remainingItems,
       totalAvista,
       totalAprazo,
       total: totalCobrar,
       desconto: Math.round(desconto * 100) / 100,
+      descontoPercent: deliveryDiscountType === 'percent' ? discountNum : null,
       totalPago,
-      status: 'entregue',
+      status: newStatus,
+      isFinalizado: finalize,
       returnedItems,
       totalReembolso,
       dataInicio: deliveryDataInicio || order.dataInicio || order.date || null,
       dataVencimento: deliveryDataVenc || order.dataVencimento || null,
       identityPhoto: identityPreview || order.identityPhoto || '',
       addressProof: addressPreview || order.addressProof || '',
-      deliveredAt: Date.now(),
+      deliveredAt: order.deliveredAt || now,
+      finalizadoAt: finalize ? now : (order.finalizadoAt || null),
       paymentMethod: deliveryPayment,
-      paymentSplits: deliverySplits
+      paymentSplits: isSplit ? deliverySplits : null,
+      lastModified: now,
+      updatedAt: now
     }
+
     setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o))
-    // Sync financeiro: update existing, create for missing items, apply desconto + pagamento
+    await upsertOrder(updatedOrder)
+
+    // Sync financial records
     setFinancial(prev => {
-      const existingIds = new Set(prev.filter(f => f.orderId === orderId).map(f => f.id))
-      const templates = adjustedItems.map(i => ({
-        id: orderId + '-' + i.id,
-        orderId,
-        customerName: order.customer?.nome || '',
-        itemName: i.nome,
-        qty: i.qty,
-        baseValue: i.preco * i.qty,
-        precoCusto: (i.preco_custo || 0) * i.qty,
-        avista: i.tipo === 'avista',
-        value: i.preco * i.qty,
-        paid: 0
-      }))
-      if (desconto > 0 && totalBase > 0) {
-        let remaining = desconto
-        templates.forEach((t, idx) => {
-          const d = idx === templates.length - 1 ? remaining : Math.min(remaining, Math.round((t.baseValue / totalBase) * desconto * 100) / 100)
-          t.value = Math.max(0, t.baseValue - d)
-          remaining = Math.round((remaining - d) * 100) / 100
-        })
-      }
-      if (totalPago > 0 && totalCobrar > 0) {
-        let remaining = totalPago
-        templates.forEach((t, idx) => {
-          if (remaining <= 0) return
-          const share = idx === templates.length - 1 ? remaining : Math.min(remaining, Math.round((t.value / totalCobrar) * totalPago * 100) / 100)
-          t.paid = share
-          t.value = Math.max(0, Math.round((t.value - share) * 100) / 100)
-          remaining = Math.round((remaining - share) * 100) / 100
-        })
-      }
-      const dueDate = deliveryDataVenc || hoje()
-      const newRecords = templates
-        .filter(t => !existingIds.has(t.id))
-        .map(t => ({
-          id: t.id,
+      const otherRecords = prev.filter(f => f.orderId !== orderId)
+      const existingRecords = prev.filter(f => f.orderId === orderId)
+      const aprazoItems = remainingItems.filter(i => i.tipo === 'aprazo')
+      const dueDate = deliveryDataVenc || order.dataVencimento || hoje()
+
+      const newFinancial = aprazoItems.map(i => {
+        const existing = existingRecords.find(f => f.id === orderId + '-' + i.id)
+        const itemVal = (Number(i.preco) || 0) * (Number(i.qty) || 0)
+        return {
+          id: orderId + '-' + i.id,
           orderId,
-          customerName: t.customerName,
-          itemName: t.itemName,
-          qty: t.qty,
-          value: t.value,
-          precoCusto: t.precoCusto,
-          dueDate: t.avista ? hoje() : dueDate,
-          paidDate: t.value <= 0 ? hoje() : null,
-          status: t.value <= 0 ? 'pago' : 'pendente',
+          customerName: order.customer?.nome || '',
+          itemName: i.nome,
+          qty: i.qty,
+          value: itemVal,
+          precoCusto: (i.preco_custo || 0) * i.qty,
+          dueDate: existing?.dueDate || dueDate,
+          paidDate: finalize ? hoje() : (existing?.paidDate || null),
+          status: finalize ? 'pago' : (existing?.status || 'pendente'),
           paymentMethod: deliveryPayment
-        }))
-      const updated = prev.map(f => {
-        if (f.orderId !== orderId) return f
-        const item = order.items.find(i => f.id === orderId + '-' + i.id)
-        if (!item) return f
-        const returnedQty = returnQuantities[item.id] || 0
-        if (returnedQty >= item.qty) return { ...f, status: 'cancelado', paidDate: hoje() }
-        const t = templates.find(x => x.id === f.id)
-        if (!t) return f
-        return { ...f, qty: t.qty, value: t.value, precoCusto: t.precoCusto, dueDate: t.avista ? hoje() : (deliveryDataVenc || f.dueDate), status: t.value <= 0 ? 'pago' : 'pendente', paidDate: t.value <= 0 ? hoje() : null, paymentMethod: deliveryPayment }
+        }
       })
-      return [...updated, ...newRecords]
+
+      const combined = [...otherRecords, ...newFinancial]
+      if (newFinancial.length > 0) upsertFinancial(newFinancial)
+      return combined
     })
-    const refundMsg = totalReembolso > 0 ? ` — Reembolso: ${formatPreco(totalReembolso)}` : ''
-    const discountMsg = desconto > 0 ? ` — Desconto: ${formatPreco(desconto)}` : ''
-    const paidMsg = totalPago > 0 ? ` — Pago: ${formatPreco(totalPago)}` : ''
-    showToast(`Pedido #${orderId} finalizado!${refundMsg}${discountMsg}${paidMsg} WhatsApp enviado para o cliente com link de confirmação.`)
-    sendStatusWebhook(updatedOrder, 'entregue', { returnedItems })
+
+    if (finalize) {
+      showToast(`Pedido #${orderId} finalizado com sucesso! WhatsApp enviado ao cliente.`)
+      sendStatusWebhook(updatedOrder, 'concluido', { returnedItems, paymentSplits: deliverySplits, paymentMethod: deliveryPayment, totalPago })
+    } else {
+      showToast(`Pedido #${orderId} atualizado na etapa de Acertos! WhatsApp enviado ao cliente.`)
+      sendStatusWebhook(updatedOrder, 'acerto', { returnedItems, totalComanda: totalCobrar, valorAcerto: totalPago > 0 ? totalPago : (totalCobrar * 0.70) })
+    }
+
     setShowDeliveryModal(null)
     setReturnQuantities({})
     setPayQuantities({})
@@ -1936,8 +2085,9 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
   const filteredOrders = useMemo(() => {
     let result = orders
-    if (orderFilter === 'concluidos') result = result.filter(o => isFinalizada(o))
+    if (orderFilter === 'concluidos') result = result.filter(o => o.status === 'concluido' || isFinalizada(o))
     else if (orderFilter === 'entregue') result = result.filter(o => o.status === 'entregue' && !isFinalizada(o))
+    else if (orderFilter === 'acerto') result = result.filter(o => o.status === 'acerto' && !isFinalizada(o))
     else if (orderFilter !== 'todos') result = result.filter(o => o.status === orderFilter)
     if (selectedUserEmail) result = result.filter(o => o.customer?.email === selectedUserEmail)
     const t = orderSearch.toLowerCase().trim()
@@ -2124,10 +2274,11 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     const total = ordersIn.length
     const pendentes = ordersIn.filter(o => o.status === 'pendente').length
     const entregues = ordersIn.filter(o => o.status === 'entregue').length
+    const acertos = ordersIn.filter(o => o.status === 'acerto').length
     const faturamento = ordersIn.filter(o => o.status !== 'cancelado').reduce((s, o) => s + (o.total || 0), 0)
     const aReceber = financial.filter(f => f.status === 'pendente' && inRange(f.dueDate || '')).reduce((s, f) => s + (f.value || 0), 0)
     const recebido = financial.filter(f => f.status === 'pago' && inRange(f.paidDate || '')).reduce((s, f) => s + (f.value || 0), 0)
-    return { total, pendentes, entregues, faturamento, aReceber, recebido }
+    return { total, pendentes, entregues, acertos, faturamento, aReceber, recebido }
   }, [orders, financial, dashRange])
 
   const dashLastOrders = useMemo(() => {
@@ -2801,6 +2952,13 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                   <span>Entregues</span>
                 </div>
               </div>
+              <div className="admin-card card-blue" style={{ cursor: 'pointer' }} onClick={() => { setTab('pedidos'); setOrderFilter('acerto') }}>
+                <i className="fa-solid fa-handshake"></i>
+                <div>
+                  <strong>{dashStats.acertos}</strong>
+                  <span>Acertos</span>
+                </div>
+              </div>
               <div className="admin-card card-purple">
                 <i className="fa-solid fa-dollar-sign"></i>
                 <div>
@@ -2918,7 +3076,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 { id: 'pendente', label: 'Pendentes', count: orders.filter(o => o.status === 'pendente').length },
                 { id: 'em-rota', label: 'Em Rota', count: orders.filter(o => o.status === 'em-rota').length },
                 { id: 'entregue', label: 'Entregues', count: orders.filter(o => o.status === 'entregue' && !isFinalizada(o)).length },
-                { id: 'concluidos', label: 'Concluídos', count: orders.filter(o => o.status === 'entregue' && isFinalizada(o)).length },
+                { id: 'acerto', label: 'Acertos', count: orders.filter(o => o.status === 'acerto' && !isFinalizada(o)).length },
+                { id: 'concluidos', label: 'Concluídos', count: orders.filter(o => (o.status === 'concluido' || isFinalizada(o))).length },
                 { id: 'cancelado', label: 'Cancelados', count: orders.filter(o => o.status === 'cancelado').length },
               ].map(t => (
                 <button key={t.id} className={`admin-tab ${orderFilter === t.id ? 'active' : ''}`} onClick={() => setOrderFilter(t.id)}>
@@ -3055,10 +3214,19 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Em Rota" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-undo"></i></button>
                           )}
                           {o.status === 'entregue' && !isFinalizada(o) && (
-                            <button className="action-btn action-confirm" title="Finalizar Pedido" onClick={() => { setShowDeliveryModal(o); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview(''); setDeliveryPayment('pix'); setDeliverySplits({ pix: '', dinheiro: '', cartao: '' }); setDeliveryDiscount(''); setDeliveryDiscountType('reais'); setDeliveryPaid(''); setDeliveryDataInicio(o.date || hoje()); setDeliveryDataVenc(o.dataVencimento || '') }}><i className="fa-solid fa-check"></i></button>
+                            <button className="action-btn action-confirm" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} title="Fazer Acerto (Avançar etapa)" onClick={() => openAcertoModal(o, 'acerto')}><i className="fa-solid fa-handshake"></i></button>
                           )}
-                          {o.status === 'entregue' && isFinalizada(o) && (
-                            <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Entregues" onClick={() => revertOrderFinalization(o.id)}><i className="fa-solid fa-undo"></i></button>
+                          {o.status === 'acerto' && !isFinalizada(o) && (
+                            <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Entregues" onClick={() => revertToEntregue(o.id)}><i className="fa-solid fa-undo"></i></button>
+                          )}
+                          {o.status === 'acerto' && !isFinalizada(o) && (
+                            <button className="action-btn" style={{ color: '#3b82f6', borderColor: '#3b82f6' }} title="Editar Acerto" onClick={() => openAcertoModal(o, 'acerto')}><i className="fa-solid fa-pen-to-square"></i></button>
+                          )}
+                          {o.status === 'acerto' && !isFinalizada(o) && (
+                            <button className="action-btn action-confirm" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} title="Finalizar Pedido" onClick={() => openAcertoModal(o, 'finalizar')}><i className="fa-solid fa-check-double"></i></button>
+                          )}
+                          {(o.status === 'concluido' || isFinalizada(o)) && (
+                            <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Acertos" onClick={() => revertOrderFinalization(o.id)}><i className="fa-solid fa-undo"></i></button>
                           )}
                           {(() => {
                             const e = o.customer?.endereco || {}
@@ -4723,7 +4891,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           onStatusChange={(s) => { updateOrderStatus(showOrderDetail.id, s); setShowOrderDetail(null) }}
           onUpdateDue={(due) => updateOrderDue(showOrderDetail.id, due)}
           onPreApprovar={(rejectedIds, replacements, venc) => preApprovarPedido(showOrderDetail.id, rejectedIds, replacements, venc)}
-          onOpenDelivery={(order) => { setShowDeliveryModal(order); setReturnQuantities({}); setPayQuantities({}); setIdentityPreview(''); setAddressPreview(''); setDeliveryPayment('pix'); setDeliverySplits({ pix: '', dinheiro: '', cartao: '' }); setDeliveryDiscount(''); setDeliveryDiscountType('reais'); setDeliveryPaid(''); setDeliveryDataInicio(order.date || hoje()); setDeliveryDataVenc(order.dataVencimento || '') }}
+          onOpenDelivery={(order, mode = 'acerto') => { openAcertoModal(order, mode); setShowOrderDetail(null) }}
           onEditAndConfirm={(editedItems, currentStatus) => {
             const now = Date.now()
             const totalAvista = editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
@@ -4861,18 +5029,21 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         />
       )}
 
-      {/* MODAL DELIVERY (UNIFIED FINALIZATION) */}
+      {/* MODAL ACERTO & FINALIZAÇÃO */}
       {showDeliveryModal && (
         <div className="admin-overlay" onClick={() => setShowDeliveryModal(null)}>
-          <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '540px' }}>
+          <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '560px' }}>
             <div className="admin-modal-header">
-              <h3><i className="fa-solid fa-check-circle"></i> Finalizar Pedido</h3>
+              <h3>
+                <i className={deliveryModalMode === 'finalizar' ? 'fa-solid fa-circle-check' : 'fa-solid fa-handshake'} style={{ color: deliveryModalMode === 'finalizar' ? 'var(--success)' : '#6366f1' }}></i>
+                {deliveryModalMode === 'finalizar' ? ' Finalizar Pedido' : ' Acerto do Pedido'} #{showDeliveryModal.id.toString().slice(-6)}
+              </h3>
               <button className="admin-modal-close" onClick={() => setShowDeliveryModal(null)}><i className="fa-solid fa-xmark"></i></button>
             </div>
             <div className="admin-modal-body">
               <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '0.5rem 0.75rem', marginBottom: '0.75rem' }}>
                 <p style={{ fontSize: '0.78rem', color: '#1e40af', margin: 0 }}>
-                  <i className="fa-solid fa-info-circle"></i> Após finalizar, o cliente receberá um link no WhatsApp para confirmar a entrega.
+                  <i className="fa-solid fa-info-circle"></i> O cliente receberá a mensagem formatada de <strong>{deliveryModalMode === 'finalizar' ? 'Pedido Finalizado' : 'Acerto'}</strong> no WhatsApp.
                 </p>
                 <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', marginTop: '0.35rem' }}>
                   <input type="text" readOnly value={(() => { try { return buildOrderLink(showDeliveryModal.id) } catch { return '' } })()}
@@ -4888,29 +5059,37 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 Informe a quantidade de itens <strong>devolvidos</strong> (não vendidos). Apenas os itens vendidos serão cobrados.
               </p>
 
-              {showDeliveryModal.items.map((i, idx) => {
-                const maxQty = i.qty
+              {(showDeliveryModal.baseItems || showDeliveryModal.items).map((i, idx) => {
+                const maxQty = Number(i.qty) || 0
+                const retVal = returnQuantities[i.id] !== undefined ? returnQuantities[i.id] : ''
                 return (
                   <div key={idx} style={{ padding: '0.6rem 0', borderBottom: '1px solid var(--admin-border)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                      <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>{i.nome} ({i.qty}x)</span>
-                      <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{formatPreco(i.preco * i.qty)}</span>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>{i.nome} ({maxQty}x)</span>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{formatPreco(i.preco * maxQty)}</span>
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)', marginBottom: '0.35rem' }}>
-                      {i.preco.toFixed(2).replace('.', ',')} /un — {i.tipo === 'avista' ? 'À Vista' : 'A Prazo'}
+                      {Number(i.preco || 0).toFixed(2).replace('.', ',')} /un — {i.tipo === 'avista' ? 'À Vista' : 'A Prazo'}
                     </div>
-                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.82rem' }}>
                         <span style={{ color: 'var(--admin-text-sec)' }}>Devolver:</span>
-                        <input type="number" min="0" max={maxQty} step="1" value={returnQuantities[i.id] || ''}
+                        <input type="number" min="0" max={maxQty} step="1" value={retVal}
                           placeholder="0"
                           onChange={e => {
-                            const val = e.target.value === '' ? '' : Math.min(Number(e.target.value), maxQty)
-                            setReturnQuantities(prev => ({ ...prev, [i.id]: val }))
+                            const raw = e.target.value
+                            if (raw === '') {
+                              setReturnQuantities(prev => { const n = { ...prev }; delete n[i.id]; return n })
+                              return
+                            }
+                            const num = Math.max(0, Math.min(Number(raw), maxQty))
+                            setReturnQuantities(prev => ({ ...prev, [i.id]: num }))
                           }}
-                          style={{ width: '50px', padding: '0.25rem 0.35rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', textAlign: 'center' }}
+                          style={{ width: '60px', padding: '0.25rem 0.35rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', textAlign: 'center' }}
                         />
                       </div>
+                      <button type="button" className="admin-btn admin-btn-sec" style={{ fontSize: '0.68rem', padding: '0.2rem 0.45rem' }} onClick={() => setReturnQuantities(prev => ({ ...prev, [i.id]: maxQty }))}>Todos ({maxQty})</button>
+                      <button type="button" className="admin-btn admin-btn-sec" style={{ fontSize: '0.68rem', padding: '0.2rem 0.45rem' }} onClick={() => setReturnQuantities(prev => { const n = { ...prev }; delete n[i.id]; return n })}>Zerar</button>
                     </div>
                   </div>
                 )
@@ -4918,17 +5097,30 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
               {/* Auto-calc summary */}
               {(() => {
-                const totalOriginal = showDeliveryModal.items.reduce((s, i) => s + i.preco * i.qty, 0)
-                const totalDevolvido = showDeliveryModal.items.reduce((s, i) => s + i.preco * (returnQuantities[i.id] || 0), 0)
-                const base = totalOriginal - totalDevolvido
+                const modalBase = showDeliveryModal.baseItems || showDeliveryModal.items
+                const totalOriginal = modalBase.reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0)
+                const totalDevolvido = modalBase.reduce((s, i) => s + (Number(i.preco) || 0) * (Number(returnQuantities[i.id]) || 0), 0)
+                const base = Math.max(0, totalOriginal - totalDevolvido)
+                const discRaw = Number(String(deliveryDiscount).replace(',', '.')) || 0
                 const desconto = deliveryDiscountType === 'percent'
-                  ? (Math.min(100, Number(deliveryDiscount) || 0) / 100) * base
-                  : Math.max(0, Math.min(Number(deliveryDiscount) || 0, base))
+                  ? (Math.min(100, Math.max(0, discRaw)) / 100) * base
+                  : Math.max(0, Math.min(discRaw, base))
                 const totalCobrar = Math.round((base - desconto) * 100) / 100
-                const totalPago = Math.max(0, Math.min(Number(deliveryPaid) || 0, totalCobrar))
-                const faltaPagar = totalCobrar - totalPago
+
+                const isSplit = deliveryPayment.includes('+')
+                let totalPagoCalc = 0
+                if (isSplit) {
+                  totalPagoCalc = deliveryPayment.split('+').reduce((sum, m) => {
+                    return sum + (Number(String(deliverySplits[m] || 0).replace(',', '.')) || 0)
+                  }, 0)
+                } else {
+                  totalPagoCalc = Number(String(deliveryPaid || 0).replace(',', '.')) || 0
+                }
+                const totalPago = Math.round(totalPagoCalc * 100) / 100
+                const faltaPagar = Math.max(0, Math.round((totalCobrar - totalPago) * 100) / 100)
+
                 return (
-                  <div style={{ background: '#f9fafb', borderRadius: '10px', padding: '0.75rem 1rem', marginBottom: '1rem', marginTop: '0.75rem' }}>
+                  <div style={{ background: '#f9fafb', borderRadius: '10px', padding: '0.75rem 1rem', marginBottom: '1rem', marginTop: '0.75rem', border: '1px solid var(--admin-border)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.25rem' }}>
                       <span>Total original</span>
                       <span>{formatPreco(totalOriginal)}</span>
@@ -4937,26 +5129,41 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                       <span><i className="fa-solid fa-rotate-left"></i> Total devolvido</span>
                       <span style={{ fontWeight: 700 }}>{formatPreco(totalDevolvido)}</span>
                     </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.25rem' }}>
+                      <span>Itens mantidos (subtotal)</span>
+                      <span style={{ fontWeight: 600 }}>{formatPreco(base)}</span>
+                    </div>
+
                     <div style={{ marginTop: '0.4rem', paddingTop: '0.35rem', borderTop: '1px solid var(--admin-border)' }}>
-                      <p style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)', marginBottom: '0.35rem' }}>
-                        <i className="fa-solid fa-percent"></i> Desconto
-                      </p>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                        <p style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)', margin: 0 }}>
+                          <i className="fa-solid fa-percent"></i> Desconto
+                        </p>
+                        <div style={{ display: 'flex', gap: '0.3rem' }}>
+                          {['30', '20', '10', '0'].map(pct => (
+                            <button key={pct} type="button"
+                              className={`pag-chip ${deliveryDiscountType === 'percent' && String(deliveryDiscount) === pct ? 'active' : ''}`}
+                              style={{ fontSize: '0.7rem', padding: '0.15rem 0.4rem' }}
+                              onClick={() => { setDeliveryDiscountType('percent'); setDeliveryDiscount(pct) }}>
+                              {pct}%
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                       <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.4rem' }}>
                         <button type="button" className={`pag-chip ${deliveryDiscountType === 'reais' ? 'active' : ''}`} onClick={() => { setDeliveryDiscountType('reais'); setDeliveryDiscount('') }}>R$ Real</button>
-                        <button type="button" className={`pag-chip ${deliveryDiscountType === 'percent' ? 'active' : ''}`} onClick={() => { setDeliveryDiscountType('percent'); setDeliveryDiscount('') }}>% Porcentagem</button>
+                        <button type="button" className={`pag-chip ${deliveryDiscountType === 'percent' ? 'active' : ''}`} onClick={() => { setDeliveryDiscountType('percent'); setDeliveryDiscount('30') }}>% Porcentagem</button>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.6rem' }}>
                         <span style={{ fontSize: '0.82rem', color: 'var(--admin-text-sec)' }}>
                           {deliveryDiscountType === 'percent' ? 'Desconto (%)' : 'Desconto (R$)'}
                         </span>
-                        <input type="number" min="0" step={deliveryDiscountType === 'percent' ? '0.5' : '0.01'} max={deliveryDiscountType === 'percent' ? 100 : undefined}
+                        <input type="text" inputMode="decimal"
                           placeholder="0" autoComplete="off"
                           value={deliveryDiscount}
                           onChange={e => {
-                            const raw = e.target.value
-                            if (raw === '') { setDeliveryDiscount(''); return }
-                            const num = Number(raw)
-                            if (!isNaN(num)) setDeliveryDiscount(num < 0 ? '0' : String(num))
+                            const raw = e.target.value.replace(/[^0-9.,]/g, '')
+                            setDeliveryDiscount(raw)
                           }}
                           style={{ width: '110px', padding: '0.3rem 0.4rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', textAlign: 'right' }} />
                       </div>
@@ -4971,23 +5178,122 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                       <span style={{ fontWeight: 700 }}>Total a cobrar (comanda)</span>
                       <span style={{ fontWeight: 800, color: totalCobrar > 0 ? 'var(--accent)' : 'var(--success)' }}>{formatPreco(totalCobrar)}</span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.6rem', marginTop: '0.4rem', paddingTop: '0.35rem', borderTop: '1px solid var(--admin-border)' }}>
-                      <span style={{ fontSize: '0.82rem', color: 'var(--admin-text-sec)' }}>
-                        <i className="fa-solid fa-hand-holding-dollar"></i> Quanto o cliente pagou
-                      </span>
-                      <input type="number" min="0" step="0.01" placeholder="0,00" autoComplete="off"
-                        value={deliveryPaid}
-                        onChange={e => {
-                          const raw = e.target.value
-                          if (raw === '') { setDeliveryPaid(''); return }
-                          const num = Number(raw)
-                          if (!isNaN(num)) setDeliveryPaid(num < 0 ? '0' : String(num))
-                        }}
-                        style={{ width: '110px', padding: '0.3rem 0.4rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', textAlign: 'right' }} />
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginTop: '0.3rem', color: faltaPagar > 0 ? 'var(--danger)' : 'var(--success)' }}>
-                      <span style={{ fontWeight: 600 }}>{totalPago > 0 ? 'Falta pagar' : 'Saldo devedor'}</span>
-                      <span style={{ fontWeight: 800 }}>{formatPreco(faltaPagar)}</span>
+
+                    {/* Forma de Pagamento e Valores */}
+                    <div style={{ marginTop: '0.75rem', paddingTop: '0.6rem', borderTop: '1px solid var(--admin-border)' }}>
+                      <p style={{ fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.5rem' }}>
+                        <i className="fa-solid fa-credit-card"></i> Forma de pagamento do cliente
+                      </p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.6rem' }}>
+                        {Object.entries(PAG_METHODS).map(([id, conf]) => (
+                          <button key={id} type="button"
+                            className={`pag-chip ${deliveryPayment === id ? 'active' : ''}`}
+                            onClick={() => {
+                              setDeliveryPayment(id)
+                              if (!id.includes('+')) {
+                                setDeliverySplits({ pix: '', dinheiro: '', cartao: '' })
+                                if (totalCobrar > 0 && (!deliveryPaid || deliveryPaid === '0')) {
+                                  setDeliveryPaid(String(totalCobrar))
+                                }
+                              }
+                            }}>
+                            <i className={`fa-solid ${conf.icon}`}></i> {conf.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Split Inputs */}
+                      {deliveryPayment.includes('+') && (
+                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.6rem 0.75rem', marginBottom: '0.5rem' }}>
+                          <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '0.4rem' }}>
+                            <i className="fa-solid fa-arrows-left-right"></i> Informe quanto foi pago em cada forma:
+                          </p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                            {deliveryPayment.split('+').map(m => {
+                              const thisVal = deliverySplits[m] || ''
+                              const otherSplitsSum = deliveryPayment.split('+')
+                                .filter(x => x !== m)
+                                .reduce((s, x) => s + (Number(String(deliverySplits[x] || 0).replace(',', '.')) || 0), 0)
+                              const remainingForThis = Math.max(0, Math.round((totalCobrar - otherSplitsSum) * 100) / 100)
+
+                              return (
+                                <div key={m} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', background: 'white', padding: '0.35rem 0.6rem', borderRadius: '6px', border: '1px solid var(--admin-border)' }}>
+                                  <span style={{ fontSize: '0.82rem', fontWeight: 600, minWidth: '70px', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                    <i className={`fa-solid ${PAG_METHODS[m]?.icon || 'fa-money-bill'}`}></i>
+                                    {PAG_METHODS[m]?.label}:
+                                  </span>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                    <span style={{ fontSize: '0.8rem', color: 'var(--admin-text-sec)' }}>R$</span>
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
+                                      placeholder="0,00"
+                                      value={thisVal}
+                                      onChange={e => {
+                                        const raw = e.target.value.replace(/[^0-9.,]/g, '')
+                                        setDeliverySplits(prev => ({ ...prev, [m]: raw }))
+                                      }}
+                                      style={{ width: '95px', padding: '0.25rem 0.4rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', textAlign: 'right' }}
+                                    />
+                                    <button
+                                      type="button"
+                                      className="admin-btn admin-btn-sec"
+                                      title={`Preencher restante (${formatPreco(remainingForThis)})`}
+                                      style={{ fontSize: '0.68rem', padding: '0.25rem 0.45rem', whiteSpace: 'nowrap' }}
+                                      onClick={() => {
+                                        setDeliverySplits(prev => ({ ...prev, [m]: String(remainingForThis) }))
+                                      }}>
+                                      Restante
+                                    </button>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem', paddingTop: '0.4rem', borderTop: '1px solid #e2e8f0', fontSize: '0.82rem' }}>
+                            <span>Total pago: <strong style={{ color: totalPago >= totalCobrar ? 'var(--success)' : 'var(--accent)' }}>{formatPreco(totalPago)}</strong></span>
+                            <span style={{ color: faltaPagar > 0 ? 'var(--danger)' : 'var(--success)', fontWeight: 600 }}>
+                              {faltaPagar > 0 ? `Falta: ${formatPreco(faltaPagar)}` : '✅ Quitado'}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Single Input */}
+                      {!deliveryPayment.includes('+') && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.6rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '0.5rem' }}>
+                          <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--admin-text)' }}>
+                            <i className="fa-solid fa-hand-holding-dollar"></i> Quanto o cliente pagou ({PAG_METHODS[deliveryPayment]?.label}):
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--admin-text-sec)' }}>R$</span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder={String(totalCobrar.toFixed(2)).replace('.', ',')}
+                              autoComplete="off"
+                              value={deliveryPaid}
+                              onChange={e => {
+                                const raw = e.target.value.replace(/[^0-9.,]/g, '')
+                                setDeliveryPaid(raw)
+                              }}
+                              style={{ width: '95px', padding: '0.25rem 0.4rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', textAlign: 'right' }}
+                            />
+                            <button
+                              type="button"
+                              className="admin-btn admin-btn-sec"
+                              style={{ fontSize: '0.68rem', padding: '0.25rem 0.45rem', whiteSpace: 'nowrap' }}
+                              onClick={() => setDeliveryPaid(String(totalCobrar))}>
+                              Pagar total
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginTop: '0.3rem', color: faltaPagar > 0 ? 'var(--danger)' : 'var(--success)' }}>
+                        <span style={{ fontWeight: 600 }}>{totalPago > 0 ? 'Saldo devedor restante' : 'Saldo devedor'}</span>
+                        <span style={{ fontWeight: 800 }}>{formatPreco(faltaPagar)}</span>
+                      </div>
                     </div>
                   </div>
                 )
@@ -5012,47 +5318,35 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 </div>
               </div>
 
-              {/* Payment method */}
-              <div style={{ marginBottom: '1rem' }}>
-                <p style={{ fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.5rem' }}>
-                  <i className="fa-solid fa-credit-card"></i> Forma de pagamento do cliente
-                </p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                  {Object.entries(PAG_METHODS).map(([id, conf]) => (
-                    <button key={id} type="button"
-                      className={`pag-chip ${deliveryPayment === id ? 'active' : ''}`}
-                      onClick={() => { setDeliveryPayment(id); setDeliverySplits({ pix: '', dinheiro: '', cartao: '' }) }}>
-                      <i className={`fa-solid ${conf.icon}`}></i> {conf.label}
-                    </button>
-                  ))}
-                </div>
-                {deliveryPayment.includes('+') && (
-                  <div style={{ marginTop: '0.5rem', background: '#f9fafb', borderRadius: '8px', padding: '0.5rem 0.75rem' }}>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)', marginBottom: '0.4rem' }}>
-                      <i className="fa-solid fa-arrows-left-right"></i> Divida o valor pago em cada forma:
-                    </p>
-                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                      {deliveryPayment.split('+').map(m => (
-                        <div key={m} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                          <span style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>{PAG_METHODS[m].label}:</span>
-                          <input type="number" min="0" step="0.01" placeholder="0,00"
-                            value={deliverySplits[m] || ''}
-                            onChange={e => setDeliverySplits(prev => ({ ...prev, [m]: e.target.value }))}
-                            style={{ width: '90px', padding: '0.25rem 0.35rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.82rem' }} />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Document upload (optional) */}
-              <div className="modal-actions">
+              {/* Modal Actions */}
+              <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <button className="admin-btn admin-btn-sec" onClick={() => setShowDeliveryModal(null)}>Cancelar</button>
-                <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }}
-                  onClick={() => finalizarComDevolucao(showDeliveryModal.id)}>
-                  <i className="fa-solid fa-check"></i> Finalizar Pedido
-                </button>
+
+                {deliveryModalMode === 'acerto' && (
+                  <>
+                    <button className="admin-btn" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }}
+                      onClick={() => salvarAcerto(showDeliveryModal.id, false)}>
+                      <i className="fa-solid fa-handshake"></i> Salvar e Mover para Acertos
+                    </button>
+                    <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }}
+                      onClick={() => salvarAcerto(showDeliveryModal.id, true)}>
+                      <i className="fa-solid fa-check-double"></i> Finalizar Pedido Agora
+                    </button>
+                  </>
+                )}
+
+                {deliveryModalMode === 'finalizar' && (
+                  <>
+                    <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
+                      onClick={() => salvarAcerto(showDeliveryModal.id, false)}>
+                      <i className="fa-solid fa-floppy-disk"></i> Salvar Alterações
+                    </button>
+                    <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }}
+                      onClick={() => salvarAcerto(showDeliveryModal.id, true)}>
+                      <i className="fa-solid fa-check-double"></i> Finalizar Pedido
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -7739,9 +8033,11 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
               <button className="admin-btn" style={{ background: 'var(--accent)', color: 'white', borderColor: 'var(--accent)' }} disabled={editedItems.filter(i => i.qty > 0).length === 0} onClick={handleEditSave}>
                 <i className="fa-solid fa-save"></i> Salvar
               </button>
-              <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} disabled={editedItems.filter(i => i.qty > 0).length === 0} onClick={handleEditConfirm}>
-                <i className="fa-solid fa-check"></i> {order.status === 'em-rota' ? 'Salvar e Finalizar Entrega' : 'Salvar e Enviar para Rota'}
-              </button>
+              {order.status !== 'acerto' && order.status !== 'entregue' && (
+                <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} disabled={editedItems.filter(i => i.qty > 0).length === 0} onClick={handleEditConfirm}>
+                  <i className="fa-solid fa-check"></i> {order.status === 'em-rota' ? 'Salvar e Finalizar Entrega' : 'Salvar e Enviar para Rota'}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -8065,16 +8361,39 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
             </div>
           )}
 
-          <div className="modal-actions">
-            {(order.status === 'pre-pedido' || order.status === 'pendente' || order.status === 'em-rota') && (
+          <div className="modal-actions" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', justifyContent: 'flex-end' }}>
+            {(order.status === 'pre-pedido' || order.status === 'pendente' || order.status === 'em-rota' || order.status === 'acerto') && (
               <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
                 onClick={() => { setEditMode(true); resetEditedItems() }}>
                 <i className="fa-solid fa-pen"></i> Editar Itens
               </button>
             )}
             {order.status === 'entregue' && (
-              <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => onStatusChange('em-rota')}>
-                <i className="fa-solid fa-undo"></i> Voltar para Em Rota
+              <>
+                <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => onStatusChange('em-rota')}>
+                  <i className="fa-solid fa-undo"></i> Voltar para Em Rota
+                </button>
+                <button className="admin-btn" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} onClick={() => onOpenDelivery?.(order, 'acerto')}>
+                  <i className="fa-solid fa-handshake"></i> Fazer Acerto
+                </button>
+              </>
+            )}
+            {order.status === 'acerto' && (
+              <>
+                <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => onStatusChange('entregue')}>
+                  <i className="fa-solid fa-undo"></i> Voltar para Entregues
+                </button>
+                <button className="admin-btn" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} onClick={() => onOpenDelivery?.(order, 'acerto')}>
+                  <i className="fa-solid fa-handshake"></i> Editar Acerto
+                </button>
+                <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} onClick={() => onOpenDelivery?.(order, 'finalizar')}>
+                  <i className="fa-solid fa-check-double"></i> Finalizar Pedido
+                </button>
+              </>
+            )}
+            {order.status === 'concluido' && (
+              <button className="admin-btn" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} onClick={() => onOpenDelivery?.(order, 'finalizar')}>
+                <i className="fa-solid fa-eye"></i> Ver Acerto / Devoluções
               </button>
             )}
             {order.status === 'pre-pedido' && (
@@ -8093,7 +8412,7 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
                 <i className="fa-solid fa-check-double"></i> Concluir
               </button>
             )}
-            {order.status !== 'entregue' && order.status !== 'cancelado' && (
+            {order.status !== 'entregue' && order.status !== 'acerto' && order.status !== 'concluido' && order.status !== 'cancelado' && (
               <button className="admin-btn" style={{ background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)' }} onClick={() => { if (confirm('Tem certeza que deseja cancelar esta comanda?')) { onCancelOrder?.(order.id) } }}>
                 <i className="fa-solid fa-ban"></i> Cancelar Comanda
               </button>

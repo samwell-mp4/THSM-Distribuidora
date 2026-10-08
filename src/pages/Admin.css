@@ -558,6 +558,8 @@
 .status-em-rota { background: rgba(245,158,11,0.15); color: #d97706; }
 .status-pre-pedido { background: rgba(251,146,60,0.12); color: #ea580c; }
 .status-entregue { background: rgba(22,163,74,0.1); color: var(--success); }
+.status-acerto { background: rgba(99,102,241,0.12); color: #4f46e5; border: 1px solid rgba(99,102,241,0.25); }
+.status-concluido { background: rgba(16,185,129,0.15); color: #059669; }
 .status-cancelado { background: rgba(220,38,38,0.1); color: var(--danger); }
 .status-pago { background: rgba(22,163,74,0.1); color: var(--success); }
 .status-atrasado { background: rgba(220,38,38,0.1); color: var(--danger); }
