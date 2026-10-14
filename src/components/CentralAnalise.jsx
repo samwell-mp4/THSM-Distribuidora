@@ -239,6 +239,35 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
   const finPrev = useMemo(() => financial.filter(f => f.status !== 'cancelado' && fit(f.dueDate || '', prevWin)), [financial, prevWin])
   const despWin = useMemo(() => despesas.filter(d => fit(d.dueDate || '', win)), [despesas, win])
 
+  const prodCostMap = useMemo(() => {
+    const map = new Map()
+    ;(produtos || []).forEach(p => {
+      if (p) {
+        const c = Number(p.preco_custo) || Number(p.custo) || 0
+        if (p.id != null) map.set(String(p.id), c)
+        if (p.nome) map.set(p.nome.trim().toLowerCase(), c)
+        if (p.displayName) map.set(p.displayName.trim().toLowerCase(), c)
+      }
+    })
+    return map
+  }, [produtos])
+
+  const getItemCost = useCallback((i) => {
+    if (!i) return 0
+    if (i.preco_custo !== null && i.preco_custo !== undefined && i.preco_custo !== '') {
+      const n = Number(i.preco_custo)
+      if (!isNaN(n) && n >= 0) return n
+    }
+    if (i.custo !== null && i.custo !== undefined && i.custo !== '') {
+      const n = Number(i.custo)
+      if (!isNaN(n) && n >= 0) return n
+    }
+    if (i.id != null && prodCostMap.has(String(i.id))) return prodCostMap.get(String(i.id))
+    const name = (i.nome || i.displayName || i.produto || '').trim().toLowerCase()
+    if (name && prodCostMap.has(name)) return prodCostMap.get(name)
+    return 0
+  }, [prodCostMap])
+
   const agg = (list) => {
     let bruto = 0, desc = 0, qty = 0, custo = 0, n = 0
     list.forEach(o => {
@@ -247,15 +276,15 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
       n += 1
       ;(o.items || []).forEach(i => {
         qty += Number(i.qty) || 0
-        custo += (Number(i.preco_custo) || Number(i.custo) || 0) * (Number(i.qty) || 0)
+        custo += getItemCost(i) * (Number(i.qty) || 0)
       })
     })
     const liq = Math.max(0, bruto - desc)
     return { bruto, liq, desc, custo, qty, n, ticket: n ? liq / n : 0, lucro: liq - custo, margem: bruto ? ((liq - custo) / bruto) * 100 : 0 }
   }
 
-  const cur = useMemo(() => agg(ordersWin), [ordersWin])
-  const prev = useMemo(() => agg(ordersPrev), [ordersPrev])
+  const cur = useMemo(() => agg(ordersWin), [ordersWin, prodCostMap])
+  const prev = useMemo(() => agg(ordersPrev), [ordersPrev, prodCostMap])
 
   const delta = (c, p) => {
     if (!p) return null
@@ -274,7 +303,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
       map[k].frete += o.frete || 0
       map[k].n += 1
       ;(o.items || []).forEach(i => {
-        map[k].custo += (Number(i.preco_custo) || Number(i.custo) || 0) * (Number(i.qty) || 0)
+        map[k].custo += getItemCost(i) * (Number(i.qty) || 0)
         map[k].qtd += Number(i.qty) || 0
       })
     })
@@ -282,7 +311,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
       const liq = Math.max(0, m.bruto - m.desc)
       return { ...m, liq, lucro: liq - m.custo, margem: m.bruto ? ((liq - m.custo) / m.bruto) * 100 : 0 }
     })
-  }, [ordersWin])
+  }, [ordersWin, prodCostMap])
 
   const prodRank = useMemo(() => {
     const map = {}
@@ -292,11 +321,11 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         if (!map[name]) map[name] = { nome: name, qty: 0, bruto: 0, custo: 0 }
         map[name].qty += Number(i.qty) || 0
         map[name].bruto += (Number(i.preco) || 0) * (Number(i.qty) || 0)
-        map[name].custo += (Number(i.preco_custo) || Number(i.custo) || 0) * (Number(i.qty) || 0)
+        map[name].custo += getItemCost(i) * (Number(i.qty) || 0)
       })
     })
     return Object.values(map).map(p => ({ ...p, lucro: p.bruto - p.custo, margem: p.bruto ? ((p.bruto - p.custo) / p.bruto) * 100 : 0 })).sort((a, b) => b.bruto - a.bruto)
-  }, [ordersWin])
+  }, [ordersWin, prodCostMap])
 
   const cliRank = useMemo(() => {
     const map = {}

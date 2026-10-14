@@ -403,6 +403,8 @@ async function upsertOrderBatch(records, attempts = 3) {
 
 const STATUS_RANK = {
   'cancelado': 100,
+  'concluido': 70,
+  'acerto': 60,
   'entregue': 50,
   'em-rota': 40,
   'em-andamento': 30,

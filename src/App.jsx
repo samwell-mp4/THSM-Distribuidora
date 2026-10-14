@@ -686,7 +686,7 @@ function App() {
         if (existing.qty >= p.estoque && p.estoque > 0) { showToast('Estoque máximo atingido!', 'error'); return prev }
         return { ...prev, [cartKey]: { ...existing, qty: existing.qty + 1 } }
       }
-      return { ...prev, [cartKey]: { id: p.id, cartKey, nome: p.nome, displayName, preco: p.preco, imagem: p.imagem, qty: 1, estoque: p.estoque, variantes: vSel, semDevolucao: !!p.semDevolucao } }
+      return { ...prev, [cartKey]: { id: p.id, cartKey, nome: p.nome, displayName, preco: p.preco, preco_custo: p.preco_custo != null ? Number(p.preco_custo) : null, imagem: p.imagem, qty: 1, estoque: p.estoque, variantes: vSel, semDevolucao: !!p.semDevolucao } }
     })
     showToast(`${displayName.substring(0, 40)} adicionado ao carrinho`)
   }, [showToast, selectedVariants])
@@ -817,7 +817,11 @@ function App() {
   const finalizarCheckout = async () => {
     const user = await autoLoginOuRegistro()
     if (!user) { showToast('Erro ao identificar usuário', 'error'); return }
-    const items = cartItems.map(i => ({ ...i, tipo: 'aprazo' }))
+    const items = cartItems.map(i => {
+      const p = (produtos || []).find(x => x.id === i.id || String(x.id) === String(i.id))
+      const custo = (i.preco_custo != null && i.preco_custo !== '') ? Number(i.preco_custo) : (p?.preco_custo != null ? Number(p.preco_custo) : null)
+      return { ...i, preco_custo: custo, tipo: 'aprazo' }
+    })
     const total = items.reduce((s, i) => s + i.preco * i.qty, 0)
     const telefone = normTel(customer.telefone)
     const userId = user.id || null
@@ -1217,7 +1221,7 @@ function App() {
                             <span className="cart-related-price">{formatPreco(p.preco)}</span>
                           </div>
                           <button className="cart-related-add" onClick={() => {
-                            setCart(prev => ({ ...prev, [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, foto: p.foto, estoque: p.estoque, categoria: p.categoria, semDevolucao: !!p.semDevolucao, qty: 1 } }))
+                            setCart(prev => ({ ...prev, [p.id]: { id: p.id, nome: p.nome, preco: p.preco, preco_custo: p.preco_custo != null ? Number(p.preco_custo) : null, imagem: p.imagem, foto: p.foto, estoque: p.estoque, categoria: p.categoria, semDevolucao: !!p.semDevolucao, qty: 1 } }))
                             showToast(`${p.nome} adicionado ao carrinho!`, 'success')
                           }}><i className="fa-solid fa-plus"></i></button>
                         </div>

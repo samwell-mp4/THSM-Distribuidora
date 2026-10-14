@@ -82,20 +82,61 @@ function getOrderTime(o) {
   return Number(o.id) || 0
 }
 
-function getOrderBaseItems(order) {
-  if (!order) return []
-  if (order.originalItems && order.originalItems.length > 0) return order.originalItems.map(i => ({ ...i }))
-  const map = new Map((order.items || []).map(i => [i.id, { ...i }]))
-  ;(order.returnedItems || []).forEach(r => {
-    const existing = map.get(r.id)
-    const retQty = Number(r.returnedQty || r.qty || 0)
-    if (existing) {
-      existing.qty = Number(existing.qty || 0) + retQty
-    } else {
-      map.set(r.id, { ...r, qty: retQty })
+function getItemCost(item, produtosList = []) {
+  if (!item) return 0
+  if (item.preco_custo !== null && item.preco_custo !== undefined && item.preco_custo !== '') {
+    const n = Number(String(item.preco_custo).replace(',', '.'))
+    if (!isNaN(n) && n >= 0) return n
+  }
+  if (item.custo !== null && item.custo !== undefined && item.custo !== '') {
+    const n = Number(String(item.custo).replace(',', '.'))
+    if (!isNaN(n) && n >= 0) return n
+  }
+  if (Array.isArray(produtosList) && produtosList.length > 0) {
+    const prod = produtosList.find(p => p && (
+      (item.id != null && String(p.id) === String(item.id)) ||
+      (item.nome && p.nome && p.nome.trim().toLowerCase() === item.nome.trim().toLowerCase()) ||
+      (item.displayName && p.nome && p.nome.trim().toLowerCase() === item.displayName.trim().toLowerCase()) ||
+      (item.nome && p.displayName && p.displayName.trim().toLowerCase() === item.nome.trim().toLowerCase())
+    ))
+    if (prod) {
+      if (prod.preco_custo !== null && prod.preco_custo !== undefined && prod.preco_custo !== '') {
+        const n = Number(String(prod.preco_custo).replace(',', '.'))
+        if (!isNaN(n) && n >= 0) return n
+      }
+      if (prod.custo !== null && prod.custo !== undefined && prod.custo !== '') {
+        const n = Number(String(prod.custo).replace(',', '.'))
+        if (!isNaN(n) && n >= 0) return n
+      }
     }
+  }
+  return 0
+}
+
+function getOrderBaseItems(order, produtosList = []) {
+  if (!order) return []
+  const rawItems = (order.originalItems && order.originalItems.length > 0)
+    ? order.originalItems.map(i => ({ ...i }))
+    : (() => {
+        const map = new Map((order.items || []).map(i => [i.id, { ...i }]))
+        ;(order.returnedItems || []).forEach(r => {
+          const existing = map.get(r.id)
+          const retQty = Number(r.returnedQty || r.qty || 0)
+          if (existing) {
+            existing.qty = Number(existing.qty || 0) + retQty
+          } else {
+            map.set(r.id, { ...r, qty: retQty })
+          }
+        })
+        return Array.from(map.values())
+      })()
+
+  return rawItems.map(i => {
+    const c = (i.preco_custo !== null && i.preco_custo !== undefined && i.preco_custo !== '')
+      ? Number(String(i.preco_custo).replace(',', '.'))
+      : getItemCost(i, produtosList)
+    return { ...i, preco_custo: c > 0 ? c : null }
   })
-  return Array.from(map.values())
 }
 
 function diffDays(a, b) {
@@ -345,39 +386,81 @@ Obrigado pela preferência! 🎉`,
       const totalQtyPaid = remaining.reduce((s, i) => s + (Number(i.qty) || 0), 0)
 
       const devolvidosBlock = returned.length > 0
-        ? `📦 *ITENS DEVOLVIDOS*\n\n${returned.map(formatReturnedItemRow).join('\n\n')}\n\n\n`
+        ? `📦 *ITENS DEVOLVIDOS*\n\n${returned.map(formatReturnedItemRow).join('\n')}\n\n`
         : ''
 
       const pagosBlock = remaining.length > 0
-        ? `📦 *ITENS PAGOS*\n${remaining.map(formatItemRow).join('\n')}\n`
-        : `📦 *ITENS PAGOS*\n  • Nenhum item\n`
+        ? `📦 *ITENS MANTIDOS*\n\n${remaining.map(formatItemRow).join('\n')}\n\n`
+        : `📦 *ITENS MANTIDOS*\n  • Nenhum item\n\n`
 
-      const totalComandaNum = Number(extra.totalComanda != null ? extra.totalComanda : (order.total || 0))
-      const totalComandaStr = totalComandaNum.toFixed(2)
+      const formatBr = (n) => Number(n || 0).toFixed(2).replace('.', ',')
 
-      const valorAcertoNum = Number(
-        extra.valorAcerto != null
-          ? extra.valorAcerto
-          : (order.totalPago > 0
-              ? order.totalPago
-              : (order.valorAcerto > 0 ? order.valorAcerto : (order.desconto ? totalComandaNum : totalComandaNum * 0.70)))
+      const totalOriginalNum = Number(
+        extra.totalOriginal != null
+          ? extra.totalOriginal
+          : (order.totalOriginal != null
+              ? order.totalOriginal
+              : (order.totalNota != null ? order.totalNota : (Number(order.total || 0) + returned.reduce((s, i) => s + (Number(i.preco || 0) * Number(i.returnedQty || i.qty || 0)), 0))))
       )
-      const valorAcertoStr = valorAcertoNum.toFixed(2)
+      const totalDevolvidoNum = Number(
+        extra.totalDevolvido != null
+          ? extra.totalDevolvido
+          : returned.reduce((s, i) => s + (Number(i.preco || 0) * Number(i.returnedQty || i.qty || 0)), 0)
+      )
+      const descontoNum = Number(extra.desconto != null ? extra.desconto : (order.desconto || 0))
+      const totalAcertoNum = Number(
+        extra.totalAcerto != null
+          ? extra.totalAcerto
+          : (extra.totalComanda != null ? extra.totalComanda : (order.total || 0))
+      )
 
-      return `✅ *ACERTO* ✅
+      const pm = (order.paymentMethod || extra.paymentMethod || '').toLowerCase()
+      const splits = order.paymentSplits || extra.paymentSplits || {}
+      const totalPagoNum = Number(extra.totalPago != null ? extra.totalPago : (order.totalPago != null ? order.totalPago : 0))
+      const valorEmAbertoNum = Number(extra.valorEmAberto != null ? extra.valorEmAberto : Math.max(0, Math.round((totalAcertoNum - totalPagoNum) * 100) / 100))
+
+      let paymentLines = []
+      if (pm.includes('+')) {
+        pm.split('+').forEach(m => {
+          const val = Number(String(splits[m] || 0).replace(',', '.')) || 0
+          const label = PAG_METHODS[m]?.label || m.toUpperCase()
+          paymentLines.push(`💰 *PAGOU NO ${label.toUpperCase()}:* R$ ${formatBr(val)}`)
+        })
+      } else if (pm) {
+        const label = PAG_METHODS[pm]?.label || pm.toUpperCase()
+        paymentLines.push(`💰 *PAGOU NO ${label.toUpperCase()}:* R$ ${formatBr(totalPagoNum)}`)
+      }
+
+      paymentLines.push(`💰 *TOTAL PAGO:* R$ ${formatBr(totalPagoNum)}`)
+
+      if (valorEmAbertoNum > 0) {
+        paymentLines.push(`⚠️ *VALOR EM ABERTO:* R$ ${formatBr(valorEmAbertoNum)}`)
+        const vencDate = formatDate(order.dataVencimento || extra.dataVencimento)
+        if (vencDate && vencDate !== '—') {
+          paymentLines.push(`📅 *DATA DE VENCIMENTO DO SALDO:* ${vencDate}`)
+        }
+      } else {
+        paymentLines.push(`✅ *VALOR EM ABERTO:* R$ 0,00 (Totalmente quitado)`)
+      }
+
+      const paymentSection = paymentLines.join('\n')
+
+      return `✅ *ACERTO DE PEDIDO* ✅
 ━━━━━━━━━━━━━━━━━━
 📋 *Pedido:* ${id}
 👤 *Cliente:* ${nome}
 ${msgDatas}
 ━━━━━━━━━━━━━━━━━━
-Olá ${nome}, seu pedido foi finalizado!
+Olá ${nome}, confira o resumo do seu acerto:
 
 ${devolvidosBlock}${pagosBlock}━━━━━━━━━━━━━━━━━━
+📦 *TOTAL DE ITENS MANTIDOS:* ${totalQtyPaid}
 
-📦 *TOTAL DE ITENS PAGOS:* ${totalQtyPaid}
-
-💰 *TOTAL R$* ${totalComandaStr}
-💰 *ACERTO R$*${valorAcertoStr}
+💰 *VALOR TOTAL DA NOTA:* R$ ${formatBr(totalOriginalNum)}${totalDevolvidoNum > 0 ? `\n📦 *TOTAL DEVOLVIDO:* - R$ ${formatBr(totalDevolvidoNum)}` : ''}${descontoNum > 0 ? `\n🏷️ *DESCONTO:* - R$ ${formatBr(descontoNum)}` : ''}
+💰 *TOTAL DO ACERTO:* R$ ${formatBr(totalAcertoNum)}
+━━━━━━━━━━━━━━━━━━
+💳 *DETALHES DO PAGAMENTO:*
+${paymentSection}
 ━━━━━━━━━━━━━━━━━━
 ⚠️ *Importante:* Produtos embalados/lacrados não podem ser abertos. Não aceitamos devolução de produtos violados.
 Você tem até 24 horas para nos informar se houver algum item faltando ou com avaria.
@@ -389,58 +472,91 @@ Obrigado pela preferência! 🎉`
     })(),
 
     'concluido': (() => {
+      const returned = (extra.returnedItems || order.returnedItems || []).filter(i => (Number(i.returnedQty || i.qty) || 0) > 0)
       const remaining = (order.items || []).filter(i => (Number(i.qty) || 0) > 0)
+      const totalQtyPaid = remaining.reduce((s, i) => s + (Number(i.qty) || 0), 0)
+
+      const devolvidosBlock = returned.length > 0
+        ? `📦 *ITENS DEVOLVIDOS*\n\n${returned.map(formatReturnedItemRow).join('\n')}\n\n`
+        : ''
+
       const pagosBlock = remaining.length > 0
         ? remaining.map(formatItemRow).join('\n')
         : '  • Nenhum item'
 
+      const formatBr = (n) => Number(n || 0).toFixed(2).replace('.', ',')
+
+      const totalOriginalNum = Number(
+        extra.totalOriginal != null
+          ? extra.totalOriginal
+          : (order.totalOriginal != null
+              ? order.totalOriginal
+              : (order.totalNota != null ? order.totalNota : (Number(order.total || 0) + returned.reduce((s, i) => s + (Number(i.preco || 0) * Number(i.returnedQty || i.qty || 0)), 0))))
+      )
+      const totalDevolvidoNum = Number(
+        extra.totalDevolvido != null
+          ? extra.totalDevolvido
+          : returned.reduce((s, i) => s + (Number(i.preco || 0) * Number(i.returnedQty || i.qty || 0)), 0)
+      )
+      const descontoNum = Number(extra.desconto != null ? extra.desconto : (order.desconto || 0))
+      const totalAcertoNum = Number(
+        extra.totalAcerto != null
+          ? extra.totalAcerto
+          : (extra.totalComanda != null ? extra.totalComanda : (order.total || 0))
+      )
+
       const pm = (order.paymentMethod || extra.paymentMethod || 'pix').toLowerCase()
       const splits = order.paymentSplits || extra.paymentSplits || {}
       const totalPagoNum = Number(extra.totalPago != null ? extra.totalPago : (order.totalPago != null ? order.totalPago : order.total)) || 0
-      const formatBr = (n) => Number(n || 0).toFixed(2).replace('.', ',')
+      const valorEmAbertoNum = Number(extra.valorEmAberto != null ? extra.valorEmAberto : Math.max(0, Math.round((totalAcertoNum - totalPagoNum) * 100) / 100))
 
       let paymentLines = []
-      if (pm === 'pix+dinheiro') {
-        const pixVal = Number(String(splits.pix || 0).replace(',', '.'))
-        const dinVal = Number(String(splits.dinheiro || 0).replace(',', '.'))
-        paymentLines.push(`💰 *PAGOU NO PIX R$${formatBr(pixVal)}*`)
-        paymentLines.push(`💰 *PAGOU NO DINHEIRO R$${formatBr(dinVal)}*`)
-      } else if (pm === 'pix+cartao') {
-        const pixVal = Number(String(splits.pix || 0).replace(',', '.'))
-        const carVal = Number(String(splits.cartao || 0).replace(',', '.'))
-        paymentLines.push(`💰 *PAGOU NO PIX R$${formatBr(pixVal)}*`)
-        paymentLines.push(`💰 *PAGOU NO CARTÃO R$${formatBr(carVal)}*`)
-      } else if (pm === 'cartao+dinheiro') {
-        const carVal = Number(String(splits.cartao || 0).replace(',', '.'))
-        const dinVal = Number(String(splits.dinheiro || 0).replace(',', '.'))
-        paymentLines.push(`💰 *PAGOU NO CARTÃO R$${formatBr(carVal)}*`)
-        paymentLines.push(`💰 *PAGOU NO DINHEIRO R$${formatBr(dinVal)}*`)
-      } else if (pm === 'dinheiro') {
-        paymentLines.push(`💰 *PAGOU NO DINHEIRO R$${formatBr(totalPagoNum)}*`)
-      } else if (pm === 'cartao') {
-        paymentLines.push(`💰 *PAGOU NO CARTÃO R$${formatBr(totalPagoNum)}*`)
+      if (pm.includes('+')) {
+        pm.split('+').forEach(m => {
+          const val = Number(String(splits[m] || 0).replace(',', '.')) || 0
+          const label = PAG_METHODS[m]?.label || m.toUpperCase()
+          paymentLines.push(`💰 *PAGOU NO ${label.toUpperCase()}:* R$ ${formatBr(val)}`)
+        })
       } else {
-        paymentLines.push(`💰 *PAGOU NO PIX R$${formatBr(totalPagoNum)}*`)
+        const label = PAG_METHODS[pm]?.label || (pm ? pm.toUpperCase() : 'PIX')
+        paymentLines.push(`💰 *PAGOU NO ${label.toUpperCase()}:* R$ ${formatBr(totalPagoNum)}`)
       }
 
-      paymentLines.push(`💰 *VALOR TOTAL PAGO R$${formatBr(totalPagoNum)}*`)
-      const paymentSection = paymentLines.join('\n\n')
+      paymentLines.push(`💰 *VALOR TOTAL PAGO:* R$ ${formatBr(totalPagoNum)}`)
 
-      const returned = (extra.returnedItems || order.returnedItems || []).filter(i => (Number(i.returnedQty || i.qty) || 0) > 0)
-      const devolucaoLine = returned.length > 0 ? `\n\n*DEVOLUÇÃO ✅*` : ''
+      if (valorEmAbertoNum > 0) {
+        paymentLines.push(`⚠️ *VALOR EM ABERTO:* R$ ${formatBr(valorEmAbertoNum)}`)
+        const vencDate = formatDate(order.dataVencimento || extra.dataVencimento)
+        if (vencDate && vencDate !== '—') {
+          paymentLines.push(`📅 *DATA DE VENCIMENTO DO SALDO:* ${vencDate}`)
+        }
+      } else {
+        paymentLines.push(`✅ *VALOR EM ABERTO:* R$ 0,00 (Totalmente quitado)`)
+      }
 
-      return `✅ *PEDIDO FINALIZADO✅*
+      const paymentSection = paymentLines.join('\n')
+      const devolucaoLine = returned.length > 0 ? `\n\n*DEVOLUÇÃO REALIZADA ✅*` : ''
+
+      return `✅ *PEDIDO FINALIZADO* ✅
 ━━━━━━━━━━━━━━━━━━
 📋 *Pedido:* ${id}
 👤 *Cliente:* ${nome}
 ${msgDatas}
 ━━━━━━━━━━━━━━━━━━
-📦 *ITENS PAGOS*
+${devolvidosBlock}📦 *ITENS PAGOS / MANTIDOS*
 
 ${pagosBlock}
 
 ━━━━━━━━━━━━━━━━━━
+📦 *TOTAL DE ITENS PAGOS:* ${totalQtyPaid}
+
+💰 *VALOR TOTAL DA NOTA:* R$ ${formatBr(totalOriginalNum)}${totalDevolvidoNum > 0 ? `\n📦 *TOTAL DEVOLVIDO:* - R$ ${formatBr(totalDevolvidoNum)}` : ''}${descontoNum > 0 ? `\n🏷️ *DESCONTO:* - R$ ${formatBr(descontoNum)}` : ''}
+💰 *TOTAL DO ACERTO:* R$ ${formatBr(totalAcertoNum)}
+━━━━━━━━━━━━━━━━━━
+💳 *DETALHES DO PAGAMENTO:*
 ${paymentSection}${devolucaoLine}
+━━━━━━━━━━━━━━━━━━
+📲 *Acesse sua comanda:* ${link}
 ━━━━━━━━━━━━━━━━━━
 Obrigado pela preferência! 🎉`
     })(),
@@ -695,7 +811,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           itemName: i.nome,
           qty: i.qty,
           value: i.preco * i.qty,
-          precoCusto: (i.preco_custo || 0) * i.qty,
+          precoCusto: getItemCost(i, produtosAtuais) * i.qty,
           dueDate: existing?.dueDate || order.dataVencimento || hoje(),
           paidDate: null,
           status: 'pendente',
@@ -758,6 +874,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [deliveryPaid, setDeliveryPaid] = useState('')
   const [deliveryDataInicio, setDeliveryDataInicio] = useState(() => hoje())
   const [deliveryDataVenc, setDeliveryDataVenc] = useState('')
+  const [deliveryItemPrices, setDeliveryItemPrices] = useState({})
+  const [deliveryItemCosts, setDeliveryItemCosts] = useState({})
   const [usuarios, setUsuarios] = useState(() => LS.get('thsm_usuarios', []))
 
   const [syncingUsers, setSyncingUsers] = useState(false)
@@ -1119,6 +1237,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           setOrders(prev => {
             const STATUS_RANK = {
               'cancelado': 100,
+              'concluido': 70,
+              'acerto': 60,
               'entregue': 50,
               'em-rota': 40,
               'em-andamento': 30,
@@ -1277,12 +1397,17 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     if (savingOrder) return
     setSavingOrder(true)
     try {
-      const items = (data.items || []).map(i => ({
-        ...i,
-        preco: Number(i.preco) || 0,
-        preco_custo: i.preco_custo != null && i.preco_custo !== '' ? Number(i.preco_custo) : null,
-        qty: Number(i.qty) || 1
-      }))
+      const items = (data.items || []).map(i => {
+        const cost = (i.preco_custo != null && i.preco_custo !== '')
+          ? Number(String(i.preco_custo).replace(',', '.'))
+          : getItemCost(i, produtosAtuais)
+        return {
+          ...i,
+          preco: Number(String(i.preco).replace(',', '.')) || 0,
+          preco_custo: cost > 0 ? cost : null,
+          qty: Number(i.qty) || 1
+        }
+      })
 
       // Batch update cost in background ONLY for items where cost was explicitly modified by user
       const changedCosts = {}
@@ -1347,7 +1472,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           itemName: i.nome,
           qty: i.qty,
           value: i.preco * i.qty,
-          precoCusto: (i.preco_custo || 0) * i.qty,
+          precoCusto: (i.preco_custo || getItemCost(i, produtosAtuais)) * i.qty,
           dueDate,
           paidDate: concluido ? hoje() : null,
           status: concluido ? 'pago' : 'pendente'
@@ -1475,7 +1600,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
             itemName: i.nome,
             qty: i.qty,
             value: i.preco * i.qty,
-            precoCusto: (i.preco_custo || 0) * i.qty,
+            precoCusto: (i.preco_custo || getItemCost(i, produtosAtuais)) * i.qty,
             dueDate: finalDue || hoje(),
             paidDate: null,
             status: 'pendente',
@@ -1528,12 +1653,24 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       remainingItems = [...remainingItems, ...replacements]
     }
     if (remainingItems.length === 0) { showToast('Não é possível aprovar um pedido sem itens', 'error'); return }
-    const totalAvista = remainingItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
-    const totalAprazo = remainingItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
+
+    const resolvedRemaining = remainingItems.map(i => {
+      const cost = (i.preco_custo != null && i.preco_custo !== '')
+        ? Number(String(i.preco_custo).replace(',', '.'))
+        : getItemCost(i, produtosAtuais)
+      return {
+        ...i,
+        preco: Number(String(i.preco).replace(',', '.')) || 0,
+        preco_custo: cost > 0 ? cost : null
+      }
+    })
+
+    const totalAvista = resolvedRemaining.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
+    const totalAprazo = resolvedRemaining.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
     const now = Date.now()
     const updatedOrder = {
       ...order,
-      items: remainingItems,
+      items: resolvedRemaining,
       totalAvista,
       totalAprazo,
       total: totalAvista + totalAprazo,
@@ -1551,7 +1688,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     })
     upsertOrder(updatedOrder)
     // Create financial records for approved a-prazo items
-    const finRecords = remainingItems.filter(i => i.tipo === 'aprazo').map(i => {
+    const finRecords = resolvedRemaining.filter(i => i.tipo === 'aprazo').map(i => {
       const dueDate = dataVencimento || (() => {
         const d = new Date((order.date || hoje()) + 'T12:00:00')
         d.setDate(d.getDate() + 60)
@@ -1564,7 +1701,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         itemName: i.nome,
         qty: i.qty,
         value: i.preco * i.qty,
-        precoCusto: (i.preco_custo || 0) * i.qty,
+        precoCusto: (i.preco_custo || getItemCost(i, produtosAtuais)) * i.qty,
         dueDate,
         paidDate: null,
         status: 'pendente'
@@ -1700,7 +1837,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         itemName: i.nome,
         qty: i.qty,
         value: i.preco * i.qty,
-        precoCusto: (i.preco_custo || 0) * i.qty,
+        precoCusto: (i.preco_custo || getItemCost(i, produtosAtuais)) * i.qty,
         dueDate,
         paidDate: null,
         status: 'pendente'
@@ -1723,14 +1860,23 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   }
 
   const openAcertoModal = (o, mode = 'acerto') => {
-    const baseItems = getOrderBaseItems(o)
+    const baseItems = getOrderBaseItems(o, produtosAtuais)
     const retMap = {}
+    const priceMap = {}
+    const costMap = {}
+    baseItems.forEach(i => {
+      priceMap[i.id] = String(i.preco != null ? i.preco : '')
+      const c = (i.preco_custo != null && i.preco_custo !== '') ? i.preco_custo : getItemCost(i, produtosAtuais)
+      costMap[i.id] = c > 0 ? String(c) : ''
+    })
     if (o.returnedItems && o.returnedItems.length > 0) {
       o.returnedItems.forEach(r => {
         retMap[r.id] = r.returnedQty || r.qty || 0
       })
     }
     setReturnQuantities(retMap)
+    setDeliveryItemPrices(priceMap)
+    setDeliveryItemCosts(costMap)
     setPayQuantities({})
     setIdentityPreview(o.identityPhoto || '')
     setAddressPreview(o.addressProof || '')
@@ -1766,19 +1912,31 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     const order = orders.find(o => o.id === orderId) || showDeliveryModal
     if (!order) return
 
-    const baseItems = showDeliveryModal?.baseItems || getOrderBaseItems(order)
+    const baseItems = showDeliveryModal?.baseItems || getOrderBaseItems(order, produtosAtuais)
     const returnedItems = []
     const remainingItems = []
 
     baseItems.forEach(i => {
+      const pRaw = deliveryItemPrices[i.id] !== undefined ? String(deliveryItemPrices[i.id]).replace(',', '.') : String(i.preco || 0)
+      const unitPreco = Number(pRaw) || 0
+      const cRaw = deliveryItemCosts[i.id] !== undefined ? String(deliveryItemCosts[i.id]).replace(',', '.') : ''
+      const unitCusto = cRaw !== '' ? (Number(cRaw) || 0) : getItemCost(i, produtosAtuais)
+
+      if (cRaw !== '') {
+        const prod = produtosAtuais.find(p => p && (p.id === i.id || String(p.id) === String(i.id)))
+        if (prod && Number(prod.preco_custo) !== unitCusto) {
+          updateProduct(prod.id, { preco_custo: unitCusto })
+        }
+      }
+
       const maxQty = Number(i.qty) || 0
       const retQty = Math.max(0, Math.min(maxQty, Number(returnQuantities[i.id]) || 0))
       if (retQty > 0) {
-        returnedItems.push({ ...i, returnedQty: retQty })
+        returnedItems.push({ ...i, preco: unitPreco, preco_custo: unitCusto > 0 ? unitCusto : null, returnedQty: retQty })
       }
       const keptQty = maxQty - retQty
       if (keptQty > 0) {
-        remainingItems.push({ ...i, qty: keptQty })
+        remainingItems.push({ ...i, preco: unitPreco, preco_custo: unitCusto > 0 ? unitCusto : null, qty: keptQty })
       }
     })
 
@@ -1805,19 +1963,39 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     const totalPago = Math.round(totalPagoCalc * 100) / 100
     const totalReembolso = returnedItems.reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.returnedQty) || 0), 0)
 
+    const totalOriginal = baseItems.reduce((s, i) => {
+      const pRaw = deliveryItemPrices[i.id] !== undefined ? String(deliveryItemPrices[i.id]).replace(',', '.') : String(i.preco || 0)
+      return s + (Number(pRaw) || 0) * (Number(i.qty) || 0)
+    }, 0)
+    const valorEmAberto = Math.max(0, Math.round((totalCobrar - totalPago) * 100) / 100)
+
     const now = Date.now()
     const newStatus = finalize ? 'concluido' : 'acerto'
 
     const updatedOrder = {
       ...order,
-      originalItems: baseItems.map(i => ({ ...i })),
+      originalItems: baseItems.map(i => {
+        const pRaw = deliveryItemPrices[i.id] !== undefined ? String(deliveryItemPrices[i.id]).replace(',', '.') : String(i.preco || 0)
+        const unitPreco = Number(pRaw) || 0
+        const cRaw = deliveryItemCosts[i.id] !== undefined ? String(deliveryItemCosts[i.id]).replace(',', '.') : ''
+        const unitCusto = cRaw !== '' ? (Number(cRaw) || 0) : getItemCost(i, produtosAtuais)
+        return {
+          ...i,
+          preco: unitPreco,
+          preco_custo: unitCusto > 0 ? unitCusto : null
+        }
+      }),
       items: remainingItems,
+      totalOriginal,
+      totalNota: totalOriginal,
+      totalAcerto: totalCobrar,
       totalAvista,
       totalAprazo,
       total: totalCobrar,
       desconto: Math.round(desconto * 100) / 100,
       descontoPercent: deliveryDiscountType === 'percent' ? discountNum : null,
       totalPago,
+      valorEmAberto,
       status: newStatus,
       isFinalizado: finalize,
       returnedItems,
@@ -1829,7 +2007,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       deliveredAt: order.deliveredAt || now,
       finalizadoAt: finalize ? now : (order.finalizadoAt || null),
       paymentMethod: deliveryPayment,
-      paymentSplits: isSplit ? deliverySplits : null,
+      paymentSplits: isSplit ? deliverySplits : (deliveryPayment ? { [deliveryPayment]: totalPago } : null),
       lastModified: now,
       updatedAt: now
     }
@@ -1847,6 +2025,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       const newFinancial = aprazoItems.map(i => {
         const existing = existingRecords.find(f => f.id === orderId + '-' + i.id)
         const itemVal = (Number(i.preco) || 0) * (Number(i.qty) || 0)
+        const unitCusto = getItemCost(i, produtosAtuais)
         return {
           id: orderId + '-' + i.id,
           orderId,
@@ -1854,7 +2033,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           itemName: i.nome,
           qty: i.qty,
           value: itemVal,
-          precoCusto: (i.preco_custo || 0) * i.qty,
+          precoCusto: (unitCusto || 0) * i.qty,
           dueDate: existing?.dueDate || dueDate,
           paidDate: finalize ? hoje() : (existing?.paidDate || null),
           status: finalize ? 'pago' : (existing?.status || 'pendente'),
@@ -1867,16 +2046,33 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       return combined
     })
 
+    const webhookExtra = {
+      returnedItems,
+      originalItems: baseItems,
+      totalOriginal,
+      totalDevolvido: totalReembolso,
+      desconto: Math.round(desconto * 100) / 100,
+      totalComanda: totalCobrar,
+      totalAcerto: totalCobrar,
+      paymentSplits: isSplit ? deliverySplits : (deliveryPayment ? { [deliveryPayment]: totalPago } : null),
+      paymentMethod: deliveryPayment,
+      totalPago,
+      valorEmAberto,
+      dataVencimento: deliveryDataVenc || order.dataVencimento || null
+    }
+
     if (finalize) {
       showToast(`Pedido #${orderId} finalizado com sucesso! WhatsApp enviado ao cliente.`)
-      sendStatusWebhook(updatedOrder, 'concluido', { returnedItems, paymentSplits: deliverySplits, paymentMethod: deliveryPayment, totalPago })
+      sendStatusWebhook(updatedOrder, 'concluido', webhookExtra)
     } else {
       showToast(`Pedido #${orderId} atualizado na etapa de Acertos! WhatsApp enviado ao cliente.`)
-      sendStatusWebhook(updatedOrder, 'acerto', { returnedItems, totalComanda: totalCobrar, valorAcerto: totalPago > 0 ? totalPago : (totalCobrar * 0.70) })
+      sendStatusWebhook(updatedOrder, 'acerto', webhookExtra)
     }
 
     setShowDeliveryModal(null)
     setReturnQuantities({})
+    setDeliveryItemPrices({})
+    setDeliveryItemCosts({})
     setPayQuantities({})
     setDeliveryDiscount('')
     setDeliveryPaid('')
@@ -2303,7 +2499,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       ; (o.items || []).forEach(i => {
         const qty = Number(i.qty) || 0
         const preco = Number(i.preco) || 0
-        const custo = Number(i.preco_custo) || Number(i.custo) || 0
+        const custo = getItemCost(i, produtosAtuais)
         lucroTotal += (preco - custo) * qty
         const key = i.displayName || i.nome || i.produto || 'Produto'
         qtyByProduto[key] = (qtyByProduto[key] || 0) + qty
@@ -5062,18 +5258,47 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
               {(showDeliveryModal.baseItems || showDeliveryModal.items).map((i, idx) => {
                 const maxQty = Number(i.qty) || 0
                 const retVal = returnQuantities[i.id] !== undefined ? returnQuantities[i.id] : ''
+                const currentPrice = deliveryItemPrices[i.id] !== undefined ? deliveryItemPrices[i.id] : (i.preco ?? '')
+                const currentPriceNum = Number(String(currentPrice).replace(',', '.')) || 0
+                const currentCost = deliveryItemCosts[i.id] !== undefined ? deliveryItemCosts[i.id] : (i.preco_custo ?? (getItemCost(i, produtosAtuais) || ''))
                 return (
-                  <div key={idx} style={{ padding: '0.6rem 0', borderBottom: '1px solid var(--admin-border)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                      <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>{i.nome} ({maxQty}x)</span>
-                      <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{formatPreco(i.preco * maxQty)}</span>
+                  <div key={idx} style={{ padding: '0.65rem 0', borderBottom: '1px solid var(--admin-border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{i.nome} ({maxQty}x)</span>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--accent)' }}>{formatPreco(currentPriceNum * maxQty)}</span>
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)', marginBottom: '0.35rem' }}>
-                      {Number(i.preco || 0).toFixed(2).replace('.', ',')} /un — {i.tipo === 'avista' ? 'À Vista' : 'A Prazo'}
+
+                    <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '0.45rem', background: '#f8fafc', padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.74rem', color: 'var(--admin-text-sec)', margin: 0 }}>
+                        <span style={{ fontWeight: 600 }}>Preço: R$</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={currentPrice}
+                          placeholder="0,00"
+                          onChange={e => setDeliveryItemPrices(prev => ({ ...prev, [i.id]: e.target.value }))}
+                          style={{ width: '70px', padding: '0.2rem 0.35rem', borderRadius: '4px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', textAlign: 'right', background: 'white' }}
+                        />
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.74rem', color: '#059669', margin: 0 }}>
+                        <span style={{ fontWeight: 600 }}><i className="fa-solid fa-tag"></i> Custo: R$</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={currentCost}
+                          placeholder="0,00"
+                          onChange={e => setDeliveryItemCosts(prev => ({ ...prev, [i.id]: e.target.value }))}
+                          style={{ width: '70px', padding: '0.2rem 0.35rem', borderRadius: '4px', border: '1px solid #10b981', fontSize: '0.78rem', textAlign: 'right', background: 'white' }}
+                        />
+                      </label>
+                      <span className={`split-badge ${i.tipo === 'avista' ? 'vista' : 'aprazo'}`} style={{ fontSize: '0.68rem', padding: '0.1rem 0.35rem' }}>
+                        {i.tipo === 'avista' ? 'À Vista' : 'A Prazo'}
+                      </span>
                     </div>
+
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.82rem' }}>
-                        <span style={{ color: 'var(--admin-text-sec)' }}>Devolver:</span>
+                        <span style={{ color: 'var(--admin-text-sec)', fontWeight: 500 }}>Devolver:</span>
                         <input type="number" min="0" max={maxQty} step="1" value={retVal}
                           placeholder="0"
                           onChange={e => {
@@ -5098,8 +5323,14 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
               {/* Auto-calc summary */}
               {(() => {
                 const modalBase = showDeliveryModal.baseItems || showDeliveryModal.items
-                const totalOriginal = modalBase.reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0)
-                const totalDevolvido = modalBase.reduce((s, i) => s + (Number(i.preco) || 0) * (Number(returnQuantities[i.id]) || 0), 0)
+                const totalOriginal = modalBase.reduce((s, i) => {
+                  const p = deliveryItemPrices[i.id] !== undefined ? (Number(String(deliveryItemPrices[i.id]).replace(',', '.')) || 0) : (Number(i.preco) || 0)
+                  return s + p * (Number(i.qty) || 0)
+                }, 0)
+                const totalDevolvido = modalBase.reduce((s, i) => {
+                  const p = deliveryItemPrices[i.id] !== undefined ? (Number(String(deliveryItemPrices[i.id]).replace(',', '.')) || 0) : (Number(i.preco) || 0)
+                  return s + p * (Number(returnQuantities[i.id]) || 0)
+                }, 0)
                 const base = Math.max(0, totalOriginal - totalDevolvido)
                 const discRaw = Number(String(deliveryDiscount).replace(',', '.')) || 0
                 const desconto = deliveryDiscountType === 'percent'
@@ -5245,15 +5476,25 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                                       }}>
                                       Restante
                                     </button>
+                                    <button
+                                      type="button"
+                                      className="admin-btn admin-btn-sec"
+                                      title="Deixar esta forma em aberto (R$ 0)"
+                                      style={{ fontSize: '0.68rem', padding: '0.25rem 0.45rem', whiteSpace: 'nowrap', color: '#b45309', borderColor: '#fcd34d', background: '#fffbeb' }}
+                                      onClick={() => {
+                                        setDeliverySplits(prev => ({ ...prev, [m]: '0' }))
+                                      }}>
+                                      Em Aberto
+                                    </button>
                                   </div>
                                 </div>
                               )
                             })}
                           </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem', paddingTop: '0.4rem', borderTop: '1px solid #e2e8f0', fontSize: '0.82rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', paddingTop: '0.4rem', borderTop: '1px solid #e2e8f0', fontSize: '0.82rem' }}>
                             <span>Total pago: <strong style={{ color: totalPago >= totalCobrar ? 'var(--success)' : 'var(--accent)' }}>{formatPreco(totalPago)}</strong></span>
-                            <span style={{ color: faltaPagar > 0 ? 'var(--danger)' : 'var(--success)', fontWeight: 600 }}>
-                              {faltaPagar > 0 ? `Falta: ${formatPreco(faltaPagar)}` : '✅ Quitado'}
+                            <span style={{ color: faltaPagar > 0 ? '#b45309' : 'var(--success)', fontWeight: 700, background: faltaPagar > 0 ? '#fef3c7' : '#dcfce7', padding: '0.2rem 0.55rem', borderRadius: '6px', border: faltaPagar > 0 ? '1px solid #fde68a' : '1px solid #bbf7d0' }}>
+                              {faltaPagar > 0 ? `⏳ EM ABERTO (Vencimento): ${formatPreco(faltaPagar)}` : '✅ Quitado'}
                             </span>
                           </div>
                         </div>
@@ -5261,11 +5502,11 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
                       {/* Single Input */}
                       {!deliveryPayment.includes('+') && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.6rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '0.5rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.6rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--admin-text)' }}>
                             <i className="fa-solid fa-hand-holding-dollar"></i> Quanto o cliente pagou ({PAG_METHODS[deliveryPayment]?.label}):
                           </span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
                             <span style={{ fontSize: '0.8rem', color: 'var(--admin-text-sec)' }}>R$</span>
                             <input
                               type="text"
@@ -5286,13 +5527,31 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                               onClick={() => setDeliveryPaid(String(totalCobrar))}>
                               Pagar total
                             </button>
+                            <button
+                              type="button"
+                              className="admin-btn admin-btn-sec"
+                              title="Pagar 50% agora e deixar o restante em aberto até o vencimento"
+                              style={{ fontSize: '0.68rem', padding: '0.25rem 0.45rem', whiteSpace: 'nowrap', color: '#2563eb', borderColor: '#bfdbfe', background: '#eff6ff' }}
+                              onClick={() => setDeliveryPaid(String((totalCobrar / 2).toFixed(2)))}>
+                              Metade (50%)
+                            </button>
+                            <button
+                              type="button"
+                              className="admin-btn admin-btn-sec"
+                              title="Zerar valor pago para ficar 100% em aberto até o vencimento"
+                              style={{ fontSize: '0.68rem', padding: '0.25rem 0.45rem', whiteSpace: 'nowrap', color: '#b45309', borderColor: '#fcd34d', background: '#fffbeb' }}
+                              onClick={() => setDeliveryPaid('0')}>
+                              Em Aberto
+                            </button>
                           </div>
                         </div>
                       )}
 
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginTop: '0.3rem', color: faltaPagar > 0 ? 'var(--danger)' : 'var(--success)' }}>
-                        <span style={{ fontWeight: 600 }}>{totalPago > 0 ? 'Saldo devedor restante' : 'Saldo devedor'}</span>
-                        <span style={{ fontWeight: 800 }}>{formatPreco(faltaPagar)}</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem', marginTop: '0.4rem', padding: '0.4rem 0.65rem', borderRadius: '6px', background: faltaPagar > 0 ? '#fffbeb' : '#f0fdf4', border: faltaPagar > 0 ? '1px solid #fde68a' : '1px solid #bbf7d0', color: faltaPagar > 0 ? '#b45309' : 'var(--success)' }}>
+                        <span style={{ fontWeight: 700 }}>
+                          {faltaPagar > 0 ? '⏳ EM ABERTO (a pagar no vencimento):' : '✅ Quitado integralmente:'}
+                        </span>
+                        <span style={{ fontWeight: 800, fontSize: '0.95rem' }}>{formatPreco(faltaPagar)}</span>
                       </div>
                     </div>
                   </div>
@@ -6119,7 +6378,7 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
           produto: i.displayName || i.nome || i.produto || 'Produto',
           qty: Number(i.qty) || 0,
           preco: Number(i.preco) || 0,
-          preco_custo: Number(i.preco_custo) || Number(i.custo) || 0,
+          preco_custo: getItemCost(i, produtosAtuais),
           cliente: o.customer?.nome || '-',
           data: o.date || '',
           tipo: i.tipo === 'avista' ? 'À Vista' : 'A Prazo'
@@ -6127,7 +6386,7 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
       })
     })
     return arr
-  }, [ordersF, itemTipoF])
+  }, [ordersF, itemTipoF, produtosAtuais])
 
   const vendasMes = useMemo(() => {
     const map = {}
@@ -6144,11 +6403,11 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
       map[k].pedidos += 1
         ; (o.items || []).forEach(i => {
           map[k].qtd += Number(i.qty) || 0
-          map[k].custo += (Number(i.preco_custo) || Number(i.custo) || 0) * (Number(i.qty) || 0)
+          map[k].custo += getItemCost(i, produtosAtuais) * (Number(i.qty) || 0)
         })
     })
     return Object.values(map).sort((a, b) => a.mes.localeCompare(b.mes))
-  }, [ordersF])
+  }, [ordersF, produtosAtuais])
 
   const qtdPorProduto = useMemo(() => {
     const map = {}
@@ -6300,12 +6559,12 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
           sku: i.id || '',
           qty: Number(i.qty) || 0,
           tipo: 'Saída',
-          custoMedio: Number(i.preco_custo) || 0
+          custoMedio: getItemCost(i, produtosAtuais)
         })
       })
     })
     return arr.sort((a, b) => b.data.localeCompare(a.data))
-  }, [ordersF])
+  }, [ordersF, produtosAtuais])
 
   const inativos = useMemo(() => {
     const arr = usuarios.map(u => {
@@ -7284,7 +7543,7 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
     }
   }, [])
 
-  const pickUser = (u) => {
+  const pickUser = async (u) => {
     setSelectedUser(u)
     setNome(u.nome || '')
     let rawTel = u.telefone || ''
@@ -7294,9 +7553,66 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
     }
     setTelefone(rawTel)
     setCpf(u.endereco?.cpf || '')
-    setEndereco(u.endereco || { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' })
+
+    const userEnd = u.endereco || {}
+    let initialCep = String(userEnd.cep || u.cep || '').replace(/\D/g, '')
+
+    // 1. If user doesn't have CEP, try to find from past orders
+    if (initialCep.length !== 8 && orders && orders.length > 0) {
+      const normPhone = cleanTel.startsWith('55') ? cleanTel : '55' + cleanTel
+      const foundOrder = orders.find(o => {
+        const oPhone = String(o.customer?.telefone || o.telefone || '').replace(/\D/g, '')
+        const oNorm = oPhone.startsWith('55') ? oPhone : '55' + oPhone
+        const oCep = String(o.customer?.endereco?.cep || o.endereco?.cep || '').replace(/\D/g, '')
+        return oNorm === normPhone && oCep.length === 8
+      })
+      if (foundOrder) {
+        initialCep = String(foundOrder.customer?.endereco?.cep || foundOrder.endereco?.cep || '').replace(/\D/g, '')
+      }
+    }
+
+    // 2. Check if a valid 8-digit CEP is present inside other address fields
+    if (initialCep.length !== 8) {
+      const combined = `${userEnd.numero || ''} ${userEnd.rua || ''} ${userEnd.bairro || ''} ${userEnd.complemento || ''}`
+      const numMatch = combined.match(/\b\d{5}-?\d{3}\b|\b\d{8}\b/)
+      if (numMatch) {
+        const cand = numMatch[0].replace(/\D/g, '')
+        if (cand.length === 8) initialCep = cand
+      }
+    }
+
+    const nextEnd = {
+      cep: initialCep,
+      estado: userEnd.estado || '',
+      cidade: userEnd.cidade || '',
+      bairro: userEnd.bairro || '',
+      rua: userEnd.rua || userEnd.logradouro || '',
+      numero: userEnd.numero || '',
+      complemento: userEnd.complemento || ''
+    }
+    setEndereco(nextEnd)
     setUserSearch('')
     setShowNewForm(false)
+
+    // 3. If CEP is still missing, but rua and cidade and estado are present, query ViaCEP reverse address search
+    if (initialCep.length !== 8 && nextEnd.rua && nextEnd.cidade && nextEnd.estado) {
+      try {
+        const cleanRua = nextEnd.rua.replace(/^(rua|avenida|av\.?|alameda|travessa|praça|r\.)\s+/i, '').trim()
+        if (cleanRua.length >= 3) {
+          const url = `https://viacep.com.br/ws/${encodeURIComponent(nextEnd.estado)}/${encodeURIComponent(nextEnd.cidade)}/${encodeURIComponent(cleanRua)}/json/`
+          const res = await fetch(url)
+          if (res.ok) {
+            const data = await res.json()
+            if (Array.isArray(data) && data.length > 0 && data[0].cep) {
+              const fetchedCep = data[0].cep.replace(/\D/g, '')
+              setEndereco(prev => ({ ...prev, cep: fetchedCep }))
+            }
+          }
+        }
+      } catch (err) {
+        // silent fail on network error
+      }
+    }
   }
 
   const resetForm = () => {
@@ -7389,7 +7705,7 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
       return
     }
     setSaving(true)
-    const isConcluido = orderStatus === 'entregue'
+    const isConcluido = orderStatus === 'concluido' || orderStatus === 'entregue'
     onSave({
       nome: nome.trim(),
       telefone: normalizePhone(telefone),
@@ -7444,8 +7760,13 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
             {[
               { id: 'pre-pedido', label: 'Pré-Pedido' },
               { id: 'pendente', label: 'Pendente' },
+              { id: 'confirmado', label: 'Confirmado' },
+              { id: 'em-andamento', label: 'Em Andamento' },
               { id: 'em-rota', label: 'Em Rota' },
-              { id: 'entregue', label: 'Concluído' },
+              { id: 'entregue', label: 'Entregue' },
+              { id: 'acerto', label: 'Acerto' },
+              { id: 'concluido', label: 'Concluído' },
+              { id: 'cancelado', label: 'Cancelado' },
             ].map(s => (
               <button key={s.id} type="button" className={`pag-chip ${orderStatus === s.id ? 'active' : ''}`}
                 style={{ padding: '0.35rem 0.8rem' }}
@@ -7615,9 +7936,8 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
                           <label style={isZero ? { color: '#dc2626', fontWeight: 700 } : {}}>
                             Preço Unitário (R$) *
                             <input
-                              type="number"
-                              step="0.01"
-                              min="0.01"
+                              type="text"
+                              inputMode="decimal"
                               placeholder="0,00 (Obrigatório)"
                               style={isZero ? { borderColor: '#ef4444', background: '#fff' } : {}}
                               value={i.preco === '' ? '' : i.preco}
@@ -7625,13 +7945,13 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
                               onClick={e => e.stopPropagation()}
                             />
                           </label>
-                          <label>Custo (R$)
+                          <label style={{ color: '#059669', fontWeight: 600 }}>Custo (R$)
                             <input
-                              type="number"
-                              step="0.01"
-                              min="0"
+                              type="text"
+                              inputMode="decimal"
                               value={i.preco_custo ?? ''}
                               placeholder="0,00"
+                              style={{ borderColor: '#10b981' }}
                               onChange={e => setItemCusto(i.id, e.target.value)}
                               onClick={e => e.stopPropagation()}
                             />
@@ -7771,7 +8091,14 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
 function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onStatusChange, onUpdateDue, onPreApprovar, onEditAndConfirm, onEditSave, onSyncCusto, onOpenDelivery, onUpdateCustomer, onCancelOrder }) {
   const [rejectedItems, setRejectedItems] = useState(new Set())
   const [editMode, setEditMode] = useState(false)
-  const [editedItems, setEditedItems] = useState(order.items.map(i => ({ ...i })))
+  const [editedItems, setEditedItems] = useState(() => (order.items || []).map(i => {
+    const c = (i.preco_custo != null && i.preco_custo !== '') ? Number(String(i.preco_custo).replace(',', '.')) : getItemCost(i, produtos)
+    return {
+      ...i,
+      preco: Number(String(i.preco).replace(',', '.')) || 0,
+      preco_custo: c > 0 ? c : null
+    }
+  }))
   const [addSearch, setAddSearch] = useState('')
   const [addCart, setAddCart] = useState({})
   const [preAddSearch, setPreAddSearch] = useState('')
@@ -7817,8 +8144,16 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
         cpf: order.customer?.cpf || order.customer?.endereco?.cpf || '',
         endereco: { ...(order.customer?.endereco || {}) }
       })
+      setEditedItems((order.items || []).map(i => {
+        const c = (i.preco_custo != null && i.preco_custo !== '') ? Number(String(i.preco_custo).replace(',', '.')) : getItemCost(i, produtos)
+        return {
+          ...i,
+          preco: Number(String(i.preco).replace(',', '.')) || 0,
+          preco_custo: c > 0 ? c : null
+        }
+      }))
     }
-  }, [order])
+  }, [order, produtos])
 
   const toggleReject = (idx) => {
     setRejectedItems(prev => {
@@ -7833,18 +8168,27 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
   }
 
   const resetEditedItems = () => {
-    setEditedItems(order.items.map(i => {
-      const prod = produtos.find(p => p.id === i.id || p.id === String(i.id))
+    setEditedItems((order.items || []).map(i => {
+      const c = (i.preco_custo != null && i.preco_custo !== '') ? Number(String(i.preco_custo).replace(',', '.')) : getItemCost(i, produtos)
       return {
         ...i,
-        preco_custo: i.preco_custo ?? (prod?.preco_custo ?? null)
+        preco: Number(String(i.preco).replace(',', '.')) || 0,
+        preco_custo: c > 0 ? c : null
       }
     }))
   }
 
+  const setItemPreco = (idx, val) => {
+    const clean = String(val).replace(',', '.')
+    const num = parseFloat(clean)
+    const preco = (val === '' || isNaN(num) || num < 0) ? (val === '' ? '' : 0) : num
+    setEditedItems(prev => prev.map((item, i) => i === idx ? { ...item, preco } : item))
+  }
+
   const setItemCusto = (idx, val) => {
-    const num = parseFloat(val)
-    const custo = isNaN(num) || num < 0 ? null : num
+    const clean = String(val).replace(',', '.')
+    const num = parseFloat(clean)
+    const custo = (val === '' || isNaN(num) || num < 0) ? null : num
     setEditedItems(prev => prev.map((item, i) => i === idx ? { ...item, preco_custo: custo } : item))
     const prodId = editedItems[idx]?.id
     if (prodId != null) onSyncCusto?.(prodId, custo)
@@ -7880,18 +8224,26 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
   }
 
   const handleEditConfirm = () => {
-    const validItems = editedItems.filter(i => i.qty > 0)
+    const validItems = editedItems.filter(i => i.qty > 0).map(i => ({
+      ...i,
+      preco: Number(String(i.preco).replace(',', '.')) || 0,
+      preco_custo: (i.preco_custo != null && i.preco_custo !== '') ? Number(String(i.preco_custo).replace(',', '.')) : getItemCost(i, produtos)
+    }))
     if (validItems.length === 0) { return }
     onEditAndConfirm(validItems, order.status)
   }
 
   const handleEditSave = () => {
-    const validItems = editedItems.filter(i => i.qty > 0)
+    const validItems = editedItems.filter(i => i.qty > 0).map(i => ({
+      ...i,
+      preco: Number(String(i.preco).replace(',', '.')) || 0,
+      preco_custo: (i.preco_custo != null && i.preco_custo !== '') ? Number(String(i.preco_custo).replace(',', '.')) : getItemCost(i, produtos)
+    }))
     if (validItems.length === 0) { return }
     onEditSave(validItems)
   }
 
-  const editTotal = editedItems.filter(i => i.qty > 0).reduce((s, i) => s + i.preco * i.qty, 0)
+  const editTotal = editedItems.filter(i => i.qty > 0).reduce((s, i) => s + (Number(String(i.preco).replace(',', '.')) || 0) * i.qty, 0)
 
   const filteredAddProds = useMemo(() => {
     const t = (addSearch || '').toLowerCase().trim()
@@ -7908,7 +8260,7 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
   const addToPreReplacement = (p) => {
     setPreAddCart(prev => ({
       ...prev,
-      [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, tipo: 'aprazo', qty: (prev[p.id]?.qty || 0) + 1 }
+      [p.id]: { id: p.id, nome: p.nome, preco: p.preco, preco_custo: p.preco_custo != null ? Number(p.preco_custo) : null, imagem: p.imagem, tipo: 'aprazo', qty: (prev[p.id]?.qty || 0) + 1 }
     }))
   }
 
@@ -7946,22 +8298,17 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
                   <div style={{ flex: 1 }}>
                     <span className="detail-item-name" style={{ textDecoration: i.qty <= 0 ? 'line-through' : 'none' }}>{i.displayName || i.nome || 'Produto'}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.15rem' }}>
-                      <span style={{ fontSize: '0.72rem', color: 'var(--admin-text-sec)' }}>Preço:</span>
-                      <input type="number" step="0.01" min="0" value={i.preco}
-                        onChange={e => {
-                          const val = parseFloat(e.target.value)
-                          if (!isNaN(val) && val >= 0) {
-                            setEditedItems(prev => prev.map((item, ii) => ii === idx ? { ...item, preco: val } : item))
-                          }
-                        }}
+                      <span style={{ fontSize: '0.72rem', color: 'var(--admin-text-sec)', fontWeight: 600 }}>Preço: R$</span>
+                      <input type="text" inputMode="decimal" value={i.preco}
+                        onChange={e => setItemPreco(idx, e.target.value)}
                         style={{ width: '80px', padding: '0.2rem 0.35rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', textAlign: 'right' }}
                       />
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.15rem' }}>
-                      <span style={{ fontSize: '0.72rem', color: 'var(--admin-text-sec)' }}>Custo:</span>
-                      <input type="number" step="0.01" min="0" value={i.preco_custo ?? ''} placeholder="0,00"
+                      <span style={{ fontSize: '0.72rem', color: '#059669', fontWeight: 600 }}><i className="fa-solid fa-tag"></i> Custo: R$</span>
+                      <input type="text" inputMode="decimal" value={i.preco_custo ?? ''} placeholder="0,00"
                         onChange={e => setItemCusto(idx, e.target.value)}
-                        style={{ width: '80px', padding: '0.2rem 0.35rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', textAlign: 'right' }}
+                        style={{ width: '80px', padding: '0.2rem 0.35rem', borderRadius: '6px', border: '1px solid #10b981', fontSize: '0.82rem', textAlign: 'right' }}
                       />
                     </div>
                   </div>
@@ -8153,14 +8500,28 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
           </div>
 
           <div className="detail-section">
-            <h4>Itens</h4>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+              <h4 style={{ margin: 0 }}>Itens</h4>
+              <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}
+                onClick={() => { setEditMode(true); resetEditedItems() }}>
+                <i className="fa-solid fa-pen"></i> Editar Preços / Custo / Qtd
+              </button>
+            </div>
             {order.items.map((i, idx) => {
               const isRejected = rejectedItems.has(idx)
+              const c = getItemCost(i, produtos)
+              const p = Number(i.preco) || 0
+              const q = Number(i.qty) || 0
               return (
                 <div key={idx} className="detail-item" style={{ opacity: isRejected ? 0.5 : 1 }}>
-                  <div>
-                    <span className="detail-item-name" style={{ textDecoration: isRejected ? 'line-through' : 'none' }}>{i.nome}</span>
-                    <span className="detail-item-qty">{i.qty}x {formatPreco(i.preco)}</span>
+                  <div style={{ flex: 1 }}>
+                    <span className="detail-item-name" style={{ textDecoration: isRejected ? 'line-through' : 'none' }}>{i.displayName || i.nome}</span>
+                    <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', fontSize: '0.75rem', marginTop: '0.2rem', color: 'var(--admin-text-sec)' }}>
+                      <span><strong>{q}x</strong> {formatPreco(p)} = <strong>{formatPreco(p * q)}</strong></span>
+                      <span style={{ color: c > 0 ? '#059669' : '#f59e0b', fontWeight: 600 }}>
+                        <i className="fa-solid fa-tag"></i> Custo un.: {formatPreco(c)} {c > 0 ? `(total ${formatPreco(c * q)})` : '(sem custo)'}
+                      </span>
+                    </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span className={`split-badge ${i.tipo === 'avista' ? 'vista' : 'aprazo'}`}>
@@ -8362,10 +8723,10 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
           )}
 
           <div className="modal-actions" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', justifyContent: 'flex-end' }}>
-            {(order.status === 'pre-pedido' || order.status === 'pendente' || order.status === 'em-rota' || order.status === 'acerto') && (
+            {(order.status === 'pre-pedido' || order.status === 'pendente' || order.status === 'em-rota' || order.status === 'entregue' || order.status === 'acerto') && (
               <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
                 onClick={() => { setEditMode(true); resetEditedItems() }}>
-                <i className="fa-solid fa-pen"></i> Editar Itens
+                <i className="fa-solid fa-pen"></i> Editar Itens / Custo
               </button>
             )}
             {order.status === 'entregue' && (
