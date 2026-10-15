@@ -373,19 +373,23 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
 
   const savePrePedidoEdits = (editedItems) => {
     if (!selectedOrder) return
-    const totalAvista = editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
-    const totalAprazo = editedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
-    const updated = allOrders.map(o => o.id === selectedOrder.id ? {
+    const totalAvista = Math.round(editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + (Number(String(i.preco).replace(',', '.')) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
+    const totalAprazo = Math.round(editedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + (Number(String(i.preco).replace(',', '.')) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
+    const total = Math.round((totalAvista + totalAprazo) * 100) / 100
+    const now = Date.now()
+    const updated = allOrders.map(o => String(o.id) === String(selectedOrder.id) ? {
       ...o,
       items: editedItems,
       totalAvista,
       totalAprazo,
-      total: totalAvista + totalAprazo,
+      total,
+      lastModified: now,
+      updatedAt: now
     } : o)
     setAllOrders(updated)
     setLS(LS_ORDERS, updated)
-    setSelectedOrder(prev => ({ ...prev, items: editedItems, totalAvista, totalAprazo, total: totalAvista + totalAprazo }))
-    upsertOrder({ ...selectedOrder, items: editedItems, totalAvista, totalAprazo, total: totalAvista + totalAprazo })
+    setSelectedOrder(prev => ({ ...prev, items: editedItems, totalAvista, totalAprazo, total, lastModified: now, updatedAt: now }))
+    upsertOrder({ ...selectedOrder, items: editedItems, totalAvista, totalAprazo, total, lastModified: now, updatedAt: now })
     setEditPreOrder(false)
   }
 
@@ -467,9 +471,17 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
   }, [produtos, preAddSearch])
 
   const addToPreCart = (p) => {
+    const precoNum = Number(String(p.preco || 0).replace(',', '.')) || 0
     setPreAddCart(prev => ({
       ...prev,
-      [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, tipo: 'avista', qty: (prev[p.id]?.qty || 0) + 1 }
+      [p.id]: {
+        id: p.id,
+        nome: p.nome,
+        preco: precoNum,
+        imagem: p.imagem,
+        tipo: 'avista',
+        qty: ((prev[p.id]?.qty || 0) + 1)
+      }
     }))
   }
 
@@ -484,9 +496,27 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
   }
 
   const confirmPreAdd = () => {
-    const newItems = Object.values(preAddCart).filter(i => i.qty > 0)
+    const newItems = Object.values(preAddCart).filter(i => (Number(i.qty) || 0) > 0)
     if (newItems.length === 0) return
-    setEditedPreItems(prev => [...prev, ...newItems])
+    setEditedPreItems(prev => {
+      const copy = [...prev]
+      for (const ni of newItems) {
+        const existIdx = copy.findIndex(it => String(it.id) === String(ni.id))
+        if (existIdx >= 0) {
+          copy[existIdx] = {
+            ...copy[existIdx],
+            qty: (Number(copy[existIdx].qty) || 0) + (Number(ni.qty) || 0)
+          }
+        } else {
+          copy.push({
+            ...ni,
+            qty: Number(ni.qty) || 1,
+            preco: Number(String(ni.preco).replace(',', '.')) || 0
+          })
+        }
+      }
+      return copy
+    })
     setPreAddCart({})
     setPreAddSearch('')
   }

@@ -759,17 +759,19 @@ function App() {
     const end = formatEndereco(order.customer?.endereco || order.endereco)
     const msgDatas = `📅 Data do pedido: ${formatDate(order.date || order.dataInicio || order.createdAt)}\n📅 Vencimento: ${formatDate(order.dataVencimento)}\n📞 Telefone: ${tel}\n🏠 Endereço: ${end}`
 
+    const formatBr = (val) => Number(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
     const formatItemRow = (i) => {
-      const unitPrice = Number(i.preco || 0).toFixed(2)
-      const itemTotal = (Number(i.preco || 0) * (Number(i.qty) || 0)).toFixed(2)
-      return `  • ${i.nome} — ${i.qty}x R$ ${unitPrice} = R$ ${itemTotal}`
+      const unitPrice = formatBr(i.preco)
+      const itemTotal = formatBr((Number(i.preco) || 0) * (Number(i.qty) || 0))
+      return `  • ${i.nome} — ${i.qty}x *R$ ${unitPrice}* = *R$ ${itemTotal}*`
     }
 
-    const msgItems = (order.items || []).map(formatItemRow).join('\n')
+    const msgItems = (order.items || []).map(formatItemRow).join('\n\n')
     const totalQty = (order.items || []).reduce((s, i) => s + (Number(i.qty) || 0), 0)
-    const totalVal = Number(order.total || 0).toFixed(2)
+    const totalVal = formatBr(order.total)
 
-    return `🆕 *${statusLabel}* 🆕\n━━━━━━━━━━━━━━━━━━\n📋 Pedido: ${id}\n👤 Cliente: ${nome}\n${msgDatas}\n━━━━━━━━━━━━━━━━━━\n${msgItems}\n━━━━━━━━━━━━━━━━━━\n📦 Total de itens: ${totalQty}\n💰 Valor Total: R$ ${totalVal}\n━━━━━━━━━━━━━━━━━━\n${statusLabel}\n━━━━━━━━━━━━━━━━━━\n🔗 Acompanhe: ${link}`
+    return `🆕 *${statusLabel}* 🆕\n━━━━━━━━━━━━━━━━━━\n📋 Pedido: ${id}\n👤 Cliente: ${nome}\n${msgDatas}\n━━━━━━━━━━━━━━━━━━\n${msgItems}\n━━━━━━━━━━━━━━━━━━\n📦 *Total de itens: ${totalQty}*\n💰 *Valor Total: R$ ${totalVal}*\n━━━━━━━━━━━━━━━━━━\n${statusLabel}\n━━━━━━━━━━━━━━━━━━\n🔗 Acompanhe: ${link}`
   }
 
   const sendOrderWebhook = (order) => {

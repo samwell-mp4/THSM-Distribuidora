@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import './CentralAnalise.css'
 
 function formatPreco(v) {
@@ -52,7 +52,9 @@ const STATUS_LABELS = {
   'confirmado': 'Confirmado',
   'em-andamento': 'Em Andamento',
   'em-rota': 'Em Rota',
-  'entregue': 'Concluído',
+  'acerto': 'Acerto',
+  'entregue': 'Entregue',
+  'concluido': 'Concluído',
   'cancelado': 'Cancelado',
 }
 
@@ -705,10 +707,10 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         </div>
         <Card title="Giro de estoque" icon="fa-rotate">
           <TabelaPaginada per={15} cols={[
-            { key: 'nome', label: 'Produto' },
-            { key: 'vend', label: 'Vendidos', num: true },
+            { key: 'produto', label: 'Produto' },
+            { key: 'vendido', label: 'Vendidos', num: true },
             { key: 'estoque', label: 'Estoque', num: true },
-            { key: 'cober', label: 'Cobertura', num: true, render: r => r.vend ? `${r.cober.toFixed(1)}x` : '-' },
+            { key: 'giro', label: 'Giro', num: true, render: r => r.giro !== null ? `${r.giro.toFixed(2)}x` : '-' },
           ]} rows={giroEstoque} />
         </Card>
       </>
@@ -1153,6 +1155,9 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
             {prevWin.start && ` · anterior: ${formatDate(prevWin.start)} a ${formatDate(prevWin.end)}`}
           </span>
         </div>
+        <button className="ca-back ca-btn-print" onClick={() => window.print()} title="Imprimir Relatório de Análise" style={{ background: '#0284c7', color: '#fff' }}>
+          <i className="fa-solid fa-print"></i> Imprimir / PDF
+        </button>
         <div className="ca-periodos">
           {PERIODOS.map(p => (
             <button key={p.id} className={`ca-peri ${periodo === p.id ? 'ca-peri-on' : ''}`} onClick={() => setPeriodo(p.id)}>{p.label}</button>

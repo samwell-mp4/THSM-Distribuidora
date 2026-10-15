@@ -272,21 +272,23 @@ function buildStatusWhatsApp(order, newStatus, extra = {}) {
 📞 Telefone: ${telFormatado}
 🏠 Endereço: ${endFormatado}`
 
+  const formatBr = (n) => Number(n || 0).toFixed(2).replace('.', ',')
+
   const formatItemRow = (i) => {
-    const unitPrice = Number(i.preco || 0).toFixed(2)
-    const itemTotal = (Number(i.preco || 0) * (Number(i.qty) || 0)).toFixed(2)
-    return `  • ${i.nome} — ${i.qty}x R$ ${unitPrice} = R$ ${itemTotal}`
+    const unitPrice = formatBr(i.preco)
+    const itemTotal = formatBr(Number(i.preco || 0) * (Number(i.qty) || 0))
+    return `  • ${i.nome} — ${i.qty}x *R$ ${unitPrice}* = *R$ ${itemTotal}*`
   }
 
   const formatReturnedItemRow = (i) => {
-    const unitPrice = Number(i.preco || 0).toFixed(2)
+    const unitPrice = formatBr(i.preco)
     const qty = Number(i.returnedQty || i.qty) || 0
-    const itemTotal = (Number(i.preco || 0) * qty).toFixed(2)
-    return `  • ${i.nome} — ${qty}x R$ ${unitPrice} = R$ ${itemTotal}`
+    const itemTotal = formatBr(Number(i.preco || 0) * qty)
+    return `  • ${i.nome} — ${qty}x *R$ ${unitPrice}* = *R$ ${itemTotal}*`
   }
 
   const totalQty = order.items.reduce((s, i) => s + (Number(i.qty) || 0), 0)
-  const msgItems = order.items.map(formatItemRow).join('\n')
+  const msgItems = order.items.map(formatItemRow).join('\n\n')
   const msgPagamento = order.pagamento === 'avista' ? 'À Vista' : order.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'
 
   const templates = {
@@ -298,8 +300,8 @@ ${msgDatas}
 ━━━━━━━━━━━━━━━━━━
 ${msgItems}
 ━━━━━━━━━━━━━━━━━━
-📦 Total de itens: ${totalQty}
-💰 Valor Total: R$ ${order.total.toFixed(2)}
+📦 *Total de itens:* *${totalQty}*
+💰 *Valor Total:* *R$ ${formatBr(order.total)}*
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pré-pedido foi recebido e está em análise pela nossa equipe.
 Em breve você receberá a confirmação.
@@ -315,8 +317,8 @@ ${msgDatas}
 ━━━━━━━━━━━━━━━━━━
 ${msgItems}
 ━━━━━━━━━━━━━━━━━━
-📦 Total de itens: ${totalQty}
-💰 Valor Total: R$ ${order.total.toFixed(2)}
+📦 *Total de itens:* *${totalQty}*
+💰 *Valor Total:* *R$ ${formatBr(order.total)}*
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pedido foi recebido com sucesso!
 Em breve confirmaremos seu pedido.
@@ -352,10 +354,11 @@ ${msgDatas}
 💳 Pagamento: ${msgPagamento}
 ━━━━━━━━━━━━━━━━━━
 📦 *ITENS:*
+
 ${msgItems}
 ━━━━━━━━━━━━━━━━━━
-📦 Total de itens: ${totalQty}
-💰 Valor Total: R$ ${order.total.toFixed(2)}
+📦 *Total de itens:* *${totalQty}*
+💰 *Valor Total:* *R$ ${formatBr(order.total)}*
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pedido já foi separado. Só aguardar a entrega.
 🔗 Acesse seu pedido: ${link}`,
@@ -367,10 +370,10 @@ Olá ${nome}, seu pedido já foi separado. Só aguardar a entrega.
 ${msgDatas}
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pedido foi entregue com sucesso! 🎉
-${order.items.length > 0 ? `📦 Itens:\n${order.items.map(formatItemRow).join('\n')}
+${order.items.length > 0 ? `📦 *ITENS:*\n\n${order.items.map(formatItemRow).join('\n\n')}
 ━━━━━━━━━━━━━━━━━━
-📦 Total de itens: ${totalQty}
-💰 Valor Total: R$ ${order.total.toFixed(2)}` : ''}
+📦 *Total de itens:* *${totalQty}*
+💰 *Valor Total:* *R$ ${formatBr(order.total)}*` : ''}
 ━━━━━━━━━━━━━━━━━━
 ⚠️ *Importante:* Produtos embalados/lacrados não podem ser abertos. Não aceitamos devolução de produtos violados.
 Você tem até 24 horas para nos informar se houver algum item faltando ou com avaria.
@@ -386,14 +389,12 @@ Obrigado pela preferência! 🎉`,
       const totalQtyPaid = remaining.reduce((s, i) => s + (Number(i.qty) || 0), 0)
 
       const devolvidosBlock = returned.length > 0
-        ? `📦 *ITENS DEVOLVIDOS*\n\n${returned.map(formatReturnedItemRow).join('\n')}\n\n`
+        ? `📦 *ITENS DEVOLVIDOS*\n\n${returned.map(formatReturnedItemRow).join('\n\n')}\n\n`
         : ''
 
       const pagosBlock = remaining.length > 0
-        ? `📦 *ITENS MANTIDOS*\n\n${remaining.map(formatItemRow).join('\n')}\n\n`
-        : `📦 *ITENS MANTIDOS*\n  • Nenhum item\n\n`
-
-      const formatBr = (n) => Number(n || 0).toFixed(2).replace('.', ',')
+        ? `📦 *ITENS PAGOS*\n\n${remaining.map(formatItemRow).join('\n\n')}\n\n`
+        : `📦 *ITENS PAGOS*\n  • Nenhum item\n\n`
 
       const totalOriginalNum = Number(
         extra.totalOriginal != null
@@ -408,10 +409,11 @@ Obrigado pela preferência! 🎉`,
           : returned.reduce((s, i) => s + (Number(i.preco || 0) * Number(i.returnedQty || i.qty || 0)), 0)
       )
       const descontoNum = Number(extra.desconto != null ? extra.desconto : (order.desconto || 0))
+      const descPct = extra.descontoPercent != null ? extra.descontoPercent : (order.descontoPercent || null)
       const totalAcertoNum = Number(
         extra.totalAcerto != null
           ? extra.totalAcerto
-          : (extra.totalComanda != null ? extra.totalComanda : (order.total || 0))
+          : (extra.totalComanda != null ? extra.totalComanda : (order.totalAcerto != null ? order.totalAcerto : (order.total || 0)))
       )
 
       const pm = (order.paymentMethod || extra.paymentMethod || '').toLowerCase()
@@ -424,23 +426,23 @@ Obrigado pela preferência! 🎉`,
         pm.split('+').forEach(m => {
           const val = Number(String(splits[m] || 0).replace(',', '.')) || 0
           const label = PAG_METHODS[m]?.label || m.toUpperCase()
-          paymentLines.push(`💰 *PAGOU NO ${label.toUpperCase()}:* R$ ${formatBr(val)}`)
+          paymentLines.push(`💰 *PAGOU NO ${label.toUpperCase()}:* *R$ ${formatBr(val)}*`)
         })
       } else if (pm) {
         const label = PAG_METHODS[pm]?.label || pm.toUpperCase()
-        paymentLines.push(`💰 *PAGOU NO ${label.toUpperCase()}:* R$ ${formatBr(totalPagoNum)}`)
+        paymentLines.push(`💰 *PAGOU NO ${label.toUpperCase()}:* *R$ ${formatBr(totalPagoNum)}*`)
       }
 
-      paymentLines.push(`💰 *TOTAL PAGO:* R$ ${formatBr(totalPagoNum)}`)
+      paymentLines.push(`💰 *TOTAL PAGO:* *R$ ${formatBr(totalPagoNum)}*`)
 
       if (valorEmAbertoNum > 0) {
-        paymentLines.push(`⚠️ *VALOR EM ABERTO:* R$ ${formatBr(valorEmAbertoNum)}`)
+        paymentLines.push(`⚠️ *VALOR EM ABERTO:* *R$ ${formatBr(valorEmAbertoNum)}*`)
         const vencDate = formatDate(order.dataVencimento || extra.dataVencimento)
         if (vencDate && vencDate !== '—') {
-          paymentLines.push(`📅 *DATA DE VENCIMENTO DO SALDO:* ${vencDate}`)
+          paymentLines.push(`📅 *DATA DE VENCIMENTO DO SALDO:* *${vencDate}*`)
         }
       } else {
-        paymentLines.push(`✅ *VALOR EM ABERTO:* R$ 0,00 (Totalmente quitado)`)
+        paymentLines.push(`✅ *VALOR EM ABERTO:* *R$ 0,00* (Totalmente quitado)`)
       }
 
       const paymentSection = paymentLines.join('\n')
@@ -454,21 +456,17 @@ ${msgDatas}
 Olá ${nome}, confira o resumo do seu acerto:
 
 ${devolvidosBlock}${pagosBlock}━━━━━━━━━━━━━━━━━━
-📦 *TOTAL DE ITENS MANTIDOS:* ${totalQtyPaid}
+📦 *TOTAL DE ITENS PAGOS:* *${totalQtyPaid}*
 
-💰 *VALOR TOTAL DA NOTA:* R$ ${formatBr(totalOriginalNum)}${totalDevolvidoNum > 0 ? `\n📦 *TOTAL DEVOLVIDO:* - R$ ${formatBr(totalDevolvidoNum)}` : ''}${descontoNum > 0 ? `\n🏷️ *DESCONTO:* - R$ ${formatBr(descontoNum)}` : ''}
-💰 *TOTAL DO ACERTO:* R$ ${formatBr(totalAcertoNum)}
+💰 *VALOR TOTAL DA VENDA:* *R$ ${formatBr(totalOriginalNum)}*${totalDevolvidoNum > 0 ? `\n📦 *TOTAL DEVOLVIDO:* *- R$ ${formatBr(totalDevolvidoNum)}*` : ''}${descontoNum > 0 ? `\n🏷️ *DESCONTO${descPct ? ` (${descPct}%)` : ''}:* *- R$ ${formatBr(descontoNum)}*` : ''}
+💰 *TOTAL DO ACERTO:* *R$ ${formatBr(totalAcertoNum)}*
 ━━━━━━━━━━━━━━━━━━
 💳 *DETALHES DO PAGAMENTO:*
 ${paymentSection}
 ━━━━━━━━━━━━━━━━━━
 ⚠️ *Importante:* Produtos embalados/lacrados não podem ser abertos. Não aceitamos devolução de produtos violados.
 Você tem até 24 horas para nos informar se houver algum item faltando ou com avaria.
-━━━━━━━━━━━━━━━━━━
-📲 *Confirme o recebimento:* Clique no link abaixo para visualizar sua comanda e confirmar os itens recebidos:
-${link}
-━━━━━━━━━━━━━━━━━━
-Obrigado pela preferência! 🎉`
+━━━━━━━━━━━━━━━━━━`
     })(),
 
     'concluido': (() => {
@@ -477,14 +475,12 @@ Obrigado pela preferência! 🎉`
       const totalQtyPaid = remaining.reduce((s, i) => s + (Number(i.qty) || 0), 0)
 
       const devolvidosBlock = returned.length > 0
-        ? `📦 *ITENS DEVOLVIDOS*\n\n${returned.map(formatReturnedItemRow).join('\n')}\n\n`
+        ? `📦 *ITENS DEVOLVIDOS*\n\n${returned.map(formatReturnedItemRow).join('\n\n')}\n\n`
         : ''
 
       const pagosBlock = remaining.length > 0
-        ? remaining.map(formatItemRow).join('\n')
+        ? remaining.map(formatItemRow).join('\n\n')
         : '  • Nenhum item'
-
-      const formatBr = (n) => Number(n || 0).toFixed(2).replace('.', ',')
 
       const totalOriginalNum = Number(
         extra.totalOriginal != null
@@ -499,10 +495,11 @@ Obrigado pela preferência! 🎉`
           : returned.reduce((s, i) => s + (Number(i.preco || 0) * Number(i.returnedQty || i.qty || 0)), 0)
       )
       const descontoNum = Number(extra.desconto != null ? extra.desconto : (order.desconto || 0))
+      const descPct = extra.descontoPercent != null ? extra.descontoPercent : (order.descontoPercent || null)
       const totalAcertoNum = Number(
         extra.totalAcerto != null
           ? extra.totalAcerto
-          : (extra.totalComanda != null ? extra.totalComanda : (order.total || 0))
+          : (extra.totalComanda != null ? extra.totalComanda : (order.totalAcerto != null ? order.totalAcerto : (order.total || 0)))
       )
 
       const pm = (order.paymentMethod || extra.paymentMethod || 'pix').toLowerCase()
@@ -515,23 +512,23 @@ Obrigado pela preferência! 🎉`
         pm.split('+').forEach(m => {
           const val = Number(String(splits[m] || 0).replace(',', '.')) || 0
           const label = PAG_METHODS[m]?.label || m.toUpperCase()
-          paymentLines.push(`💰 *PAGOU NO ${label.toUpperCase()}:* R$ ${formatBr(val)}`)
+          paymentLines.push(`💰 *PAGOU NO ${label.toUpperCase()}:* *R$ ${formatBr(val)}*`)
         })
       } else {
         const label = PAG_METHODS[pm]?.label || (pm ? pm.toUpperCase() : 'PIX')
-        paymentLines.push(`💰 *PAGOU NO ${label.toUpperCase()}:* R$ ${formatBr(totalPagoNum)}`)
+        paymentLines.push(`💰 *PAGOU NO ${label.toUpperCase()}:* *R$ ${formatBr(totalPagoNum)}*`)
       }
 
-      paymentLines.push(`💰 *VALOR TOTAL PAGO:* R$ ${formatBr(totalPagoNum)}`)
+      paymentLines.push(`💰 *VALOR TOTAL PAGO:* *R$ ${formatBr(totalPagoNum)}*`)
 
       if (valorEmAbertoNum > 0) {
-        paymentLines.push(`⚠️ *VALOR EM ABERTO:* R$ ${formatBr(valorEmAbertoNum)}`)
+        paymentLines.push(`⚠️ *VALOR EM ABERTO:* *R$ ${formatBr(valorEmAbertoNum)}*`)
         const vencDate = formatDate(order.dataVencimento || extra.dataVencimento)
         if (vencDate && vencDate !== '—') {
-          paymentLines.push(`📅 *DATA DE VENCIMENTO DO SALDO:* ${vencDate}`)
+          paymentLines.push(`📅 *DATA DE VENCIMENTO DO SALDO:* *${vencDate}*`)
         }
       } else {
-        paymentLines.push(`✅ *VALOR EM ABERTO:* R$ 0,00 (Totalmente quitado)`)
+        paymentLines.push(`✅ *VALOR EM ABERTO:* *R$ 0,00* (Totalmente quitado)`)
       }
 
       const paymentSection = paymentLines.join('\n')
@@ -543,15 +540,15 @@ Obrigado pela preferência! 🎉`
 👤 *Cliente:* ${nome}
 ${msgDatas}
 ━━━━━━━━━━━━━━━━━━
-${devolvidosBlock}📦 *ITENS PAGOS / MANTIDOS*
+${devolvidosBlock}📦 *ITENS PAGOS*
 
 ${pagosBlock}
 
 ━━━━━━━━━━━━━━━━━━
-📦 *TOTAL DE ITENS PAGOS:* ${totalQtyPaid}
+📦 *TOTAL DE ITENS PAGOS:* *${totalQtyPaid}*
 
-💰 *VALOR TOTAL DA NOTA:* R$ ${formatBr(totalOriginalNum)}${totalDevolvidoNum > 0 ? `\n📦 *TOTAL DEVOLVIDO:* - R$ ${formatBr(totalDevolvidoNum)}` : ''}${descontoNum > 0 ? `\n🏷️ *DESCONTO:* - R$ ${formatBr(descontoNum)}` : ''}
-💰 *TOTAL DO ACERTO:* R$ ${formatBr(totalAcertoNum)}
+💰 *VALOR TOTAL DA VENDA:* *R$ ${formatBr(totalOriginalNum)}*${totalDevolvidoNum > 0 ? `\n📦 *TOTAL DEVOLVIDO:* *- R$ ${formatBr(totalDevolvidoNum)}*` : ''}${descontoNum > 0 ? `\n🏷️ *DESCONTO${descPct ? ` (${descPct}%)` : ''}:* *- R$ ${formatBr(descontoNum)}*` : ''}
+💰 *TOTAL DO ACERTO:* *R$ ${formatBr(totalAcertoNum)}*
 ━━━━━━━━━━━━━━━━━━
 💳 *DETALHES DO PAGAMENTO:*
 ${paymentSection}${devolucaoLine}
@@ -741,14 +738,14 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     return o.status === 'concluido' || o.isFinalizado === true || (
       o.status === 'entregue' && (
         o.finalizadoAt ||
-        (financial.some(f => f.orderId === o.id) &&
-          financial.filter(f => f.orderId === o.id).every(f => f.status === 'pago' || f.status === 'cancelado'))
+        (financial.some(f => String(f.orderId) === String(o.id)) &&
+          financial.filter(f => String(f.orderId) === String(o.id)).every(f => f.status === 'pago' || f.status === 'cancelado'))
       )
     )
   }, [financial])
 
   const revertToEntregue = async (orderId) => {
-    const order = orders.find(o => o.id === orderId)
+    const order = orders.find(o => String(o.id) === String(orderId))
     if (!order) return
     if (!confirm('Deseja voltar este pedido para Entregues?')) return
     const updated = {
@@ -758,29 +755,33 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       lastModified: Date.now(),
       updatedAt: Date.now()
     }
-    setOrders(prev => prev.map(o => o.id === orderId ? updated : o))
+    setOrders(prev => {
+      const next = prev.map(o => String(o.id) === String(orderId) ? updated : o)
+      LS.set(STORAGE_ORDERS, next)
+      return next
+    })
     await upsertOrder(updated)
     showToast(`Pedido #${orderId} voltou para Entregues!`)
     sendStatusWebhook(updated, 'entregue')
   }
 
   const revertOrderFinalization = async (orderId) => {
-    const order = orders.find(o => o.id === orderId)
+    const order = orders.find(o => String(o.id) === String(orderId))
     if (!order) return
     if (!confirm('Deseja voltar este pedido para Acertos? (Isso irá reverter as devoluções e pagamentos)')) return
 
     // 1. Restore items (add back returned quantities)
     const baseItems = getOrderBaseItems(order)
 
-    const totalAvista = baseItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
-    const totalAprazo = baseItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
+    const totalAvista = baseItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0)
+    const totalAprazo = baseItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0)
 
     const updatedOrder = {
       ...order,
       items: baseItems,
-      totalAvista,
-      totalAprazo,
-      total: totalAvista + totalAprazo,
+      totalAvista: Math.round(totalAvista * 100) / 100,
+      totalAprazo: Math.round(totalAprazo * 100) / 100,
+      total: Math.round((totalAvista + totalAprazo) * 100) / 100,
       desconto: 0,
       totalPago: 0,
       status: 'acerto',
@@ -789,29 +790,35 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       totalReembolso: 0,
       paymentMethod: '',
       paymentSplits: null,
-      payment: null
+      payment: null,
+      lastModified: Date.now(),
+      updatedAt: Date.now()
     }
 
-    setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o))
+    setOrders(prev => {
+      const next = prev.map(o => String(o.id) === String(orderId) ? updatedOrder : o)
+      LS.set(STORAGE_ORDERS, next)
+      return next
+    })
     await upsertOrder(updatedOrder)
 
     // 2. Revert financial records in DB and State
     await deleteOnlyFinancialByOrder(orderId)
 
     setFinancial(prev => {
-      const otherRecords = prev.filter(f => f.orderId !== orderId)
+      const otherRecords = prev.filter(f => String(f.orderId) !== String(orderId))
       const orderAprazoItems = baseItems.filter(i => i.tipo === 'aprazo')
 
       const restoredFinancial = orderAprazoItems.map(i => {
-        const existing = prev.find(f => f.id === orderId + '-' + i.id)
+        const existing = prev.find(f => String(f.id) === String(orderId + '-' + i.id))
         return {
           id: orderId + '-' + i.id,
           orderId,
           customerName: order.customer?.nome || '',
           itemName: i.nome,
           qty: i.qty,
-          value: i.preco * i.qty,
-          precoCusto: getItemCost(i, produtosAtuais) * i.qty,
+          value: Math.round((Number(i.preco) || 0) * (Number(i.qty) || 0) * 100) / 100,
+          precoCusto: Math.round(getItemCost(i, produtosAtuais) * (Number(i.qty) || 0) * 100) / 100,
           dueDate: existing?.dueDate || order.dataVencimento || hoje(),
           paidDate: null,
           status: 'pendente',
@@ -820,6 +827,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       })
 
       const newFin = [...otherRecords, ...restoredFinancial]
+      LS.set(STORAGE_FINANCIAL, newFin)
       upsertFinancial(restoredFinancial) // upsert only the new restored ones
       return newFin
     })
@@ -1625,11 +1633,15 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     const isAdvance = prevIndex !== -1 && nextIndex > prevIndex
     const isNewOrder = prevIndex === -1 && STATUS_ORDER.includes(status)
     const isPreToPendente = order?.status === 'pre-pedido' && status === 'pendente'
-    if (order && !skipWebhook && !isPreToPendente && (isAdvance || isNewOrder)) sendStatusWebhook(order, status)
+    if (updated && !skipWebhook && !isPreToPendente && (isAdvance || isNewOrder)) sendStatusWebhook(updated, status)
   }
 
   const updateOrderDue = (id, due) => {
-    setOrders(prev => prev.map(o => String(o.id) === String(id) ? { ...o, dataVencimento: due || null, lastModified: Date.now() } : o))
+    setOrders(prev => {
+      const next = prev.map(o => String(o.id) === String(id) ? { ...o, dataVencimento: due || null, lastModified: Date.now() } : o)
+      LS.set(STORAGE_ORDERS, next)
+      return next
+    })
     setFinancial(prev => prev
       .filter(f => String(f.orderId) === String(id) && f.status !== 'pago' && f.status !== 'cancelado')
       .map(f => ({ ...f, dueDate: due || f.dueDate })))
@@ -1665,15 +1677,15 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       }
     })
 
-    const totalAvista = resolvedRemaining.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
-    const totalAprazo = resolvedRemaining.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
+    const totalAvista = Math.round(resolvedRemaining.filter(i => i.tipo === 'avista').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
+    const totalAprazo = Math.round(resolvedRemaining.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
     const now = Date.now()
     const updatedOrder = {
       ...order,
       items: resolvedRemaining,
       totalAvista,
       totalAprazo,
-      total: totalAvista + totalAprazo,
+      total: Math.round((totalAvista + totalAprazo) * 100) / 100,
       status: 'pendente',
       preApprovedAt: now,
       lastModified: now,
@@ -1694,14 +1706,16 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         d.setDate(d.getDate() + 60)
         return d.toISOString().split('T')[0]
       })()
+      const itemVal = Math.round((Number(i.preco) || 0) * (Number(i.qty) || 0) * 100) / 100
+      const costVal = Math.round((Number(i.preco_custo || getItemCost(i, produtosAtuais)) || 0) * (Number(i.qty) || 0) * 100) / 100
       return {
         id: orderId + '-' + i.id,
         orderId,
         customerName: order.customer?.nome || '',
         itemName: i.nome,
         qty: i.qty,
-        value: i.preco * i.qty,
-        precoCusto: (i.preco_custo || getItemCost(i, produtosAtuais)) * i.qty,
+        value: itemVal,
+        precoCusto: costVal,
         dueDate,
         paidDate: null,
         status: 'pendente'
@@ -1909,7 +1923,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   }
 
   const salvarAcerto = async (orderId, finalize = false) => {
-    const order = orders.find(o => o.id === orderId) || showDeliveryModal
+    const order = orders.find(o => String(o.id) === String(orderId)) || showDeliveryModal
     if (!order) return
 
     const baseItems = showDeliveryModal?.baseItems || getOrderBaseItems(order, produtosAtuais)
@@ -1918,12 +1932,12 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
     baseItems.forEach(i => {
       const pRaw = deliveryItemPrices[i.id] !== undefined ? String(deliveryItemPrices[i.id]).replace(',', '.') : String(i.preco || 0)
-      const unitPreco = Number(pRaw) || 0
+      const unitPreco = Math.round((Number(pRaw) || 0) * 100) / 100
       const cRaw = deliveryItemCosts[i.id] !== undefined ? String(deliveryItemCosts[i.id]).replace(',', '.') : ''
-      const unitCusto = cRaw !== '' ? (Number(cRaw) || 0) : getItemCost(i, produtosAtuais)
+      const unitCusto = cRaw !== '' ? (Math.round((Number(cRaw) || 0) * 100) / 100) : getItemCost(i, produtosAtuais)
 
       if (cRaw !== '') {
-        const prod = produtosAtuais.find(p => p && (p.id === i.id || String(p.id) === String(i.id)))
+        const prod = produtosAtuais.find(p => p && (String(p.id) === String(i.id)))
         if (prod && Number(prod.preco_custo) !== unitCusto) {
           updateProduct(prod.id, { preco_custo: unitCusto })
         }
@@ -1940,14 +1954,14 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       }
     })
 
-    const totalAvista = remainingItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0)
-    const totalAprazo = remainingItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0)
-    const totalBase = totalAvista + totalAprazo
+    const totalAvista = Math.round(remainingItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
+    const totalAprazo = Math.round(remainingItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
+    const totalBase = Math.round((totalAvista + totalAprazo) * 100) / 100
 
     const discountNum = Number(String(deliveryDiscount).replace(',', '.')) || 0
-    const desconto = deliveryDiscountType === 'percent'
+    const desconto = Math.round((deliveryDiscountType === 'percent'
       ? (Math.min(100, Math.max(0, discountNum)) / 100) * totalBase
-      : Math.max(0, Math.min(discountNum, totalBase))
+      : Math.max(0, Math.min(discountNum, totalBase))) * 100) / 100
 
     const totalCobrar = Math.round((totalBase - desconto) * 100) / 100
 
@@ -1961,12 +1975,12 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       totalPagoCalc = Number(String(deliveryPaid || 0).replace(',', '.')) || 0
     }
     const totalPago = Math.round(totalPagoCalc * 100) / 100
-    const totalReembolso = returnedItems.reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.returnedQty) || 0), 0)
+    const totalReembolso = Math.round(returnedItems.reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.returnedQty) || 0), 0) * 100) / 100
 
-    const totalOriginal = baseItems.reduce((s, i) => {
+    const totalOriginal = Math.round(baseItems.reduce((s, i) => {
       const pRaw = deliveryItemPrices[i.id] !== undefined ? String(deliveryItemPrices[i.id]).replace(',', '.') : String(i.preco || 0)
       return s + (Number(pRaw) || 0) * (Number(i.qty) || 0)
-    }, 0)
+    }, 0) * 100) / 100
     const valorEmAberto = Math.max(0, Math.round((totalCobrar - totalPago) * 100) / 100)
 
     const now = Date.now()
@@ -1976,9 +1990,9 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       ...order,
       originalItems: baseItems.map(i => {
         const pRaw = deliveryItemPrices[i.id] !== undefined ? String(deliveryItemPrices[i.id]).replace(',', '.') : String(i.preco || 0)
-        const unitPreco = Number(pRaw) || 0
+        const unitPreco = Math.round((Number(pRaw) || 0) * 100) / 100
         const cRaw = deliveryItemCosts[i.id] !== undefined ? String(deliveryItemCosts[i.id]).replace(',', '.') : ''
-        const unitCusto = cRaw !== '' ? (Number(cRaw) || 0) : getItemCost(i, produtosAtuais)
+        const unitCusto = cRaw !== '' ? (Math.round((Number(cRaw) || 0) * 100) / 100) : getItemCost(i, produtosAtuais)
         return {
           ...i,
           preco: unitPreco,
@@ -1992,8 +2006,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       totalAvista,
       totalAprazo,
       total: totalCobrar,
-      desconto: Math.round(desconto * 100) / 100,
-      descontoPercent: deliveryDiscountType === 'percent' ? discountNum : null,
+      desconto,
+      descontoPercent: deliveryDiscountType === 'percent' ? discountNum : (order.descontoPercent || null),
       totalPago,
       valorEmAberto,
       status: newStatus,
@@ -2012,19 +2026,23 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       updatedAt: now
     }
 
-    setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o))
+    setOrders(prev => {
+      const next = prev.map(o => String(o.id) === String(orderId) ? updatedOrder : o)
+      LS.set(STORAGE_ORDERS, next)
+      return next
+    })
     await upsertOrder(updatedOrder)
 
     // Sync financial records
     setFinancial(prev => {
-      const otherRecords = prev.filter(f => f.orderId !== orderId)
-      const existingRecords = prev.filter(f => f.orderId === orderId)
+      const otherRecords = prev.filter(f => String(f.orderId) !== String(orderId))
+      const existingRecords = prev.filter(f => String(f.orderId) === String(orderId))
       const aprazoItems = remainingItems.filter(i => i.tipo === 'aprazo')
       const dueDate = deliveryDataVenc || order.dataVencimento || hoje()
 
       const newFinancial = aprazoItems.map(i => {
-        const existing = existingRecords.find(f => f.id === orderId + '-' + i.id)
-        const itemVal = (Number(i.preco) || 0) * (Number(i.qty) || 0)
+        const existing = existingRecords.find(f => String(f.id) === String(orderId + '-' + i.id))
+        const itemVal = Math.round((Number(i.preco) || 0) * (Number(i.qty) || 0) * 100) / 100
         const unitCusto = getItemCost(i, produtosAtuais)
         return {
           id: orderId + '-' + i.id,
@@ -2033,7 +2051,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           itemName: i.nome,
           qty: i.qty,
           value: itemVal,
-          precoCusto: (unitCusto || 0) * i.qty,
+          precoCusto: Math.round((unitCusto || 0) * (Number(i.qty) || 0) * 100) / 100,
           dueDate: existing?.dueDate || dueDate,
           paidDate: finalize ? hoje() : (existing?.paidDate || null),
           status: finalize ? 'pago' : (existing?.status || 'pendente'),
@@ -2042,6 +2060,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       })
 
       const combined = [...otherRecords, ...newFinancial]
+      LS.set(STORAGE_FINANCIAL, combined)
       if (newFinancial.length > 0) upsertFinancial(newFinancial)
       return combined
     })
@@ -2051,7 +2070,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       originalItems: baseItems,
       totalOriginal,
       totalDevolvido: totalReembolso,
-      desconto: Math.round(desconto * 100) / 100,
+      desconto,
+      descontoPercent: deliveryDiscountType === 'percent' ? discountNum : (order.descontoPercent || null),
       totalComanda: totalCobrar,
       totalAcerto: totalCobrar,
       paymentSplits: isSplit ? deliverySplits : (deliveryPayment ? { [deliveryPayment]: totalPago } : null),
@@ -2292,10 +2312,10 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       o.customer?.telefone?.includes(t) ||
       (o.customer?.endereco?.cidade || '').toLowerCase().includes(t)
     )
-    if (orderDateStart) result = result.filter(o => (o.date || '') >= orderDateStart)
-    if (orderDateEnd) result = result.filter(o => (o.date || '') <= orderDateEnd)
-    if (orderDueStart) result = result.filter(o => (getOrderDue(o) || '') >= orderDueStart)
-    if (orderDueEnd) result = result.filter(o => (getOrderDue(o) || '') <= orderDueEnd)
+    if (orderDateStart) result = result.filter(o => ((o.date || o.createdAt || '').split('T')[0]) >= orderDateStart)
+    if (orderDateEnd) result = result.filter(o => ((o.date || o.createdAt || '').split('T')[0]) <= orderDateEnd)
+    if (orderDueStart) result = result.filter(o => ((getOrderDue(o) || '').split('T')[0]) >= orderDueStart)
+    if (orderDueEnd) result = result.filter(o => ((getOrderDue(o) || '').split('T')[0]) <= orderDueEnd)
     if (orderCityFilter !== 'TODAS') result = result.filter(o => o.customer?.endereco?.cidade === orderCityFilter)
     if (orderRoutesSelected.size > 0) {
       result = result.filter(o => orderRoutesSelected.has(rotaDeOrder(o)))
@@ -5081,7 +5101,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         <OrderDetailModal
           order={showOrderDetail}
           usuarios={usuarios}
-          financial={financial.filter(f => f.orderId === showOrderDetail.id)}
+          financial={financial.filter(f => String(f.orderId) === String(showOrderDetail.id))}
           produtos={produtosAtuais}
           onClose={() => setShowOrderDetail(null)}
           onStatusChange={(s) => { updateOrderStatus(showOrderDetail.id, s); setShowOrderDetail(null) }}
@@ -5090,17 +5110,17 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           onOpenDelivery={(order, mode = 'acerto') => { openAcertoModal(order, mode); setShowOrderDetail(null) }}
           onEditAndConfirm={(editedItems, currentStatus) => {
             const now = Date.now()
-            const totalAvista = editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
-            const totalAprazo = editedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
-            const newStatus = currentStatus === 'entregue' || currentStatus === 'em-rota' ? 'entregue' : 'em-rota'
+            const totalAvista = Math.round(editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
+            const totalAprazo = Math.round(editedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
+            const newStatus = currentStatus === 'acerto' ? 'acerto' : (currentStatus === 'entregue' || currentStatus === 'em-rota' ? 'entregue' : 'em-rota')
             const updatedOrder = {
               ...showOrderDetail,
               items: editedItems,
               totalAvista,
               totalAprazo,
-              total: totalAvista + totalAprazo,
+              total: Math.round((totalAvista + totalAprazo) * 100) / 100,
               status: newStatus,
-              deliveredAt: newStatus === 'entregue' ? now : showOrderDetail.deliveredAt,
+              deliveredAt: (newStatus === 'entregue' || newStatus === 'acerto') ? (showOrderDetail.deliveredAt || now) : showOrderDetail.deliveredAt,
               lastModified: now,
               updatedAt: now
             }
@@ -5120,8 +5140,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                   customerName: showOrderDetail.customer?.nome || '',
                   itemName: i.nome,
                   qty: i.qty,
-                  value: i.preco * i.qty,
-                  precoCusto: (i.preco_custo || 0) * i.qty,
+                  value: Math.round((Number(i.preco) || 0) * (Number(i.qty) || 0) * 100) / 100,
+                  precoCusto: Math.round((Number(i.preco_custo) || 0) * (Number(i.qty) || 0) * 100) / 100,
                   dueDate: showOrderDetail.dataVencimento || hoje(),
                   paidDate: null,
                   status: i.tipo === 'aprazo' ? 'pendente' : 'pago',
@@ -5134,8 +5154,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 return {
                   ...f,
                   qty: item.qty,
-                  value: item.preco * item.qty,
-                  precoCusto: (item.preco_custo || 0) * item.qty,
+                  value: Math.round((Number(item.preco) || 0) * (Number(item.qty) || 0) * 100) / 100,
+                  precoCusto: Math.round((Number(item.preco_custo) || 0) * (Number(item.qty) || 0) * 100) / 100,
                   status: f.status,
                   paidDate: f.paidDate
                 }
@@ -5148,9 +5168,9 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
               }
               return mergedFin
             })
-            showToast(currentStatus === 'em-rota' ? `Pedido #${showOrderDetail.id} finalizado e enviado para Entregues!` : `Pedido #${showOrderDetail.id} enviado para a rota!`)
+            showToast(newStatus === 'entregue' ? `Pedido #${showOrderDetail.id} finalizado e enviado para Entregues!` : (newStatus === 'acerto' ? `Pedido #${showOrderDetail.id} atualizado em Acertos!` : `Pedido #${showOrderDetail.id} enviado para a rota!`))
             setShowOrderDetail(null)
-            const ESTADOS = ['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'entregue']
+            const ESTADOS = ['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'entregue', 'acerto']
             const idxFrom = ESTADOS.indexOf(currentStatus)
             const idxTo = ESTADOS.indexOf(newStatus)
             if ((ESTADOS.includes(currentStatus) && idxTo > idxFrom) || (!ESTADOS.includes(currentStatus) && ESTADOS.includes(newStatus))) {
@@ -5159,14 +5179,14 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           }}
           onEditSave={(editedItems) => {
             const now = Date.now()
-            const totalAvista = editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
-            const totalAprazo = editedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
+            const totalAvista = Math.round(editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
+            const totalAprazo = Math.round(editedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
             const updatedOrder = {
               ...showOrderDetail,
               items: editedItems,
               totalAvista,
               totalAprazo,
-              total: totalAvista + totalAprazo,
+              total: Math.round((totalAvista + totalAprazo) * 100) / 100,
               lastModified: now,
               updatedAt: now
             }
@@ -5361,7 +5381,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                       <span style={{ fontWeight: 700 }}>{formatPreco(totalDevolvido)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.25rem' }}>
-                      <span>Itens mantidos (subtotal)</span>
+                      <span>Itens pagos (subtotal)</span>
                       <span style={{ fontWeight: 600 }}>{formatPreco(base)}</span>
                     </div>
 
@@ -6344,7 +6364,7 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
   const [pagamentoF, setPagamentoF] = useState('todos')
   const [itemTipoF, setItemTipoF] = useState('todos')
 
-  const ORDER_STATUS = ['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'entregue']
+  const ORDER_STATUS = ['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'acerto', 'entregue', 'concluido']
   const FIN_LIKE = ['contratos', 'fin_cliente', 'pagamentos', 'caixa', 'despesas']
   const isFinLike = FIN_LIKE.includes(rep)
   const effStatusF = isFinLike ? (statusF === 'pago' || statusF === 'pendente' ? statusF : 'todos') : (ORDER_STATUS.includes(statusF) ? statusF : 'todos')
@@ -6378,7 +6398,7 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
           produto: i.displayName || i.nome || i.produto || 'Produto',
           qty: Number(i.qty) || 0,
           preco: Number(i.preco) || 0,
-          preco_custo: getItemCost(i, produtosAtuais),
+          preco_custo: getItemCost(i, produtos),
           cliente: o.customer?.nome || '-',
           data: o.date || '',
           tipo: i.tipo === 'avista' ? 'À Vista' : 'A Prazo'
@@ -6386,7 +6406,7 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
       })
     })
     return arr
-  }, [ordersF, itemTipoF, produtosAtuais])
+  }, [ordersF, itemTipoF, produtos])
 
   const vendasMes = useMemo(() => {
     const map = {}
@@ -6559,12 +6579,12 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
           sku: i.id || '',
           qty: Number(i.qty) || 0,
           tipo: 'Saída',
-          custoMedio: getItemCost(i, produtosAtuais)
+          custoMedio: getItemCost(i, produtos)
         })
       })
     })
     return arr.sort((a, b) => b.data.localeCompare(a.data))
-  }, [ordersF, produtosAtuais])
+  }, [ordersF, produtos])
 
   const inativos = useMemo(() => {
     const arr = usuarios.map(u => {
@@ -8134,6 +8154,7 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
     endereco: { ...(order.customer?.endereco || {}) }
   })
 
+  const orderId = order?.id
   useEffect(() => {
     if (order) {
       setEditCustomer({
@@ -8148,12 +8169,13 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
         const c = (i.preco_custo != null && i.preco_custo !== '') ? Number(String(i.preco_custo).replace(',', '.')) : getItemCost(i, produtos)
         return {
           ...i,
+          qty: Number(i.qty) || 0,
           preco: Number(String(i.preco).replace(',', '.')) || 0,
           preco_custo: c > 0 ? c : null
         }
       }))
     }
-  }, [order, produtos])
+  }, [orderId])
 
   const toggleReject = (idx) => {
     setRejectedItems(prev => {
@@ -8164,7 +8186,7 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
   }
 
   const changeQty = (idx, delta) => {
-    setEditedItems(prev => prev.map((item, i) => i === idx ? { ...item, qty: Math.max(0, item.qty + delta) } : item))
+    setEditedItems(prev => prev.map((item, i) => i === idx ? { ...item, qty: Math.max(0, (Number(item.qty) || 0) + delta) } : item))
   }
 
   const resetEditedItems = () => {
@@ -8172,6 +8194,7 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
       const c = (i.preco_custo != null && i.preco_custo !== '') ? Number(String(i.preco_custo).replace(',', '.')) : getItemCost(i, produtos)
       return {
         ...i,
+        qty: Number(i.qty) || 0,
         preco: Number(String(i.preco).replace(',', '.')) || 0,
         preco_custo: c > 0 ? c : null
       }
@@ -8199,9 +8222,20 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
   }
 
   const addItemToEdit = (p) => {
+    const unitPreco = Number(String(p.preco || 0).replace(',', '.')) || 0
+    const rawCusto = (p.preco_custo != null && p.preco_custo !== '') ? Number(String(p.preco_custo).replace(',', '.')) : (getItemCost(p, produtos) || null)
     setAddCart(prev => ({
       ...prev,
-      [p.id]: { id: p.id, nome: p.nome, preco: p.preco, preco_custo: p.preco_custo ?? null, imagem: p.imagem, tipo: 'aprazo', qty: (prev[p.id]?.qty || 0) + 1, semDevolucao: !!p.semDevolucao }
+      [p.id]: {
+        id: p.id,
+        nome: p.nome || p.displayName,
+        preco: unitPreco,
+        preco_custo: rawCusto > 0 ? rawCusto : null,
+        imagem: p.imagem,
+        tipo: 'aprazo',
+        qty: ((prev[p.id]?.qty || 0) + 1),
+        semDevolucao: !!p.semDevolucao
+      }
     }))
   }
 
@@ -8216,16 +8250,35 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
   }
 
   const confirmAddItems = () => {
-    const newItems = Object.values(addCart).filter(i => i.qty > 0)
+    const newItems = Object.values(addCart).filter(i => (Number(i.qty) || 0) > 0)
     if (newItems.length === 0) return
-    setEditedItems(prev => [...prev, ...newItems])
+    setEditedItems(prev => {
+      const copy = [...prev]
+      for (const ni of newItems) {
+        const existIdx = copy.findIndex(it => String(it.id) === String(ni.id))
+        if (existIdx >= 0) {
+          copy[existIdx] = {
+            ...copy[existIdx],
+            qty: (Number(copy[existIdx].qty) || 0) + (Number(ni.qty) || 1)
+          }
+        } else {
+          copy.push({
+            ...ni,
+            qty: Number(ni.qty) || 1,
+            preco: Number(String(ni.preco).replace(',', '.')) || 0
+          })
+        }
+      }
+      return copy
+    })
     setAddCart({})
     setAddSearch('')
   }
 
   const handleEditConfirm = () => {
-    const validItems = editedItems.filter(i => i.qty > 0).map(i => ({
+    const validItems = editedItems.filter(i => (Number(i.qty) || 0) > 0).map(i => ({
       ...i,
+      qty: Number(i.qty) || 0,
       preco: Number(String(i.preco).replace(',', '.')) || 0,
       preco_custo: (i.preco_custo != null && i.preco_custo !== '') ? Number(String(i.preco_custo).replace(',', '.')) : getItemCost(i, produtos)
     }))
@@ -8234,8 +8287,9 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
   }
 
   const handleEditSave = () => {
-    const validItems = editedItems.filter(i => i.qty > 0).map(i => ({
+    const validItems = editedItems.filter(i => (Number(i.qty) || 0) > 0).map(i => ({
       ...i,
+      qty: Number(i.qty) || 0,
       preco: Number(String(i.preco).replace(',', '.')) || 0,
       preco_custo: (i.preco_custo != null && i.preco_custo !== '') ? Number(String(i.preco_custo).replace(',', '.')) : getItemCost(i, produtos)
     }))
@@ -8243,7 +8297,7 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
     onEditSave(validItems)
   }
 
-  const editTotal = editedItems.filter(i => i.qty > 0).reduce((s, i) => s + (Number(String(i.preco).replace(',', '.')) || 0) * i.qty, 0)
+  const editTotal = Math.round(editedItems.filter(i => (Number(i.qty) || 0) > 0).reduce((s, i) => s + (Number(String(i.preco).replace(',', '.')) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
 
   const filteredAddProds = useMemo(() => {
     const t = (addSearch || '').toLowerCase().trim()
@@ -8258,9 +8312,20 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
   }, [produtos, preAddSearch])
 
   const addToPreReplacement = (p) => {
+    const unitPreco = Number(String(p.preco || 0).replace(',', '.')) || 0
+    const rawCusto = (p.preco_custo != null && p.preco_custo !== '') ? Number(String(p.preco_custo).replace(',', '.')) : (getItemCost(p, produtos) || null)
     setPreAddCart(prev => ({
       ...prev,
-      [p.id]: { id: p.id, nome: p.nome, preco: p.preco, preco_custo: p.preco_custo != null ? Number(p.preco_custo) : null, imagem: p.imagem, tipo: 'aprazo', qty: (prev[p.id]?.qty || 0) + 1 }
+      [p.id]: {
+        id: p.id,
+        nome: p.nome || p.displayName,
+        preco: unitPreco,
+        preco_custo: rawCusto > 0 ? rawCusto : null,
+        imagem: p.imagem,
+        tipo: 'aprazo',
+        qty: ((prev[p.id]?.qty || 0) + 1),
+        semDevolucao: !!p.semDevolucao
+      }
     }))
   }
 
@@ -8275,9 +8340,27 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
   }
 
   const confirmPreReplacements = () => {
-    const newItems = Object.values(preAddCart).filter(i => i.qty > 0)
+    const newItems = Object.values(preAddCart).filter(i => (Number(i.qty) || 0) > 0)
     if (newItems.length === 0) return
-    setPreReplacements(prev => [...prev, ...newItems])
+    setPreReplacements(prev => {
+      const copy = [...prev]
+      for (const ni of newItems) {
+        const existIdx = copy.findIndex(it => String(it.id) === String(ni.id))
+        if (existIdx >= 0) {
+          copy[existIdx] = {
+            ...copy[existIdx],
+            qty: (Number(copy[existIdx].qty) || 0) + (Number(ni.qty) || 1)
+          }
+        } else {
+          copy.push({
+            ...ni,
+            qty: Number(ni.qty) || 1,
+            preco: Number(String(ni.preco).replace(',', '.')) || 0
+          })
+        }
+      }
+      return copy
+    })
     setPreAddCart({})
     setPreAddSearch('')
   }
@@ -8545,7 +8628,7 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
               <h4 style={{ color: 'var(--danger)' }}><i className="fa-solid fa-ban"></i> Itens Recusados</h4>
               {[...rejectedItems].map(idx => (
                 <p key={idx} style={{ fontSize: '0.82rem', color: 'var(--danger)', marginBottom: '0.2rem' }}>
-                  {order.items[idx].nome} ({order.items[idx].qty}x)
+                  {order.items[idx]?.nome || 'Item'} ({order.items[idx]?.qty || 1}x)
                 </p>
               ))}
             </div>
@@ -8575,7 +8658,7 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
                             <button className="qty-btn-sm" onClick={() => addToPreReplacement(p)}><i className="fa-solid fa-plus"></i></button>
                           </div>
                         ) : (
-                          <button className="add-prod-add" style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }} onClick={() => { setPreAddCart({ [p.id]: { id: p.id, nome: p.nome, preco: p.preco, imagem: p.imagem, tipo: 'aprazo', qty: 1, semDevolucao: !!p.semDevolucao } }) }}>
+                          <button className="add-prod-add" style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }} onClick={() => addToPreReplacement(p)}>
                             <i className="fa-solid fa-plus"></i> Substituto
                           </button>
                         )}
@@ -8586,16 +8669,19 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
               )}
               {Object.values(preAddCart).filter(i => i.qty > 0).length > 0 && (
                 <button className="admin-btn" style={{ marginTop: '0.4rem', fontSize: '0.78rem', background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }} onClick={confirmPreReplacements}>
-                  <i className="fa-solid fa-check"></i> Adicionar ao pedido
+                  <i className="fa-solid fa-check"></i> Adicionar {Object.values(preAddCart).reduce((s, i) => s + (Number(i.qty) || 0), 0)} substituto(s) ao pedido
                 </button>
               )}
               {preReplacements.length > 0 && (
                 <div style={{ marginTop: '0.5rem' }}>
                   <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--success)', marginBottom: '0.25rem' }}>Produtos substitutos adicionados:</p>
                   {preReplacements.map((r, i) => (
-                    <p key={i} style={{ fontSize: '0.8rem', color: 'var(--admin-text)', marginBottom: '0.15rem' }}>
-                      {r.nome} ({r.qty}x) — {formatPreco(r.preco * r.qty)}
-                    </p>
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: 'var(--admin-text)', marginBottom: '0.25rem', padding: '0.25rem 0.5rem', background: 'var(--admin-bg)', borderRadius: '6px', border: '1px solid var(--admin-border)' }}>
+                      <span>{r.nome} ({r.qty}x) — {formatPreco(Number(r.preco || 0) * Number(r.qty || 0))}</span>
+                      <button className="action-btn action-delete" title="Remover substituto" onClick={() => setPreReplacements(prev => prev.filter((_, idx) => idx !== i))} style={{ padding: '2px 6px', fontSize: '0.75rem' }}>
+                        <i className="fa-solid fa-trash"></i>
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}
@@ -8610,13 +8696,14 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
                 const rejectedSet = rejectedItems
                 const kept = order.items.filter((_, i) => !rejectedSet.has(i))
                 const all = [...kept, ...preReplacements]
-                const av = all.filter(i => i.tipo === 'avista').reduce((s, i) => s + i.preco * i.qty, 0)
-                const ap = all.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + i.preco * i.qty, 0)
+                const av = Math.round(all.filter(i => i.tipo === 'avista').reduce((s, i) => s + (Number(String(i.preco).replace(',', '.')) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
+                const ap = Math.round(all.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + (Number(String(i.preco).replace(',', '.')) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
+                const totalCalculado = Math.round((av + ap) * 100) / 100
                 return (
                   <>
                     <span style={{ color: 'var(--danger)' }}>Itens recusados: {rejectedItems.size}</span>
                     <span>Substitutos: {preReplacements.length} itens</span>
-                    <span>Total <strong style={{ color: 'var(--accent)' }}>{formatPreco(av + ap)}</strong></span>
+                    <span>Total <strong style={{ color: 'var(--accent)' }}>{formatPreco(totalCalculado)}</strong></span>
                     {ap > 0 && <span>📋 A prazo: <strong style={{ color: 'var(--warning)' }}>{formatPreco(ap)}</strong></span>}
                   </>
                 )

@@ -10,6 +10,7 @@ const STATUS_CONFIG = {
   'confirmado': { label: 'Confirmado', color: '#2563eb', bg: '#dbeafe' },
   'em-andamento': { label: 'Em Andamento', color: '#4f46e5', bg: '#e0e7ff' },
   'em-rota': { label: 'Em Rota', color: '#0284c7', bg: '#e0f2fe' },
+  'acerto': { label: 'Acerto', color: '#7c3aed', bg: '#f3e8ff' },
   'entregue': { label: 'Entregue', color: '#059669', bg: '#d1fae5' },
   'concluido': { label: 'Concluído', color: '#16a34a', bg: '#dcfce7' },
   'cancelado': { label: 'Cancelado', color: '#dc2626', bg: '#fee2e2' }
@@ -112,14 +113,13 @@ export default function OrderReportModal({
 }) {
   if (!isOpen) return null
 
-  // Escopo de dados: 'tela', 'selecionados', 'custom'
+  // Escopo de dados: 'todos', 'tela', 'selecionados', 'custom'
   const hasSelected = selectedOrderIds && selectedOrderIds.size > 0
-  const [scope, setScope] = useState(hasSelected ? 'selecionados' : 'custom')
+  const [scope, setScope] = useState(hasSelected ? 'selecionados' : 'todos')
+  const [density, setDensity] = useState('compact') // 'compact' ou 'detailed'
 
-  // Filtros customizados
-  const [selectedStatuses, setSelectedStatuses] = useState([
-    'pendente', 'confirmado', 'em-andamento', 'em-rota', 'entregue', 'concluido'
-  ])
+  // Filtros customizados (inicia com todos os status marcados para puxar 100% dos pedidos)
+  const [selectedStatuses, setSelectedStatuses] = useState(() => Object.keys(STATUS_CONFIG))
   const [selectedClientPhone, setSelectedClientPhone] = useState('TODOS')
   const [clientSearch, setClientSearch] = useState('')
   const [selectedCity, setSelectedCity] = useState('TODAS')
@@ -157,8 +157,11 @@ export default function OrderReportModal({
   }, [rotas, orders])
 
   // Normalização de status
+  // Normalização de status
   const getResolvedStatus = (o) => {
-    if (o.status === 'entregue' && isFinalizada(o)) return 'concluido'
+    if (o.status === 'concluido' || isFinalizada(o)) return 'concluido'
+    if (o.status === 'acerto') return 'acerto'
+    if (o.status === 'entregue') return 'entregue'
     return o.status || 'pendente'
   }
 
@@ -166,9 +169,12 @@ export default function OrderReportModal({
   const targetOrders = useMemo(() => {
     let list = []
     if (scope === 'selecionados') {
-      list = orders.filter(o => selectedOrderIds.has(o.id))
+      const selSet = new Set([...selectedOrderIds].map(String))
+      list = orders.filter(o => selSet.has(String(o.id)))
     } else if (scope === 'tela') {
       list = filteredOrdersFromScreen || []
+    } else if (scope === 'todos') {
+      list = orders || []
     } else {
       // Escopo 'custom'
       list = orders.filter(o => {
@@ -206,10 +212,13 @@ export default function OrderReportModal({
           if (pag !== selectedPayment) return false
         }
 
-        // 6. Datas
-        const orderDate = dateType === 'vencimento' ? (o.dataVencimento || '') : (o.date || '')
-        if (startDate && orderDate && orderDate < startDate) return false
-        if (endDate && orderDate && orderDate > endDate) return false
+        // 6. Datas (ignora hora e ISO para nunca cortar a data final)
+        const rawDate = dateType === 'vencimento'
+          ? (o.dataVencimento || o.vencimento || '')
+          : (o.date || o.createdAt || o.dataInicio || o.created_at || '')
+        const orderDateOnly = rawDate ? String(rawDate).split('T')[0].split(' ')[0] : ''
+        if (startDate && orderDateOnly && orderDateOnly < startDate) return false
+        if (endDate && orderDateOnly && orderDateOnly > endDate) return false
 
         return true
       })
@@ -227,8 +236,8 @@ export default function OrderReportModal({
     }
 
     return [...list].sort((a, b) => {
-      const ta = new Date(a.date || 0).getTime()
-      const tb = new Date(b.date || 0).getTime()
+      const ta = new Date(a.date || a.createdAt || a.created_at || 0).getTime()
+      const tb = new Date(b.date || b.createdAt || b.created_at || 0).getTime()
       return tb - ta
     })
   }, [
@@ -323,6 +332,9 @@ export default function OrderReportModal({
       case 'pendentes':
         setSelectedStatuses(['pre-pedido', 'pendente'])
         break
+      case 'acertos':
+        setSelectedStatuses(['acerto'])
+        break
       case 'concluidos':
         setSelectedStatuses(['entregue', 'concluido'])
         break
@@ -330,7 +342,7 @@ export default function OrderReportModal({
         setSelectedStatuses(['em-rota'])
         break
       case 'pendentes_a_concluidos':
-        setSelectedStatuses(['pendente', 'confirmado', 'em-andamento', 'em-rota', 'entregue', 'concluido'])
+        setSelectedStatuses(['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'acerto', 'entregue', 'concluido'])
         break
       default:
         break
@@ -386,7 +398,7 @@ export default function OrderReportModal({
   }, [usuarios, clientSearch])
 
   // ==========================================
-  // GERAÇÃO DE PDF PROFISSIONAL COM ENDEREÇO COMPLETO E PRODUTOS
+  // GERAÇÃO DE PDF ULTRA-COMPACTO E PROFISSIONAL (POUCAS PÁGINAS)
   // ==========================================
   const handleGeneratePDF = () => {
     if (targetOrders.length === 0) {
@@ -405,33 +417,34 @@ export default function OrderReportModal({
       const pageHeight = doc.internal.pageSize.getHeight()
       const nowStr = new Date().toLocaleString('pt-BR')
 
-      // 1. Cabeçalho Corporativo THSM
+      // 1. Cabeçalho Corporativo THSM Ultra-Compacto (12mm)
+      const headerH = 12
       doc.setFillColor(15, 23, 42) // #0f172a
-      doc.rect(0, 0, pageWidth, 24, 'F')
+      doc.rect(0, 0, pageWidth, headerH, 'F')
 
       doc.setTextColor(255, 255, 255)
-      doc.setFontSize(14)
+      doc.setFontSize(11)
       doc.setFont('helvetica', 'bold')
-      doc.text('THSM DISTRIBUIDORA', 14, 11)
+      doc.text('THSM DISTRIBUIDORA', 10, 7.5)
 
-      doc.setFontSize(9)
+      doc.setFontSize(7)
       doc.setFont('helvetica', 'normal')
+      doc.setTextColor(148, 163, 184)
+      doc.text('RELATÓRIO GERENCIAL DE PEDIDOS COM ENDEREÇO E PRODUTOS', 64, 7.5)
+
+      doc.setFontSize(6.8)
       doc.setTextColor(203, 213, 225)
-      doc.text('RELATÓRIO GERENCIAL DE PEDIDOS COM ENDEREÇO E ITENS', 14, 17)
+      doc.text(`Emissão: ${nowStr}   |   Total: ${reportStats.totalPedidos} pedidos`, pageWidth - 10, 7.5, { align: 'right' })
 
-      doc.setFontSize(8)
-      doc.text(`Emitido em: ${nowStr}`, pageWidth - 14, 11, { align: 'right' })
-      doc.text(`Total de Pedidos: ${reportStats.totalPedidos}`, pageWidth - 14, 17, { align: 'right' })
+      let currentY = 14.5
 
-      let currentY = 28
-
-      // 2. Metadados dos Filtros
+      // 2. Metadados dos Filtros (Faixa compacta 5.5mm)
       doc.setFillColor(241, 245, 249)
-      doc.rect(14, currentY, pageWidth - 28, 12, 'F')
+      doc.rect(10, currentY, pageWidth - 20, 5.5, 'F')
       doc.setDrawColor(226, 232, 240)
-      doc.rect(14, currentY, pageWidth - 28, 12, 'S')
+      doc.rect(10, currentY, pageWidth - 20, 5.5, 'S')
 
-      doc.setFontSize(7.5)
+      doc.setFontSize(6.5)
       doc.setTextColor(71, 85, 105)
       doc.setFont('helvetica', 'bold')
 
@@ -444,69 +457,61 @@ export default function OrderReportModal({
         : 'Todo o Período'
 
       const devDesc = devolucaoFilter === 'todos' ? 'Todos os produtos' : devolucaoFilter === 'com_sem_dev' ? 'Com itens SEM devolução' : devolucaoFilter === 'apenas_sem_dev' ? 'Apenas SEM devolução' : 'Apenas COM devolução'
+      const scopeDesc = scope === 'todos' ? 'Todos os Pedidos' : scope === 'selecionados' ? 'Selecionados' : scope === 'tela' ? 'Filtros da Tela' : 'Personalizado'
 
-      const filterLine = `Filtros: Status: ${statusDesc} | Devolução: ${devDesc} | Período: ${dateDesc} | Cidade: ${selectedCity} | Rota: ${selectedRoute}`
-      doc.text(filterLine.slice(0, 150), 17, currentY + 7.5)
+      const filterLine = `Escopo: ${scopeDesc} | Status: ${statusDesc} | Devolução: ${devDesc} | Período: ${dateDesc} | Cidade: ${selectedCity} | Rota: ${selectedRoute}`
+      doc.text(filterLine.slice(0, 160), 13, currentY + 3.8)
 
-      currentY += 16
+      currentY += 7.5
 
-      // 3. Resumo Executivo e KPIs
+      // 3. Resumo Executivo e KPIs Compacto (8mm de altura)
       if (includeSummary) {
-        doc.setFontSize(10)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(15, 23, 42)
-        doc.text('RESUMO EXECUTIVO (COM QUEBRA DE DEVOLUÇÃO)', 14, currentY)
-        currentY += 4
-
-        const cardW = (pageWidth - 28 - 12) / 5
-        const cardH = 14
+        const cardCount = 5
+        const gap = 2.5
+        const totalW = pageWidth - 20
+        const cardW = (totalW - (gap * (cardCount - 1))) / cardCount
+        const cardH = 8
         const kpis = [
-          { label: 'TOTAL PEDIDOS', val: String(reportStats.totalPedidos), color: [2, 132, 199] },
+          { label: 'TOTAL PEDIDOS', val: `${reportStats.totalPedidos} pedidos`, color: [2, 132, 199] },
           { label: 'TOTAL BRUTO', val: formatCurrency(reportStats.faturamentoTotal), color: [16, 185, 129] },
           { label: 'SEM DEVOLUÇÃO', val: formatCurrency(reportStats.totalValorSemDev), color: [220, 38, 38] },
           { label: 'COM DEVOLUÇÃO', val: formatCurrency(reportStats.totalValorComDev), color: [79, 70, 229] },
-          { label: 'ITENS (TOTAL)', val: `${reportStats.totalItens} un (${reportStats.totalQtdSemDev} s/ dev)`, color: [245, 158, 11] }
+          { label: 'TOTAL DE ITENS', val: `${reportStats.totalItens} un (${reportStats.totalQtdSemDev} s/dev)`, color: [245, 158, 11] }
         ]
 
         kpis.forEach((kpi, idx) => {
-          const kpiX = 14 + idx * (cardW + 3)
+          const kpiX = 10 + idx * (cardW + gap)
           doc.setFillColor(248, 250, 252)
           doc.rect(kpiX, currentY, cardW, cardH, 'F')
           doc.setDrawColor(226, 232, 240)
           doc.rect(kpiX, currentY, cardW, cardH, 'S')
 
           doc.setFillColor(kpi.color[0], kpi.color[1], kpi.color[2])
-          doc.rect(kpiX, currentY, 2.5, cardH, 'F')
+          doc.rect(kpiX, currentY, 2, cardH, 'F')
 
-          doc.setFontSize(6.2)
+          doc.setFontSize(5.2)
           doc.setTextColor(100, 116, 139)
           doc.setFont('helvetica', 'bold')
-          doc.text(kpi.label, kpiX + 4.5, currentY + 5)
+          doc.text(kpi.label, kpiX + 3.5, currentY + 3.2)
 
-          doc.setFontSize(8.5)
+          doc.setFontSize(7.2)
           doc.setTextColor(15, 23, 42)
-          doc.text(kpi.val, kpiX + 4.5, currentY + 11)
+          doc.text(kpi.val, kpiX + 3.5, currentY + 6.6)
         })
 
-        currentY += cardH + 5
+        currentY += cardH + 3
       }
 
       // 4. Tabela de Pedidos
-      doc.setFontSize(10)
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(15, 23, 42)
-      doc.text('RELAÇÃO DE PEDIDOS E ITENS', 14, currentY)
-      currentY += 3
-
       const tableHeaders = [
-        'Data',
-        'Cliente / Telefone',
+        '# / Data',
+        'Cliente / Tel',
         'Status',
-        'Endereço Completo / Cidade',
+        'Endereço Completo / Destino',
         'Rota',
-        'Qtd Itens',
-        'Total S/ Dev',
-        'Total C/ Dev',
+        'Qtd',
+        'Produtos / Itens',
+        'S/ Dev',
         'Total Bruto'
       ]
 
@@ -514,7 +519,9 @@ export default function OrderReportModal({
 
       targetOrders.forEach(o => {
         const dev = getOrderDevolucaoStats(o, produtos)
-        const dateStr = formatDateBR(o.date)
+        const dateStr = formatDateBR(o.date || o.createdAt)
+        const numId = `#${String(o.id).slice(-6)}`
+        const numDataStr = `${numId}\n${dateStr}`
         const clienteStr = `${o.customer?.nome || 'Não informado'}\n${o.customer?.telefone || '-'}`
         const resStatus = getResolvedStatus(o)
         const statusLabel = STATUS_CONFIG[resStatus]?.label || resStatus
@@ -522,24 +529,33 @@ export default function OrderReportModal({
         const rotaStr = o.customer?.endereco?.rota || '-'
 
         let qtdStr = `${dev.qtdTotal} un`
-        if (dev.qtdSemDev > 0) qtdStr += `\n(${dev.qtdSemDev} s/dev)`
+        if (dev.qtdSemDev > 0) qtdStr += `\n(${dev.qtdSemDev} s/d)`
 
-        // Linha principal do pedido
+        // Formatação dos produtos inline super compacta
+        let prodsInline = '-'
+        if (o.items && o.items.length > 0) {
+          prodsInline = o.items.map(i => {
+            const isSem = checkItemSemDevolucao(i, produtos)
+            return `${i.qty || 1}x ${i.nome}${isSem ? ' [S/DEV]' : ''}`
+          }).join(' • ')
+        }
+
+        // Linha do pedido
         tableBody.push([
-          dateStr,
+          numDataStr,
           clienteStr,
           statusLabel,
           enderecoCompleto,
           rotaStr,
           qtdStr,
+          prodsInline,
           formatCurrency(dev.totalSemDev),
-          formatCurrency(dev.totalComDev),
           formatCurrency(dev.totalBruto)
         ])
 
-        // Se detalhamento de itens ativado, adiciona linha com todos os produtos descritos
-        if (includeItemsDetail && o.items && o.items.length > 0) {
-          const itemsText = o.items.map(item => {
+        // Se density === 'detailed', adiciona sublinha detalhada
+        if (density === 'detailed' && includeItemsDetail && o.items && o.items.length > 0) {
+          const itemsDetailedText = o.items.map(item => {
             const isSem = checkItemSemDevolucao(item, produtos)
             const sub = Number(item.preco || 0) * Number(item.qty || 1)
             return `• ${item.qty || 1}x ${item.nome} (${formatCurrency(sub)})${isSem ? ' [SEM DEVOLUÇÃO]' : ''}`
@@ -547,7 +563,7 @@ export default function OrderReportModal({
 
           tableBody.push([
             { content: '', styles: { cellPadding: 1 } },
-            { content: `PRODUTOS DO PEDIDO #${String(o.id).slice(-6)}:\n${itemsText}`, colSpan: 8, styles: { fontSize: 6.5, textColor: [51, 65, 85], fontStyle: 'italic', fillColor: [248, 250, 252] } }
+            { content: `PRODUTOS DO PEDIDO ${numId}:\n${itemsDetailedText}`, colSpan: 8, styles: { fontSize: 6, textColor: [51, 65, 85], fontStyle: 'italic', fillColor: [248, 250, 252] } }
           ])
         }
       })
@@ -555,15 +571,37 @@ export default function OrderReportModal({
       // Linha de Totalizador
       const footRow = [
         'TOTAL GERAL',
-        `${reportStats.totalPedidos} pedidos`,
+        `${reportStats.totalPedidos} pedido(s)`,
         '',
         '',
         '',
-        `${reportStats.totalItens} un (${reportStats.totalQtdSemDev} s/dev)`,
+        `${reportStats.totalItens} un`,
+        `Sem Dev: ${reportStats.totalQtdSemDev} un (${formatCurrency(reportStats.totalValorSemDev)})`,
         formatCurrency(reportStats.totalValorSemDev),
-        formatCurrency(reportStats.totalValorComDev),
         formatCurrency(reportStats.faturamentoTotal)
       ]
+
+      const colStyles = orientation === 'landscape' ? {
+        0: { cellWidth: 17 }, // # / Data
+        1: { cellWidth: 36 }, // Cliente / Tel
+        2: { cellWidth: 17 }, // Status
+        3: { cellWidth: 46 }, // Endereço Completo
+        4: { cellWidth: 15 }, // Rota
+        5: { cellWidth: 11, halign: 'center' }, // Qtd
+        6: { cellWidth: 93 }, // Produtos (inline compact)
+        7: { cellWidth: 18, halign: 'right' }, // S/ Dev
+        8: { cellWidth: 24, halign: 'right', fontStyle: 'bold', textColor: [16, 185, 129] } // Total Bruto
+      } : {
+        0: { cellWidth: 15 },
+        1: { cellWidth: 30 },
+        2: { cellWidth: 15 },
+        3: { cellWidth: 35 },
+        4: { cellWidth: 14 },
+        5: { cellWidth: 10, halign: 'center' },
+        6: { cellWidth: 41 },
+        7: { cellWidth: 15, halign: 'right' },
+        8: { cellWidth: 19, halign: 'right', fontStyle: 'bold', textColor: [16, 185, 129] }
+      }
 
       autoTable(doc, {
         startY: currentY,
@@ -574,51 +612,42 @@ export default function OrderReportModal({
         headStyles: {
           fillColor: [15, 23, 42],
           textColor: [255, 255, 255],
-          fontSize: 7.2,
+          fontSize: 6.8,
           fontStyle: 'bold',
-          cellPadding: 2
+          cellPadding: 1.5
         },
         bodyStyles: {
-          fontSize: 6.8,
-          cellPadding: 2,
-          textColor: [15, 23, 42]
+          fontSize: 6.2,
+          cellPadding: 1.2,
+          textColor: [15, 23, 42],
+          valign: 'middle'
         },
         footStyles: {
           fillColor: [226, 232, 240],
           textColor: [15, 23, 42],
           fontStyle: 'bold',
-          fontSize: 7.2,
-          cellPadding: 2
+          fontSize: 6.8,
+          cellPadding: 1.5
         },
-        columnStyles: {
-          0: { cellWidth: 16 }, // Data
-          1: { cellWidth: 32 }, // Cliente/Tel
-          2: { cellWidth: 18 }, // Status
-          3: { cellWidth: 'auto' }, // Endereço Completo
-          4: { cellWidth: 18 }, // Rota
-          5: { cellWidth: 18, halign: 'center' }, // Qtd
-          6: { cellWidth: 22, halign: 'right' }, // Total Sem Dev
-          7: { cellWidth: 22, halign: 'right' }, // Total Com Dev
-          8: { cellWidth: 24, halign: 'right', fontStyle: 'bold', textColor: [16, 185, 129] } // Total Bruto
-        },
-        margin: { left: 14, right: 14 }
+        columnStyles: colStyles,
+        margin: { left: 10, right: 10, top: 10, bottom: 8 }
       })
 
       // Rodapé em todas as páginas
       const totalPages = doc.internal.getNumberOfPages()
       for (let i = 1; i <= totalPages; i++) {
         doc.setPage(i)
-        doc.setFontSize(7.5)
+        doc.setFontSize(6.8)
         doc.setTextColor(148, 163, 184)
         doc.setDrawColor(226, 232, 240)
-        doc.line(14, pageHeight - 10, pageWidth - 14, pageHeight - 10)
-        doc.text('THSM Distribuidora — Sistema de Gestão Comercial', 14, pageHeight - 6)
-        doc.text(`Página ${i} de ${totalPages}`, pageWidth - 14, pageHeight - 6, { align: 'right' })
+        doc.line(10, pageHeight - 7, pageWidth - 10, pageHeight - 7)
+        doc.text('THSM Distribuidora — Sistema Comercial e Logística', 10, pageHeight - 4)
+        doc.text(`Página ${i} de ${totalPages}`, pageWidth - 10, pageHeight - 4, { align: 'right' })
       }
 
       const fileName = `Relatorio_Pedidos_THSM_${new Date().toISOString().split('T')[0]}.pdf`
       doc.save(fileName)
-      showToast('Relatório PDF gerado e baixado com sucesso!', 'success')
+      showToast(`Relatório PDF gerado (${totalPages} pág) e baixado com sucesso!`, 'success')
     } catch (err) {
       console.error('Erro ao gerar PDF:', err)
       showToast('Erro ao gerar arquivo PDF. Verifique o console.', 'error')
@@ -838,7 +867,7 @@ export default function OrderReportModal({
   }
 
   // ==========================================
-  // IMPRESSÃO / SALVAR PDF NATIVO VIA BROWSER
+  // IMPRESSÃO / SALVAR PDF NATIVO VIA BROWSER ULTRA-COMPACTO
   // ==========================================
   const handlePrintView = () => {
     if (targetOrders.length === 0) {
@@ -853,7 +882,9 @@ export default function OrderReportModal({
     }
 
     const nowStr = new Date().toLocaleString('pt-BR')
-    const statusDesc = selectedStatuses.map(s => STATUS_CONFIG[s]?.label || s).join(', ')
+    const statusDesc = selectedStatuses.length === Object.keys(STATUS_CONFIG).length
+      ? 'Todos os Status'
+      : selectedStatuses.map(s => STATUS_CONFIG[s]?.label || s).join(', ')
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -863,27 +894,27 @@ export default function OrderReportModal({
         <title>Relatório de Pedidos - THSM Distribuidora</title>
         <style>
           * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-          body { padding: 24px; color: #0f172a; background: #fff; }
-          .header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 16px; border-bottom: 2px solid #0f172a; margin-bottom: 16px; }
-          .header h1 { font-size: 20px; font-weight: 800; color: #0f172a; margin-bottom: 4px; }
-          .header p { font-size: 11px; color: #64748b; }
-          .meta-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 14px; font-size: 11px; margin-bottom: 16px; line-height: 1.5; color: #334155; }
-          .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px; }
-          .kpi-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; border-left: 4px solid #0284c7; }
-          .kpi-box .val { font-size: 15px; font-weight: 800; color: #0f172a; }
-          .kpi-box .lbl { font-size: 9.5px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-top: 2px; }
-          table { width: 100%; border-collapse: collapse; font-size: 10.5px; margin-bottom: 20px; }
-          th { background: #0f172a; color: #fff; padding: 8px 6px; text-align: left; font-weight: 700; font-size: 9.5px; }
-          td { padding: 7px 6px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
-          tr.order-row { background: #ffffff; }
-          tr.items-row { background: #f8fafc; }
-          .items-container { padding: 4px 8px 8px; font-size: 9.5px; color: #475569; }
-          .item-line { margin-bottom: 3px; }
-          .badge-nodev { background: #fee2e2; color: #dc2626; font-size: 8.5px; font-weight: 700; padding: 1px 4px; border-radius: 3px; margin-left: 4px; }
-          .status-tag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 700; }
+          @page { size: landscape; margin: 6mm 8mm; }
+          body { padding: 12px; color: #0f172a; background: #fff; }
+          .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 6px; border-bottom: 2px solid #0f172a; margin-bottom: 6px; }
+          .header h1 { font-size: 15px; font-weight: 800; color: #0f172a; }
+          .header p { font-size: 9px; color: #64748b; margin-top: 1px; }
+          .meta-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 5px 8px; font-size: 8.5px; margin-bottom: 8px; color: #334155; line-height: 1.3; }
+          .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 8px; }
+          .kpi-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 4px 6px; border-left: 3px solid #0284c7; }
+          .kpi-box .val { font-size: 11px; font-weight: 800; color: #0f172a; }
+          .kpi-box .lbl { font-size: 7.5px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-top: 1px; }
+          table { width: 100%; border-collapse: collapse; font-size: 8px; margin-bottom: 8px; }
+          tr { page-break-inside: avoid; }
+          th { background: #0f172a; color: #fff; padding: 4px 5px; text-align: left; font-weight: 700; font-size: 8px; white-space: nowrap; }
+          td { padding: 3px 5px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; font-size: 7.8px; line-height: 1.25; }
+          tr:nth-child(even) { background: #f8fafc; }
+          .status-tag { display: inline-block; padding: 1px 4px; border-radius: 3px; font-size: 7.5px; font-weight: 700; white-space: nowrap; }
+          .badge-nodev { background: #fee2e2; color: #dc2626; font-size: 7px; font-weight: 700; padding: 0 3px; border-radius: 2px; margin-left: 2px; }
           .td-right { text-align: right; }
-          .footer-total { background: #e2e8f0; font-weight: 800; }
-          .footer-note { text-align: center; font-size: 9px; color: #94a3b8; margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+          .td-center { text-align: center; }
+          .footer-total { background: #e2e8f0 !important; font-weight: 800; font-size: 8.5px; }
+          .footer-note { text-align: center; font-size: 7.5px; color: #94a3b8; margin-top: 8px; border-top: 1px solid #e2e8f0; padding-top: 4px; }
           @media print {
             body { padding: 0; }
             .no-print { display: none; }
@@ -896,9 +927,8 @@ export default function OrderReportModal({
             <h1>THSM DISTRIBUIDORA</h1>
             <p>RELATÓRIO GERENCIAL DE PEDIDOS COM ENDEREÇO E PRODUTOS</p>
           </div>
-          <div style="text-align: right;">
-            <p><strong>Emissão:</strong> ${nowStr}</p>
-            <p><strong>Total:</strong> ${reportStats.totalPedidos} pedidos</p>
+          <div style="text-align: right; font-size: 8.5px; color: #334155;">
+            <p><strong>Emissão:</strong> ${nowStr}   |   <strong>Total:</strong> ${reportStats.totalPedidos} pedidos</p>
           </div>
         </div>
 
@@ -932,14 +962,14 @@ export default function OrderReportModal({
         <table>
           <thead>
             <tr>
-              <th>Data</th>
+              <th># / Data</th>
               <th>Cliente / Tel</th>
               <th>Status</th>
               <th>Endereço Completo / Destino</th>
               <th>Rota</th>
-              <th class="td-right">Qtd Itens</th>
-              <th class="td-right">Total S/ Dev</th>
-              <th class="td-right">Total C/ Dev</th>
+              <th class="td-center">Qtd</th>
+              <th>Produtos / Itens</th>
+              <th class="td-right">S/ Dev</th>
               <th class="td-right">Total Bruto</th>
             </tr>
           </thead>
@@ -949,43 +979,30 @@ export default function OrderReportModal({
               const cfg = STATUS_CONFIG[resStatus] || { label: resStatus, color: '#333', bg: '#eee' }
               const dev = getOrderDevolucaoStats(o, produtos)
               const enderecoStr = formatFullAddress(o.customer?.endereco)
-
-              const itemsHtml = (o.items || []).map(i => {
+              const prodsInline = (o.items || []).map(i => {
                 const isSem = checkItemSemDevolucao(i, produtos)
-                const sub = (Number(i.preco) || 0) * (Number(i.qty) || 1)
-                return `<div class="item-line">• <strong>${i.qty}x ${i.nome}</strong> - ${formatCurrency(sub)} ${isSem ? '<span class="badge-nodev">SEM DEVOLUÇÃO</span>' : ''}</div>`
-              }).join('')
+                return `${i.qty || 1}x ${i.nome}${isSem ? '<span class="badge-nodev">S/DEV</span>' : ''}`
+              }).join(' • ') || '-'
 
               return `
-                <tr class="order-row">
-                  <td>${formatDateBR(o.date)}</td>
+                <tr>
+                  <td><strong>#${String(o.id).slice(-6)}</strong><br><span style="color:#64748b;">${formatDateBR(o.date || o.createdAt)}</span></td>
                   <td><strong>${o.customer?.nome || '-'}</strong><br><small style="color:#64748b;">${o.customer?.telefone || '-'}</small></td>
                   <td><span class="status-tag" style="background:${cfg.bg};color:${cfg.color};">${cfg.label}</span></td>
-                  <td>${enderecoStr}</td>
+                  <td style="max-width: 250px;">${enderecoStr}</td>
                   <td><strong>${o.customer?.endereco?.rota || '-'}</strong></td>
-                  <td class="td-right">${dev.qtdTotal} un</td>
-                  <td class="td-right">${formatCurrency(dev.totalSemDev)}</td>
-                  <td class="td-right">${formatCurrency(dev.totalComDev)}</td>
+                  <td class="td-center">${dev.qtdTotal} un</td>
+                  <td>${prodsInline}</td>
+                  <td class="td-right" style="color:#dc2626;font-weight:600;">${formatCurrency(dev.totalSemDev)}</td>
                   <td class="td-right" style="font-weight:700;color:#059669;">${formatCurrency(dev.totalBruto)}</td>
                 </tr>
-                ${itemsHtml ? `
-                <tr class="items-row">
-                  <td></td>
-                  <td colspan="8">
-                    <div class="items-container">
-                      <strong style="color:#0f172a;display:block;margin-bottom:3px;">PRODUTOS:</strong>
-                      ${itemsHtml}
-                    </div>
-                  </td>
-                </tr>
-                ` : ''}
               `
             }).join('')}
             <tr class="footer-total">
               <td colspan="5">TOTAL GERAL (${reportStats.totalPedidos} pedidos)</td>
-              <td class="td-right">${reportStats.totalItens} un</td>
+              <td class="td-center">${reportStats.totalItens} un</td>
+              <td>Sem Dev: ${reportStats.totalQtdSemDev} un (${formatCurrency(reportStats.totalValorSemDev)})</td>
               <td class="td-right">${formatCurrency(reportStats.totalValorSemDev)}</td>
-              <td class="td-right">${formatCurrency(reportStats.totalValorComDev)}</td>
               <td class="td-right">${formatCurrency(reportStats.faturamentoTotal)}</td>
             </tr>
           </tbody>
@@ -1035,18 +1052,18 @@ export default function OrderReportModal({
           {/* SELETOR DE ESCOPO */}
           <div className="report-scope-selector">
             <button
-              className={`report-scope-btn ${scope === 'custom' ? 'active' : ''}`}
-              onClick={() => setScope('custom')}
+              className={`report-scope-btn ${scope === 'todos' ? 'active' : ''}`}
+              onClick={() => setScope('todos')}
             >
-              <i className="fa-solid fa-sliders"></i>
-              Personalizar Filtros no Relatório
+              <i className="fa-solid fa-list-check"></i>
+              Todos os Pedidos ({orders.length})
             </button>
             <button
               className={`report-scope-btn ${scope === 'tela' ? 'active' : ''}`}
               onClick={() => setScope('tela')}
             >
               <i className="fa-solid fa-desktop"></i>
-              Usar Filtros Atuais da Tela ({filteredOrdersFromScreen.length})
+              Filtros da Tela ({filteredOrdersFromScreen.length})
             </button>
             <button
               className={`report-scope-btn ${scope === 'selecionados' ? 'active' : ''}`}
@@ -1055,9 +1072,30 @@ export default function OrderReportModal({
               style={{ opacity: hasSelected ? 1 : 0.5, cursor: hasSelected ? 'pointer' : 'not-allowed' }}
             >
               <i className="fa-solid fa-check-square"></i>
-              Apenas Selecionados ({selectedOrderIds.size})
+              Selecionados ({selectedOrderIds.size})
+            </button>
+            <button
+              className={`report-scope-btn ${scope === 'custom' ? 'active' : ''}`}
+              onClick={() => setScope('custom')}
+            >
+              <i className="fa-solid fa-sliders"></i>
+              Filtros Personalizados
             </button>
           </div>
+
+          {scope !== 'custom' && (
+            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '0.5rem 0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', color: '#166534' }}>
+              <span>
+                <i className="fa-solid fa-circle-check" style={{ marginRight: '6px', color: '#16a34a' }}></i>
+                {scope === 'todos' && `Puxando 100% de todos os pedidos cadastrados no sistema (${orders.length} pedidos).`}
+                {scope === 'tela' && `Puxando pedidos conforme os filtros atualmente ativos na tela (${filteredOrdersFromScreen.length} pedidos).`}
+                {scope === 'selecionados' && `Puxando apenas os ${selectedOrderIds.size} pedido(s) selecionados com caixa de marcação.`}
+              </span>
+              <span style={{ fontWeight: 700, color: '#15803d' }}>
+                {targetOrders.length} pedido(s) incluídos no relatório
+              </span>
+            </div>
+          )}
 
           {/* PAINEL DE FILTROS PERSONALIZADOS */}
           {scope === 'custom' && (
@@ -1075,18 +1113,25 @@ export default function OrderReportModal({
                 <div className="report-status-presets">
                   <button
                     type="button"
-                    className="report-preset-chip"
+                    className={`report-preset-chip ${selectedStatuses.length === Object.keys(STATUS_CONFIG).length ? 'active' : ''}`}
                     onClick={() => applyStatusPreset('todos')}
                   >
                     Todos os Status
                   </button>
                   <button
                     type="button"
-                    className="report-preset-chip active"
+                    className="report-preset-chip"
                     onClick={() => applyStatusPreset('pendentes_a_concluidos')}
-                    title="Pendentes, confirmados, em rota, entregues e concluídos"
+                    title="Pré-pedidos, pendentes, confirmados, em rota, acertos e concluídos"
                   >
-                    ⚡ Pendentes &gt; Concluídos
+                    ⚡ Pedidos Ativos
+                  </button>
+                  <button
+                    type="button"
+                    className="report-preset-chip"
+                    onClick={() => applyStatusPreset('acertos')}
+                  >
+                    Apenas Acertos
                   </button>
                   <button
                     type="button"
@@ -1376,20 +1421,34 @@ export default function OrderReportModal({
                   checked={includeItemsDetail}
                   onChange={e => setIncludeItemsDetail(e.target.checked)}
                 />
-                Descrever Todos os Produtos/Itens em cada Pedido
+                Descrever Produtos/Itens em cada Pedido
               </label>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>Orientação do PDF:</span>
-              <select
-                value={orientation}
-                onChange={e => setOrientation(e.target.value)}
-                style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}
-              >
-                <option value="landscape">Paisagem (Horizontal - Recomendado)</option>
-                <option value="portrait">Retrato (Vertical)</option>
-              </select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>Formato:</span>
+                <select
+                  value={density}
+                  onChange={e => setDensity(e.target.value)}
+                  style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontWeight: 600, background: '#f8fafc' }}
+                >
+                  <option value="compact">Compacto (1 linha/pedido - Recomendado)</option>
+                  <option value="detailed">Detalhado (com quebra por produto)</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>Orientação:</span>
+                <select
+                  value={orientation}
+                  onChange={e => setOrientation(e.target.value)}
+                  style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                >
+                  <option value="landscape">Paisagem (Horizontal - Recomendado)</option>
+                  <option value="portrait">Retrato (Vertical)</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -1411,14 +1470,14 @@ export default function OrderReportModal({
                 <table className="report-preview-table">
                   <thead>
                     <tr>
-                      <th>Data</th>
-                      <th>Cliente</th>
+                      <th># / Data</th>
+                      <th>Cliente / Tel</th>
                       <th>Status</th>
                       <th>Endereço Completo</th>
                       <th>Rota</th>
-                      <th>Qtd Itens</th>
+                      <th>Qtd</th>
+                      <th>Produtos</th>
                       <th style={{ textAlign: 'right' }}>Sem Dev.</th>
-                      <th style={{ textAlign: 'right' }}>Com Dev.</th>
                       <th style={{ textAlign: 'right' }}>Total Bruto</th>
                     </tr>
                   </thead>
@@ -1428,44 +1487,29 @@ export default function OrderReportModal({
                       const cfg = STATUS_CONFIG[st] || { label: st, color: '#333', bg: '#eee' }
                       const dev = getOrderDevolucaoStats(o, produtos)
                       const endStr = formatFullAddress(o.customer?.endereco)
+                      const prodsInline = (o.items || []).map(i => {
+                        const isSem = checkItemSemDevolucao(i, produtos)
+                        return `${i.qty || 1}x ${i.nome}${isSem ? ' [S/DEV]' : ''}`
+                      }).join(' • ') || '-'
 
                       return (
-                        <React.Fragment key={o.id}>
-                          <tr>
-                            <td>{formatDateBR(o.date)}</td>
-                            <td><strong>{o.customer?.nome || '-'}</strong><br /><small style={{ color: '#64748b' }}>{o.customer?.telefone || '-'}</small></td>
-                            <td>
-                              <span style={{ fontSize: '0.7rem', padding: '1px 6px', borderRadius: '4px', background: cfg.bg, color: cfg.color, fontWeight: 700 }}>
-                                {cfg.label}
-                              </span>
-                            </td>
-                            <td style={{ maxWidth: '280px', fontSize: '0.72rem', color: '#334155' }}>{endStr}</td>
-                            <td><strong>{o.customer?.endereco?.rota || '-'}</strong></td>
-                            <td>{dev.qtdTotal} un</td>
-                            <td style={{ textAlign: 'right', color: '#dc2626' }}>{formatCurrency(dev.totalSemDev)}</td>
-                            <td style={{ textAlign: 'right', color: '#4f46e5' }}>{formatCurrency(dev.totalComDev)}</td>
-                            <td style={{ textAlign: 'right', fontWeight: 700, color: '#059669' }}>
-                              {formatCurrency(dev.totalBruto)}
-                            </td>
-                          </tr>
-                          {includeItemsDetail && o.items && o.items.length > 0 && (
-                            <tr style={{ background: '#f8fafc' }}>
-                              <td></td>
-                              <td colSpan="8" style={{ padding: '0.3rem 0.65rem', fontSize: '0.7rem', color: '#475569' }}>
-                                <strong style={{ color: '#0f172a' }}>Itens: </strong>
-                                {o.items.map((i, idx) => {
-                                  const isSem = checkItemSemDevolucao(i, produtos)
-                                  return (
-                                    <span key={idx} style={{ marginRight: '8px' }}>
-                                      {i.qty}x {i.nome} ({formatCurrency(i.preco * i.qty)})
-                                      {isSem && <span style={{ color: '#dc2626', fontWeight: 700, marginLeft: '2px' }}>[S/ DEV]</span>}
-                                    </span>
-                                  )
-                                })}
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
+                        <tr key={o.id}>
+                          <td><strong>#{String(o.id).slice(-6)}</strong><br /><small style={{ color: '#64748b' }}>{formatDateBR(o.date || o.createdAt)}</small></td>
+                          <td><strong>{o.customer?.nome || '-'}</strong><br /><small style={{ color: '#64748b' }}>{o.customer?.telefone || '-'}</small></td>
+                          <td>
+                            <span style={{ fontSize: '0.7rem', padding: '1px 6px', borderRadius: '4px', background: cfg.bg, color: cfg.color, fontWeight: 700 }}>
+                              {cfg.label}
+                            </span>
+                          </td>
+                          <td style={{ maxWidth: '240px', fontSize: '0.72rem', color: '#334155' }}>{endStr}</td>
+                          <td><strong>{o.customer?.endereco?.rota || '-'}</strong></td>
+                          <td>{dev.qtdTotal} un</td>
+                          <td style={{ maxWidth: '280px', fontSize: '0.72rem', color: '#475569' }}>{prodsInline}</td>
+                          <td style={{ textAlign: 'right', color: '#dc2626', fontWeight: 600 }}>{formatCurrency(dev.totalSemDev)}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#059669' }}>
+                            {formatCurrency(dev.totalBruto)}
+                          </td>
+                        </tr>
                       )
                     })}
                     {targetOrders.length > 50 && (
