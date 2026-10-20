@@ -34,14 +34,15 @@ const ESTADOS_BR = [
   { sigla: 'TO', nome: 'Tocantins' },
 ]
 
-export default function AddressForm({ value, onChange, showErrors, requiredFields = true }) {
-  const [cep, setCep] = useState(value.cep || '')
-  const [estado, setEstado] = useState(value.estado || '')
-  const [cidade, setCidade] = useState(value.cidade || '')
-  const [bairro, setBairro] = useState(value.bairro || '')
-  const [rua, setRua] = useState(value.rua || '')
-  const [numero, setNumero] = useState(value.numero || '')
-  const [complemento, setComplemento] = useState(value.complemento || '')
+export default function AddressForm({ value = {}, onChange, showErrors, requiredFields = true }) {
+  const safeVal = (typeof value === 'object' && value !== null) ? value : (typeof value === 'string' ? { rua: value } : {})
+  const [cep, setCep] = useState(safeVal.cep || '')
+  const [estado, setEstado] = useState(safeVal.estado || '')
+  const [cidade, setCidade] = useState(safeVal.cidade || '')
+  const [bairro, setBairro] = useState(safeVal.bairro || '')
+  const [rua, setRua] = useState(safeVal.rua || '')
+  const [numero, setNumero] = useState(safeVal.numero || '')
+  const [complemento, setComplemento] = useState(safeVal.complemento || '')
   const [cidades, setCidades] = useState([])
   const [loadingCep, setLoadingCep] = useState(false)
   const [loadingCidades, setLoadingCidades] = useState(false)
@@ -52,19 +53,21 @@ export default function AddressForm({ value, onChange, showErrors, requiredField
     : { cep: false, cidade: false, rua: false, numero: false }
 
   const emitChange = useCallback((updates) => {
-    onChange({ ...value, cep: cep.replace(/\D/g, ''), estado, cidade, bairro, rua, numero, complemento, ...updates })
+    const base = (typeof value === 'object' && value !== null) ? value : {}
+    onChange({ ...base, cep: cep.replace(/\D/g, ''), estado, cidade, bairro, rua, numero, complemento, ...updates })
   }, [value, cep, estado, cidade, bairro, rua, numero, complemento, onChange])
 
   // Sync from value prop
   useEffect(() => {
-    setCep(value.cep || '')
-    setEstado(value.estado || '')
-    setCidade(value.cidade || '')
-    setBairro(value.bairro || '')
-    setRua(value.rua || '')
-    setNumero(value.numero || '')
-    setComplemento(value.complemento || '')
-  }, [value.cep, value.estado, value.cidade, value.bairro, value.rua, value.numero, value.complemento])
+    const v = (typeof value === 'object' && value !== null) ? value : (typeof value === 'string' ? { rua: value } : {})
+    setCep(v.cep || '')
+    setEstado(v.estado || '')
+    setCidade(v.cidade || '')
+    setBairro(v.bairro || '')
+    setRua(v.rua || '')
+    setNumero(v.numero || '')
+    setComplemento(v.complemento || '')
+  }, [value])
 
   // Load cities when estado changes
   useEffect(() => {

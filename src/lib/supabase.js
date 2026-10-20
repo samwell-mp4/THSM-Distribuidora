@@ -229,13 +229,17 @@ export async function saveUserViaWebhook(userPayload) {
     }
   }
 
-  // 1. Post to Webhook att-user
+  // 1. Post to Webhook att-user with 5s timeout to prevent hanging the checkout
   try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 5000)
     const response = await fetch('https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/att-user', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: controller.signal
     })
+    clearTimeout(timer)
     if (response.ok) {
       const responseData = await response.json().catch(() => ({}))
       if (responseData.status === 'erro' || responseData.status === 'error') {
@@ -243,7 +247,7 @@ export async function saveUserViaWebhook(userPayload) {
       }
     }
   } catch (err) {
-    console.error('[saveUserViaWebhook] Exceção no webhook att-user:', err)
+    console.error('[saveUserViaWebhook] Exceção no webhook att-user:', err.message)
   }
 
   // 2. Also persist in database via upsertUser, but DO NOT overwrite payload with a mismatched user record

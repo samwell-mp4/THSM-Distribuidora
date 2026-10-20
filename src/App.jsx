@@ -38,6 +38,7 @@ function App() {
   const [customer, setCustomer] = useState({ nome: '', email: '', telefone: '', senha: '', cpf: '', endereco: { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' } })
   const [pagamento, setPagamento] = useState('aprazo')
   const [confirmaSemDevolucao, setConfirmaSemDevolucao] = useState(false)
+  const [checkoutSubmitting, setCheckoutSubmitting] = useState(false)
   const [showLogin, setShowLogin] = useState(false)
   const [loginEmail, setLoginEmail] = useState('')
   const [loginSenha, setLoginSenha] = useState('')
@@ -617,11 +618,49 @@ function App() {
     }
   }
 
+  const parseAddress = (addr) => {
+    if (!addr) return { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' }
+    if (typeof addr === 'string') return { cep: '', estado: '', cidade: '', bairro: '', rua: addr, numero: '', complemento: '' }
+    return {
+      cep: addr.cep || '',
+      estado: addr.estado || '',
+      cidade: addr.cidade || '',
+      bairro: addr.bairro || '',
+      rua: addr.rua || '',
+      numero: addr.numero || '',
+      complemento: addr.complemento || ''
+    }
+  }
+
   const autoLoginOuRegistro = async () => {
-    const telefone = normTel(customer.telefone)
+    const rawTel = customer.telefone || currentUser?.telefone || ''
+    const telefone = normTel(rawTel)
     if (!telefone) { showToast('Informe seu telefone', 'error'); return null }
 
     if (currentUser && samePhone(currentUser.telefone, telefone)) {
+      const baseEnd = parseAddress(currentUser.endereco)
+      const currentEnd = parseAddress(customer.endereco)
+      const mergedEnd = { ...baseEnd, ...currentEnd }
+      if (customer.nome || customer.cpf || customer.endereco) {
+        const payload = {
+          ...currentUser,
+          id: currentUser.id,
+          telefone: currentUser.telefone || telefone,
+          nome: (customer.nome || currentUser.nome || '').trim(),
+          email: (customer.email || currentUser.email || '').trim(),
+          endereco: { ...mergedEnd, cpf: (customer.cpf || currentUser.cpf || mergedEnd.cpf || '').trim() }
+        }
+        try {
+          const saved = await saveUserViaWebhook(payload)
+          if (saved) {
+            setCurrentUser(saved)
+            safeSetItem(LS_SESSAO, saved)
+            return saved
+          }
+        } catch (e) {
+          console.warn('Erro ao atualizar usuário logado:', e)
+        }
+      }
       return currentUser
     }
 
@@ -630,39 +669,51 @@ function App() {
 
     if (existente) {
       const senha = existente.endereco?.senha
-      if (senha && customer.senha && customer.senha !== senha) { showToast('Senha incorreta', 'error'); return null }
-      const endereco = { ...(existente.endereco || {}), ...(customer.endereco || {}) }
-      if (customer.senha) endereco.senha = customer.senha
+      if (senha && customer.senha && customer.senha.trim() && customer.senha.trim() !== senha.trim()) {
+        showToast('Senha incorreta para este telefone', 'error')
+        return null
+      }
+      const baseEnd = parseAddress(existente.endereco)
+      const currentEnd = parseAddress(customer.endereco)
+      const endereco = { ...baseEnd, ...currentEnd }
+      if (customer.senha && customer.senha.trim()) endereco.senha = customer.senha.trim()
 
       const payload = {
         id: existente.id,
         telefone: existente.telefone || telefone,
-        nome: customer.nome || existente.nome,
-        email: customer.email || existente.email || '',
-        endereco: { ...endereco, cpf: customer.cpf || existente.cpf || endereco.cpf || '' }
+        nome: (customer.nome || existente.nome || '').trim(),
+        email: (customer.email || existente.email || '').trim(),
+        endereco: { ...endereco, cpf: (customer.cpf || existente.cpf || endereco.cpf || '').trim() }
       }
       const saved = await saveUserViaWebhook(payload)
-      if (!saved) {
-        showToast('Erro ao atualizar seus dados cadastrais. Tente novamente.', 'error')
-        return null
-      }
-      setCurrentUser(saved)
-      safeSetItem(LS_SESSAO, saved)
-      return saved
+      const userToSet = saved || payload
+      setCurrentUser(userToSet)
+      safeSetItem(LS_SESSAO, userToSet)
+      return userToSet
     }
 
-    if (!customer.senha) { showToast('Escolha uma senha', 'error'); return null }
+    // Usuário novo: se não escolheu senha, define padrão pelos dígitos do telefone/CPF para nunca travar o cliente
+    const chosenSenha = (customer.senha || '').trim() ||
+      (customer.cpf ? customer.cpf.replace(/\D/g, '').slice(-4) : '') ||
+      telefone.slice(-4) || '123456'
+
     try {
-      const saved = await saveUserViaWebhook({
+      const payload = {
         telefone,
-        nome: customer.nome || 'Cliente',
-        email: customer.email || '',
-        endereco: { ...(customer.endereco || {}), cpf: customer.cpf, senha: customer.senha, origem: 'Registro do Site' }
-      })
-      if (!saved) { showToast('Erro ao criar cadastro', 'error'); return null }
-      setCurrentUser(saved)
-      safeSetItem(LS_SESSAO, saved)
-      return saved
+        nome: (customer.nome || 'Cliente').trim(),
+        email: (customer.email || '').trim(),
+        endereco: {
+          ...parseAddress(customer.endereco),
+          cpf: (customer.cpf || '').trim(),
+          senha: chosenSenha,
+          origem: 'Registro do Site'
+        }
+      }
+      const saved = await saveUserViaWebhook(payload)
+      const userToSet = saved || payload
+      setCurrentUser(userToSet)
+      safeSetItem(LS_SESSAO, userToSet)
+      return userToSet
     } catch (e) {
       console.error('Erro autoLoginOuRegistro:', e)
       showToast('Erro ao criar cadastro', 'error')
@@ -705,17 +756,24 @@ function App() {
   }, [])
 
   const iniciarCheckout = () => {
+    if (cartItems.length === 0) {
+      showToast('Seu carrinho está vazio', 'error')
+      return
+    }
+    const end = parseAddress(currentUser?.endereco)
+    const tel = currentUser?.telefone ? formatPhone(currentUser.telefone) : ''
     setCustomer({
       nome: currentUser?.nome || '',
       email: currentUser?.email || '',
-      telefone: currentUser?.telefone || '',
+      telefone: tel,
       senha: '',
       cpf: currentUser?.cpf || currentUser?.endereco?.cpf || '',
-      endereco: currentUser?.endereco || { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' }
+      endereco: end
     })
     setPagamento('aprazo')
     setConfirmaSemDevolucao(false)
-    setCheckout(currentUser ? 'payment' : 'info')
+    const temDados = !!(currentUser && currentUser.nome && currentUser.telefone)
+    setCheckout(temDados ? 'payment' : 'info')
     setCartOpen(false)
   }
 
@@ -795,10 +853,19 @@ function App() {
           status: order.status,
           pagamento: order.pagamento,
           total: order.total,
-          totalAvista: order.totalAvista,
-          totalAprazo: order.totalAprazo,
+          totalAvista: order.totalAvista != null ? order.totalAvista : order.total_avista,
+          totalAprazo: order.totalAprazo != null ? order.totalAprazo : order.total_aprazo,
+          total_avista: order.total_avista != null ? order.total_avista : order.totalAvista,
+          total_aprazo: order.total_aprazo != null ? order.total_aprazo : order.totalAprazo,
           customer,
-          items: order.items.map(i => ({ nome: i.nome, qty: i.qty, preco: i.preco, tipo: i.tipo, foto: i.foto }))
+          items: (order.items || order.itens || []).map(i => ({
+            id: i.id,
+            nome: i.displayName || i.nome,
+            qty: i.qty,
+            preco: i.preco,
+            tipo: i.tipo || 'aprazo',
+            foto: i.foto || i.imagem || ''
+          }))
         }
       })
     }).catch(() => {})
@@ -817,36 +884,76 @@ function App() {
   }
 
   const finalizarCheckout = async () => {
-    const user = await autoLoginOuRegistro()
-    if (!user) { showToast('Erro ao identificar usuário', 'error'); return }
-    const items = cartItems.map(i => {
-      const p = (produtos || []).find(x => x.id === i.id || String(x.id) === String(i.id))
-      const custo = (i.preco_custo != null && i.preco_custo !== '') ? Number(i.preco_custo) : (p?.preco_custo != null ? Number(p.preco_custo) : null)
-      return { ...i, preco_custo: custo, tipo: 'aprazo' }
-    })
-    const total = items.reduce((s, i) => s + i.preco * i.qty, 0)
-    const telefone = normTel(customer.telefone)
-    const userId = user.id || null
-    const order = {
-      id: Date.now(),
-      user_id: userId,
-      date: new Date().toISOString().split('T')[0],
-      customer: { nome: customer.nome, email: customer.email, telefone, cpf: customer.cpf, endereco: customer.endereco },
-      items,
-      pagamento: 'aprazo',
-      total_avista: 0,
-      total_aprazo: total,
-      total,
-      status: 'pre-pedido',
-      pre_approved_at: null,
-      created_at: new Date().toISOString()
+    if (checkoutSubmitting) return
+    if (!cartItems.length) {
+      showToast('Seu carrinho está vazio', 'error')
+      return
     }
-    await upsertOrder({ ...order, user_id: userId })
-    setCart({})
-    setCheckout(null)
-    showToast('Pedido enviado com sucesso!')
-    navigate('/minha-conta')
-    sendOrderWebhook(order)
+
+    setCheckoutSubmitting(true)
+    try {
+      const user = await autoLoginOuRegistro()
+      if (!user) {
+        return
+      }
+
+      const items = cartItems.map(i => {
+        const p = (produtosMerged || []).find(x => x.id === i.id || String(x.id) === String(i.id))
+        const custo = (i.preco_custo != null && i.preco_custo !== '') ? Number(i.preco_custo) : (p?.preco_custo != null ? Number(p.preco_custo) : null)
+        const preco = Number(i.preco) || Number(p?.preco) || 0
+        const foto = i.foto || i.imagem || p?.imagem || p?.foto || ''
+        const nome = i.displayName || i.nome || p?.nome || 'Produto'
+        return {
+          ...i,
+          id: p?.id || i.id,
+          nome,
+          preco,
+          preco_custo: custo,
+          foto,
+          imagem: foto,
+          tipo: 'aprazo'
+        }
+      })
+
+      const total = items.reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0)
+      const telefone = normTel(customer.telefone || user.telefone)
+      const userId = user.id || null
+      const order = {
+        id: Date.now(),
+        user_id: userId,
+        date: new Date().toISOString().split('T')[0],
+        customer: {
+          nome: (customer.nome || user.nome || 'Cliente').trim(),
+          email: (customer.email || user.email || '').trim(),
+          telefone,
+          cpf: (customer.cpf || user.cpf || user.endereco?.cpf || '').trim(),
+          endereco: customer.endereco || user.endereco || {}
+        },
+        items,
+        itens: items,
+        pagamento: pagamento || 'aprazo',
+        total_avista: 0,
+        total_aprazo: total,
+        totalAvista: 0,
+        totalAprazo: total,
+        total,
+        status: 'pre-pedido',
+        pre_approved_at: null,
+        created_at: new Date().toISOString()
+      }
+
+      await upsertOrder({ ...order, user_id: userId })
+      setCart({})
+      setCheckout(null)
+      showToast('Pedido enviado com sucesso!')
+      navigate('/minha-conta')
+      sendOrderWebhook(order)
+    } catch (err) {
+      console.error('Erro ao finalizar checkout:', err)
+      showToast('Erro ao processar o pedido. Tente novamente.', 'error')
+    } finally {
+      setCheckoutSubmitting(false)
+    }
   }
 
   const formatPhone = (v) => {
@@ -1236,7 +1343,7 @@ function App() {
                     <span>Total</span>
                     <span className="cart-summary-price">{formatPreco(cartTotal)}</span>
                   </div>
-                  <button className="btn-next" onClick={iniciarCheckout} style={{ width: '100%' }}>
+                  <button className="btn-next" onClick={iniciarCheckout} style={{ width: '100%' }} disabled={cartItems.length === 0}>
                     <i className="fa-solid fa-bag-shopping"></i> Finalizar Pedido
                   </button>
                   <button className="btn-clear-cart" onClick={() => { setCart({}); showToast('Carrinho limpo', 'success') }}>
@@ -1286,13 +1393,30 @@ function App() {
                 </div>
                 {!currentUser && (
                   <div className="form-group">
-                    <label>Senha <small>(escolha uma senha para sua conta)</small></label>
-                    <input type="password" placeholder="Sua senha" value={customer.senha} onChange={e => setCustomer({ ...customer, senha: e.target.value })} />
+                    <label>Senha <small>(opcional - padrão: últimos dígitos do telefone)</small></label>
+                    <input type="password" placeholder="Sua senha (opcional)" value={customer.senha} onChange={e => setCustomer({ ...customer, senha: e.target.value })} />
                   </div>
                 )}
                 <p className="info-msg"><i className="fa-solid fa-info-circle"></i> Ao continuar, você cria ou acessa sua conta automaticamente.</p>
-                <button className="btn-next" disabled={!customer.nome.trim() || !customer.telefone.trim() || !customer.cpf.trim()} onClick={async () => { if (await autoLoginOuRegistro()) setCheckout('payment') }}>
-                  Continuar <i className="fa-solid fa-arrow-right"></i>
+                <button
+                  className="btn-next"
+                  disabled={checkoutSubmitting || !customer.nome.trim() || !customer.telefone.trim() || !customer.cpf.trim()}
+                  onClick={async () => {
+                    if (checkoutSubmitting) return
+                    setCheckoutSubmitting(true)
+                    try {
+                      const u = await autoLoginOuRegistro()
+                      if (u) setCheckout('payment')
+                    } finally {
+                      setCheckoutSubmitting(false)
+                    }
+                  }}
+                >
+                  {checkoutSubmitting ? (
+                    <><i className="fa-solid fa-spinner fa-spin"></i> Processando...</>
+                  ) : (
+                    <>Continuar <i className="fa-solid fa-arrow-right"></i></>
+                  )}
                 </button>
               </div>
             )}
@@ -1319,8 +1443,8 @@ function App() {
                 </div>
 
                 <div className="checkout-nav">
-                  <button className="btn-back" onClick={() => setCheckout('info')}><i className="fa-solid fa-arrow-left"></i> Voltar</button>
-                  <button className="btn-next" onClick={() => setCheckout('review')}>Revisar Pedido <i className="fa-solid fa-arrow-right"></i></button>
+                  <button className="btn-back" disabled={checkoutSubmitting} onClick={() => setCheckout('info')}><i className="fa-solid fa-arrow-left"></i> Voltar</button>
+                  <button className="btn-next" disabled={checkoutSubmitting} onClick={() => setCheckout('review')}>Revisar Pedido <i className="fa-solid fa-arrow-right"></i></button>
                 </div>
               </div>
             )}
@@ -1331,7 +1455,7 @@ function App() {
                 <div className="review-section">
                   <h4><i className="fa-solid fa-user"></i> Cliente</h4>
                   <p><strong>Nome:</strong> {customer.nome}</p>
-                  <p><strong>Email:</strong> {customer.email}</p>
+                  <p><strong>Email:</strong> {customer.email || '—'}</p>
                   <p><strong>Telefone:</strong> {customer.telefone}</p>
                   <p><strong>CPF:</strong> {customer.cpf}</p>
                   {customer.endereco?.cidade && <p><strong>Endereço:</strong> {[customer.endereco.rua, customer.endereco.numero, customer.endereco.bairro, customer.endereco.cidade, customer.endereco.estado].filter(Boolean).join(', ')}</p>}
@@ -1377,9 +1501,13 @@ function App() {
                   <span className="review-total-price">{formatPreco(cartTotal)}</span>
                 </div>
                 <div className="checkout-nav">
-                  <button className="btn-back" onClick={() => setCheckout('payment')}><i className="fa-solid fa-arrow-left"></i> Voltar</button>
-                  <button className="btn-next" onClick={finalizarCheckout} disabled={hasSemDevolucao && !confirmaSemDevolucao}>
-                    <i className="fa-solid fa-check"></i> Confirmar Pedido
+                  <button className="btn-back" disabled={checkoutSubmitting} onClick={() => setCheckout('payment')}><i className="fa-solid fa-arrow-left"></i> Voltar</button>
+                  <button className="btn-next" onClick={finalizarCheckout} disabled={checkoutSubmitting || (hasSemDevolucao && !confirmaSemDevolucao)}>
+                    {checkoutSubmitting ? (
+                      <><i className="fa-solid fa-spinner fa-spin"></i> Finalizando Pedido...</>
+                    ) : (
+                      <><i className="fa-solid fa-check"></i> Finalizar Pedido</>
+                    )}
                   </button>
                 </div>
               </div>
