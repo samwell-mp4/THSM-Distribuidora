@@ -62,6 +62,23 @@ function hoje() {
   return new Date().toISOString().split('T')[0]
 }
 
+function cleanDecimalInput(val) {
+  if (val == null) return ''
+  let str = String(val).replace(/\./g, ',').replace(/[^0-9,]/g, '')
+  const parts = str.split(',')
+  if (parts.length > 2) {
+    str = parts[0] + ',' + parts.slice(1).join('')
+  }
+  return str
+}
+
+function parseDecimalToNumber(val) {
+  if (val == null || val === '') return 0
+  const clean = String(val).replace(/\s/g, '').replace(',', '.')
+  const num = parseFloat(clean)
+  return isNaN(num) ? 0 : num
+}
+
 function formatDate(str) {
   if (!str) return '-'
   const d = new Date(str + (str.length <= 10 ? 'T12:00:00' : ''))
@@ -2131,6 +2148,11 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         ...(editUserData.endereco || {})
       }
     }
+    if (payload.endereco?.limitePreco !== undefined) {
+      payload.endereco.limitePreco = (payload.endereco.limitePreco === '' || payload.endereco.limitePreco === null)
+        ? null
+        : parseDecimalToNumber(payload.endereco.limitePreco)
+    }
     if (editUserData.senha) payload.endereco.senha = editUserData.senha
     else if (selectedUserDetail?.endereco?.senha) payload.endereco.senha = selectedUserDetail.endereco.senha
 
@@ -2782,7 +2804,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   }
 
   const applyBulkPrice = () => {
-    const val = parseFloat(bulkPriceValue)
+    const val = parseDecimalToNumber(bulkPriceValue)
     if (isNaN(val) || val < 0) { showToast('Valor inválido', 'error'); return }
     if (!confirm(`Definir preço R$ ${val.toFixed(2).replace('.', ',')} para ${prodSelectedIds.size} produto(s)?`)) return
 
@@ -3807,7 +3829,16 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                       </button>
                     )}
                     <button className="admin-btn" style={{ background: editingUser ? 'var(--success)' : 'var(--accent)', color: 'white', borderColor: editingUser ? 'var(--success)' : 'var(--accent)' }}
-                      onClick={editingUser ? saveUserEdit : () => { setEditingUser(true); setEditUserData({ ...selectedUserDetail }) }}>
+                      onClick={editingUser ? saveUserEdit : () => { 
+                        setEditingUser(true); 
+                        setEditUserData({ 
+                          ...selectedUserDetail, 
+                          endereco: { 
+                            ...(selectedUserDetail?.endereco || {}), 
+                            limitePreco: selectedUserDetail?.endereco?.limitePreco != null ? String(selectedUserDetail.endereco.limitePreco).replace('.', ',') : '' 
+                          } 
+                        }) 
+                      }}>
                       <i className={`fa-solid ${editingUser ? 'fa-check' : 'fa-pen'}`}></i> {editingUser ? 'Salvar' : 'Editar'}
                     </button>
                   </div>
@@ -3956,7 +3987,10 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                       <div>
                         <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)', display: 'block', marginBottom: '0.2rem' }}>Limite de Preço (R$)</span>
                         {editingUser ? (
-                          <input type="number" min="0" step="0.01" placeholder="Sem limite" value={editUserData.endereco?.limitePreco ?? ''} onChange={e => setEditUserData(p => ({ ...p, endereco: { ...(p.endereco || {}), limitePreco: e.target.value === '' ? null : Number(e.target.value) } }))}
+                          <input type="text" inputMode="decimal" placeholder="Sem limite" value={editUserData.endereco?.limitePreco ?? ''} onChange={e => {
+                            const clean = cleanDecimalInput(e.target.value)
+                            setEditUserData(p => ({ ...p, endereco: { ...(p.endereco || {}), limitePreco: clean } }))
+                          }}
                             style={{ width: '100%', padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem' }} />
                         ) : (
                           <strong style={{ fontSize: '0.95rem' }}>{selectedUserDetail.endereco?.limitePreco ? formatPreco(selectedUserDetail.endereco.limitePreco) : '—'}</strong>
@@ -5296,7 +5330,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                           inputMode="decimal"
                           value={currentPrice}
                           placeholder="0,00"
-                          onChange={e => setDeliveryItemPrices(prev => ({ ...prev, [i.id]: e.target.value }))}
+                          onChange={e => setDeliveryItemPrices(prev => ({ ...prev, [i.id]: cleanDecimalInput(e.target.value) }))}
                           style={{ width: '70px', padding: '0.2rem 0.35rem', borderRadius: '4px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', textAlign: 'right', background: 'white' }}
                         />
                       </label>
@@ -5307,7 +5341,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                           inputMode="decimal"
                           value={currentCost}
                           placeholder="0,00"
-                          onChange={e => setDeliveryItemCosts(prev => ({ ...prev, [i.id]: e.target.value }))}
+                          onChange={e => setDeliveryItemCosts(prev => ({ ...prev, [i.id]: cleanDecimalInput(e.target.value) }))}
                           style={{ width: '70px', padding: '0.2rem 0.35rem', borderRadius: '4px', border: '1px solid #10b981', fontSize: '0.78rem', textAlign: 'right', background: 'white' }}
                         />
                       </label>
@@ -5646,7 +5680,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
               </p>
               <div className="form-group">
                 <label>Novo preço (R$)</label>
-                <input type="number" step="0.01" min="0" placeholder="0,00" value={bulkPriceValue} onChange={e => setBulkPriceValue(e.target.value)} autoFocus />
+                <input type="text" inputMode="decimal" placeholder="0,00" value={bulkPriceValue} onChange={e => setBulkPriceValue(cleanDecimalInput(e.target.value))} autoFocus />
               </div>
               <div className="modal-actions">
                 <button className="admin-btn admin-btn-sec" onClick={() => { setShowBulkPrice(false); setBulkPriceValue('') }}>Cancelar</button>
@@ -7536,7 +7570,12 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
           if (isNaN(preco) || preco <= 0) {
             preco = getInitialPrice(item)
           }
-          return [id, { ...item, preco, tipo: item.tipo || 'avista' }]
+          return [id, {
+            ...item,
+            preco: preco > 0 ? String(preco).replace('.', ',') : '',
+            preco_custo: (item.preco_custo != null && item.preco_custo !== '') ? String(item.preco_custo).replace('.', ',') : null,
+            tipo: item.tipo || 'avista'
+          }]
         })
       )
     }
@@ -7658,20 +7697,23 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
   useEffect(() => { setProdPage(1) }, [search])
 
   const cartItems = useMemo(() => Object.values(cart).filter(i => i.qty > 0), [cart])
-  const cartTotal = useMemo(() => cartItems.reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0), [cartItems])
+  const cartTotal = useMemo(() => cartItems.reduce((s, i) => s + (parseDecimalToNumber(i.preco)) * (Number(i.qty) || 0), 0), [cartItems])
 
   const addItem = (p) => {
     const resolvedPreco = getInitialPrice(p)
     setCart(prev => {
       const existing = prev[p.id]
-      const currentPrice = existing?.preco !== '' && existing?.preco != null && Number(existing.preco) > 0 ? existing.preco : (resolvedPreco > 0 ? resolvedPreco : 0)
+      const currentPrice = existing?.preco !== '' && existing?.preco != null && parseDecimalToNumber(existing.preco) > 0 
+        ? existing.preco 
+        : (resolvedPreco > 0 ? String(resolvedPreco).replace('.', ',') : '')
+      const currentCusto = existing?.preco_custo ?? (p.preco_custo != null ? String(p.preco_custo).replace('.', ',') : null)
       return {
         ...prev,
         [p.id]: {
           id: p.id,
           nome: p.nome,
           preco: currentPrice,
-          preco_custo: existing?.preco_custo ?? p.preco_custo ?? null,
+          preco_custo: currentCusto,
           imagem: p.imagem,
           qty: (existing?.qty || 0) + 1,
           tipo: existing?.tipo || 'aprazo',
@@ -7696,29 +7738,21 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
   }
 
   const setItemPreco = (id, val) => {
-    if (val === '') {
-      setCart(prev => prev[id] ? { ...prev, [id]: { ...prev[id], preco: '' } } : prev)
-      return
-    }
-    const num = Number(String(val).replace(',', '.'))
-    setCart(prev => prev[id] ? { ...prev, [id]: { ...prev[id], preco: isNaN(num) ? '' : num } } : prev)
+    const clean = cleanDecimalInput(val)
+    setCart(prev => prev[id] ? { ...prev, [id]: { ...prev[id], preco: clean } } : prev)
   }
 
   const setItemCusto = (id, val) => {
-    if (val === '') {
-      setCart(prev => prev[id] ? { ...prev, [id]: { ...prev[id], preco_custo: null } } : prev)
-      return
-    }
-    const num = Number(String(val).replace(',', '.'))
-    setCart(prev => prev[id] ? { ...prev, [id]: { ...prev[id], preco_custo: isNaN(num) ? null : num } } : prev)
+    const clean = cleanDecimalInput(val)
+    setCart(prev => prev[id] ? { ...prev, [id]: { ...prev[id], preco_custo: clean } } : prev)
   }
 
-  const valorPagoNum = Number(String(valorPago).replace(',', '.')) || 0
+  const valorPagoNum = parseDecimalToNumber(valorPago)
   const troco = valorPagoNum - cartTotal
 
   const handleSave = () => {
     if (saving || cartItems.length === 0 || !nome.trim() || !telefone.trim()) return
-    const zeroPriceItems = cartItems.filter(i => i.preco === '' || !i.preco || Number(i.preco) <= 0)
+    const zeroPriceItems = cartItems.filter(i => i.preco === '' || !i.preco || parseDecimalToNumber(i.preco) <= 0)
     if (zeroPriceItems.length > 0) {
       alert(`Atenção: O produto "${zeroPriceItems[0].nome}" está com preço zerado. Por favor, volte ao passo 2 e informe o valor unitário antes de salvar o pedido.`)
       setStep(2)
@@ -7735,8 +7769,8 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
       pagamento: pagamento === 'misto' ? 'misto' : (pagamento === 'aprazo' ? 'aprazo' : 'avista'),
       items: cartItems.map(i => ({
         ...i,
-        preco: Number(i.preco) || 0,
-        preco_custo: i.preco_custo != null && i.preco_custo !== '' ? Number(i.preco_custo) : null,
+        preco: parseDecimalToNumber(i.preco),
+        preco_custo: i.preco_custo != null && i.preco_custo !== '' ? parseDecimalToNumber(i.preco_custo) : null,
         tipo: pagamento === 'aprazo' ? 'aprazo' : (pagamento === 'avista' ? 'avista' : i.tipo)
       })),
       dataVencimento: (pagamento === 'aprazo' || pagamento === 'misto') ? dataVencimento : '',
@@ -7941,7 +7975,7 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
                 <div className="add-prod-cart">
                   <p className="add-prod-cart-title">Itens do pedido — ajuste preço e custo:</p>
                   {cartItems.map(i => {
-                    const isZero = i.preco === '' || !i.preco || Number(i.preco) <= 0
+                    const isZero = i.preco === '' || !i.preco || parseDecimalToNumber(i.preco) <= 0
                     return (
                       <div key={i.id} className={`add-prod-cart-item ${isZero ? 'has-zero-price' : ''}`} style={isZero ? { border: '1.5px solid #ef4444', background: '#fef2f2', borderRadius: '8px', padding: '0.5rem 0.75rem', marginBottom: '0.5rem' } : {}}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
@@ -8077,7 +8111,7 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
                   </div>
                   <div className="payment-done-values">
                     <label>Valor recebido (R$)
-                      <input type="number" step="0.01" min="0" placeholder={String(cartTotal.toFixed(2)).replace('.', ',')} value={valorPago} onChange={e => setValorPago(e.target.value)} />
+                      <input type="text" inputMode="decimal" placeholder={String(cartTotal.toFixed(2)).replace('.', ',')} value={valorPago} onChange={e => setValorPago(cleanDecimalInput(e.target.value))} />
                     </label>
                     <div className="payment-done-totals">
                       <span>Total do pedido: <strong>{formatPreco(cartTotal)}</strong></span>
@@ -8112,11 +8146,11 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
   const [rejectedItems, setRejectedItems] = useState(new Set())
   const [editMode, setEditMode] = useState(false)
   const [editedItems, setEditedItems] = useState(() => (order.items || []).map(i => {
-    const c = (i.preco_custo != null && i.preco_custo !== '') ? Number(String(i.preco_custo).replace(',', '.')) : getItemCost(i, produtos)
+    const c = (i.preco_custo != null && i.preco_custo !== '') ? String(i.preco_custo).replace('.', ',') : (getItemCost(i, produtos) ? String(getItemCost(i, produtos)).replace('.', ',') : '')
     return {
       ...i,
-      preco: Number(String(i.preco).replace(',', '.')) || 0,
-      preco_custo: c > 0 ? c : null
+      preco: (i.preco != null && i.preco !== '') ? String(i.preco).replace('.', ',') : '0',
+      preco_custo: c || ''
     }
   }))
   const [addSearch, setAddSearch] = useState('')
@@ -8166,12 +8200,12 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
         endereco: { ...(order.customer?.endereco || {}) }
       })
       setEditedItems((order.items || []).map(i => {
-        const c = (i.preco_custo != null && i.preco_custo !== '') ? Number(String(i.preco_custo).replace(',', '.')) : getItemCost(i, produtos)
+        const c = (i.preco_custo != null && i.preco_custo !== '') ? String(i.preco_custo).replace('.', ',') : (getItemCost(i, produtos) ? String(getItemCost(i, produtos)).replace('.', ',') : '')
         return {
           ...i,
           qty: Number(i.qty) || 0,
-          preco: Number(String(i.preco).replace(',', '.')) || 0,
-          preco_custo: c > 0 ? c : null
+          preco: (i.preco != null && i.preco !== '') ? String(i.preco).replace('.', ',') : '0',
+          preco_custo: c || ''
         }
       }))
     }
@@ -8191,30 +8225,29 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
 
   const resetEditedItems = () => {
     setEditedItems((order.items || []).map(i => {
-      const c = (i.preco_custo != null && i.preco_custo !== '') ? Number(String(i.preco_custo).replace(',', '.')) : getItemCost(i, produtos)
+      const c = (i.preco_custo != null && i.preco_custo !== '') ? String(i.preco_custo).replace('.', ',') : (getItemCost(i, produtos) ? String(getItemCost(i, produtos)).replace('.', ',') : '')
       return {
         ...i,
         qty: Number(i.qty) || 0,
-        preco: Number(String(i.preco).replace(',', '.')) || 0,
-        preco_custo: c > 0 ? c : null
+        preco: (i.preco != null && i.preco !== '') ? String(i.preco).replace('.', ',') : '0',
+        preco_custo: c || ''
       }
     }))
   }
 
   const setItemPreco = (idx, val) => {
-    const clean = String(val).replace(',', '.')
-    const num = parseFloat(clean)
-    const preco = (val === '' || isNaN(num) || num < 0) ? (val === '' ? '' : 0) : num
-    setEditedItems(prev => prev.map((item, i) => i === idx ? { ...item, preco } : item))
+    const clean = cleanDecimalInput(val)
+    setEditedItems(prev => prev.map((item, i) => i === idx ? { ...item, preco: clean } : item))
   }
 
   const setItemCusto = (idx, val) => {
-    const clean = String(val).replace(',', '.')
-    const num = parseFloat(clean)
-    const custo = (val === '' || isNaN(num) || num < 0) ? null : num
-    setEditedItems(prev => prev.map((item, i) => i === idx ? { ...item, preco_custo: custo } : item))
+    const clean = cleanDecimalInput(val)
+    setEditedItems(prev => prev.map((item, i) => i === idx ? { ...item, preco_custo: clean } : item))
     const prodId = editedItems[idx]?.id
-    if (prodId != null) onSyncCusto?.(prodId, custo)
+    if (prodId != null) {
+      const numCusto = parseDecimalToNumber(clean)
+      onSyncCusto?.(prodId, clean === '' ? null : numCusto)
+    }
   }
 
   const removeItem = (idx) => {
@@ -8265,7 +8298,8 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
           copy.push({
             ...ni,
             qty: Number(ni.qty) || 1,
-            preco: Number(String(ni.preco).replace(',', '.')) || 0
+            preco: ni.preco != null ? String(ni.preco).replace('.', ',') : '0',
+            preco_custo: ni.preco_custo != null ? String(ni.preco_custo).replace('.', ',') : ''
           })
         }
       }
@@ -8279,8 +8313,8 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
     const validItems = editedItems.filter(i => (Number(i.qty) || 0) > 0).map(i => ({
       ...i,
       qty: Number(i.qty) || 0,
-      preco: Number(String(i.preco).replace(',', '.')) || 0,
-      preco_custo: (i.preco_custo != null && i.preco_custo !== '') ? Number(String(i.preco_custo).replace(',', '.')) : getItemCost(i, produtos)
+      preco: parseDecimalToNumber(i.preco),
+      preco_custo: (i.preco_custo != null && i.preco_custo !== '') ? parseDecimalToNumber(i.preco_custo) : getItemCost(i, produtos)
     }))
     if (validItems.length === 0) { return }
     onEditAndConfirm(validItems, order.status)
@@ -8290,14 +8324,14 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
     const validItems = editedItems.filter(i => (Number(i.qty) || 0) > 0).map(i => ({
       ...i,
       qty: Number(i.qty) || 0,
-      preco: Number(String(i.preco).replace(',', '.')) || 0,
-      preco_custo: (i.preco_custo != null && i.preco_custo !== '') ? Number(String(i.preco_custo).replace(',', '.')) : getItemCost(i, produtos)
+      preco: parseDecimalToNumber(i.preco),
+      preco_custo: (i.preco_custo != null && i.preco_custo !== '') ? parseDecimalToNumber(i.preco_custo) : getItemCost(i, produtos)
     }))
     if (validItems.length === 0) { return }
     onEditSave(validItems)
   }
 
-  const editTotal = Math.round(editedItems.filter(i => (Number(i.qty) || 0) > 0).reduce((s, i) => s + (Number(String(i.preco).replace(',', '.')) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
+  const editTotal = Math.round(editedItems.filter(i => (Number(i.qty) || 0) > 0).reduce((s, i) => s + parseDecimalToNumber(i.preco) * (Number(i.qty) || 0), 0) * 100) / 100
 
   const filteredAddProds = useMemo(() => {
     const t = (addSearch || '').toLowerCase().trim()
@@ -8969,8 +9003,13 @@ function KitModal({ produtos, kit, onSave, onClose }) {
 // =============================================
 function EditProductModal({ product, categorias = [], onAddCategoria, onSave, onClose }) {
   const [nome, setNome] = useState(product.nome)
-  const [preco, setPreco] = useState(String(product.preco))
-  const [precoCusto, setPrecoCusto] = useState(String(product.preco_custo ?? ''))
+  const formatInitialDecimal = (v) => {
+    if (v == null || v === '') return ''
+    if (product._new && (v === 0 || v === '0')) return ''
+    return String(v).replace('.', ',')
+  }
+  const [preco, setPreco] = useState(() => formatInitialDecimal(product.preco))
+  const [precoCusto, setPrecoCusto] = useState(() => formatInitialDecimal(product.preco_custo))
   const [estoque, setEstoque] = useState(String(product.estoque))
   const [imagem, setImagem] = useState(product.imagem || '')
   const [categoria, setCategoria] = useState(product.categoria)
@@ -9042,17 +9081,22 @@ function EditProductModal({ product, categorias = [], onAddCategoria, onSave, on
   }
 
   const handleSave = () => {
-    if (!nome.trim() || preco === '' || isNaN(Number(preco))) return
+    const numPreco = parseDecimalToNumber(preco)
+    if (!nome.trim() || preco === '' || isNaN(numPreco) || numPreco < 0) {
+      alert('Por favor, informe um preço válido para o produto.')
+      return
+    }
     const cleaned = {}
     Object.entries(variantes).forEach(([k, v]) => {
       const opts = v.filter(o => o.trim())
       if (opts.length > 0) cleaned[k] = opts
     })
+    const numCusto = precoCusto === '' ? null : parseDecimalToNumber(precoCusto)
     onSave({
       nome: nome.trim(),
-      preco: Number(preco),
-      preco_custo: precoCusto === '' ? null : Number(precoCusto),
-      estoque: Number(estoque),
+      preco: numPreco,
+      preco_custo: numCusto,
+      estoque: Number(estoque) || 0,
       imagem,
       categoria,
       descricao,
@@ -9076,11 +9120,11 @@ function EditProductModal({ product, categorias = [], onAddCategoria, onSave, on
           <div className="form-row">
             <div className="form-group">
               <label>Preço (R$) <span style={{ color: 'var(--danger)' }}>*</span></label>
-              <input type="number" step="0.01" min="0" value={preco} onChange={e => setPreco(e.target.value)} placeholder="0,00" />
+              <input type="text" inputMode="decimal" value={preco} onChange={e => setPreco(cleanDecimalInput(e.target.value))} placeholder="0,00" />
             </div>
             <div className="form-group">
               <label>Preço de Custo (R$)</label>
-              <input type="number" step="0.01" min="0" value={precoCusto} onChange={e => setPrecoCusto(e.target.value)} placeholder="0,00" />
+              <input type="text" inputMode="decimal" value={precoCusto} onChange={e => setPrecoCusto(cleanDecimalInput(e.target.value))} placeholder="0,00" />
             </div>
             <div className="form-group">
               <label>Estoque</label>
@@ -9334,7 +9378,7 @@ function FinCalendar({ financial }) {
 function DespesaModal({ despesa, customTipos = [], onAddTipo, onSave, onClose }) {
   const [tipo, setTipo] = useState(despesa?.tipo || 'Alimentação')
   const [descricao, setDescricao] = useState(despesa?.descricao || '')
-  const [value, setValue] = useState(despesa ? String(despesa.value) : '')
+  const [value, setValue] = useState(despesa ? String(despesa.value).replace('.', ',') : '')
   const [dueDate, setDueDate] = useState(despesa?.dueDate || hoje())
   const [paymentMethod, setPaymentMethod] = useState(despesa?.paymentMethod || 'pix')
   const [status, setStatus] = useState(despesa?.status || 'pendente')
@@ -9346,7 +9390,7 @@ function DespesaModal({ despesa, customTipos = [], onAddTipo, onSave, onClose })
   }, [customTipos, tipo])
 
   const handleSave = () => {
-    const val = Number(value)
+    const val = parseDecimalToNumber(value)
     if (!tipo.trim() || isNaN(val) || val <= 0) return
     onSave({ tipo: tipo.trim(), descricao: descricao.trim(), value: val, dueDate, paymentMethod, status })
   }
@@ -9384,7 +9428,7 @@ function DespesaModal({ despesa, customTipos = [], onAddTipo, onSave, onClose })
           <div className="form-row">
             <div className="form-group">
               <label>Valor (R$) <span style={{ color: 'var(--danger)' }}>*</span></label>
-              <input type="number" step="0.01" min="0" value={value} onChange={e => setValue(e.target.value)} placeholder="0,00" />
+              <input type="text" inputMode="decimal" value={value} onChange={e => setValue(cleanDecimalInput(e.target.value))} placeholder="0,00" />
             </div>
             <div className="form-group">
               <label>Vencimento</label>
