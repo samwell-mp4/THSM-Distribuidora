@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { supabase, upsertOrder, upsertFinancial, deleteOrder as supabaseDeleteOrder, upsertUser, saveUserViaWebhook, flushPendingOrders, samePhone } from '../lib/supabase'
 import { compressImageDataUrl } from '../lib/image'
+import { searchMatches } from '../lib/search'
 import AddressForm from '../components/AddressForm'
 
 const LS_ORDERS = 'thsm_user_orders'
@@ -481,9 +482,8 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
   }
 
   const filteredPreAddProds = useMemo(() => {
-    const t = preAddSearch.toLowerCase().trim()
-    if (!t) return []
-    return produtos.filter(p => p.nome?.toLowerCase().includes(t)).slice(0, 10)
+    if (!preAddSearch.trim()) return []
+    return produtos.filter(p => searchMatches(p.nome, preAddSearch) || searchMatches(p.categoria, preAddSearch)).slice(0, 10)
   }, [produtos, preAddSearch])
 
   const addToPreCart = (p) => {
@@ -620,8 +620,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
               const filtered = produtos.filter(p => {
                 if (prodCategoria !== 'TODOS' && p.categoria !== prodCategoria) return false
                 if (prodSearch) {
-                  const q = prodSearch.toLowerCase()
-                  return p.nome?.toLowerCase().includes(q) || p.categoria?.toLowerCase().includes(q)
+                  return searchMatches(p.nome, prodSearch) || searchMatches(p.categoria, prodSearch) || searchMatches(p.descricao, prodSearch)
                 }
                 return true
               })
@@ -742,9 +741,8 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
                 if (orderDateStart && o.date < orderDateStart) return false
                 if (orderDateEnd && o.date > orderDateEnd) return false
                 if (orderSearch) {
-                  const q = orderSearch.toLowerCase()
-                  const matchItem = o.items.some(i => i.nome?.toLowerCase().includes(q))
-                  if (!matchItem) return false
+                  const matchItem = o.items.some(i => searchMatches(i.nome, orderSearch))
+                  if (!matchItem && !searchMatches(o.id, orderSearch)) return false
                 }
                 return true
               })
@@ -773,7 +771,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
                         <tr key={o.id}>
                           <td data-label="Pedido">#{o.id.toString().slice(-6)}</td>
                           <td data-label="Data">{formatDate(o.date)}</td>
-                          <td data-label="Itens">{o.items.reduce((s, i) => s + i.qty, 0)} itens</td>
+                          <td data-label="Itens">{o.items.reduce((s, i) => s + (Number(i.qty) || 0), 0)} peças</td>
                           <td className="td-price" data-label="Total">{formatPreco(o.total)}</td>
                           <td data-label="Pagamento">{o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}</td>
                           <td data-label="Status"><span className={`status-tag status-${o.status}`}>{o.status}</span></td>
@@ -853,8 +851,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
             {(() => {
               let filtered = finFilter === 'todas' ? userFinancial : userFinancial.filter(f => f.status === finFilter)
               if (finSearch.trim()) {
-                const term = finSearch.toLowerCase().trim()
-                filtered = filtered.filter(f => f.itemName?.toLowerCase().includes(term))
+                filtered = filtered.filter(f => searchMatches(f.itemName, finSearch))
               }
               if (finDateStart) filtered = filtered.filter(f => f.dueDate >= finDateStart)
               if (finDateEnd) filtered = filtered.filter(f => f.dueDate <= finDateEnd)
@@ -955,7 +952,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
                     </div>
 
                     <div className="detail-section">
-                      <h4><i className="fa-solid fa-box"></i> Itens</h4>
+                      <h4><i className="fa-solid fa-box"></i> Itens ({order.items.reduce((s, i) => s + (Number(i.qty) || 0), 0)} peças no total)</h4>
                       {order.items.map((i, idx) => (
                         <div key={idx} className="review-item">
                           <span className="review-item-name">{i.nome} <span className="review-item-qty">({i.qty}x)</span></span>
@@ -1300,12 +1297,12 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
         <div className="admin-overlay" onClick={() => setEditPreOrder(false)}>
           <div className="admin-modal admin-modal-lg" onClick={e => e.stopPropagation()} style={{ maxWidth: '550px' }}>
             <div className="admin-modal-header">
-              <h3><i className="fa-solid fa-pen"></i> Editar Comanda — Pedido #{selectedOrder.id.toString().slice(-6)}</h3>
+              <h3><i className="fa-solid fa-pen"></i> Editar Comanda — Pedido #{selectedOrder.id.toString().slice(-6)} ({editedPreItems.filter(i => i.qty > 0).reduce((s, i) => s + (Number(i.qty) || 0), 0)} peças totais)</h3>
               <button className="admin-modal-close" onClick={() => setEditPreOrder(false)}><i className="fa-solid fa-xmark"></i></button>
             </div>
             <div className="admin-modal-body">
               <div style={{ marginBottom: '1rem' }}>
-                <h4 style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem' }}>Itens</h4>
+                <h4 style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem' }}>Itens ({editedPreItems.filter(i => i.qty > 0).reduce((s, i) => s + (Number(i.qty) || 0), 0)} peças totais)</h4>
                 {editedPreItems.map((i, idx) => (
                   <div key={idx} className="detail-item" style={{ opacity: i.qty <= 0 ? 0.4 : 1 }}>
                     <div style={{ flex: 1 }}>
@@ -1316,15 +1313,27 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
                         </span>
                       )}
                       <span className="detail-item-qty">{formatPreco(i.preco)}</span>
+                      {Number(i.qty) > 1 && (
+                        <div style={{ fontSize: '0.74rem', color: 'var(--accent)', fontWeight: 700, marginTop: '0.15rem' }}>
+                          <i className="fa-solid fa-calculator"></i> Subtotal: {formatPreco((Number(i.preco) || 0) * (Number(i.qty) || 0))} ({i.qty}x de {formatPreco(i.preco)})
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                       <span className={`split-badge ${i.tipo === 'avista' ? 'vista' : 'aprazo'}`}>
                         {i.tipo === 'avista' ? 'À Vista' : 'A Prazo'}
                       </span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '2px', border: '1px solid var(--admin-border)', borderRadius: '6px', padding: '2px' }}>
-                        <button className="qty-btn-sm" onClick={() => changeQty(idx, -1)}><i className="fa-solid fa-minus"></i></button>
-                        <span style={{ minWidth: '20px', textAlign: 'center', fontSize: '0.82rem', fontWeight: 600 }}>{i.qty}</span>
-                        <button className="qty-btn-sm" onClick={() => changeQty(idx, 1)}><i className="fa-solid fa-plus"></i></button>
+                        <button type="button" className="qty-btn-sm" onClick={() => changeQty(idx, -1)}><i className="fa-solid fa-minus"></i></button>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={i.qty}
+                          onChange={e => setEditedPreItems(prev => prev.map((item, idx2) => idx2 === idx ? { ...item, qty: Math.max(0, parseInt(e.target.value, 10) || 0) } : item))}
+                          style={{ width: '38px', textAlign: 'center', fontSize: '0.82rem', fontWeight: 700, border: 'none', background: 'transparent', outline: 'none' }}
+                        />
+                        <button type="button" className="qty-btn-sm" onClick={() => changeQty(idx, 1)}><i className="fa-solid fa-plus"></i></button>
                       </div>
                       <button className="action-btn action-delete" title="Remover" onClick={() => removeEditedItem(idx)}><i className="fa-solid fa-trash"></i></button>
                     </div>
@@ -1375,7 +1384,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Total: <strong style={{ color: 'var(--accent)', fontSize: '1.1rem' }}>{formatPreco(editedPreItems.filter(i => i.qty > 0).reduce((s, i) => s + i.preco * i.qty, 0))}</strong></span>
-                <span style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>{editedPreItems.filter(i => i.qty > 0).length} itens</span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>{editedPreItems.filter(i => i.qty > 0).reduce((s, i) => s + (Number(i.qty) || 0), 0)} peças totais ({editedPreItems.filter(i => i.qty > 0).length} produtos)</span>
               </div>
 
               <div className="modal-actions">

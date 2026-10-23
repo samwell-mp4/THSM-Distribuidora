@@ -5,6 +5,7 @@ import UserDashboard from './pages/UserDashboard'
 import KitPage from './pages/KitPage'
 import LandingPage from './pages/LandingPage'
 import { supabase, upsertOrder, upsertUser, saveUserViaWebhook, generateLoginToken, consumeLoginToken, flushPendingOrders, normTel, samePhone, formatImageUrl } from './lib/supabase'
+import { searchMatches } from './lib/search'
 import './App.css'
 
 const LS_SESSAO = 'thsm_sessao'
@@ -339,7 +340,7 @@ function App() {
       if (!p) return false
       const nome = String(p.nome || '')
       const cat = String(p.categoria || '')
-      if (term && !nome.toLowerCase().includes(term) && !cat.toLowerCase().includes(term)) return false
+      if (term && !searchMatches(nome, term) && !searchMatches(cat, term) && !searchMatches(p.descricao, term)) return false
       if (categoria === 'Encomendas da Empresa') {
         if (!p.semDevolucao) return false
       } else if (categoria !== 'TODOS' && cat !== categoria) return false

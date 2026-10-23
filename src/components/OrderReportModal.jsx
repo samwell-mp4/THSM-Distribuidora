@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
+import { searchMatches } from '../lib/search'
 import './OrderReportModal.css'
 
 const STATUS_CONFIG = {
@@ -400,10 +401,9 @@ export default function OrderReportModal({
 
   const filteredClients = useMemo(() => {
     if (!clientSearch) return usuarios.slice(0, 50)
-    const t = clientSearch.toLowerCase().trim()
     return usuarios.filter(u =>
-      (u.nome && u.nome.toLowerCase().includes(t)) ||
-      (u.telefone && u.telefone.includes(t))
+      searchMatches(u.nome, clientSearch) ||
+      (u.telefone && String(u.telefone).includes(clientSearch))
     ).slice(0, 50)
   }, [usuarios, clientSearch])
 

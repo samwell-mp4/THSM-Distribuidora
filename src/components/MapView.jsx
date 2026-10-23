@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
+import { searchMatches } from '../lib/search'
 import './MapView.css'
 
 const GM_KEY = 'AIzaSyDqitbcWIg-akmvbGdTrBWf_H7FZ8G3YaY'
@@ -136,8 +137,7 @@ export default function MapView({ usuarios, orders, financial, onMarkOnWay, onVi
     if (filtroCidade !== 'TODAS') r = r.filter(i => (i.user.endereco?.cidade || '').toLowerCase() === filtroCidade.toLowerCase())
     if (filtroEstado !== 'TODOS') r = r.filter(i => (i.user.endereco?.estado || '').toUpperCase() === filtroEstado)
     if (filtroSearch) {
-      const t = filtroSearch.toLowerCase()
-      r = r.filter(i => (i.user.nome || i.user.pushName || '').toLowerCase().includes(t) || (i.user.telefone || '').includes(t))
+      r = r.filter(i => searchMatches(i.user.nome, filtroSearch) || searchMatches(i.user.pushName, filtroSearch) || (i.user.telefone || '').includes(filtroSearch))
     }
     return r
   }, [items, filtroCidade, filtroEstado, filtroSearch])
