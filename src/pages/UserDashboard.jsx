@@ -296,10 +296,15 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
 
     supabase.from('pedidos').select('*').or(conds.join(',')).order('created_at', { ascending: false }).then(async ({ data }) => {
       if (data) {
+        let deletedSet = new Set()
+        try {
+          const d = JSON.parse(localStorage.getItem('thsm_deleted_order_ids') || '[]')
+          deletedSet = new Set(d.map(String))
+        } catch {}
         const orders = data.map(r => {
           const raw = r.data && typeof r.data === 'object' ? { ...r.data, user_id: r.user_id, status: r.status } : r
           return normalizeOrder(raw)
-        })
+        }).filter(o => o && o.id != null && !deletedSet.has(String(o.id)))
         setAllOrders(orders)
         setLS(LS_ORDERS, orders)
         const orderIds = orders.filter(o => o && o.id).map(o => o.id)
@@ -344,9 +349,20 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
 
   const deleteOrder = (id) => {
     if (!confirm('Excluir este pedido?')) return
-    const updated = allOrders.filter(o => o.id !== id)
+    const idStr = String(id)
+    const updated = allOrders.filter(o => String(o.id) !== idStr)
     setAllOrders(updated)
     setLS(LS_ORDERS, updated)
+    try {
+      const saved = JSON.parse(localStorage.getItem('thsm_deleted_order_ids') || '[]')
+      if (!saved.map(String).includes(idStr)) {
+        saved.push(idStr)
+        localStorage.setItem('thsm_deleted_order_ids', JSON.stringify(saved))
+      }
+      const pending = JSON.parse(localStorage.getItem('thsm_pending_orders') || '[]')
+      const nextPending = pending.filter(p => String(p.id) !== idStr)
+      localStorage.setItem('thsm_pending_orders', JSON.stringify(nextPending))
+    } catch {}
     supabaseDeleteOrder(id)
   }
 

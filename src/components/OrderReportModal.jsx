@@ -378,6 +378,16 @@ export default function OrderReportModal({
       past.setDate(today.getDate() - 30)
       setStartDate(formatDateYMD(past))
       setEndDate(formatDateYMD(today))
+    } else if (preset === 'last60') {
+      const past = new Date()
+      past.setDate(today.getDate() - 60)
+      setStartDate(formatDateYMD(past))
+      setEndDate(formatDateYMD(today))
+    } else if (preset === 'last90') {
+      const past = new Date()
+      past.setDate(today.getDate() - 90)
+      setStartDate(formatDateYMD(past))
+      setEndDate(formatDateYMD(today))
     } else if (preset === 'this_month') {
       const first = new Date(today.getFullYear(), today.getMonth(), 1)
       setStartDate(formatDateYMD(first))
@@ -1287,11 +1297,14 @@ export default function OrderReportModal({
                       <option value="vencimento">Data de Vencimento</option>
                     </select>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.35rem' }}>
+                  <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
                     <button type="button" className="report-preset-chip" onClick={() => applyDatePreset('today')}>Hoje</button>
                     <button type="button" className="report-preset-chip" onClick={() => applyDatePreset('last7')}>7 dias</button>
+                    <button type="button" className="report-preset-chip" onClick={() => applyDatePreset('last30')}>30 dias</button>
+                    <button type="button" className="report-preset-chip" onClick={() => applyDatePreset('last60')}>60 dias</button>
+                    <button type="button" className="report-preset-chip" onClick={() => applyDatePreset('last90')}>90 dias</button>
                     <button type="button" className="report-preset-chip" onClick={() => applyDatePreset('this_month')}>Este Mês</button>
-                    <button type="button" className="report-preset-chip" onClick={() => applyDatePreset('clear')}>Limpar</button>
+                    <button type="button" className="report-preset-chip" onClick={() => applyDatePreset('clear')}>Sem Limite (Todos)</button>
                   </div>
                 </div>
 

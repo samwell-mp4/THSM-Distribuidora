@@ -8,6 +8,7 @@ import {
   formatImageUrl, reconcileOrdersUsers, saveUserViaWebhook
 } from '../lib/supabase'
 import { compressImageDataUrl, capPhotoSize } from '../lib/image'
+import { idbGet, idbSet } from '../lib/idb'
 
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
 const STORAGE_ORDERS = 'thsm_admin_orders'
@@ -16,6 +17,7 @@ const STORAGE_DESPESAS = 'thsm_admin_despesas'
 const STORAGE_CUSTOM_ROTAS = 'thsm_custom_rotas'
 const STORAGE_CUSTOM_CATS = 'thsm_custom_categorias'
 const STORAGE_CUSTOM_TIPOS = 'thsm_custom_despesa_tipos'
+const STORAGE_DELETED_ORDERS = 'thsm_deleted_order_ids'
 const WEBHOOK_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/novo-pedido'
 const LISTA_CONTATOS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/lista-contatos'
 const ALERTAR_ROTAS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/alertar-rotas'
@@ -26,18 +28,14 @@ const LS = {
     try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : def } catch { return def }
   },
   set(key, val) {
+    if (key === STORAGE_ORDERS || key === STORAGE_FINANCIAL || key === STORAGE_PRODUCTS) {
+      idbSet(key, val).catch(() => {})
+    }
     try {
       localStorage.setItem(key, JSON.stringify(val))
     } catch (e) {
-      try {
-        let str = JSON.stringify(val)
-        if (Array.isArray(val) && val.length > 100) {
-          str = JSON.stringify(val.slice(0, 100))
-        }
-        localStorage.setItem(key, str)
-      } catch (inner) {
-        console.warn('LocalStorage quota limit reached for key:', key)
-      }
+      // LocalStorage quota reached (typically 5MB); data is safely persisted in IndexedDB
+      console.warn('LocalStorage quota limit reached for key (persisted in IndexedDB):', key)
     }
   }
 }
@@ -743,23 +741,40 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   useEffect(() => { sessionStorage.setItem('thsm_admin_tab', tab) }, [tab])
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [orders, setOrders] = useState(() => LS.get(STORAGE_ORDERS, []))
-  const [deletedOrderIds, setDeletedOrderIds] = useState([])
-  const deletedOrderIdsRef = useRef(null)
-  useEffect(() => { deletedOrderIdsRef.current = new Set(deletedOrderIds) }, [deletedOrderIds])
-  useEffect(() => { /* Sem persistência local de ids deletados */ }, [deletedOrderIds])
+  useEffect(() => {
+    idbGet(STORAGE_ORDERS).then(cached => {
+      if (Array.isArray(cached) && cached.length > 0) {
+        setOrders(prev => {
+          if (!prev || prev.length < cached.length) return cached
+          return prev
+        })
+      }
+    }).catch(() => {})
+  }, [])
+
+  const [deletedOrderIds, setDeletedOrderIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_DELETED_ORDERS)
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
+  const deletedOrderIdsRef = useRef(new Set(deletedOrderIds.map(String)))
+  useEffect(() => {
+    deletedOrderIdsRef.current = new Set(deletedOrderIds.map(String))
+    try {
+      localStorage.setItem(STORAGE_DELETED_ORDERS, JSON.stringify(deletedOrderIds))
+    } catch {}
+  }, [deletedOrderIds])
+
   const [financial, setFinancial] = useState(() => LS.get(STORAGE_FINANCIAL, []))
   const [toast, setToast] = useState(null)
 
   const isFinalizada = useCallback((o) => {
     if (!o) return false
-    return o.status === 'concluido' || o.isFinalizado === true || (
-      o.status === 'entregue' && (
-        o.finalizadoAt ||
-        (financial.some(f => String(f.orderId) === String(o.id)) &&
-          financial.filter(f => String(f.orderId) === String(o.id)).every(f => f.status === 'pago' || f.status === 'cancelado'))
-      )
-    )
-  }, [financial])
+    return o.status === 'concluido' || o.isFinalizado === true
+  }, [])
 
   const revertToEntregue = async (orderId) => {
     const order = orders.find(o => String(o.id) === String(orderId))
@@ -1249,7 +1264,18 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     const doSync = () => {
       if (isSyncing) return
       isSyncing = true
-      syncAllForAdmin().then(({ orders: o, financial: f, users: u, rotas: r, products: p, despesas: d, rotaEdits: re }) => {
+      syncAllForAdmin().then(({ orders: o, financial: f, users: u, rotas: r, products: p, despesas: d, rotaEdits: re, deletedOrderIds: serverDel }) => {
+        if (serverDel && serverDel.length) {
+          setDeletedOrderIds(prev => {
+            const next = Array.from(new Set([...prev.map(String), ...serverDel.map(String)]))
+            return next
+          })
+          try {
+            const saved = JSON.parse(localStorage.getItem(STORAGE_DELETED_ORDERS) || '[]')
+            const next = Array.from(new Set([...saved.map(String), ...serverDel.map(String)]))
+            localStorage.setItem(STORAGE_DELETED_ORDERS, JSON.stringify(next))
+          } catch {}
+        }
         if (re.length) setRotaEdits(prev => {
           const map = new Map()
           re.forEach(edit => map.set(edit.id, edit))
@@ -1260,62 +1286,56 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         })
         if (o.length) {
           setOrders(prev => {
-            const STATUS_RANK = {
-              'cancelado': 100,
-              'concluido': 70,
-              'acerto': 60,
-              'entregue': 50,
-              'em-rota': 40,
-              'em-andamento': 30,
-              'confirmado': 20,
-              'pendente': 10,
-              'pre-pedido': 0
-            }
+            const del = new Set([
+              ...(deletedOrderIdsRef.current ? Array.from(deletedOrderIdsRef.current).map(String) : []),
+              ...(serverDel ? serverDel.map(String) : [])
+            ])
             const map = new Map()
-            // 1. Put all incoming remote orders in map
-            o.forEach(ord => map.set(String(ord.id), ord))
+            // 1. Put all incoming remote orders in map (excluding deleted ones)
+            o.forEach(ord => {
+              if (ord && ord.id != null && !del.has(String(ord.id))) {
+                map.set(String(ord.id), ord)
+              }
+            })
 
-            // 2. Protect local orders: NEVER demote status and NEVER overwrite newer local edits
+            // 2. Reconcile with local orders
             prev.forEach(localOrd => {
-              const remoteOrd = map.get(String(localOrd.id))
+              if (!localOrd || localOrd.id == null) return
+              const localIdStr = String(localOrd.id)
+              // If deleted, never restore!
+              if (del.has(localIdStr)) return
+
+              const remoteOrd = map.get(localIdStr)
               if (!remoteOrd) {
-                map.set(String(localOrd.id), localOrd)
+                // If it is a pending unsynced local order, keep it; otherwise discard
+                let isPending = false
+                try {
+                  const pending = JSON.parse(localStorage.getItem('thsm_pending_orders') || '[]')
+                  isPending = pending.some(p => String(p.id) === localIdStr)
+                } catch {}
+                if (localOrd.isLocal || localOrd._pendingSync || isPending) {
+                  map.set(localIdStr, localOrd)
+                }
                 return
               }
-
-              const localRank = STATUS_RANK[localOrd.status] ?? 0
-              const remoteRank = STATUS_RANK[remoteOrd.status] ?? 0
 
               const localTime = Number(localOrd.lastModified || localOrd.updatedAt || localOrd.preApprovedAt || localOrd.createdAt || 0)
               const remoteTime = Number(remoteOrd.lastModified || remoteOrd.updatedAt || remoteOrd.preApprovedAt || remoteOrd.createdAt || 0)
 
-              // If local status has advanced further (e.g. em-rota vs pre-pedido/pendente in DB), NEVER revert to lower status!
-              if (localRank > remoteRank) {
+              // If local edits are newer, keep local modifications and persist
+              if (localTime > remoteTime) {
                 const preserved = {
                   ...remoteOrd,
                   ...localOrd,
-                  status: localOrd.status,
                   items: (localOrd.items && localOrd.items.length > 0) ? localOrd.items : remoteOrd.items,
                   total: (localOrd.total > 0) ? localOrd.total : remoteOrd.total
                 }
-                map.set(String(localOrd.id), preserved)
+                map.set(localIdStr, preserved)
                 upsertOrder(preserved)
-              } else if (localRank === remoteRank) {
-                // Same rank: keep local edits if local is newer or has items
-                if (localTime >= remoteTime) {
-                  const preserved = {
-                    ...remoteOrd,
-                    ...localOrd,
-                    items: (localOrd.items && localOrd.items.length > 0) ? localOrd.items : remoteOrd.items,
-                    total: (localOrd.total > 0) ? localOrd.total : remoteOrd.total
-                  }
-                  map.set(String(localOrd.id), preserved)
-                }
               }
             })
 
-            const del = deletedOrderIdsRef.current || new Set()
-            const merged = Array.from(map.values()).filter(ord => !del.has(ord.id) && !del.has(String(ord.id)))
+            const merged = Array.from(map.values()).filter(ord => !del.has(String(ord.id)))
             LS.set(STORAGE_ORDERS, merged)
             return merged
           })
@@ -1570,34 +1590,14 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     const order = orders.find(o => String(o.id) === String(id))
     if (!order) return
 
-    const STATUS_RANK_MAP = {
-      'cancelado': 100,
-      'concluido': 70,
-      'acerto': 60,
-      'entregue': 50,
-      'em-rota': 40,
-      'em-andamento': 30,
-      'confirmado': 20,
-      'pendente': 10,
-      'pre-pedido': 0
-    }
-    const currentRank = STATUS_RANK_MAP[order.status] ?? 0
-    const targetRank = STATUS_RANK_MAP[status] ?? 0
-
-    // Strict guard: never allow demoting an order in route, delivered or acerto back to pending or pre-order
-    if (currentRank >= 40 && targetRank < 40) {
-      console.warn(`[updateOrderStatus] Tentativa bloqueada de rebaixar pedido #${id} de "${order.status}" para "${status}"`)
-      showToast(`O pedido #${id} já está em rota, entregue ou em acerto e não pode ser rebaixado!`, 'error')
-      return
-    }
-
     const now = Date.now()
     const finalDue = customDue !== null ? (customDue || null) : (order.dataVencimento || null)
     let updated = {
       ...order,
       status,
+      isFinalizado: status === 'concluido' ? true : (status === 'entregue' || status === 'acerto' ? false : order.isFinalizado),
       dataVencimento: finalDue,
-      deliveredAt: status === 'entregue' ? now : order.deliveredAt,
+      deliveredAt: status === 'entregue' ? (order.deliveredAt || now) : order.deliveredAt,
       lastModified: now,
       updatedAt: now
     }
@@ -2120,13 +2120,37 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
   const deleteOrder = (id) => {
     if (!confirm('Excluir este pedido?')) return
-    setOrders(prev => prev.filter(o => o.id !== id))
-    setFinancial(prev => prev.filter(f => f.orderId !== id))
-    setDeletedOrderIds(prev => prev.includes(id) ? prev : [...prev, id])
-    supabaseDeleteOrder(id).then(({ error } = {}) => {
-      if (error) showToast('Pedido excluído (não sincronizou: rode o SQL admin_delete_order no Supabase)', 'error')
+    const idStr = String(id)
+    setOrders(prev => {
+      const next = prev.filter(o => String(o.id) !== idStr)
+      LS.set(STORAGE_ORDERS, next)
+      return next
     })
-    showToast('Pedido excluído')
+    setFinancial(prev => {
+      const next = prev.filter(f => String(f.orderId) !== idStr)
+      LS.set(STORAGE_FINANCIAL, next)
+      return next
+    })
+    setDeletedOrderIds(prev => {
+      const next = prev.map(String).includes(idStr) ? prev : [...prev.map(String), idStr]
+      return next
+    })
+    deletedOrderIdsRef.current?.add?.(idStr)
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_DELETED_ORDERS) || '[]')
+      if (!saved.map(String).includes(idStr)) {
+        saved.push(idStr)
+        localStorage.setItem(STORAGE_DELETED_ORDERS, JSON.stringify(saved))
+      }
+      const pending = JSON.parse(localStorage.getItem('thsm_pending_orders') || '[]')
+      const nextPending = pending.filter(p => String(p.id) !== idStr)
+      localStorage.setItem('thsm_pending_orders', JSON.stringify(nextPending))
+    } catch {}
+
+    supabaseDeleteOrder(id).then(({ error } = {}) => {
+      if (error) showToast('Pedido excluído (aviso: sincronização de exclusão falhou)', 'error')
+    })
+    showToast('Pedido excluído com sucesso')
   }
 
   const gerarLinkRecuperacao = async (user) => {
@@ -2391,7 +2415,44 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
   const bulkAction = (action) => {
     if (selectedIds.size === 0) { showToast('Selecione pelo menos um pedido', 'error'); return }
-    if (action === 'delete' && !confirm(`Excluir ${selectedIds.size} pedido(s)?`)) return
+    if (action === 'delete') {
+      if (!confirm(`Excluir definitivamente ${selectedIds.size} pedido(s)?`)) return
+      const idList = Array.from(selectedIds)
+      const idStrSet = new Set(idList.map(String))
+
+      setOrders(prev => {
+        const next = prev.filter(o => !idStrSet.has(String(o.id)))
+        LS.set(STORAGE_ORDERS, next)
+        return next
+      })
+      setFinancial(prev => {
+        const next = prev.filter(f => !idStrSet.has(String(f.orderId)))
+        LS.set(STORAGE_FINANCIAL, next)
+        return next
+      })
+      setDeletedOrderIds(prev => {
+        const next = Array.from(new Set([...prev.map(String), ...idList.map(String)]))
+        return next
+      })
+      idList.forEach(id => {
+        deletedOrderIdsRef.current?.add?.(String(id))
+        supabaseDeleteOrder(id)
+      })
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_DELETED_ORDERS) || '[]')
+        const mergedSaved = Array.from(new Set([...saved.map(String), ...idList.map(String)]))
+        localStorage.setItem(STORAGE_DELETED_ORDERS, JSON.stringify(mergedSaved))
+
+        const pending = JSON.parse(localStorage.getItem('thsm_pending_orders') || '[]')
+        const nextPending = pending.filter(p => !idStrSet.has(String(p.id)))
+        localStorage.setItem('thsm_pending_orders', JSON.stringify(nextPending))
+      } catch {}
+
+      showToast(`${selectedIds.size} pedido(s) excluído(s)`)
+      setSelectedIds(new Set())
+      return
+    }
+
     selectedIds.forEach(id => {
       const order = orders.find(o => o.id === id)
       if (action === 'confirm') {
@@ -2399,14 +2460,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         else if (order?.status === 'pendente') updateOrderStatus(id, 'em-rota')
         else if (order?.status === 'em-rota') updateOrderStatus(id, 'entregue')
         else updateOrderStatus(id, 'entregue')
-      } else if (action === 'delete') {
-        setOrders(prev => prev.filter(o => o.id !== id))
-        setFinancial(prev => prev.filter(f => f.orderId !== id))
-        setDeletedOrderIds(prev => prev.includes(id) ? prev : [...prev, id])
-        supabaseDeleteOrder(id)
       }
     })
-    if (action === 'delete') showToast(`${selectedIds.size} pedido(s) excluído(s)`)
     setSelectedIds(new Set())
   }
 
@@ -8520,7 +8575,7 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
           <div className="detail-section">
             <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               Cliente
-              {!customerEdit && order.status !== 'entregue' && order.status !== 'cancelado' && (
+              {!customerEdit && order.status !== 'cancelado' && (
                 <button className="action-btn" title="Editar dados do cliente" onClick={() => {
                   setEditCustomer({
                     id: order.user_id || order.customer?.id || null,
@@ -8843,13 +8898,39 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
             </div>
           )}
 
+          <div className="detail-section" style={{ background: 'var(--admin-card)', borderRadius: '8px', padding: '0.5rem 0.75rem', border: '1px solid var(--admin-border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>
+                <i className="fa-solid fa-shuffle"></i> Mudar Etapa Diretamente:
+              </span>
+              <select
+                value={order.status}
+                onChange={e => {
+                  const newStatus = e.target.value
+                  if (newStatus !== order.status) {
+                    onStatusChange(newStatus)
+                  }
+                }}
+                style={{ padding: '0.3rem 0.6rem', borderRadius: '6px', border: '1px solid var(--admin-border)', background: 'var(--admin-bg)', color: 'var(--admin-text)', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
+              >
+                <option value="pre-pedido">Pré-Pedido</option>
+                <option value="pendente">Pendente</option>
+                <option value="confirmado">Confirmado</option>
+                <option value="em-andamento">Em Andamento</option>
+                <option value="em-rota">Em Rota</option>
+                <option value="entregue">Entregue</option>
+                <option value="acerto">Acerto</option>
+                <option value="concluido">Concluído</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </div>
+          </div>
+
           <div className="modal-actions" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', justifyContent: 'flex-end' }}>
-            {(order.status === 'pre-pedido' || order.status === 'pendente' || order.status === 'em-rota' || order.status === 'entregue' || order.status === 'acerto') && (
-              <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
-                onClick={() => { setEditMode(true); resetEditedItems() }}>
-                <i className="fa-solid fa-pen"></i> Editar Itens / Custo
-              </button>
-            )}
+            <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
+              onClick={() => { setEditMode(true); resetEditedItems() }}>
+              <i className="fa-solid fa-pen"></i> Editar Itens / Custo
+            </button>
             {order.status === 'entregue' && (
               <>
                 <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => onStatusChange('em-rota')}>
@@ -8874,9 +8955,14 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
               </>
             )}
             {order.status === 'concluido' && (
-              <button className="admin-btn" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} onClick={() => onOpenDelivery?.(order, 'finalizar')}>
-                <i className="fa-solid fa-eye"></i> Ver Acerto / Devoluções
-              </button>
+              <>
+                <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => { if (confirm('Reabrir comanda e retornar para Acertos?')) onStatusChange('acerto') }}>
+                  <i className="fa-solid fa-rotate-left"></i> Reabrir Comanda (Voltar para Acertos)
+                </button>
+                <button className="admin-btn" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} onClick={() => onOpenDelivery?.(order, 'finalizar')}>
+                  <i className="fa-solid fa-eye"></i> Ver Acerto / Devoluções
+                </button>
+              </>
             )}
             {order.status === 'pre-pedido' && (
               <button className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }}

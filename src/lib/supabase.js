@@ -310,11 +310,11 @@ export async function findUserByPhone(telefone) {
   return data || null
 }
 
-async function paginateAll(table, pageSize = 1000) {
+async function paginateAll(table, pageSize = 2000) {
   let all = []
   let offset = 0
   while (true) {
-    const { data } = await supabase.from(table).select('*').range(offset, offset + pageSize - 1)
+    const { data } = await supabase.from(table).select('*').order('created_at', { ascending: false }).range(offset, offset + pageSize - 1)
     if (!data || data.length === 0) break
     all = all.concat(data)
     if (data.length < pageSize) break
@@ -330,8 +330,29 @@ export async function getAllUsers() {
 
 // ---- ORDERS ----
 export async function getAllOrders() {
-  const data = await paginateAll('pedidos')
-  return (data || []).map(fixOrder).sort((a, b) => new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0))
+  let data = null
+  try {
+    const res = await supabase.from('pedidos').select('*').order('created_at', { ascending: false })
+    if (res && !res.error && Array.isArray(res.data)) {
+      data = res.data
+    }
+  } catch {}
+
+  if (!data) {
+    data = await paginateAll('pedidos', 2000)
+  }
+
+  // Filter out any tombstoned / deleted orders
+  let deletedSet = new Set()
+  try {
+    const localDel = JSON.parse(localStorage.getItem('thsm_deleted_order_ids') || '[]')
+    localDel.forEach(id => deletedSet.add(Number(id)))
+  } catch {}
+
+  return (data || [])
+    .filter(r => r && r.id != null && !deletedSet.has(Number(r.id)))
+    .map(fixOrder)
+    .sort((a, b) => new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0))
 }
 
 export async function getOrdersCount() {
@@ -419,15 +440,17 @@ const STATUS_RANK = {
 
 function queueOrderWrite(order) {
   if (!order || order.id == null) return
+  const numId = Number(order.id)
+  try {
+    const stored = JSON.parse(localStorage.getItem('thsm_deleted_order_ids') || '[]')
+    if (stored.includes(numId)) return
+  } catch {}
+
   const compact = { ...order, identityPhoto: capPhotoSize(order.identityPhoto, 8000), addressProof: capPhotoSize(order.addressProof, 8000) }
   const pending = readPendingOrders()
   const idx = pending.findIndex(p => String(p.id) === String(order.id))
   if (idx >= 0) {
-    const oldRank = STATUS_RANK[pending[idx].status] ?? 0
-    const newRank = STATUS_RANK[compact.status] ?? 0
-    if (newRank >= oldRank) {
-      pending[idx] = { ...pending[idx], ...compact }
-    }
+    pending[idx] = { ...pending[idx], ...compact }
   } else {
     pending.push(compact)
   }
@@ -447,27 +470,22 @@ export async function flushPendingOrders() {
   if (pending.length === 0) return
   flushingOrders = true
   try {
-    let currentAdminOrders = []
+    let deletedSet = new Set()
     try {
-      currentAdminOrders = JSON.parse(localStorage.getItem('thsm_admin_orders') || '[]')
+      const localDel = JSON.parse(localStorage.getItem('thsm_deleted_order_ids') || '[]')
+      localDel.forEach(id => deletedSet.add(Number(id)))
     } catch {}
 
+    const validPending = pending.filter(p => !deletedSet.has(Number(p.id)))
+    if (validPending.length !== pending.length) {
+      writePendingOrders(validPending)
+    }
+
     const remaining = []
-    for (const o of pending) {
-      // Never flush an obsolete demoted status if admin orders has a higher or newer status
-      const existing = currentAdminOrders.find(a => String(a.id) === String(o.id))
-      let orderToSend = o
-      if (existing) {
-        const existRank = STATUS_RANK[existing.status] ?? 0
-        const pendRank = STATUS_RANK[o.status] ?? 0
-        if (existRank > pendRank) {
-          orderToSend = { ...o, ...existing, status: existing.status }
-        } else if (existRank === pendRank) {
-          orderToSend = { ...o, ...existing }
-        }
-      }
-      const ok = await upsertOrderBatch([orderRecord(orderToSend)], 2)
-      if (!ok) remaining.push(orderToSend)
+    for (const o of validPending) {
+      if (deletedSet.has(Number(o.id))) continue
+      const ok = await upsertOrderBatch([orderRecord(o)], 2)
+      if (!ok) remaining.push(o)
     }
     writePendingOrders(remaining)
   } finally {
@@ -482,22 +500,27 @@ if (typeof window !== 'undefined') {
 
 export async function upsertOrder(order) {
   if (!order || order.id == null) return true
+  const numId = Number(order.id)
+  // Refuse to upsert if order was marked deleted
+  try {
+    const stored = JSON.parse(localStorage.getItem('thsm_deleted_order_ids') || '[]')
+    if (stored.includes(numId)) {
+      removePendingOrder(numId)
+      return true
+    }
+  } catch {}
+
   const now = Date.now()
   const cleanOrder = {
     ...order,
     lastModified: order.lastModified || now,
     updatedAt: order.updatedAt || now
   }
-  // Instantly sync or remove from pending queue to prevent stale status overwrites
   const pending = readPendingOrders()
   const idx = pending.findIndex(p => String(p.id) === String(cleanOrder.id))
   if (idx >= 0) {
-    const oldRank = STATUS_RANK[pending[idx].status] ?? 0
-    const newRank = STATUS_RANK[cleanOrder.status] ?? 0
-    if (newRank >= oldRank) {
-      pending[idx] = { ...pending[idx], ...cleanOrder }
-      writePendingOrders(pending)
-    }
+    pending[idx] = { ...pending[idx], ...cleanOrder }
+    writePendingOrders(pending)
   }
   const ok = await upsertOrderBatch([orderRecord(cleanOrder)])
   if (ok) removePendingOrder(cleanOrder.id)
@@ -530,8 +553,18 @@ async function upsertChunked(table, records, mapFn) {
 }
 
 export async function upsertOrders(orders) {
+  let deletedSet = new Set()
+  try {
+    const localDel = JSON.parse(localStorage.getItem('thsm_deleted_order_ids') || '[]')
+    localDel.forEach(id => deletedSet.add(Number(id)))
+  } catch {}
+
   const seen = new Map()
-  orders.forEach(o => { if (o && o.id != null) seen.set(o.id, o) })
+  orders.forEach(o => {
+    if (o && o.id != null && !deletedSet.has(Number(o.id))) {
+      seen.set(o.id, o)
+    }
+  })
   const list = [...seen.values()]
   if (list.length === 0) return
   const CHUNK = 100
@@ -546,12 +579,38 @@ export async function upsertOrders(orders) {
 
 export async function deleteOrder(id) {
   try {
-    const { error } = await supabase.rpc('admin_delete_order', { ord_id: id })
+    const numId = Number(id)
+    const strId = String(id)
+    removePendingOrder(numId)
+    removePendingOrder(strId)
+
+    // Store in persistent deleted orders
+    try {
+      const stored = JSON.parse(localStorage.getItem('thsm_deleted_order_ids') || '[]')
+      if (!stored.includes(numId)) {
+        stored.push(numId)
+        localStorage.setItem('thsm_deleted_order_ids', JSON.stringify(stored))
+      }
+    } catch {}
+
+    // Call RPC which inserts into pedidos_deletados and deletes from pedidos and financeiro
+    const { error } = await supabase.rpc('admin_delete_order', { ord_id: numId })
+    // Direct delete guarantee
+    await supabase.from('pedidos').delete().eq('id', numId)
     if (error) console.error('Erro deleteOrder:', error)
-    return { error }
+    return { error: null }
   } catch (e) {
     console.error('Exceção deleteOrder:', e)
     return { error: e }
+  }
+}
+
+export async function getDeletedOrderIds() {
+  try {
+    const { data } = await supabase.from('pedidos_deletados').select('id')
+    return (data || []).map(r => Number(r.id)).filter(Boolean)
+  } catch (e) {
+    return []
   }
 }
 
@@ -900,14 +959,15 @@ export async function deleteProducts(ids) {
 }
 
 export async function syncAllForAdmin() {
-  const [orders, financial, users, rotas, products, despesas, rotaEdits] = await Promise.allSettled([
+  const [orders, financial, users, rotas, products, despesas, rotaEdits, deletedOrderIds] = await Promise.allSettled([
     getAllOrders(),
     getAllFinancial(),
     getAllUsers(),
     getRotasContatos(),
     getAllProducts(),
     getAllDespesas(),
-    getAllRotaEdits()
+    getAllRotaEdits(),
+    getDeletedOrderIds()
   ])
   return {
     orders: orders.status === 'fulfilled' ? orders.value : [],
@@ -916,7 +976,8 @@ export async function syncAllForAdmin() {
     rotas: rotas.status === 'fulfilled' ? rotas.value : [],
     products: products.status === 'fulfilled' ? products.value : [],
     despesas: despesas.status === 'fulfilled' ? despesas.value : [],
-    rotaEdits: rotaEdits.status === 'fulfilled' ? rotaEdits.value : []
+    rotaEdits: rotaEdits.status === 'fulfilled' ? rotaEdits.value : [],
+    deletedOrderIds: deletedOrderIds.status === 'fulfilled' ? deletedOrderIds.value : []
   }
 }
 

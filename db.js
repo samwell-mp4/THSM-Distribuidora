@@ -52,6 +52,15 @@ export async function initDb() {
     await client.query('CREATE INDEX IF NOT EXISTS idx_pedidos_status ON pedidos(status)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_pedidos_created_at ON pedidos(created_at DESC)');
 
+    // 2b. PEDIDOS DELETADOS (Tombstone Tracking Table: prevents deleted orders from ever resurrecting)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pedidos_deletados (
+        id bigint PRIMARY KEY,
+        created_at timestamptz DEFAULT now()
+      )
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS idx_pedidos_deletados_id ON pedidos_deletados(id)');
+
     // 3. FINANCEIRO
     await client.query(`
       CREATE TABLE IF NOT EXISTS financeiro (
@@ -205,6 +214,7 @@ export async function initDb() {
     await client.query('ALTER TABLE despesas DISABLE ROW LEVEL SECURITY');
     await client.query('ALTER TABLE login_tokens DISABLE ROW LEVEL SECURITY');
     await client.query('ALTER TABLE leads DISABLE ROW LEVEL SECURITY');
+    await client.query('ALTER TABLE pedidos_deletados DISABLE ROW LEVEL SECURITY');
 
     // Create Functions
     await client.query(`
@@ -212,6 +222,7 @@ export async function initDb() {
       RETURNS void
       AS $$
       BEGIN
+        INSERT INTO pedidos_deletados (id) VALUES (ord_id) ON CONFLICT (id) DO NOTHING;
         DELETE FROM financeiro WHERE order_id = ord_id;
         DELETE FROM pedidos WHERE id = ord_id;
       END;
@@ -227,6 +238,9 @@ export async function initDb() {
       BEGIN
         SELECT id INTO uid FROM usuarios WHERE telefone = user_phone;
         IF uid IS NULL THEN RETURN 'Usuario nao encontrado'; END IF;
+        INSERT INTO pedidos_deletados (id)
+        SELECT id FROM pedidos WHERE user_id = uid
+        ON CONFLICT (id) DO NOTHING;
         DELETE FROM financeiro WHERE order_id IN (SELECT id FROM pedidos WHERE user_id = uid);
         DELETE FROM pedidos WHERE user_id = uid;
         DELETE FROM usuarios WHERE id = uid;
@@ -587,9 +601,30 @@ export async function executeQuery(queryDesc) {
 
     if (action === 'insert') {
       const isArray = Array.isArray(args);
-      const rows = isArray ? args : [args];
+      let rows = isArray ? args : [args];
       if (rows.length === 0) {
         return { data: isArray ? [] : null, error: null };
+      }
+
+      if (table === 'pedidos') {
+        const orderIds = rows.map(r => r.id).filter(Boolean);
+        if (orderIds.length > 0) {
+          try {
+            const { rows: delRows } = await pool.query(
+              `SELECT id FROM pedidos_deletados WHERE id = ANY($1::bigint[])`,
+              [orderIds]
+            );
+            if (delRows && delRows.length > 0) {
+              const delSet = new Set(delRows.map(r => String(r.id)));
+              rows = rows.filter(r => !delSet.has(String(r.id)));
+              if (rows.length === 0) {
+                return { data: isArray ? [] : null, error: null };
+              }
+            }
+          } catch (e) {
+            console.error('Error checking pedidos_deletados on insert:', e.message);
+          }
+        }
       }
 
       const keys = Object.keys(rows[0]);
@@ -644,6 +679,25 @@ export async function executeQuery(queryDesc) {
       }
 
       if (table === 'pedidos') {
+        const orderIds = rows.map(r => r.id).filter(Boolean);
+        if (orderIds.length > 0) {
+          try {
+            const { rows: delRows } = await pool.query(
+              `SELECT id FROM pedidos_deletados WHERE id = ANY($1::bigint[])`,
+              [orderIds]
+            );
+            if (delRows && delRows.length > 0) {
+              const delSet = new Set(delRows.map(r => String(r.id)));
+              rows = rows.filter(r => !delSet.has(String(r.id)));
+              if (rows.length === 0) {
+                return { data: isArray ? [] : null, error: null };
+              }
+            }
+          } catch (e) {
+            console.error('Error checking pedidos_deletados on upsert:', e.message);
+          }
+        }
+
         const userIds = [...new Set(rows.map(r => r.user_id).filter(Boolean))];
         if (userIds.length > 0) {
           try {
@@ -744,23 +798,8 @@ export async function executeQuery(queryDesc) {
       } else {
         const updateCols = keys.filter(k => k !== conflictCol && k !== 'id' && k !== 'created_at');
         if (updateCols.length > 0) {
-          if (table === 'pedidos') {
-            const statusRankSql = `CASE "pedidos"."status" WHEN 'cancelado' THEN 100 WHEN 'concluido' THEN 70 WHEN 'acerto' THEN 60 WHEN 'entregue' THEN 50 WHEN 'em-rota' THEN 40 WHEN 'em-andamento' THEN 30 WHEN 'confirmado' THEN 20 WHEN 'pendente' THEN 10 ELSE 0 END`;
-            const excludedRankSql = `CASE EXCLUDED."status" WHEN 'cancelado' THEN 100 WHEN 'concluido' THEN 70 WHEN 'acerto' THEN 60 WHEN 'entregue' THEN 50 WHEN 'em-rota' THEN 40 WHEN 'em-andamento' THEN 30 WHEN 'confirmado' THEN 20 WHEN 'pendente' THEN 10 ELSE 0 END`;
-            const updateSets = updateCols.map(k => {
-              if (k === 'status') {
-                return `"status" = CASE WHEN (${statusRankSql}) > (${excludedRankSql}) THEN "pedidos"."status" ELSE EXCLUDED."status" END`;
-              }
-              if (k === 'data') {
-                return `"data" = CASE WHEN (${statusRankSql}) > (${excludedRankSql}) THEN "pedidos"."data" ELSE EXCLUDED."data" END`;
-              }
-              return `"${k}" = EXCLUDED."${k}"`;
-            }).join(', ');
-            onConflictClause = `ON CONFLICT ("${conflictCol}") DO UPDATE SET ${updateSets}`;
-          } else {
-            const updateSets = updateCols.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ');
-            onConflictClause = `ON CONFLICT ("${conflictCol}") DO UPDATE SET ${updateSets}`;
-          }
+          const updateSets = updateCols.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ');
+          onConflictClause = `ON CONFLICT ("${conflictCol}") DO UPDATE SET ${updateSets}`;
         } else {
           onConflictClause = `ON CONFLICT ("${conflictCol}") DO NOTHING`;
         }
@@ -836,6 +875,13 @@ export async function executeQuery(queryDesc) {
           [deletedIds]
         );
       }
+      if (table === 'pedidos' && res.rows.length > 0) {
+        const deletedIds = res.rows.map(r => r.id);
+        await pool.query(
+          `INSERT INTO "pedidos_deletados" (id) SELECT DISTINCT val FROM unnest($1::bigint[]) AS t(val) ON CONFLICT DO NOTHING`,
+          [deletedIds]
+        );
+      }
       return { data: res.rows, error: null };
     }
 
@@ -852,6 +898,7 @@ export async function restoreDbData() {
   // Clean all tables in reverse dependency order
   await pool.query('DELETE FROM financeiro');
   await pool.query('DELETE FROM pedidos');
+  await pool.query('DELETE FROM pedidos_deletados');
   await pool.query('DELETE FROM usuarios');
   await pool.query('DELETE FROM rotas_contatos');
   await pool.query('DELETE FROM rotas_edits');
@@ -864,6 +911,7 @@ export async function restoreDbData() {
   const tables = [
     { name: 'usuarios', pkey: 'id' },
     { name: 'pedidos', pkey: 'id' },
+    { name: 'pedidos_deletados', pkey: 'id' },
     { name: 'financeiro', pkey: 'id' },
     { name: 'rotas_contatos', pkey: 'id' },
     { name: 'rotas_edits', pkey: 'id' },
