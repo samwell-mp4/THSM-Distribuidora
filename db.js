@@ -67,13 +67,16 @@ export async function initDb() {
         id text PRIMARY KEY,
         order_id bigint NOT NULL REFERENCES pedidos(id) ON DELETE CASCADE,
         data jsonb NOT NULL DEFAULT '{}'::jsonb,
-        status text DEFAULT 'pendente'
+        status text DEFAULT 'pendente',
+        created_at timestamptz DEFAULT now()
       )
     `);
+    await client.query('ALTER TABLE financeiro ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now()');
     
     // Indices for FINANCEIRO
     await client.query('CREATE INDEX IF NOT EXISTS idx_financeiro_order_id ON financeiro(order_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_financeiro_status ON financeiro(status)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_financeiro_created_at ON financeiro(created_at DESC)');
 
     // 4. ROTAS_CONTATOS
     await client.query(`
@@ -585,7 +588,18 @@ export async function executeQuery(queryDesc) {
       }
 
       const sql = `SELECT ${selectCols} FROM "${table}" ${whereClause} ${orderClause} ${limitOffsetClause}`;
-      const res = await pool.query(sql, values);
+      let res;
+      try {
+        res = await pool.query(sql, values);
+      } catch (selectErr) {
+        if (selectErr.code === '42703' && orderClause) {
+          console.warn(`[db] Retrying SELECT on "${table}" without ORDER BY due to missing column: ${selectErr.message}`);
+          const fallbackSql = `SELECT ${selectCols} FROM "${table}" ${whereClause} ${limitOffsetClause}`;
+          res = await pool.query(fallbackSql, values);
+        } else {
+          throw selectErr;
+        }
+      }
       let data = res.rows;
       if (single) {
         if (data.length === 0) {

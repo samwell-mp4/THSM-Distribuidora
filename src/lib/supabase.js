@@ -310,11 +310,29 @@ export async function findUserByPhone(telefone) {
   return data || null
 }
 
-async function paginateAll(table, pageSize = 2000) {
+async function paginateAll(table, pageSize = 2000, orderCol = null) {
   let all = []
   let offset = 0
+  const col = orderCol !== undefined ? orderCol : (table === 'produtos' ? 'id' : 'created_at')
   while (true) {
-    const { data } = await supabase.from(table).select('*').order('created_at', { ascending: false }).range(offset, offset + pageSize - 1)
+    let q = supabase.from(table).select('*')
+    if (col) {
+      q = q.order(col, { ascending: false })
+    }
+    const { data, error } = await q.range(offset, offset + pageSize - 1)
+    if (error) {
+      if (col && error.message && error.message.includes(col)) {
+        console.warn(`[paginateAll] Fallback on "${table}" without ordering by "${col}"`);
+        const fallback = await supabase.from(table).select('*').range(offset, offset + pageSize - 1)
+        if (fallback.data && fallback.data.length > 0) {
+          all = all.concat(fallback.data)
+          if (fallback.data.length < pageSize) break
+          offset += pageSize
+          continue
+        }
+      }
+      break
+    }
     if (!data || data.length === 0) break
     all = all.concat(data)
     if (data.length < pageSize) break
