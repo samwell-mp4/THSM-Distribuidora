@@ -992,17 +992,21 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [deliveryPaid, setDeliveryPaid] = useState('')
   const [deliveryDataInicio, setDeliveryDataInicio] = useState(() => hoje())
   const [deliveryDataVenc, setDeliveryDataVenc] = useState('')
-  const [usuarios, setUsuarios] = useState(() => LS.get('thsm_usuarios', []))
+  const [usuarios, setUsuarios] = useState(() => {
+    const cached = LS.get('thsm_usuarios', [])
+    return Array.isArray(cached) ? cached : []
+  })
 
   // Carrega usuários do IndexedDB imediatamente se localStorage estiver vazio ou limitado por cota
   useEffect(() => {
     idbGet('thsm_usuarios').then(cached => {
       if (Array.isArray(cached) && cached.length > 0) {
         setUsuarios(prev => {
-          if (!prev || prev.length === 0) return cached
+          const prevArr = Array.isArray(prev) ? prev : []
+          if (prevArr.length === 0) return cached
           const map = new Map()
           cached.forEach(u => { if (u) map.set(u.id || u.telefone, u) })
-          prev.forEach(u => { if (u) map.set(u.id || u.telefone, u) })
+          prevArr.forEach(u => { if (u) map.set(u.id || u.telefone, u) })
           return Array.from(map.values())
         })
       }
@@ -2495,26 +2499,32 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
   const rotaDeTelefone = useMemo(() => {
     const map = {}
-    rotas.forEach(r => {
-      const phone = normalizePhone((r.remoteJid || '').replace(/@.*/, ''))
-      if (phone) map[phone] = r.rota || 'Sem rota'
-    })
-    usuarios.forEach(u => {
-      const phone = normalizePhone(u.telefone)
-      if (phone && u.endereco?.rota) map[phone] = u.endereco.rota
-    })
+    if (Array.isArray(rotas)) {
+      rotas.forEach(r => {
+        const phone = normalizePhone((r.remoteJid || '').replace(/@.*/, ''))
+        if (phone) map[phone] = r.rota || 'Sem rota'
+      })
+    }
+    if (Array.isArray(usuarios)) {
+      usuarios.forEach(u => {
+        const phone = normalizePhone(u.telefone)
+        if (phone && u.endereco?.rota) map[phone] = u.endereco.rota
+      })
+    }
     return map
   }, [rotas, usuarios])
 
   const { userMapByPhone, userMapById } = useMemo(() => {
     const byPhone = new Map()
     const byId = new Map()
-    ;(usuarios || []).forEach(u => {
-      if (!u) return
-      if (u.id) byId.set(String(u.id), u)
-      const p = normalizePhone(u.telefone)
-      if (p) byPhone.set(p, u)
-    })
+    if (Array.isArray(usuarios)) {
+      for (const u of usuarios) {
+        if (!u) continue
+        if (u.id) byId.set(String(u.id), u)
+        const p = normalizePhone(u.telefone)
+        if (p) byPhone.set(p, u)
+      }
+    }
     return { userMapByPhone: byPhone, userMapById: byId }
   }, [usuarios])
 
@@ -3090,78 +3100,88 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     }
 
     // 1. Clientes registrados na tabela usuarios
-    (usuarios || []).forEach(u => {
-      if (!u) return
-      addClient({
-        ...u,
-        nome: (u.nome || u.pushName || 'Cliente').trim(),
-        telefone: u.telefone || '',
-        cidade: u.endereco?.cidade || u.cidade || '',
-        source: 'usuario'
-      })
-    })
+    if (Array.isArray(usuarios)) {
+      for (const u of usuarios) {
+        if (!u) continue
+        addClient({
+          ...u,
+          nome: (u.nome || u.pushName || 'Cliente').trim(),
+          telefone: u.telefone || '',
+          cidade: u.endereco?.cidade || u.cidade || '',
+          source: 'usuario'
+        })
+      }
+    }
 
     // 2. Clientes encontrados nos pedidos históricos (garante 100% de cobertura de quem já comprou)
-    (orders || []).forEach(o => {
-      if (!o) return
-      const cust = o.customer || (o.data && o.data.customer) || o
-      const rawPhone = cust.telefone || o.telefone || o.phone || cust.phone || ''
-      const name = (cust.nome || o.nome || o.cliente || cust.pushName || o.customerName || '').trim()
-      const end = cust.endereco || o.endereco || {}
-      if (!name && !rawPhone) return
+    if (Array.isArray(orders)) {
+      for (const o of orders) {
+        if (!o) continue
+        const cust = o.customer || (o.data && o.data.customer) || o
+        const rawPhone = cust.telefone || o.telefone || o.phone || cust.phone || ''
+        const name = (cust.nome || o.nome || o.cliente || cust.pushName || o.customerName || '').trim()
+        const end = cust.endereco || o.endereco || {}
+        if (!name && !rawPhone) continue
 
-      addClient({
-        id: cust.user_id || o.user_id || `order-cust-${o.id}`,
-        nome: name || 'Cliente Sem Nome',
-        telefone: rawPhone || '',
-        email: cust.email || o.email || '',
-        cpf: cust.cpf || end.cpf || o.cpf || '',
-        rota: o.rota || cust.rota || '',
-        cidade: end.cidade || '',
-        endereco: {
-          cep: end.cep || '',
+        addClient({
+          id: cust.user_id || o.user_id || `order-cust-${o.id}`,
+          nome: name || 'Cliente Sem Nome',
+          telefone: rawPhone || '',
+          email: cust.email || o.email || '',
+          cpf: cust.cpf || end.cpf || o.cpf || '',
+          rota: o.rota || cust.rota || '',
           cidade: end.cidade || '',
-          bairro: end.bairro || '',
-          rua: end.rua || end.logradouro || '',
-          numero: end.numero || '',
-          complemento: end.complemento || '',
-          estado: end.estado || '',
-          cpf: end.cpf || cust.cpf || ''
-        },
-        source: 'pedido'
-      })
-    })
+          endereco: {
+            cep: end.cep || '',
+            cidade: end.cidade || '',
+            bairro: end.bairro || '',
+            rua: end.rua || end.logradouro || '',
+            numero: end.numero || '',
+            complemento: end.complemento || '',
+            estado: end.estado || '',
+            cpf: end.cpf || cust.cpf || ''
+          },
+          source: 'pedido'
+        })
+      }
+    }
 
     // 3. Clientes cadastrados em Rotas (webhook, rotas personalizadas e edições de rota)
-    (rotasAgrupadas || []).forEach(group => {
-      const rotaName = group.rota
-      const cidades = Array.isArray(group.cidades) ? group.cidades : Object.values(group.cidades || {})
-      cidades.forEach(c => {
-        (c.contatos || []).forEach(ct => {
-          const name = (ct.nome || ct.pushName || '').trim()
-          const rawPhone = ct.telefone || (ct.remoteJid ? ct.remoteJid.replace(/@.*/, '') : '')
-          if (!name && !rawPhone) return
+    if (Array.isArray(rotasAgrupadas)) {
+      for (const group of rotasAgrupadas) {
+        if (!group) continue
+        const rotaName = group.rota
+        const cidades = Array.isArray(group.cidades) ? group.cidades : Object.values(group.cidades || {})
+        for (const c of cidades) {
+          if (!c) continue
+          const contatosList = Array.isArray(c.contatos) ? c.contatos : []
+          for (const ct of contatosList) {
+            if (!ct) continue
+            const name = (ct.nome || ct.pushName || '').trim()
+            const rawPhone = ct.telefone || (ct.remoteJid ? ct.remoteJid.replace(/@.*/, '') : '')
+            if (!name && !rawPhone) continue
 
-          addClient({
-            id: `rota-${ct.remoteJid || rawPhone || Math.random()}`,
-            nome: name || 'Contato Rota',
-            telefone: rawPhone || '',
-            rota: rotaName || ct.rota || '',
-            cidade: ct.cidade || c.cidade || '',
-            endereco: {
+            addClient({
+              id: `rota-${ct.remoteJid || rawPhone || Math.random()}`,
+              nome: name || 'Contato Rota',
+              telefone: rawPhone || '',
+              rota: rotaName || ct.rota || '',
               cidade: ct.cidade || c.cidade || '',
-              rua: '',
-              bairro: '',
-              cep: '',
-              numero: '',
-              complemento: '',
-              estado: ''
-            },
-            source: 'rota'
-          })
-        })
-      })
-    })
+              endereco: {
+                cidade: ct.cidade || c.cidade || '',
+                rua: '',
+                bairro: '',
+                cep: '',
+                numero: '',
+                complemento: '',
+                estado: ''
+              },
+              source: 'rota'
+            })
+          }
+        }
+      }
+    }
 
     return list.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'))
   }, [usuarios, orders, rotasAgrupadas])
