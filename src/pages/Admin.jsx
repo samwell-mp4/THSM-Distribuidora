@@ -1038,6 +1038,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [orderCityFilter, setOrderCityFilter] = useState('TODAS')
   const [orderRoutesSelected, setOrderRoutesSelected] = useState(() => new Set())
   const [showOrderRouteFilter, setShowOrderRouteFilter] = useState(false)
+  const [mobileOrdersFilterOpen, setMobileOrdersFilterOpen] = useState(false)
   const [dashPeriod, setDashPeriod] = useState('month')
   const [dashCustomStart, setDashCustomStart] = useState('')
   const [dashCustomEnd, setDashCustomEnd] = useState('')
@@ -2492,13 +2493,50 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     return map
   }, [rotas, usuarios])
 
-  const rotaDeOrder = (o) => {
-    if (o.customer?.endereco?.rota) return o.customer.endereco.rota
-    const phone = normalizePhone(o.customer?.telefone)
-    return phone ? (rotaDeTelefone[phone] || 'Sem rota') : 'Sem rota'
-  }
+  const { userMapByPhone, userMapById } = useMemo(() => {
+    const byPhone = new Map()
+    const byId = new Map()
+    ;(usuarios || []).forEach(u => {
+      if (!u) return
+      if (u.id) byId.set(String(u.id), u)
+      const p = normalizePhone(u.telefone)
+      if (p) byPhone.set(p, u)
+    })
+    return { userMapByPhone: byPhone, userMapById: byId }
+  }, [usuarios])
 
-  const getOrderDue = (o) => o.dataVencimento || financial.find(f => f.orderId === o.id)?.dueDate || ''
+  const getOrderCustomerName = useCallback((o) => {
+    if (!o) return '-'
+    if (o.customer?.nome && o.customer.nome.trim() && o.customer.nome.trim() !== '-') return o.customer.nome.trim()
+    if (o.cliente && o.cliente.trim() && o.cliente.trim() !== '-') return o.cliente.trim()
+    if (o.nome && o.nome.trim() && o.nome.trim() !== '-') return o.nome.trim()
+    if (o.customerName && o.customerName.trim() && o.customerName.trim() !== '-') return o.customerName.trim()
+    if (o.customer?.pushName && o.customer.pushName.trim()) return o.customer.pushName.trim()
+    if (o.pushName && o.pushName.trim()) return o.pushName.trim()
+    if (o.push_name && o.push_name.trim()) return o.push_name.trim()
+    const p = normalizePhone(o.customer?.telefone || o.telefone)
+    if (p && userMapByPhone.get(p)?.nome) return userMapByPhone.get(p).nome
+    if (o.user_id && userMapById.get(String(o.user_id))?.nome) return userMapById.get(String(o.user_id)).nome
+    return o.customer?.telefone || o.telefone || '-'
+  }, [userMapByPhone, userMapById])
+
+  const getOrderCustomerPhone = useCallback((o) => {
+    if (!o) return ''
+    if (o.customer?.telefone && o.customer.telefone.trim()) return o.customer.telefone.trim()
+    if (o.telefone && o.telefone.trim()) return o.telefone.trim()
+    if (o.user_id && userMapById.get(String(o.user_id))?.telefone) return userMapById.get(String(o.user_id)).telefone
+    return ''
+  }, [userMapById])
+
+  const rotaDeOrder = useCallback((o) => {
+    if (!o) return 'Sem rota'
+    if (o.customer?.endereco?.rota) return o.customer.endereco.rota
+    if (o.endereco?.rota) return o.endereco.rota
+    const phone = normalizePhone(o.customer?.telefone || o.telefone)
+    return phone ? (rotaDeTelefone[phone] || 'Sem rota') : 'Sem rota'
+  }, [rotaDeTelefone])
+
+  const getOrderDue = useCallback((o) => o.dataVencimento || financial.find(f => f.orderId === o.id)?.dueDate || '', [financial])
 
   const filteredOrders = useMemo(() => {
     let result = orders
@@ -2508,29 +2546,48 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     else if (orderFilter !== 'todos') result = result.filter(o => o.status === orderFilter)
     if (selectedUserEmail) result = result.filter(o => o.customer?.email === selectedUserEmail)
     if (orderSearch && orderSearch.trim()) {
-      result = result.filter(o =>
-        searchMatches(o.customer?.nome, orderSearch) ||
-        (o.customer?.telefone || '').includes(orderSearch.replace(/\D/g, '')) ||
-        searchMatches(o.customer?.endereco?.cidade, orderSearch) ||
-        searchMatches(o.customer?.endereco?.bairro, orderSearch) ||
-        searchMatches(o.customer?.endereco?.rota || rotaDeOrder(o), orderSearch) ||
-        String(o.id).includes(orderSearch.trim().replace(/^#/, '')) ||
-        (o.items || []).some(i => searchMatches(i.nome, orderSearch) || searchMatches(i.displayName, orderSearch))
-      )
+      const term = orderSearch.trim()
+      const digits = term.replace(/\D/g, '')
+      result = result.filter(o => {
+        const clientName = getOrderCustomerName(o)
+        const clientPhone = getOrderCustomerPhone(o)
+        const clientCity = o.customer?.endereco?.cidade || o.endereco?.cidade || ''
+        const clientBairro = o.customer?.endereco?.bairro || o.endereco?.bairro || ''
+        const clientRua = o.customer?.endereco?.rua || o.endereco?.rua || ''
+        const clientRota = o.customer?.endereco?.rota || o.endereco?.rota || rotaDeOrder(o)
+        const clientEmail = o.customer?.email || o.email || ''
+
+        const matchName = searchMatches(clientName, term) ||
+                          searchMatches(o.customer?.nome, term) ||
+                          searchMatches(o.customer?.pushName, term) ||
+                          searchMatches(o.cliente, term) ||
+                          searchMatches(o.nome, term) ||
+                          searchMatches(o.customerName, term)
+        const matchPhone = digits.length >= 2 && clientPhone.replace(/\D/g, '').includes(digits)
+        const matchAddress = searchMatches(clientCity, term) ||
+                             searchMatches(clientBairro, term) ||
+                             searchMatches(clientRua, term) ||
+                             searchMatches(clientRota, term)
+        const matchEmail = Boolean(clientEmail && searchMatches(clientEmail, term))
+        const matchId = String(o.id).includes(term.replace(/^#/, ''))
+        const matchItems = (Array.isArray(o.items) && o.items.length > 0 ? o.items : (o.itens || [])).some(i => searchMatches(i?.nome, term) || searchMatches(i?.displayName, term))
+
+        return matchName || matchPhone || matchAddress || matchEmail || matchId || matchItems
+      })
     }
     if (orderDateStart) result = result.filter(o => ((o.date || o.createdAt || '').split('T')[0]) >= orderDateStart)
     if (orderDateEnd) result = result.filter(o => ((o.date || o.createdAt || '').split('T')[0]) <= orderDateEnd)
     if (orderDueStart) result = result.filter(o => ((getOrderDue(o) || '').split('T')[0]) >= orderDueStart)
     if (orderDueEnd) result = result.filter(o => ((getOrderDue(o) || '').split('T')[0]) <= orderDueEnd)
-    if (orderCityFilter !== 'TODAS') result = result.filter(o => o.customer?.endereco?.cidade === orderCityFilter)
+    if (orderCityFilter !== 'TODAS') result = result.filter(o => (o.customer?.endereco?.cidade || o.endereco?.cidade) === orderCityFilter)
     if (orderRoutesSelected.size > 0) {
       result = result.filter(o => orderRoutesSelected.has(rotaDeOrder(o)))
     }
     result = [...result].sort((a, b) => {
       let va, vb
       switch (orderSort.field) {
-        case 'cliente': va = a.customer?.nome || ''; vb = b.customer?.nome || ''; return orderSort.dir === 'asc' ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR')
-        case 'telefone': va = a.customer?.telefone || ''; vb = b.customer?.telefone || ''; return orderSort.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+        case 'cliente': va = getOrderCustomerName(a) || ''; vb = getOrderCustomerName(b) || ''; return orderSort.dir === 'asc' ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR')
+        case 'telefone': va = getOrderCustomerPhone(a) || ''; vb = getOrderCustomerPhone(b) || ''; return orderSort.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
         case 'regiao': va = a.customer?.endereco?.cidade || ''; vb = b.customer?.endereco?.cidade || ''; return orderSort.dir === 'asc' ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR')
         case 'rota': va = rotaDeOrder(a) || ''; vb = rotaDeOrder(b) || ''; return orderSort.dir === 'asc' ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR')
         case 'data': return orderSort.dir === 'asc' ? (a.date || '').localeCompare(b.date || '') : (b.date || '').localeCompare(a.date || '')
@@ -2541,7 +2598,45 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       }
     })
     return result
-  }, [orders, orderFilter, selectedUserEmail, orderSearch, orderSort, orderDateStart, orderDateEnd, orderDueStart, orderDueEnd, orderCityFilter, orderRoutesSelected, rotaDeTelefone, financial, listaTodasRotas])
+  }, [orders, orderFilter, selectedUserEmail, orderSearch, orderSort, orderDateStart, orderDateEnd, orderDueStart, orderDueEnd, orderCityFilter, orderRoutesSelected, rotaDeTelefone, financial, listaTodasRotas, getOrderCustomerName, getOrderCustomerPhone, rotaDeOrder, getOrderDue])
+
+  const crossTabSearchMatchesCount = useMemo(() => {
+    if (!orderSearch || !orderSearch.trim()) return 0
+    if (orderFilter === 'todos') return 0
+    const term = orderSearch.trim()
+    const digits = term.replace(/\D/g, '')
+    return orders.filter(o => {
+      const clientName = getOrderCustomerName(o)
+      const clientPhone = getOrderCustomerPhone(o)
+      const clientCity = o.customer?.endereco?.cidade || o.endereco?.cidade || ''
+      const clientBairro = o.customer?.endereco?.bairro || o.endereco?.bairro || ''
+      const clientRua = o.customer?.endereco?.rua || o.endereco?.rua || ''
+      const clientRota = o.customer?.endereco?.rota || o.endereco?.rota || rotaDeOrder(o)
+      const clientEmail = o.customer?.email || o.email || ''
+
+      const matchName = searchMatches(clientName, term) ||
+                        searchMatches(o.customer?.nome, term) ||
+                        searchMatches(o.customer?.pushName, term) ||
+                        searchMatches(o.cliente, term)
+      const matchPhone = digits.length >= 2 && clientPhone.replace(/\D/g, '').includes(digits)
+      const matchAddress = searchMatches(clientCity, term) ||
+                           searchMatches(clientBairro, term) ||
+                           searchMatches(clientRua, term) ||
+                           searchMatches(clientRota, term)
+      const matchEmail = Boolean(clientEmail && searchMatches(clientEmail, term))
+      const matchId = String(o.id).includes(term.replace(/^#/, ''))
+      const matchItems = (Array.isArray(o.items) && o.items.length > 0 ? o.items : (o.itens || [])).some(i => searchMatches(i?.nome, term) || searchMatches(i?.displayName, term))
+
+      return matchName || matchPhone || matchAddress || matchEmail || matchId || matchItems
+    }).length
+  }, [orders, orderSearch, orderFilter, getOrderCustomerName, getOrderCustomerPhone, rotaDeOrder])
+
+  const activeAdvancedFiltersCount = (orderDateStart ? 1 : 0) +
+    (orderDateEnd ? 1 : 0) +
+    (orderDueStart ? 1 : 0) +
+    (orderDueEnd ? 1 : 0) +
+    (orderCityFilter !== 'TODAS' ? 1 : 0) +
+    (orderRoutesSelected.size > 0 ? 1 : 0)
 
   const paginatedOrders = useMemo(() => {
     const start = (orderPage - 1) * ORDER_PAGE_SIZE
@@ -3453,7 +3548,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                     {dashLastOrders.map(o => (
                       <tr key={o.id}>
                         <td>#{o.id.toString().slice(-6)}</td>
-                        <td>{o.customer.nome}</td>
+                        <td style={{ fontWeight: 600 }}>{getOrderCustomerName(o)}</td>
                         <td>{[o.customer.endereco?.cidade, o.customer.endereco?.estado].filter(Boolean).join('/') || '-'}</td>
                         <td>{formatDate(o.date)}</td>
                         <td className="td-price">{formatPreco(o.total)}</td>
@@ -3472,34 +3567,34 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         {/* PEDIDOS */}
         {tab === 'pedidos' && (
           <div className="admin-section">
-            <div className="admin-header-row">
+            <div className="admin-header-row admin-orders-header-row">
               <div>
                 <h1>Pedidos</h1>
                 <p className="admin-subtitle">Gerencie todos os pedidos recebidos</p>
               </div>
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <div className="admin-orders-header-actions">
                 {selectedUserEmail && (
-                  <span style={{ fontSize: '0.78rem', color: 'var(--accent)', background: 'var(--accent-bg)', padding: '0.3rem 0.6rem', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <span className="admin-user-filter-tag">
                     <i className="fa-solid fa-user"></i> {selectedUserEmail}
-                    <button style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: '0' }} onClick={() => setSelectedUserEmail(null)}>
+                    <button style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: 0 }} onClick={() => setSelectedUserEmail(null)}>
                       <i className="fa-solid fa-xmark"></i>
                     </button>
                   </span>
                 )}
-                <button className="admin-btn admin-btn-sec" disabled={reconcilingOrders} onClick={handleReconcileOrders} title="Localiza pedidos sem ID e vincula aos usuários existentes ou cadastra os novos clientes">
-                  <i className={`fa-solid ${reconcilingOrders ? 'fa-spinner fa-spin' : 'fa-link'}`}></i> {reconcilingOrders ? 'Conciliando...' : 'Conciliar Clientes/Pedidos'}
+                <button className="admin-btn admin-btn-sec admin-btn-conciliar" disabled={reconcilingOrders} onClick={handleReconcileOrders} title="Localiza pedidos sem ID e vincula aos usuários existentes ou cadastra os novos clientes">
+                  <i className={`fa-solid ${reconcilingOrders ? 'fa-spinner fa-spin' : 'fa-link'}`}></i> <span>{reconcilingOrders ? 'Conciliando...' : 'Conciliar'}</span>
                 </button>
-                <button className="admin-btn" style={{ background: '#0284c7', color: 'white', borderColor: '#0284c7', fontSize: '0.8rem', padding: '0.45rem 0.85rem' }} onClick={() => setShowOrderReportModal(true)} title="Emitir Relatório de Pedidos em PDF ou Excel com filtros e resumo">
-                  <i className="fa-solid fa-file-invoice-dollar"></i> Relatório (PDF / Excel)
+                <button className="admin-btn admin-btn-relatorio" style={{ background: '#0284c7', color: 'white', borderColor: '#0284c7', fontSize: '0.8rem', padding: '0.45rem 0.85rem' }} onClick={() => setShowOrderReportModal(true)} title="Emitir Relatório de Pedidos em PDF ou Excel com filtros e resumo">
+                  <i className="fa-solid fa-file-invoice-dollar"></i> <span>Relatório (PDF / Excel)</span>
                 </button>
-                <button className="admin-btn admin-btn-primary" onClick={() => setShowAddOrder(true)}>
+                <button className="admin-btn admin-btn-primary admin-btn-novo-pedido" onClick={() => setShowAddOrder(true)}>
                   <i className="fa-solid fa-plus"></i> Novo Pedido
                 </button>
               </div>
             </div>
 
             {orderFilter === 'concluidos' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '1rem', background: 'var(--card-bg)', border: '1px solid var(--admin-border)', borderRadius: '12px', padding: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem', marginBottom: '1rem', background: 'var(--card-bg)', border: '1px solid var(--admin-border)', borderRadius: '12px', padding: '1rem' }}>
                 <div>
                   <p style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Pedidos Concluídos</p>
                   <p style={{ fontSize: '1.35rem', fontWeight: 800, marginTop: '0.25rem' }}>{concluidosStats.totalPedidos}</p>
@@ -3538,36 +3633,74 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
               ))}
             </div>
 
-            <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '0.85rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <div className="admin-search-prod" style={{ flex: '1', minWidth: '180px' }}>
-                <i className="fa-solid fa-search"></i>
-                <input type="text" placeholder="Buscar por nome, telefone ou cidade..." value={orderSearch} onChange={e => setOrderSearch(e.target.value)} style={{ width: '100%' }} />
+            {/* SEARCH & FILTERS BAR */}
+            <div className="admin-orders-search-wrapper">
+              <div className="admin-orders-search-input-box">
+                <i className="fa-solid fa-search admin-search-ico"></i>
+                <input
+                  type="text"
+                  placeholder="Buscar por nome, telefone, cidade ou ID..."
+                  value={orderSearch}
+                  onChange={e => setOrderSearch(e.target.value)}
+                  className="admin-orders-search-input"
+                />
+                {orderSearch && (
+                  <button
+                    type="button"
+                    className="admin-search-clear-btn"
+                    onClick={() => setOrderSearch('')}
+                    title="Limpar busca"
+                  >
+                    <i className="fa-solid fa-xmark"></i>
+                  </button>
+                )}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>
-                <span>Data:</span>
-                <input type="date" value={orderDateStart} onChange={e => setOrderDateStart(e.target.value)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', maxWidth: '130px' }} />
-                <span>—</span>
-                <input type="date" value={orderDateEnd} onChange={e => setOrderDateEnd(e.target.value)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', maxWidth: '130px' }} />
+
+              <button
+                type="button"
+                className={`admin-filter-toggle-btn ${mobileOrdersFilterOpen || activeAdvancedFiltersCount > 0 ? 'active' : ''}`}
+                onClick={() => setMobileOrdersFilterOpen(v => !v)}
+              >
+                <i className="fa-solid fa-sliders"></i>
+                <span>Filtros</span>
+                {activeAdvancedFiltersCount > 0 && (
+                  <span className="admin-filter-count-badge">{activeAdvancedFiltersCount}</span>
+                )}
+              </button>
+            </div>
+
+            {/* ADVANCED FILTERS PANEL */}
+            <div className={`admin-orders-advanced-filters ${mobileOrdersFilterOpen ? 'mobile-open' : ''}`}>
+              <div className="admin-filter-item">
+                <span className="admin-filter-label">Data:</span>
+                <input type="date" value={orderDateStart} onChange={e => setOrderDateStart(e.target.value)} className="admin-filter-input" />
+                <span className="admin-filter-sep">—</span>
+                <input type="date" value={orderDateEnd} onChange={e => setOrderDateEnd(e.target.value)} className="admin-filter-input" />
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>
-                <span>Vencimento:</span>
-                <input type="date" value={orderDueStart} onChange={e => setOrderDueStart(e.target.value)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', maxWidth: '130px' }} />
-                <span>—</span>
-                <input type="date" value={orderDueEnd} onChange={e => setOrderDueEnd(e.target.value)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', maxWidth: '130px' }} />
+              <div className="admin-filter-item">
+                <span className="admin-filter-label">Vencimento:</span>
+                <input type="date" value={orderDueStart} onChange={e => setOrderDueStart(e.target.value)} className="admin-filter-input" />
+                <span className="admin-filter-sep">—</span>
+                <input type="date" value={orderDueEnd} onChange={e => setOrderDueEnd(e.target.value)} className="admin-filter-input" />
               </div>
-              <select value={orderCityFilter} onChange={e => setOrderCityFilter(e.target.value)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', background: 'white', cursor: 'pointer', maxWidth: '150px' }}>
-                {cidadesOrders.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <div style={{ position: 'relative' }}>
+              <div className="admin-filter-item">
+                <span className="admin-filter-label">Cidade:</span>
+                <select value={orderCityFilter} onChange={e => setOrderCityFilter(e.target.value)} className="admin-filter-select">
+                  {cidadesOrders.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="admin-filter-item" style={{ position: 'relative' }}>
                 <button
+                  type="button"
                   onClick={() => setShowOrderRouteFilter(v => !v)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.35rem 0.6rem', borderRadius: '6px', border: `1px solid ${orderRoutesSelected.size > 0 ? 'var(--accent)' : 'var(--admin-border)'}`, fontSize: '0.78rem', background: orderRoutesSelected.size > 0 ? 'var(--accent-bg)' : 'white', color: orderRoutesSelected.size > 0 ? 'var(--accent)' : 'var(--admin-text)', cursor: 'pointer', fontWeight: orderRoutesSelected.size > 0 ? 700 : 400 }}>
+                  className={`admin-route-filter-btn ${orderRoutesSelected.size > 0 ? 'active' : ''}`}
+                >
                   <i className="fa-solid fa-route"></i>
-                  {orderRoutesSelected.size > 0 ? `${orderRoutesSelected.size} rota(s)` : 'Rotas'}
+                  <span>{orderRoutesSelected.size > 0 ? `${orderRoutesSelected.size} rota(s)` : 'Rotas'}</span>
                   <i className="fa-solid fa-chevron-down" style={{ fontSize: '0.6rem' }}></i>
                 </button>
                 {showOrderRouteFilter && (
-                  <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 60, minWidth: '220px', maxHeight: '300px', overflowY: 'auto', background: 'white', border: '1px solid var(--admin-border)', borderRadius: '10px', boxShadow: '0 10px 30px rgba(0,0,0,0.12)', padding: '0.5rem' }}>
+                  <div className="admin-route-filter-dropdown">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
                       <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--admin-text-sec)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Filtrar por rota</span>
                       <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: '0.72rem', fontWeight: 600 }} onClick={() => setOrderRoutesSelected(new Set())}>Limpar</button>
@@ -3590,29 +3723,80 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                   </div>
                 )}
               </div>
-              {selectedIds.size > 0 && (
-                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)', fontWeight: 600 }}>{selectedIds.size} selecionado(s)</span>
-                  <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', background: '#0284c7', color: 'white', borderColor: '#0284c7' }} onClick={() => setShowOrderReportModal(true)} title="Emitir Relatório PDF ou Excel dos pedidos selecionados">
-                    <i className="fa-solid fa-file-pdf"></i> Relatório PDF/Excel ({selectedIds.size})
-                  </button>
-                  <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} onClick={() => bulkAction('confirm')}>
-                    <i className="fa-solid fa-check"></i> Confirmar
-                  </button>
-                  <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)' }} onClick={() => bulkAction('delete')}>
-                    <i className="fa-solid fa-trash"></i> Excluir
-                  </button>
-                  <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', background: '#dc2626', color: 'white', borderColor: '#dc2626' }} onClick={gerarRelatorioSemDevolucao}>
-                    <i className="fa-solid fa-file-lines"></i> Relatório Sem Devolução
-                  </button>
-                  <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem' }} onClick={() => setSelectedIds(new Set())}>
-                    <i className="fa-solid fa-xmark"></i> Limpar
-                  </button>
-                </div>
+              {activeAdvancedFiltersCount > 0 && (
+                <button
+                  type="button"
+                  className="admin-btn admin-btn-sec"
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem' }}
+                  onClick={() => {
+                    setOrderDateStart('')
+                    setOrderDateEnd('')
+                    setOrderDueStart('')
+                    setOrderDueEnd('')
+                    setOrderCityFilter('TODAS')
+                    setOrderRoutesSelected(new Set())
+                  }}
+                >
+                  <i className="fa-solid fa-rotate-left"></i> Limpar Filtros
+                </button>
               )}
             </div>
 
-            <div className="admin-table-wrap">
+            {/* Desktop selected bulk bar */}
+            {selectedIds.size > 0 && (
+              <div className="admin-desktop-bulk-bar" style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)', fontWeight: 600 }}>{selectedIds.size} selecionado(s)</span>
+                <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', background: '#0284c7', color: 'white', borderColor: '#0284c7' }} onClick={() => setShowOrderReportModal(true)} title="Emitir Relatório PDF ou Excel dos pedidos selecionados">
+                  <i className="fa-solid fa-file-pdf"></i> Relatório PDF/Excel ({selectedIds.size})
+                </button>
+                <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} onClick={() => bulkAction('confirm')}>
+                  <i className="fa-solid fa-check"></i> Confirmar
+                </button>
+                <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)' }} onClick={() => bulkAction('delete')}>
+                  <i className="fa-solid fa-trash"></i> Excluir
+                </button>
+                <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', background: '#dc2626', color: 'white', borderColor: '#dc2626' }} onClick={gerarRelatorioSemDevolucao}>
+                  <i className="fa-solid fa-file-lines"></i> Relatório Sem Devolução
+                </button>
+                <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem' }} onClick={() => setSelectedIds(new Set())}>
+                  <i className="fa-solid fa-xmark"></i> Limpar
+                </button>
+              </div>
+            )}
+
+            {/* Active search status banner */}
+            {orderSearch && (
+              <div className="admin-orders-search-status">
+                <span>
+                  <i className="fa-solid fa-magnifying-glass"></i>
+                  {filteredOrders.length > 0 ? (
+                    <> Mostrando <strong>{filteredOrders.length}</strong> pedido(s) encontrado(s) para "<strong>{orderSearch}</strong>"</>
+                  ) : (
+                    <> Nenhum pedido encontrado na aba <strong>"{orderFilter}"</strong> para "<strong>{orderSearch}</strong>"</>
+                  )}
+                </span>
+                <button type="button" className="admin-search-status-clear" onClick={() => setOrderSearch('')}>
+                  Limpar busca <i className="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+            )}
+
+            {/* Cross-tab notice: if not found in current tab but found in other statuses */}
+            {orderSearch && filteredOrders.length === 0 && crossTabSearchMatchesCount > 0 && (
+              <div className="admin-search-cross-tab-alert">
+                <div className="ascta-icon"><i className="fa-solid fa-circle-info"></i></div>
+                <div className="ascta-body">
+                  <strong>Pessoa/pedido encontrado em outro status!</strong>
+                  <p>Não há pedidos na aba "<strong>{orderFilter}</strong>", mas encontramos <strong>{crossTabSearchMatchesCount} pedido(s)</strong> de "{orderSearch}" em outros status.</p>
+                </div>
+                <button type="button" className="admin-btn admin-btn-primary" onClick={() => setOrderFilter('todos')}>
+                  <i className="fa-solid fa-layer-group"></i> Ver em Todos ({crossTabSearchMatchesCount})
+                </button>
+              </div>
+            )}
+
+            {/* DESKTOP TABLE VIEW */}
+            <div className="admin-orders-desktop admin-table-wrap">
               <table className="admin-table">
                 <thead>
                   <tr>
@@ -3638,9 +3822,9 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                       <td>
                         <input type="checkbox" checked={selectedIds.has(o.id)} onChange={() => toggleSelect(o.id)} style={{ cursor: 'pointer', width: '15px', height: '15px' }} />
                       </td>
-                      <td style={{ fontWeight: 600 }}>{o.customer?.nome || '-'}</td>
-                      <td>{o.customer?.telefone || '-'}</td>
-                      <td>{[o.customer.endereco?.cidade, o.customer.endereco?.estado].filter(Boolean).join('/') || '-'}</td>
+                      <td style={{ fontWeight: 600 }}>{getOrderCustomerName(o)}</td>
+                      <td>{getOrderCustomerPhone(o) || '-'}</td>
+                      <td>{[o.customer?.endereco?.cidade, o.customer?.endereco?.estado].filter(Boolean).join('/') || '-'}</td>
                       <td onClick={e => e.stopPropagation()}>
                         <select
                           value={o.customer?.endereco?.rota !== undefined && o.customer?.endereco?.rota !== null ? o.customer.endereco.rota : ((normalizePhone(o.customer?.telefone) ? rotaDeTelefone[normalizePhone(o.customer?.telefone)] : '') || '')}
@@ -3736,6 +3920,223 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 </tbody>
               </table>
             </div>
+
+            {/* MOBILE CARDS VIEW (100% RESPONSIVE) */}
+            <div className="admin-orders-mobile">
+              {paginatedOrders.map(o => {
+                const clientName = getOrderCustomerName(o)
+                const clientPhone = getOrderCustomerPhone(o)
+                const totalPieces = (Array.isArray(o.items) && o.items.length > 0 ? o.items : (Array.isArray(o.originalItems) && o.originalItems.length > 0 ? o.originalItems : (o.itens || []))).reduce((s, i) => s + (Number(i.qty) || 0), 0)
+                const cityState = [o.customer?.endereco?.cidade, o.customer?.endereco?.estado].filter(Boolean).join('/') || '-'
+                const currentRota = o.customer?.endereco?.rota !== undefined && o.customer?.endereco?.rota !== null ? o.customer.endereco.rota : ((normalizePhone(o.customer?.telefone) ? rotaDeTelefone[normalizePhone(o.customer?.telefone)] : '') || '')
+                const e = o.customer?.endereco || {}
+                const addressParts = [e.rua, e.numero, e.bairro, e.cidade, e.estado, e.cep].filter(Boolean)
+                const mapsUrl = addressParts.length > 0 ? ('https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(addressParts.join(', '))) : null
+
+                return (
+                  <div key={o.id} className={`admin-order-card ${selectedIds.has(o.id) ? 'selected' : ''}`}>
+                    {/* Top Row: Checkbox, ID, Date, Status */}
+                    <div className="aoc-header">
+                      <div className="aoc-header-left">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(o.id)}
+                          onChange={() => toggleSelect(o.id)}
+                          className="aoc-checkbox"
+                        />
+                        <span className="aoc-id" onClick={() => setShowOrderDetail(o)} title="Ver detalhes do pedido">
+                          #{String(o.id).slice(-6)}
+                        </span>
+                        <span className="aoc-date">
+                          <i className="fa-regular fa-calendar"></i> {formatDate(o.date)}
+                        </span>
+                      </div>
+                      <span className={`status-tag status-${o.status}`}>{o.status}</span>
+                    </div>
+
+                    {/* Customer Hero Section */}
+                    <div className="aoc-client" onClick={() => setShowOrderDetail(o)}>
+                      <div className="aoc-avatar">
+                        <i className="fa-solid fa-user"></i>
+                      </div>
+                      <div className="aoc-client-main">
+                        <div className="aoc-client-name" title={clientName}>
+                          {clientName}
+                        </div>
+                        <div className="aoc-client-sub">
+                          {clientPhone ? (
+                            <button
+                              type="button"
+                              className="aoc-phone-pill"
+                              onClick={(e) => { e.stopPropagation(); sendWhatsApp(o) }}
+                              title="Enviar WhatsApp"
+                            >
+                              <i className="fa-brands fa-whatsapp"></i> {clientPhone}
+                            </button>
+                          ) : (
+                            <span className="aoc-no-phone">Sem telefone</span>
+                          )}
+                          <span className="aoc-city">
+                            <i className="fa-solid fa-location-dot"></i> {cityState}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Route & Due date */}
+                    <div className="aoc-route-row">
+                      <div className="aoc-route-col">
+                        <span className="aoc-col-label"><i className="fa-solid fa-route"></i> Rota</span>
+                        <select
+                          value={currentRota}
+                          onChange={ev => {
+                            const val = ev.target.value
+                            if (val === '__NEW__') {
+                              const custom = prompt('Nome da nova rota:')
+                              if (custom && custom.trim()) {
+                                const trimmed = custom.trim()
+                                setCustomRotas(prev => [...prev, { id: 'cr-' + Date.now(), rota: trimmed }])
+                                updateOrderRota(o.id, trimmed)
+                              }
+                            } else {
+                              updateOrderRota(o.id, val)
+                            }
+                          }}
+                          className="aoc-select-rota"
+                        >
+                          <option value="">Sem Rota</option>
+                          {listaTodasRotas.map(r => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                          <option value="__NEW__">+ Nova Rota...</option>
+                        </select>
+                      </div>
+                      <div className="aoc-due-col">
+                        <span className="aoc-col-label"><i className="fa-regular fa-clock"></i> Vencimento</span>
+                        <input
+                          type="date"
+                          value={o.dataVencimento || ''}
+                          placeholder="Definir"
+                          onChange={ev => updateOrderDue(o.id, ev.target.value)}
+                          className="aoc-date-due"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Metrics row */}
+                    <div className="aoc-metrics">
+                      <div className="aoc-metric-box">
+                        <span className="aoc-metric-label">Itens</span>
+                        <span className="aoc-metric-val">{totalPieces} pçs</span>
+                      </div>
+                      <div className="aoc-metric-box">
+                        <span className="aoc-metric-label">Pagamento</span>
+                        <span className="aoc-metric-tag">{o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}</span>
+                      </div>
+                      <div className="aoc-metric-box aoc-total-box">
+                        <span className="aoc-metric-label">Total</span>
+                        <span className="aoc-metric-price">{formatPreco(o.total)}</span>
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="aoc-actions">
+                      <button className="aoc-btn aoc-btn-wa" title="WhatsApp" onClick={() => sendWhatsApp(o)}>
+                        <i className="fa-brands fa-whatsapp"></i> WhatsApp
+                      </button>
+
+                      {o.status === 'pre-pedido' && (
+                        <button className="aoc-btn aoc-btn-primary" onClick={() => updateOrderStatus(o.id, 'pendente')}>
+                          <i className="fa-solid fa-check"></i> Aprovar
+                        </button>
+                      )}
+                      {o.status === 'pendente' && (
+                        <button className="aoc-btn aoc-btn-primary" onClick={() => { setShowRotaDue(o); setRotaDueDate(o.dataVencimento || '') }}>
+                          <i className="fa-solid fa-truck"></i> Em Rota
+                        </button>
+                      )}
+                      {o.status === 'em-rota' && (
+                        <button className="aoc-btn aoc-btn-success" onClick={() => updateOrderStatus(o.id, 'entregue')}>
+                          <i className="fa-solid fa-check-double"></i> Entregue
+                        </button>
+                      )}
+                      {o.status === 'entregue' && !isFinalizada(o) && (
+                        <button className="aoc-btn aoc-btn-acerto" onClick={() => openAcertoModal(o, 'acerto')}>
+                          <i className="fa-solid fa-handshake"></i> Acerto
+                        </button>
+                      )}
+                      {o.status === 'acerto' && !isFinalizada(o) && (
+                        <button className="aoc-btn aoc-btn-success" onClick={() => openAcertoModal(o, 'finalizar')}>
+                          <i className="fa-solid fa-check-double"></i> Finalizar
+                        </button>
+                      )}
+                      {(o.status === 'concluido' || isFinalizada(o)) && (
+                        <button className="aoc-btn aoc-btn-revert" onClick={() => revertOrderFinalization(o.id)}>
+                          <i className="fa-solid fa-undo"></i> Voltar Acerto
+                        </button>
+                      )}
+
+                      <button className="aoc-btn aoc-btn-sec" onClick={() => setShowOrderDetail(o)} title="Ver detalhes">
+                        <i className="fa-solid fa-eye"></i> Detalhes
+                      </button>
+
+                      {mapsUrl && (
+                        <button className="aoc-btn aoc-btn-icon" title="Abrir no Google Maps" onClick={() => window.open(mapsUrl, '_blank')}>
+                          <i className="fa-solid fa-location-dot" style={{ color: '#ea4335' }}></i>
+                        </button>
+                      )}
+
+                      <button className="aoc-btn aoc-btn-icon" title="Clonar pedido" onClick={() => cloneOrder(o)}>
+                        <i className="fa-solid fa-copy" style={{ color: '#8b5cf6' }}></i>
+                      </button>
+
+                      <button className="aoc-btn aoc-btn-icon aoc-btn-del" title="Excluir pedido" onClick={() => deleteOrder(o.id)}>
+                        <i className="fa-solid fa-trash"></i>
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+
+              {paginatedOrders.length === 0 && (
+                <div style={{ padding: '2rem 1rem', textAlign: 'center', background: 'white', borderRadius: '12px', border: '1px solid var(--admin-border)' }}>
+                  <i className="fa-solid fa-box-open" style={{ fontSize: '2rem', color: '#94a3b8', marginBottom: '0.5rem', display: 'block' }}></i>
+                  <p style={{ fontWeight: 700, color: 'var(--admin-text)', margin: '0 0 0.25rem' }}>Nenhum pedido encontrado</p>
+                  {orderSearch && (
+                    <p style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)', margin: '0 0 0.75rem' }}>Nenhum resultado para "{orderSearch}".</p>
+                  )}
+                  {orderSearch && (
+                    <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.78rem', padding: '0.35rem 0.75rem' }} onClick={() => setOrderSearch('')}>
+                      <i className="fa-solid fa-xmark"></i> Limpar busca
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* MOBILE FLOATING BULK BAR */}
+            {selectedIds.size > 0 && (
+              <div className="admin-orders-mobile-bulk-bar">
+                <div className="aombb-info">
+                  <strong>{selectedIds.size}</strong> selecionado(s)
+                </div>
+                <div className="aombb-actions">
+                  <button className="admin-btn" style={{ background: '#0284c7', color: 'white', borderColor: '#0284c7', fontSize: '0.74rem', padding: '0.35rem 0.55rem' }} onClick={() => setShowOrderReportModal(true)} title="Relatório">
+                    <i className="fa-solid fa-file-pdf"></i>
+                  </button>
+                  <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)', fontSize: '0.74rem', padding: '0.35rem 0.55rem' }} onClick={() => bulkAction('confirm')}>
+                    <i className="fa-solid fa-check"></i>
+                  </button>
+                  <button className="admin-btn" style={{ background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)', fontSize: '0.74rem', padding: '0.35rem 0.55rem' }} onClick={() => bulkAction('delete')}>
+                    <i className="fa-solid fa-trash"></i>
+                  </button>
+                  <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.74rem', padding: '0.35rem 0.45rem' }} onClick={() => setSelectedIds(new Set())}>
+                    <i className="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {totalOrderPages > 1 && (
               <div className="admin-pagination" style={{ marginTop: '0.75rem' }}>
                 <button disabled={orderPage === 1} onClick={() => setOrderPage(p => p - 1)}><i className="fa-solid fa-chevron-left"></i></button>
