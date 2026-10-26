@@ -9,7 +9,7 @@ import {
 } from '../lib/supabase'
 import { compressImageDataUrl, capPhotoSize } from '../lib/image'
 import { idbGet, idbSet } from '../lib/idb'
-import { searchMatches, normalizeSearch } from '../lib/search'
+import { searchMatches, normalizeSearch, clientMatchesSearch, phonesMatch, cleanDigits } from '../lib/search'
 
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
 const STORAGE_ORDERS = 'thsm_admin_orders'
@@ -29,7 +29,7 @@ const LS = {
     try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : def } catch { return def }
   },
   set(key, val) {
-    if (key === STORAGE_ORDERS || key === STORAGE_FINANCIAL || key === STORAGE_PRODUCTS) {
+    if (key === STORAGE_ORDERS || key === STORAGE_FINANCIAL || key === STORAGE_PRODUCTS || key === 'thsm_usuarios') {
       idbSet(key, val).catch(() => {})
     }
     try {
@@ -992,9 +992,22 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [deliveryPaid, setDeliveryPaid] = useState('')
   const [deliveryDataInicio, setDeliveryDataInicio] = useState(() => hoje())
   const [deliveryDataVenc, setDeliveryDataVenc] = useState('')
-  const [deliveryItemPrices, setDeliveryItemPrices] = useState({})
-  const [deliveryItemCosts, setDeliveryItemCosts] = useState({})
   const [usuarios, setUsuarios] = useState(() => LS.get('thsm_usuarios', []))
+
+  // Carrega usuários do IndexedDB imediatamente se localStorage estiver vazio ou limitado por cota
+  useEffect(() => {
+    idbGet('thsm_usuarios').then(cached => {
+      if (Array.isArray(cached) && cached.length > 0) {
+        setUsuarios(prev => {
+          if (!prev || prev.length === 0) return cached
+          const map = new Map()
+          cached.forEach(u => { if (u) map.set(u.id || u.telefone, u) })
+          prev.forEach(u => { if (u) map.set(u.id || u.telefone, u) })
+          return Array.from(map.values())
+        })
+      }
+    }).catch(() => {})
+  }, [])
 
   const [syncingUsers, setSyncingUsers] = useState(false)
   const [isInitialSyncing, setIsInitialSyncing] = useState(true)
@@ -2557,22 +2570,23 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         const clientRota = o.customer?.endereco?.rota || o.endereco?.rota || rotaDeOrder(o)
         const clientEmail = o.customer?.email || o.email || ''
 
-        const matchName = searchMatches(clientName, term) ||
-                          searchMatches(o.customer?.nome, term) ||
-                          searchMatches(o.customer?.pushName, term) ||
-                          searchMatches(o.cliente, term) ||
-                          searchMatches(o.nome, term) ||
-                          searchMatches(o.customerName, term)
-        const matchPhone = digits.length >= 2 && clientPhone.replace(/\D/g, '').includes(digits)
-        const matchAddress = searchMatches(clientCity, term) ||
-                             searchMatches(clientBairro, term) ||
-                             searchMatches(clientRua, term) ||
-                             searchMatches(clientRota, term)
-        const matchEmail = Boolean(clientEmail && searchMatches(clientEmail, term))
+        const matchCustomer = clientMatchesSearch({
+          nome: clientName || o.customer?.nome || o.cliente || o.nome || o.customerName,
+          pushName: o.customer?.pushName,
+          telefone: clientPhone,
+          email: clientEmail,
+          endereco: {
+            cidade: clientCity,
+            bairro: clientBairro,
+            rua: clientRua,
+            rota: clientRota
+          }
+        }, term)
+        const matchPhone = digits.length >= 2 && phonesMatch(clientPhone, digits)
         const matchId = String(o.id).includes(term.replace(/^#/, ''))
         const matchItems = (Array.isArray(o.items) && o.items.length > 0 ? o.items : (o.itens || [])).some(i => searchMatches(i?.nome, term) || searchMatches(i?.displayName, term))
 
-        return matchName || matchPhone || matchAddress || matchEmail || matchId || matchItems
+        return matchCustomer || matchPhone || matchId || matchItems
       })
     }
     if (orderDateStart) result = result.filter(o => ((o.date || o.createdAt || '').split('T')[0]) >= orderDateStart)
@@ -2614,20 +2628,23 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       const clientRota = o.customer?.endereco?.rota || o.endereco?.rota || rotaDeOrder(o)
       const clientEmail = o.customer?.email || o.email || ''
 
-      const matchName = searchMatches(clientName, term) ||
-                        searchMatches(o.customer?.nome, term) ||
-                        searchMatches(o.customer?.pushName, term) ||
-                        searchMatches(o.cliente, term)
-      const matchPhone = digits.length >= 2 && clientPhone.replace(/\D/g, '').includes(digits)
-      const matchAddress = searchMatches(clientCity, term) ||
-                           searchMatches(clientBairro, term) ||
-                           searchMatches(clientRua, term) ||
-                           searchMatches(clientRota, term)
-      const matchEmail = Boolean(clientEmail && searchMatches(clientEmail, term))
+      const matchCustomer = clientMatchesSearch({
+        nome: clientName || o.customer?.nome || o.cliente || o.nome || o.customerName,
+        pushName: o.customer?.pushName,
+        telefone: clientPhone,
+        email: clientEmail,
+        endereco: {
+          cidade: clientCity,
+          bairro: clientBairro,
+          rua: clientRua,
+          rota: clientRota
+        }
+      }, term)
+      const matchPhone = digits.length >= 2 && phonesMatch(clientPhone, digits)
       const matchId = String(o.id).includes(term.replace(/^#/, ''))
       const matchItems = (Array.isArray(o.items) && o.items.length > 0 ? o.items : (o.itens || [])).some(i => searchMatches(i?.nome, term) || searchMatches(i?.displayName, term))
 
-      return matchName || matchPhone || matchAddress || matchEmail || matchId || matchItems
+      return matchCustomer || matchPhone || matchId || matchItems
     }).length
   }, [orders, orderSearch, orderFilter, getOrderCustomerName, getOrderCustomerPhone, rotaDeOrder])
 
@@ -2872,19 +2889,296 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     }
   }, [orders])
 
+  const rotasAgrupadas = useMemo(() => {
+    const groups = {}
+    rotas.forEach(r => {
+      const rotaKey = r.rota || 'Sem rota'
+      if (!groups[rotaKey]) groups[rotaKey] = { rota: rotaKey, cidades: {}, total: 0 }
+      const cidadeKey = r.cidade || 'Sem cidade'
+      if (!groups[rotaKey].cidades[cidadeKey]) groups[rotaKey].cidades[cidadeKey] = { cidade: cidadeKey, contatos: [] }
+      groups[rotaKey].cidades[cidadeKey].contatos.push(r)
+      groups[rotaKey].total++
+    })
+    customRotas.forEach(cr => {
+      const rotaKey = cr.rota
+      if (!groups[rotaKey]) groups[rotaKey] = { rota: rotaKey, cidades: {}, total: 0, _custom: true }
+      cr.cidades.forEach(c => {
+        const cidadeKey = c.cidade || 'Sem cidade'
+        if (!groups[rotaKey].cidades[cidadeKey]) groups[rotaKey].cidades[cidadeKey] = { cidade: cidadeKey, contatos: [] }
+        c.contatos.forEach(ct => {
+          groups[rotaKey].cidades[cidadeKey].contatos.push(ct)
+          groups[rotaKey].total++
+        })
+      })
+    })
+    // Aplica edições persistidas (adicionar/remover) sobre as rotas sincronizadas do webhook
+    rotaEdits.forEach(e => {
+      const rotaKey = e.rota
+      if (e.acao === 'remover') {
+        const g = groups[rotaKey]
+        if (!g) return
+        const jid = e.contato?.remoteJid
+        const tel = normalizePhone(e.contato?.telefone)
+        Object.keys(g.cidades).forEach(k => {
+          g.cidades[k].contatos = g.cidades[k].contatos.filter(ct => {
+            if (jid && ct.remoteJid && ct.remoteJid === jid) return false
+            if (tel && ct.remoteJid) {
+              const ctTel = normalizePhone((ct.remoteJid || '').replace(/@.*/, ''))
+              if (ctTel && ctTel === tel) return false
+            }
+            if (tel && ct.telefone && normalizePhone(ct.telefone) === tel) return false
+            return true
+          })
+          if (g.cidades[k].contatos.length === 0) delete g.cidades[k]
+        })
+      } else if (e.acao === 'adicionar') {
+        if (!groups[rotaKey]) groups[rotaKey] = { rota: rotaKey, cidades: {}, total: 0, _edited: true }
+        const cidadeKey = e.contato?.cidade || 'Personalizado'
+        if (!groups[rotaKey].cidades[cidadeKey]) groups[rotaKey].cidades[cidadeKey] = { cidade: cidadeKey, contatos: [] }
+        const tel = normalizePhone(e.contato?.telefone)
+        const jid = e.contato?.remoteJid
+        const exists = groups[rotaKey].cidades[cidadeKey].contatos.some(ct => {
+          if (jid && ct.remoteJid && ct.remoteJid === jid) return true
+          if (tel && ct.remoteJid && normalizePhone((ct.remoteJid || '').replace(/@.*/, '')) === tel) return true
+          if (tel && ct.telefone && normalizePhone(ct.telefone) === tel) return true
+          return false
+        })
+        if (!exists) {
+          const jidFinal = jid || (tel ? `${tel}@s.whatsapp.net` : '')
+          groups[rotaKey].cidades[cidadeKey].contatos.push({
+            remoteJid: jidFinal,
+            pushName: e.contato?.pushName || e.contato?.nome || 'Contato',
+            nome: e.contato?.nome || e.contato?.pushName || '',
+            telefone: tel,
+            cidade: cidadeKey,
+            rota: rotaKey,
+            profilePicture: '',
+            _edited: true
+          })
+        }
+      }
+    })
+    Object.values(groups).forEach(g => { g.total = Object.values(g.cidades).reduce((s, c) => s + c.contatos.length, 0) })
+    return Object.values(groups).map(g => ({
+      ...g,
+      cidades: Object.values(g.cidades).sort((a, b) => a.cidade.localeCompare(b.cidade, 'pt-BR'))
+    }))
+  }, [rotas, customRotas, rotaEdits])
+
+  // Consolidar todos os clientes da base (usuarios + pedidos históricos + contatos das rotas)
+  // Deduplicação inteligente que preserva clientes distintos mesmo se compartilharem telefone
+  const allClientesConsolidados = useMemo(() => {
+    const list = []
+    const phoneMap = new Map()
+    const nameMap = new Map()
+
+    const getCleanPhone = (p) => {
+      if (!p) return ''
+      let digits = cleanDigits(p)
+      if (digits.startsWith('55') && digits.length > 10) digits = digits.slice(2)
+      return digits
+    }
+
+    const isSamePerson = (nameA, nameB) => {
+      if (!nameA || !nameB) return false
+      const nA = normalizeSearch(nameA).trim()
+      const nB = normalizeSearch(nameB).trim()
+      if (nA === nB) return true
+      const wordsA = nA.split(/\s+/).filter(w => w.length > 2)
+      const wordsB = nB.split(/\s+/).filter(w => w.length > 2)
+      if (wordsA.length === 0 || wordsB.length === 0) return false
+      return wordsA.every(w => wordsB.includes(w)) || wordsB.every(w => wordsA.includes(w))
+    }
+
+    const findMatchIndex = (name, phone, id) => {
+      const cleanP = getCleanPhone(phone)
+      const normN = normalizeSearch(name || '').trim()
+
+      if (id) {
+        const byId = list.findIndex(c => String(c.id) === String(id))
+        if (byId !== -1) return byId
+      }
+
+      if (cleanP && phoneMap.has(cleanP)) {
+        const candidates = phoneMap.get(cleanP)
+        for (const idx of candidates) {
+          const c = list[idx]
+          if (!normN || !c.nome || isSamePerson(c.nome, name)) {
+            return idx
+          }
+        }
+      }
+
+      if (normN && nameMap.has(normN)) {
+        const candidates = nameMap.get(normN)
+        for (const idx of candidates) {
+          const c = list[idx]
+          const cPhone = getCleanPhone(c.telefone)
+          if (!cleanP || !cPhone || cleanP === cPhone) {
+            return idx
+          }
+        }
+      }
+
+      return -1
+    }
+
+    const mergeClient = (targetIdx, incoming) => {
+      const target = list[targetIdx]
+      const existingEnd = target.endereco || {}
+      const inEnd = incoming.endereco || {}
+
+      let bestName = target.nome || ''
+      if ((incoming.nome || '').length > bestName.length && !target.nome?.includes(incoming.nome)) {
+        bestName = incoming.nome
+      }
+
+      const mergedEnd = {
+        cep: target.cep || existingEnd.cep || incoming.cep || inEnd.cep || '',
+        cidade: existingEnd.cidade || target.cidade || inEnd.cidade || incoming.cidade || '',
+        bairro: existingEnd.bairro || inEnd.bairro || '',
+        rua: existingEnd.rua || inEnd.rua || inEnd.logradouro || '',
+        numero: existingEnd.numero || inEnd.numero || '',
+        complemento: existingEnd.complemento || inEnd.complemento || '',
+        estado: existingEnd.estado || inEnd.estado || '',
+        cpf: existingEnd.cpf || target.cpf || inEnd.cpf || incoming.cpf || ''
+      }
+
+      const updated = {
+        ...target,
+        nome: bestName,
+        telefone: target.telefone || incoming.telefone || '',
+        email: target.email || incoming.email || '',
+        cpf: target.cpf || incoming.cpf || mergedEnd.cpf || '',
+        rota: target.rota || incoming.rota || '',
+        cidade: mergedEnd.cidade,
+        endereco: mergedEnd
+      }
+
+      list[targetIdx] = updated
+
+      const cleanP = getCleanPhone(updated.telefone)
+      if (cleanP) {
+        if (!phoneMap.has(cleanP)) phoneMap.set(cleanP, [])
+        if (!phoneMap.get(cleanP).includes(targetIdx)) phoneMap.get(cleanP).push(targetIdx)
+      }
+      const normN = normalizeSearch(updated.nome || '').trim()
+      if (normN) {
+        if (!nameMap.has(normN)) nameMap.set(normN, [])
+        if (!nameMap.get(normN).includes(targetIdx)) nameMap.get(normN).push(targetIdx)
+      }
+    }
+
+    const addClient = (incoming) => {
+      const idx = findMatchIndex(incoming.nome, incoming.telefone, incoming.id)
+      if (idx !== -1) {
+        mergeClient(idx, incoming)
+      } else {
+        const newIdx = list.length
+        list.push(incoming)
+        const cleanP = getCleanPhone(incoming.telefone)
+        if (cleanP) {
+          if (!phoneMap.has(cleanP)) phoneMap.set(cleanP, [])
+          phoneMap.get(cleanP).push(newIdx)
+        }
+        const normN = normalizeSearch(incoming.nome || '').trim()
+        if (normN) {
+          if (!nameMap.has(normN)) nameMap.set(normN, [])
+          nameMap.get(normN).push(newIdx)
+        }
+      }
+    }
+
+    // 1. Clientes registrados na tabela usuarios
+    (usuarios || []).forEach(u => {
+      if (!u) return
+      addClient({
+        ...u,
+        nome: (u.nome || u.pushName || 'Cliente').trim(),
+        telefone: u.telefone || '',
+        cidade: u.endereco?.cidade || u.cidade || '',
+        source: 'usuario'
+      })
+    })
+
+    // 2. Clientes encontrados nos pedidos históricos (garante 100% de cobertura de quem já comprou)
+    (orders || []).forEach(o => {
+      if (!o) return
+      const cust = o.customer || (o.data && o.data.customer) || o
+      const rawPhone = cust.telefone || o.telefone || o.phone || cust.phone || ''
+      const name = (cust.nome || o.nome || o.cliente || cust.pushName || o.customerName || '').trim()
+      const end = cust.endereco || o.endereco || {}
+      if (!name && !rawPhone) return
+
+      addClient({
+        id: cust.user_id || o.user_id || `order-cust-${o.id}`,
+        nome: name || 'Cliente Sem Nome',
+        telefone: rawPhone || '',
+        email: cust.email || o.email || '',
+        cpf: cust.cpf || end.cpf || o.cpf || '',
+        rota: o.rota || cust.rota || '',
+        cidade: end.cidade || '',
+        endereco: {
+          cep: end.cep || '',
+          cidade: end.cidade || '',
+          bairro: end.bairro || '',
+          rua: end.rua || end.logradouro || '',
+          numero: end.numero || '',
+          complemento: end.complemento || '',
+          estado: end.estado || '',
+          cpf: end.cpf || cust.cpf || ''
+        },
+        source: 'pedido'
+      })
+    })
+
+    // 3. Clientes cadastrados em Rotas (webhook, rotas personalizadas e edições de rota)
+    (rotasAgrupadas || []).forEach(group => {
+      const rotaName = group.rota
+      const cidades = Array.isArray(group.cidades) ? group.cidades : Object.values(group.cidades || {})
+      cidades.forEach(c => {
+        (c.contatos || []).forEach(ct => {
+          const name = (ct.nome || ct.pushName || '').trim()
+          const rawPhone = ct.telefone || (ct.remoteJid ? ct.remoteJid.replace(/@.*/, '') : '')
+          if (!name && !rawPhone) return
+
+          addClient({
+            id: `rota-${ct.remoteJid || rawPhone || Math.random()}`,
+            nome: name || 'Contato Rota',
+            telefone: rawPhone || '',
+            rota: rotaName || ct.rota || '',
+            cidade: ct.cidade || c.cidade || '',
+            endereco: {
+              cidade: ct.cidade || c.cidade || '',
+              rua: '',
+              bairro: '',
+              cep: '',
+              numero: '',
+              complemento: '',
+              estado: ''
+            },
+            source: 'rota'
+          })
+        })
+      })
+    })
+
+    return list.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'))
+  }, [usuarios, orders, rotasAgrupadas])
+
   // Usuarios filter & pagination
   const filteredUsuarios = useMemo(() => {
-    let result = usuarios
+    let result = allClientesConsolidados
     const t = userSearch.toLowerCase().trim()
     const tEnd = userEnderecoSearch.toLowerCase().trim()
     if (selectedUserEmail || t || userCityFilter !== 'TODAS' || userOrigemFilter !== 'TODAS' || tEnd) {
-      result = usuarios.filter(u => {
+      result = allClientesConsolidados.filter(u => {
         if (userCityFilter !== 'TODAS') {
-          const cidade = (u.endereco?.cidade || u.endereco?.cidade || '').toLowerCase()
+          const cidade = (u.endereco?.cidade || u.cidade || '').toLowerCase()
           if (cidade !== userCityFilter.toLowerCase()) return false
         }
         if (userOrigemFilter !== 'TODAS') {
-          const origem = u.endereco?.origem || ''
+          const origem = u.endereco?.origem || u.source || ''
           if (origem !== userOrigemFilter) return false
         }
         if (userEnderecoSearch) {
@@ -2892,7 +3186,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           const addrStr = [e.rua, e.numero, e.bairro, e.cidade, e.estado, e.cep, e.complemento].filter(Boolean).join(' ')
           if (!searchMatches(addrStr, userEnderecoSearch)) return false
         }
-        if (userSearch && !searchMatches(u.nome, userSearch) && !String(u.telefone || '').includes(userSearch.trim()) && !searchMatches(u.email, userSearch)) return false
+        if (userSearch && !clientMatchesSearch(u, userSearch)) return false
         return true
       })
     }
@@ -2905,7 +3199,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         default: return (a.nome || '').localeCompare(b.nome || '', 'pt-BR')
       }
     })
-  }, [usuarios, userSearch, userCityFilter, userOrigemFilter, userEnderecoSearch, userSort, selectedUserEmail])
+  }, [allClientesConsolidados, userSearch, userCityFilter, userOrigemFilter, userEnderecoSearch, userSort, selectedUserEmail])
 
   const paginatedUsuarios = useMemo(() => {
     const start = (userPage - 1) * USER_PAGE_SIZE
@@ -2917,9 +3211,9 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   useEffect(() => { setUserPage(1) }, [userSearch, userCityFilter, userOrigemFilter, userEnderecoSearch, selectedUserEmail])
 
   const userCities = useMemo(() => {
-    const cidades = [...new Set((usuarios || []).map(u => u.endereco?.cidade).filter(Boolean))]
+    const cidades = [...new Set((allClientesConsolidados || []).map(u => u.endereco?.cidade || u.cidade).filter(Boolean))]
     return ['TODAS', ...cidades.sort((a, b) => a.localeCompare(b, 'pt-BR'))]
-  }, [usuarios])
+  }, [allClientesConsolidados])
 
   // =============================================
   // PRODUCTS
@@ -3257,82 +3551,6 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   // =============================================
   // SIDEBAR
   // =============================================
-  const rotasAgrupadas = useMemo(() => {
-    const groups = {}
-    rotas.forEach(r => {
-      const rotaKey = r.rota || 'Sem rota'
-      if (!groups[rotaKey]) groups[rotaKey] = { rota: rotaKey, cidades: {}, total: 0 }
-      const cidadeKey = r.cidade || 'Sem cidade'
-      if (!groups[rotaKey].cidades[cidadeKey]) groups[rotaKey].cidades[cidadeKey] = { cidade: cidadeKey, contatos: [] }
-      groups[rotaKey].cidades[cidadeKey].contatos.push(r)
-      groups[rotaKey].total++
-    })
-    customRotas.forEach(cr => {
-      const rotaKey = cr.rota
-      if (!groups[rotaKey]) groups[rotaKey] = { rota: rotaKey, cidades: {}, total: 0, _custom: true }
-      cr.cidades.forEach(c => {
-        const cidadeKey = c.cidade || 'Sem cidade'
-        if (!groups[rotaKey].cidades[cidadeKey]) groups[rotaKey].cidades[cidadeKey] = { cidade: cidadeKey, contatos: [] }
-        c.contatos.forEach(ct => {
-          groups[rotaKey].cidades[cidadeKey].contatos.push(ct)
-          groups[rotaKey].total++
-        })
-      })
-    })
-    // Aplica edições persistidas (adicionar/remover) sobre as rotas sincronizadas do webhook
-    rotaEdits.forEach(e => {
-      const rotaKey = e.rota
-      if (e.acao === 'remover') {
-        const g = groups[rotaKey]
-        if (!g) return
-        const jid = e.contato?.remoteJid
-        const tel = normalizePhone(e.contato?.telefone)
-        Object.keys(g.cidades).forEach(k => {
-          g.cidades[k].contatos = g.cidades[k].contatos.filter(ct => {
-            if (jid && ct.remoteJid && ct.remoteJid === jid) return false
-            if (tel && ct.remoteJid) {
-              const ctTel = normalizePhone((ct.remoteJid || '').replace(/@.*/, ''))
-              if (ctTel && ctTel === tel) return false
-            }
-            if (tel && ct.telefone && normalizePhone(ct.telefone) === tel) return false
-            return true
-          })
-          if (g.cidades[k].contatos.length === 0) delete g.cidades[k]
-        })
-      } else if (e.acao === 'adicionar') {
-        if (!groups[rotaKey]) groups[rotaKey] = { rota: rotaKey, cidades: {}, total: 0, _edited: true }
-        const cidadeKey = e.contato?.cidade || 'Personalizado'
-        if (!groups[rotaKey].cidades[cidadeKey]) groups[rotaKey].cidades[cidadeKey] = { cidade: cidadeKey, contatos: [] }
-        const tel = normalizePhone(e.contato?.telefone)
-        const jid = e.contato?.remoteJid
-        const exists = groups[rotaKey].cidades[cidadeKey].contatos.some(ct => {
-          if (jid && ct.remoteJid && ct.remoteJid === jid) return true
-          if (tel && ct.remoteJid && normalizePhone((ct.remoteJid || '').replace(/@.*/, '')) === tel) return true
-          if (tel && ct.telefone && normalizePhone(ct.telefone) === tel) return true
-          return false
-        })
-        if (!exists) {
-          const jidFinal = jid || (tel ? `${tel}@s.whatsapp.net` : '')
-          groups[rotaKey].cidades[cidadeKey].contatos.push({
-            remoteJid: jidFinal,
-            pushName: e.contato?.pushName || e.contato?.nome || 'Contato',
-            nome: e.contato?.nome || e.contato?.pushName || '',
-            telefone: tel,
-            cidade: cidadeKey,
-            rota: rotaKey,
-            profilePicture: '',
-            _edited: true
-          })
-        }
-      }
-    })
-    Object.values(groups).forEach(g => { g.total = Object.values(g.cidades).reduce((s, c) => s + c.contatos.length, 0) })
-    return Object.values(groups).map(g => ({
-      ...g,
-      cidades: Object.values(g.cidades).sort((a, b) => a.cidade.localeCompare(b.cidade, 'pt-BR'))
-    }))
-  }, [rotas, customRotas, rotaEdits])
-
   const cidadesRotas = useMemo(() => {
     const cidades = [...new Set(rotas.map(r => r.cidade).filter(Boolean))]
     return ['TODAS', ...cidades.sort((a, b) => a.localeCompare(b, 'pt-BR'))]
@@ -3364,7 +3582,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     if (filterRotaSearch.trim()) result = result.filter(g =>
       searchMatches(g.rota, filterRotaSearch) ||
       Object.values(g.cidades).some(c => searchMatches(c.cidade, filterRotaSearch)) ||
-      Object.values(g.cidades).some(c => c.contatos.some(ct => searchMatches(ct.pushName, filterRotaSearch)))
+      Object.values(g.cidades).some(c => c.contatos.some(ct => clientMatchesSearch(ct, filterRotaSearch)))
     )
     return result
   }, [rotasAgrupadas, filterCidade, filterRota, filterRotaSearch])
@@ -5655,7 +5873,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       {showAddOrder && (
         <AddOrderModal
           produtos={produtosAtuais}
-          usuarios={usuarios}
+          usuarios={allClientesConsolidados}
           orders={orders}
           productPriceMap={productPriceMap}
           initialCart={prodCart}
@@ -5673,7 +5891,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         produtos={produtosAtuais}
         filteredOrdersFromScreen={filteredOrders}
         selectedOrderIds={selectedIds}
-        usuarios={usuarios}
+        usuarios={allClientesConsolidados}
         rotas={rotas}
         isFinalizada={isFinalizada}
         showToast={showToast}
@@ -5788,7 +6006,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       {showOrderDetail && (
         <OrderDetailModal
           order={showOrderDetail}
-          usuarios={usuarios}
+          usuarios={allClientesConsolidados}
           financial={financial.filter(f => String(f.orderId) === String(showOrderDetail.id))}
           produtos={produtosAtuais}
           onClose={() => setShowOrderDetail(null)}
@@ -6484,8 +6702,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                   {rotas.filter(r => {
                     if (!newRotaSearch.trim()) return false
                     const phone = r.remoteJid?.replace(/@.*/, '').replace(/\D/g, '') || ''
-                    return searchMatches(r.pushName, newRotaSearch) || phone.includes(newRotaSearch.trim()) || searchMatches(r.cidade, newRotaSearch)
-                  }).slice(0, 30).map((r, i) => {
+                    return clientMatchesSearch({ nome: r.pushName, pushName: r.pushName, telefone: phone, cidade: r.cidade }, newRotaSearch)
+                  }).slice(0, 50).map((r, i) => {
                     const phone = r.remoteJid?.replace(/@.*/, '').replace(/\D/g, '') || ''
                     const isSelected = newRotaSelected.some(s => s.remoteJid === r.remoteJid)
                     return (
@@ -6504,7 +6722,10 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                       </div>
                     )
                   })}
-                  {newRotaSearch && rotas.filter(r => searchMatches(r.pushName, newRotaSearch) || searchMatches(r.cidade, newRotaSearch)).length === 0 && (
+                  {newRotaSearch && rotas.filter(r => {
+                    const phone = r.remoteJid?.replace(/@.*/, '').replace(/\D/g, '') || ''
+                    return clientMatchesSearch({ nome: r.pushName, pushName: r.pushName, telefone: phone, cidade: r.cidade }, newRotaSearch)
+                  }).length === 0 && (
                     <p style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.8rem', color: 'var(--admin-text-sec)' }}>Nenhum contato encontrado</p>
                   )}
                 </div>
@@ -8269,13 +8490,12 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
 
   const filteredUsers = useMemo(() => {
     if (!userSearch?.trim()) return []
-    return (usuarios || []).filter(u =>
-      u && (
-        searchMatches(u.nome, userSearch) ||
-        String(u.telefone || '').includes(userSearch.trim()) ||
-        searchMatches(u.email, userSearch)
-      )
-    ).slice(0, 20)
+    return (usuarios || []).filter(u => clientMatchesSearch(u, userSearch)).slice(0, 100)
+  }, [usuarios, userSearch])
+
+  const recentUsers = useMemo(() => {
+    if (userSearch?.trim()) return []
+    return (usuarios || []).slice(0, 15)
   }, [usuarios, userSearch])
 
   useEffect(() => {
@@ -8293,23 +8513,38 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
       rawTel = cleanTel.slice(2)
     }
     setTelefone(rawTel)
-    setCpf(u.endereco?.cpf || '')
+    setCpf(u.endereco?.cpf || u.cpf || '')
 
     const userEnd = u.endereco || {}
     let initialCep = String(userEnd.cep || u.cep || '').replace(/\D/g, '')
 
-    // 1. If user doesn't have CEP, try to find from past orders
-    if (initialCep.length !== 8 && orders && orders.length > 0) {
-      const normPhone = cleanTel.startsWith('55') ? cleanTel : '55' + cleanTel
-      const foundOrder = orders.find(o => {
-        const oPhone = String(o.customer?.telefone || o.telefone || '').replace(/\D/g, '')
+    // 1. Procurar pedidos anteriores do mesmo cliente (pelo nome ou telefone) para obter endereço completo
+    const normPhone = cleanTel.startsWith('55') ? cleanTel : (cleanTel ? '55' + cleanTel : '')
+    let foundOrder = null
+    if (orders && orders.length > 0) {
+      foundOrder = orders.find(o => {
+        const cust = o.customer || (o.data && o.data.customer) || o
+        const oName = (cust.nome || o.nome || o.cliente || '').trim()
+        const oPhone = String(cust.telefone || o.telefone || '').replace(/\D/g, '')
         const oNorm = oPhone.startsWith('55') ? oPhone : '55' + oPhone
-        const oCep = String(o.customer?.endereco?.cep || o.endereco?.cep || '').replace(/\D/g, '')
-        return oNorm === normPhone && oCep.length === 8
+        const nameMatch = u.nome && oName && normalizeSearch(u.nome) === normalizeSearch(oName)
+        return nameMatch && (normPhone ? oNorm === normPhone : true)
+      }) || orders.find(o => {
+        const cust = o.customer || (o.data && o.data.customer) || o
+        const oName = (cust.nome || o.nome || o.cliente || '').trim()
+        return u.nome && oName && normalizeSearch(u.nome) === normalizeSearch(oName)
+      }) || orders.find(o => {
+        const cust = o.customer || (o.data && o.data.customer) || o
+        const oPhone = String(cust.telefone || o.telefone || '').replace(/\D/g, '')
+        const oNorm = oPhone.startsWith('55') ? oPhone : '55' + oPhone
+        return normPhone && oNorm === normPhone
       })
-      if (foundOrder) {
-        initialCep = String(foundOrder.customer?.endereco?.cep || foundOrder.endereco?.cep || '').replace(/\D/g, '')
-      }
+    }
+
+    if (initialCep.length !== 8 && foundOrder) {
+      const fCust = foundOrder.customer || (foundOrder.data && foundOrder.data.customer) || foundOrder
+      const fCep = String(fCust.endereco?.cep || foundOrder.endereco?.cep || '').replace(/\D/g, '')
+      if (fCep.length === 8) initialCep = fCep
     }
 
     // 2. Check if a valid 8-digit CEP is present inside other address fields
@@ -8322,14 +8557,16 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
       }
     }
 
+    const pastEnd = foundOrder ? (foundOrder.customer?.endereco || foundOrder.endereco || {}) : {}
+
     const nextEnd = {
       cep: initialCep,
-      estado: userEnd.estado || '',
-      cidade: userEnd.cidade || '',
-      bairro: userEnd.bairro || '',
-      rua: userEnd.rua || userEnd.logradouro || '',
-      numero: userEnd.numero || '',
-      complemento: userEnd.complemento || ''
+      estado: userEnd.estado || pastEnd.estado || '',
+      cidade: userEnd.cidade || u.cidade || pastEnd.cidade || '',
+      bairro: userEnd.bairro || pastEnd.bairro || '',
+      rua: userEnd.rua || userEnd.logradouro || pastEnd.rua || pastEnd.logradouro || '',
+      numero: userEnd.numero || pastEnd.numero || '',
+      complemento: userEnd.complemento || pastEnd.complemento || ''
     }
     setEndereco(nextEnd)
     setUserSearch('')
@@ -8446,6 +8683,7 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
       telefone: normalizePhone(telefone),
       cpf: cpf.trim(),
       endereco,
+      rota: selectedUser?.rota || (selectedUser?.endereco && selectedUser.endereco.rota) || '',
       dataPedido,
       pagamento: pagamento === 'misto' ? 'misto' : (pagamento === 'aprazo' ? 'aprazo' : 'avista'),
       items: cartItems.map(i => ({
@@ -8518,15 +8756,41 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
                   <div className="form-group">
                     <label>Buscar cliente existente</label>
                     <div className="admin-search-prod">
-                      <input type="text" placeholder="Digite nome, telefone ou email..." value={userSearch} onChange={e => setUserSearch(e.target.value)} style={{ width: '100%' }} />
+                      <input
+                        type="text"
+                        placeholder="Digite nome, telefone, cidade ou documento..."
+                        value={userSearch}
+                        onChange={e => setUserSearch(e.target.value)}
+                        style={{ width: '100%' }}
+                        autoFocus
+                      />
                     </div>
-                    {filteredUsers.length > 0 && (
-                      <div style={{ maxHeight: '240px', overflowY: 'auto', border: '1px solid var(--admin-border)', borderRadius: '8px', marginTop: '0.4rem' }}>
-                        {filteredUsers.map(u => (
-                          <div key={u.id} className="add-prod-row" style={{ cursor: 'pointer', padding: '0.5rem 0.7rem' }} onClick={() => pickUser(u)}>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{u.nome}</div>
-                              <div style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>{u.telefone} {u.email ? `· ${u.email}` : ''} {u.endereco?.cidade ? `· ${u.endereco.cidade}` : ''}</div>
+                    {userSearch && filteredUsers.length > 0 && (
+                      <div style={{ maxHeight: '260px', overflowY: 'auto', border: '1px solid var(--admin-border)', borderRadius: '8px', marginTop: '0.4rem' }}>
+                        <div style={{ padding: '0.35rem 0.6rem', fontSize: '0.72rem', color: 'var(--admin-text-sec)', borderBottom: '1px solid var(--admin-border)', background: 'var(--admin-card-bg)', fontWeight: 600 }}>
+                          {filteredUsers.length} cliente(s) encontrado(s):
+                        </div>
+                        {filteredUsers.map((u, idx) => (
+                          <div key={u.id ? `uid-${u.id}` : `${u.nome}-${u.telefone}-${idx}`} className="add-prod-row" style={{ cursor: 'pointer', padding: '0.5rem 0.7rem' }} onClick={() => pickUser(u)}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                                <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{u.nome}</span>
+                                {u.rota && (
+                                  <span style={{ background: '#e0f2fe', color: '#0369a1', borderRadius: '4px', padding: '1px 6px', fontSize: '0.68rem', fontWeight: 600 }}>
+                                    <i className="fa-solid fa-route" style={{ fontSize: '0.62rem', marginRight: '3px' }}></i>{u.rota}
+                                  </span>
+                                )}
+                                {u.source && (
+                                  <span style={{ background: '#f1f5f9', color: '#475569', borderRadius: '4px', padding: '1px 6px', fontSize: '0.68rem' }}>
+                                    {u.source === 'pedido' ? 'histórico' : (u.source === 'rota' ? 'rota' : 'cadastro')}
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)', display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center', marginTop: '2px' }}>
+                                <span><i className="fa-solid fa-phone" style={{ fontSize: '0.68rem' }}></i> {u.telefone || 'Sem telefone'}</span>
+                                {(u.endereco?.cidade || u.cidade) && <span>· <i className="fa-solid fa-location-dot" style={{ fontSize: '0.68rem' }}></i> {u.endereco?.cidade || u.cidade}{u.endereco?.estado ? `/${u.endereco.estado}` : ''}</span>}
+                                {u.email && <span>· {u.email}</span>}
+                              </div>
                             </div>
                             <i className="fa-solid fa-chevron-right" style={{ color: 'var(--admin-text-sec)', fontSize: '0.75rem' }}></i>
                           </div>
@@ -8535,13 +8799,36 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
                     )}
                     {userSearch && filteredUsers.length === 0 && (
                       <p style={{ fontSize: '0.82rem', color: 'var(--admin-text-sec)', marginTop: '0.4rem' }}>
-                        Nenhum cliente encontrado. <button className="admin-btn" style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem', marginLeft: '0.3rem' }} onClick={resetForm}><i className="fa-solid fa-plus"></i> Adicionar Novo</button>
+                        Nenhum cliente encontrado para "{userSearch}". <button className="admin-btn" style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem', marginLeft: '0.3rem' }} onClick={resetForm}><i className="fa-solid fa-plus"></i> Adicionar Novo</button>
                       </p>
                     )}
                     {!userSearch && (
-                      <p style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)', marginTop: '0.5rem' }}>
-                        Ou <button className="admin-btn" style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem' }} onClick={resetForm}><i className="fa-solid fa-plus"></i> Adicionar Novo Cliente</button>
-                      </p>
+                      <div style={{ marginTop: '0.5rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                          <span style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)', fontWeight: 500 }}>Clientes recentes / sugeridos:</span>
+                          <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }} onClick={resetForm}><i className="fa-solid fa-plus"></i> Novo Cliente</button>
+                        </div>
+                        <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid var(--admin-border)', borderRadius: '8px' }}>
+                          {recentUsers.map((u, idx) => (
+                            <div key={u.id ? `uid-recent-${u.id}` : `recent-${u.nome}-${u.telefone}-${idx}`} className="add-prod-row" style={{ cursor: 'pointer', padding: '0.45rem 0.7rem' }} onClick={() => pickUser(u)}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                                  <span style={{ fontWeight: 600, fontSize: '0.82rem' }}>{u.nome}</span>
+                                  {u.rota && (
+                                    <span style={{ background: '#e0f2fe', color: '#0369a1', borderRadius: '4px', padding: '1px 5px', fontSize: '0.65rem', fontWeight: 600 }}>
+                                      {u.rota}
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: '0.73rem', color: 'var(--admin-text-sec)', marginTop: '2px' }}>
+                                  {u.telefone} {(u.endereco?.cidade || u.cidade) ? `· ${u.endereco?.cidade || u.cidade}` : ''}
+                                </div>
+                              </div>
+                              <i className="fa-solid fa-chevron-right" style={{ color: 'var(--admin-text-sec)', fontSize: '0.75rem' }}></i>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
                 </>
@@ -8859,13 +9146,7 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
   const [userSearch, setUserSearch] = useState('')
   const filteredUsers = useMemo(() => {
     if (!usuarios || !userSearch?.trim()) return []
-    return usuarios.filter(u =>
-      u && (
-        searchMatches(u.nome, userSearch) ||
-        String(u.telefone || '').includes(userSearch.trim()) ||
-        searchMatches(u.email, userSearch)
-      )
-    ).slice(0, 10)
+    return usuarios.filter(u => clientMatchesSearch(u, userSearch)).slice(0, 100)
   }, [usuarios, userSearch])
   const [editCustomer, setEditCustomer] = useState({
     id: order.user_id || order.customer?.id || null,
@@ -9272,22 +9553,25 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 <div style={{ marginBottom: '0.5rem', borderBottom: '1px solid var(--admin-border)', paddingBottom: '0.5rem' }}>
                   <label style={{ fontSize: '0.78rem', fontWeight: 600 }}>Buscar outro cliente rapidamente:</label>
-                  <input type="text" placeholder="Digite nome, telefone ou email..." value={userSearch} onChange={e => setUserSearch(e.target.value)} style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', marginTop: '0.2rem' }} />
+                  <input type="text" placeholder="Digite nome, telefone, cidade ou CPF..." value={userSearch} onChange={e => setUserSearch(e.target.value)} style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', marginTop: '0.2rem' }} />
                   {filteredUsers.length > 0 && (
-                    <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid var(--admin-border)', borderRadius: '6px', marginTop: '0.2rem', background: 'var(--admin-bg)' }}>
+                    <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid var(--admin-border)', borderRadius: '6px', marginTop: '0.2rem', background: 'var(--admin-bg)' }}>
+                      <div style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem', color: 'var(--admin-text-sec)', borderBottom: '1px solid var(--admin-border)', fontWeight: 600 }}>
+                        {filteredUsers.length} cliente(s) encontrado(s):
+                      </div>
                       {filteredUsers.map(u => (
-                        <div key={u.id} style={{ cursor: 'pointer', padding: '0.4rem 0.6rem', borderBottom: '1px solid var(--admin-border)', fontSize: '0.8rem' }} onClick={() => {
+                        <div key={u.id || u.telefone} style={{ cursor: 'pointer', padding: '0.4rem 0.6rem', borderBottom: '1px solid var(--admin-border)', fontSize: '0.8rem' }} onClick={() => {
                           setEditCustomer({
                             id: u.id,
                             nome: u.nome || '',
                             email: u.email || '',
                             telefone: u.telefone || '',
-                            cpf: u.cpf || '',
+                            cpf: u.cpf || u.endereco?.cpf || '',
                             endereco: { ...(u.endereco || {}) }
                           })
                           setUserSearch('')
                         }}>
-                          <strong>{u.nome}</strong> - {u.telefone}
+                          <strong>{u.nome}</strong> - {u.telefone} {u.endereco?.cidade ? `· ${u.endereco.cidade}` : ''}
                         </div>
                       ))}
                     </div>
