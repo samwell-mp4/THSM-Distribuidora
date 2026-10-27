@@ -778,7 +778,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
                           <td data-label="Ações">
                             <div className="td-actions">
                               {o.status === 'pre-pedido' && (
-                                <button className="action-btn action-confirm" title="Editar Comanda" onClick={() => { setSelectedOrder(o); setEditedPreItems(o.items.map(i => ({ ...i }))); setEditPreOrder(true) }}>
+                                <button type="button" className="action-btn action-confirm" title="Editar Comanda" onClick={() => { setSelectedOrder(o); setEditedPreItems((Array.isArray(o.items) && o.items.length > 0 ? o.items : (o.itens || [])).map(i => ({ ...i }))); setEditPreOrder(true) }}>
                                   <i className="fa-solid fa-pen"></i>
                                 </button>
                               )}

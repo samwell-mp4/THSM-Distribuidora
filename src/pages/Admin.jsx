@@ -1989,36 +1989,62 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     sendStatusWebhook(order, 'cancelado')
   }
 
-  const cloneOrder = (original) => {
-    const newId = Date.now()
-    const newOrder = {
-      ...original,
-      id: newId,
-      date: hoje(),
-      createdAt: Date.now(),
-      status: 'pendente',
-      preApprovedAt: null,
-      pre_approved_at: null
-    }
-    setOrders(prev => [newOrder, ...prev])
-    const finRecords = original.items.filter(i => i.tipo === 'aprazo').map(i => {
-      const origFin = financial.find(f => f.id === original.id + '-' + i.id)
-      const dueDate = origFin?.dueDate || (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0] })()
-      return {
-        id: newId + '-' + i.id,
-        orderId: newId,
-        customerName: original.customer?.nome || '',
-        itemName: i.nome,
-        qty: i.qty,
-        value: i.preco * i.qty,
-        precoCusto: (i.preco_custo || getItemCost(i, produtosAtuais)) * i.qty,
-        dueDate,
-        paidDate: null,
-        status: 'pendente'
+  const cloneOrder = async (original) => {
+    try {
+      const origItems = (Array.isArray(original?.items) && original.items.length > 0)
+        ? original.items
+        : ((Array.isArray(original?.originalItems) && original.originalItems.length > 0) ? original.originalItems : (original?.itens || []))
+      const clonedItems = origItems.map(i => ({ ...i }))
+      const newId = Date.now()
+      const newOrder = {
+        ...original,
+        id: newId,
+        date: hoje(),
+        createdAt: Date.now(),
+        items: clonedItems,
+        itens: clonedItems,
+        originalItems: clonedItems.map(i => ({ ...i })),
+        status: 'pendente',
+        preApprovedAt: null,
+        pre_approved_at: null,
+        lastModified: Date.now(),
+        updatedAt: Date.now()
       }
-    })
-    if (finRecords.length > 0) setFinancial(prev => [...finRecords, ...prev])
-    showToast(`Pedido #${original.id} clonado como #${newId.toString().slice(-6)}!`)
+      setOrders(prev => {
+        const next = [newOrder, ...prev]
+        LS.set(STORAGE_ORDERS, next)
+        return next
+      })
+      const finRecords = clonedItems.filter(i => i.tipo === 'aprazo').map(i => {
+        const origFin = financial.find(f => f.id === original.id + '-' + i.id)
+        const dueDate = origFin?.dueDate || (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0] })()
+        return {
+          id: newId + '-' + i.id,
+          orderId: newId,
+          customerName: original.customer?.nome || '',
+          itemName: i.nome,
+          qty: i.qty,
+          value: (Number(i.preco) || 0) * (Number(i.qty) || 0),
+          precoCusto: ((i.preco_custo != null && i.preco_custo !== '') ? Number(i.preco_custo) : getItemCost(i, produtosAtuais)) * (Number(i.qty) || 0),
+          dueDate,
+          paidDate: null,
+          status: 'pendente'
+        }
+      })
+      if (finRecords.length > 0) {
+        setFinancial(prev => {
+          const next = [...finRecords, ...prev]
+          LS.set(STORAGE_FINANCIAL, next)
+          return next
+        })
+        upsertFinancial(finRecords)
+      }
+      await upsertOrder(newOrder)
+      showToast(`Pedido #${String(original.id).slice(-6)} clonado como #${String(newId).slice(-6)} com sucesso!`)
+    } catch (err) {
+      console.error('Erro ao clonar pedido:', err)
+      showToast('Erro ao clonar pedido', 'error')
+    }
   }
 
   const handleDeliveryFile = (e, type) => {
@@ -2795,15 +2821,35 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   }
 
   const sendWhatsApp = (o) => {
+    if (!o) return
+    const phone = getOrderCustomerPhone(o)
+    const raw = (phone || '').replace(/\D/g, '')
+    if (!raw || raw.length < 10) {
+      showToast('Cliente sem telefone válido para WhatsApp', 'error')
+      return
+    }
+    const cleanPhone = raw.startsWith('55') ? raw.slice(2) : raw
+    const telefoneCom55 = '55' + cleanPhone
     const msg = buildStatusWhatsApp(o, o.status)
-    const raw = (o.customer?.telefone || '').replace(/\D/g, '')
-    const telefone = raw.startsWith('55') ? raw : '55' + raw
-    if (!telefone) return
-    fetch(WHATSAPP_FORCE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ telefone, message: msg })
-    }).then(() => showToast('WhatsApp enviado!', 'success')).catch(() => { })
+
+    // 1. Disparo de webhook em segundo plano
+    try {
+      fetch(WHATSAPP_FORCE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telefone: telefoneCom55, message: msg })
+      }).then(() => {
+        showToast('WhatsApp disparado via sistema!', 'success')
+      }).catch(err => {
+        console.warn('Falha webhook whatsapp:', err)
+      })
+    } catch (err) {
+      console.warn('Exceção webhook whatsapp:', err)
+    }
+
+    // 2. Abrir diretamente o WhatsApp no celular ou navegador
+    const waUrl = `https://wa.me/${telefoneCom55}?text=${encodeURIComponent(msg)}`
+    window.open(waUrl, '_blank')
   }
 
   // Stats
@@ -4165,9 +4211,9 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 const clientName = getOrderCustomerName(o)
                 const clientPhone = getOrderCustomerPhone(o)
                 const totalPieces = (Array.isArray(o.items) && o.items.length > 0 ? o.items : (Array.isArray(o.originalItems) && o.originalItems.length > 0 ? o.originalItems : (o.itens || []))).reduce((s, i) => s + (Number(i.qty) || 0), 0)
-                const cityState = [o.customer?.endereco?.cidade, o.customer?.endereco?.estado].filter(Boolean).join('/') || '-'
-                const currentRota = o.customer?.endereco?.rota !== undefined && o.customer?.endereco?.rota !== null ? o.customer.endereco.rota : ((normalizePhone(o.customer?.telefone) ? rotaDeTelefone[normalizePhone(o.customer?.telefone)] : '') || '')
-                const e = o.customer?.endereco || {}
+                const e = o.customer?.endereco || o.endereco || {}
+                const cityState = [e.cidade, e.estado].filter(Boolean).join('/') || '-'
+                const currentRota = e.rota !== undefined && e.rota !== null ? e.rota : ((normalizePhone(clientPhone) ? rotaDeTelefone[normalizePhone(clientPhone)] : '') || '')
                 const addressParts = [e.rua, e.numero, e.bairro, e.cidade, e.estado, e.cep].filter(Boolean)
                 const mapsUrl = addressParts.length > 0 ? ('https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(addressParts.join(', '))) : null
 
@@ -4206,7 +4252,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                             <button
                               type="button"
                               className="aoc-phone-pill"
-                              onClick={(e) => { e.stopPropagation(); sendWhatsApp(o) }}
+                              onClick={(ev) => { ev.stopPropagation(); sendWhatsApp(o) }}
                               title="Enviar WhatsApp"
                             >
                               <i className="fa-brands fa-whatsapp"></i> {clientPhone}
@@ -4279,56 +4325,193 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
                     {/* Action buttons */}
                     <div className="aoc-actions">
-                      <button className="aoc-btn aoc-btn-wa" title="WhatsApp" onClick={() => sendWhatsApp(o)}>
+                      <button
+                        type="button"
+                        className="aoc-btn aoc-btn-wa"
+                        title="Conversar no WhatsApp"
+                        onClick={(ev) => { ev.stopPropagation(); sendWhatsApp(o) }}
+                      >
                         <i className="fa-brands fa-whatsapp"></i> WhatsApp
                       </button>
 
                       {o.status === 'pre-pedido' && (
-                        <button className="aoc-btn aoc-btn-primary" onClick={() => updateOrderStatus(o.id, 'pendente')}>
-                          <i className="fa-solid fa-check"></i> Aprovar
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="aoc-btn aoc-btn-primary"
+                            title="Aprovar e enviar para Pendente"
+                            onClick={(ev) => { ev.stopPropagation(); updateOrderStatus(o.id, 'pendente') }}
+                          >
+                            <i className="fa-solid fa-check"></i> Aprovar
+                          </button>
+                          <button
+                            type="button"
+                            className="aoc-btn aoc-btn-deliver"
+                            title="Enviar direto para Em Rota"
+                            onClick={(ev) => { ev.stopPropagation(); setShowRotaDue(o); setRotaDueDate(o.dataVencimento || '') }}
+                          >
+                            <i className="fa-solid fa-truck"></i> Em Rota
+                          </button>
+                        </>
                       )}
+
                       {o.status === 'pendente' && (
-                        <button className="aoc-btn aoc-btn-primary" onClick={() => { setShowRotaDue(o); setRotaDueDate(o.dataVencimento || '') }}>
+                        <button
+                          type="button"
+                          className="aoc-btn aoc-btn-primary"
+                          title="Enviar para Em Rota"
+                          onClick={(ev) => { ev.stopPropagation(); setShowRotaDue(o); setRotaDueDate(o.dataVencimento || '') }}
+                        >
                           <i className="fa-solid fa-truck"></i> Em Rota
                         </button>
                       )}
+
                       {o.status === 'em-rota' && (
-                        <button className="aoc-btn aoc-btn-success" onClick={() => updateOrderStatus(o.id, 'entregue')}>
-                          <i className="fa-solid fa-check-double"></i> Entregue
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="aoc-btn aoc-btn-success"
+                            title="Confirmar Entrega"
+                            onClick={(ev) => { ev.stopPropagation(); updateOrderStatus(o.id, 'entregue') }}
+                          >
+                            <i className="fa-solid fa-check-double"></i> Entregue
+                          </button>
+                          <button
+                            type="button"
+                            className="aoc-btn aoc-btn-revert"
+                            title="Voltar para Pendente"
+                            onClick={(ev) => { ev.stopPropagation(); updateOrderStatus(o.id, 'pendente') }}
+                          >
+                            <i className="fa-solid fa-undo"></i> Voltar
+                          </button>
+                        </>
                       )}
+
                       {o.status === 'entregue' && !isFinalizada(o) && (
-                        <button className="aoc-btn aoc-btn-acerto" onClick={() => openAcertoModal(o, 'acerto')}>
-                          <i className="fa-solid fa-handshake"></i> Acerto
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="aoc-btn aoc-btn-acerto"
+                            title="Fazer Acerto de Devoluções e Valores"
+                            onClick={(ev) => { ev.stopPropagation(); openAcertoModal(o, 'acerto') }}
+                          >
+                            <i className="fa-solid fa-handshake"></i> Acerto
+                          </button>
+                          <button
+                            type="button"
+                            className="aoc-btn aoc-btn-success"
+                            title="Finalizar Pedido"
+                            onClick={(ev) => { ev.stopPropagation(); openAcertoModal(o, 'finalizar') }}
+                          >
+                            <i className="fa-solid fa-check-double"></i> Finalizar
+                          </button>
+                          <button
+                            type="button"
+                            className="aoc-btn aoc-btn-revert"
+                            title="Voltar para Em Rota"
+                            onClick={(ev) => { ev.stopPropagation(); updateOrderStatus(o.id, 'em-rota') }}
+                          >
+                            <i className="fa-solid fa-undo"></i> Voltar Rota
+                          </button>
+                        </>
                       )}
+
                       {o.status === 'acerto' && !isFinalizada(o) && (
-                        <button className="aoc-btn aoc-btn-success" onClick={() => openAcertoModal(o, 'finalizar')}>
-                          <i className="fa-solid fa-check-double"></i> Finalizar
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="aoc-btn aoc-btn-success"
+                            title="Finalizar Pedido"
+                            onClick={(ev) => { ev.stopPropagation(); openAcertoModal(o, 'finalizar') }}
+                          >
+                            <i className="fa-solid fa-check-double"></i> Finalizar
+                          </button>
+                          <button
+                            type="button"
+                            className="aoc-btn aoc-btn-primary"
+                            title="Editar Acerto"
+                            onClick={(ev) => { ev.stopPropagation(); openAcertoModal(o, 'acerto') }}
+                          >
+                            <i className="fa-solid fa-pen-to-square"></i> Editar
+                          </button>
+                          <button
+                            type="button"
+                            className="aoc-btn aoc-btn-revert"
+                            title="Voltar para Entregues"
+                            onClick={(ev) => { ev.stopPropagation(); revertToEntregue(o.id) }}
+                          >
+                            <i className="fa-solid fa-undo"></i> Voltar
+                          </button>
+                        </>
                       )}
+
                       {(o.status === 'concluido' || isFinalizada(o)) && (
-                        <button className="aoc-btn aoc-btn-revert" onClick={() => revertOrderFinalization(o.id)}>
-                          <i className="fa-solid fa-undo"></i> Voltar Acerto
+                        <>
+                          <button
+                            type="button"
+                            className="aoc-btn aoc-btn-acerto"
+                            title="Ver Acerto e Devoluções"
+                            onClick={(ev) => { ev.stopPropagation(); openAcertoModal(o, 'finalizar') }}
+                          >
+                            <i className="fa-solid fa-eye"></i> Ver Acerto
+                          </button>
+                          <button
+                            type="button"
+                            className="aoc-btn aoc-btn-revert"
+                            title="Voltar para Acertos"
+                            onClick={(ev) => { ev.stopPropagation(); revertOrderFinalization(o.id) }}
+                          >
+                            <i className="fa-solid fa-undo"></i> Voltar Acerto
+                          </button>
+                        </>
+                      )}
+
+                      {o.status === 'cancelado' && (
+                        <button
+                          type="button"
+                          className="aoc-btn aoc-btn-primary"
+                          title="Reativar Pedido"
+                          onClick={(ev) => { ev.stopPropagation(); updateOrderStatus(o.id, 'pendente') }}
+                        >
+                          <i className="fa-solid fa-rotate-left"></i> Reativar
                         </button>
                       )}
 
-                      <button className="aoc-btn aoc-btn-sec" onClick={() => setShowOrderDetail(o)} title="Ver detalhes">
+                      <button
+                        type="button"
+                        className="aoc-btn aoc-btn-sec"
+                        onClick={(ev) => { ev.stopPropagation(); setShowOrderDetail(o) }}
+                        title="Ver detalhes da comanda"
+                      >
                         <i className="fa-solid fa-eye"></i> Detalhes
                       </button>
 
                       {mapsUrl && (
-                        <button className="aoc-btn aoc-btn-icon" title="Abrir no Google Maps" onClick={() => window.open(mapsUrl, '_blank')}>
+                        <button
+                          type="button"
+                          className="aoc-btn aoc-btn-icon"
+                          title="Abrir no Google Maps"
+                          onClick={(ev) => { ev.stopPropagation(); window.open(mapsUrl, '_blank') }}
+                        >
                           <i className="fa-solid fa-location-dot" style={{ color: '#ea4335' }}></i>
                         </button>
                       )}
 
-                      <button className="aoc-btn aoc-btn-icon" title="Clonar pedido" onClick={() => cloneOrder(o)}>
+                      <button
+                        type="button"
+                        className="aoc-btn aoc-btn-icon"
+                        title="Clonar pedido"
+                        onClick={(ev) => { ev.stopPropagation(); cloneOrder(o) }}
+                      >
                         <i className="fa-solid fa-copy" style={{ color: '#8b5cf6' }}></i>
                       </button>
 
-                      <button className="aoc-btn aoc-btn-icon aoc-btn-del" title="Excluir pedido" onClick={() => deleteOrder(o.id)}>
+                      <button
+                        type="button"
+                        className="aoc-btn aoc-btn-icon aoc-btn-del"
+                        title="Excluir pedido"
+                        onClick={(ev) => { ev.stopPropagation(); deleteOrder(o.id) }}
+                      >
                         <i className="fa-solid fa-trash"></i>
                       </button>
                     </div>
@@ -9958,16 +10141,43 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
               </button>
             )}
             {order.status === 'em-rota' && (
-              <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} onClick={onClose}>
-                <i className="fa-solid fa-check-double"></i> Concluir
+              <button
+                type="button"
+                className="admin-btn"
+                style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }}
+                onClick={() => onStatusChange('entregue')}
+              >
+                <i className="fa-solid fa-check-double"></i> Concluir Entrega
+              </button>
+            )}
+            {(order.customer?.telefone || order.telefone) && (
+              <button
+                type="button"
+                className="admin-btn"
+                style={{ background: '#10b981', color: 'white', borderColor: '#059669' }}
+                onClick={() => {
+                  const raw = (order.customer?.telefone || order.telefone || '').replace(/\D/g, '')
+                  const clean = raw.startsWith('55') ? raw.slice(2) : raw
+                  if (clean) {
+                    const msg = buildStatusWhatsApp(order, order.status)
+                    window.open(`https://wa.me/55${clean}?text=${encodeURIComponent(msg)}`, '_blank')
+                  }
+                }}
+              >
+                <i className="fa-brands fa-whatsapp"></i> WhatsApp
               </button>
             )}
             {order.status !== 'entregue' && order.status !== 'acerto' && order.status !== 'concluido' && order.status !== 'cancelado' && (
-              <button className="admin-btn" style={{ background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)' }} onClick={() => { if (confirm('Tem certeza que deseja cancelar esta comanda?')) { onCancelOrder?.(order.id) } }}>
+              <button
+                type="button"
+                className="admin-btn"
+                style={{ background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)' }}
+                onClick={() => { if (confirm('Tem certeza que deseja cancelar esta comanda?')) { onCancelOrder?.(order.id) } }}
+              >
                 <i className="fa-solid fa-ban"></i> Cancelar Comanda
               </button>
             )}
-            <button className="admin-btn admin-btn-sec" onClick={onClose}>Fechar</button>
+            <button type="button" className="admin-btn admin-btn-sec" onClick={onClose}>Fechar</button>
           </div>
         </div>
       </div>
