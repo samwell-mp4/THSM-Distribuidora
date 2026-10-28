@@ -977,6 +977,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [showDeliveryModal, setShowDeliveryModal] = useState(null)
   const [deliveryModalMode, setDeliveryModalMode] = useState('acerto')
   const [returnQuantities, setReturnQuantities] = useState({})
+  const [deliveryItemPrices, setDeliveryItemPrices] = useState({})
+  const [deliveryItemCosts, setDeliveryItemCosts] = useState({})
   const [payQuantities, setPayQuantities] = useState({})
   const [identityPreview, setIdentityPreview] = useState('')
   const [addressPreview, setAddressPreview] = useState('')
@@ -2074,58 +2076,70 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   }
 
   const openAcertoModal = (orderParam, mode = 'acerto') => {
-    const freshOrder = orders.find(ord => String(ord.id) === String(orderParam?.id)) || orderParam
-    const o = { ...freshOrder, ...orderParam }
-    const baseItems = getOrderBaseItems(o, produtosAtuais)
-    const retMap = {}
-    const priceMap = {}
-    const costMap = {}
-    baseItems.forEach((i, idx) => {
-      const key = i.id != null ? String(i.id) : (i.nome ? String(i.nome) : String(idx))
-      priceMap[key] = String(i.preco != null ? i.preco : '')
-      const c = (i.preco_custo != null && i.preco_custo !== '') ? i.preco_custo : getItemCost(i, produtosAtuais)
-      costMap[key] = c > 0 ? String(c) : ''
-    })
-    if (o.returnedItems && o.returnedItems.length > 0) {
-      o.returnedItems.forEach(r => {
-        const key = r.id != null ? String(r.id) : (r.nome ? String(r.nome) : '')
-        if (key) {
-          retMap[key] = r.returnedQty || r.qty || 0
-        }
+    try {
+      const freshOrder = orders.find(ord => String(ord.id) === String(orderParam?.id)) || orderParam
+      const o = { ...freshOrder, ...orderParam }
+      const baseItems = getOrderBaseItems(o, produtosAtuais)
+      const retMap = {}
+      const priceMap = {}
+      const costMap = {}
+      baseItems.forEach((i, idx) => {
+        const key = i.id != null ? String(i.id) : (i.nome ? String(i.nome) : String(idx))
+        priceMap[key] = String(i.preco != null ? i.preco : '')
+        const c = (i.preco_custo != null && i.preco_custo !== '') ? i.preco_custo : getItemCost(i, produtosAtuais)
+        costMap[key] = c > 0 ? String(c) : ''
       })
+      let returnedList = []
+      if (Array.isArray(o.returnedItems)) {
+        returnedList = o.returnedItems
+      } else if (typeof o.returnedItems === 'string') {
+        try { returnedList = JSON.parse(o.returnedItems) } catch {}
+      }
+      if (Array.isArray(returnedList) && returnedList.length > 0) {
+        returnedList.forEach(r => {
+          if (!r) return
+          const key = r.id != null ? String(r.id) : (r.nome ? String(r.nome) : '')
+          if (key) {
+            retMap[key] = r.returnedQty || r.qty || 0
+          }
+        })
+      }
+      setReturnQuantities(retMap)
+      setDeliveryItemPrices(priceMap)
+      setDeliveryItemCosts(costMap)
+      setPayQuantities({})
+      setIdentityPreview(o.identityPhoto || '')
+      setAddressPreview(o.addressProof || '')
+
+      const pm = o.paymentMethod || 'pix'
+      setDeliveryPayment(pm)
+      setDeliverySplits(o.paymentSplits || { pix: '', dinheiro: '', cartao: '' })
+
+      if (o.descontoPercent != null) {
+        setDeliveryDiscountType('percent')
+        setDeliveryDiscount(String(o.descontoPercent))
+      } else if (o.desconto > 0) {
+        setDeliveryDiscountType('reais')
+        setDeliveryDiscount(String(o.desconto))
+      } else {
+        setDeliveryDiscountType('percent')
+        setDeliveryDiscount('30')
+      }
+
+      if (o.totalPago != null && o.totalPago !== '' && Number(o.totalPago) > 0) {
+        setDeliveryPaid(String(o.totalPago))
+      } else {
+        setDeliveryPaid('')
+      }
+
+      setDeliveryDataInicio(o.dataInicio || o.date || hoje())
+      setDeliveryDataVenc(o.dataVencimento || '')
+      setDeliveryModalMode(mode)
+      setShowDeliveryModal({ ...o, baseItems })
+    } catch (err) {
+      console.error('Erro ao abrir modal de acerto:', err)
+      showToast('Erro ao abrir dados de acerto', 'error')
     }
-    setReturnQuantities(retMap)
-    setDeliveryItemPrices(priceMap)
-    setDeliveryItemCosts(costMap)
-    setPayQuantities({})
-    setIdentityPreview(o.identityPhoto || '')
-    setAddressPreview(o.addressProof || '')
-
-    const pm = o.paymentMethod || 'pix'
-    setDeliveryPayment(pm)
-    setDeliverySplits(o.paymentSplits || { pix: '', dinheiro: '', cartao: '' })
-
-    if (o.descontoPercent != null) {
-      setDeliveryDiscountType('percent')
-      setDeliveryDiscount(String(o.descontoPercent))
-    } else if (o.desconto > 0) {
-      setDeliveryDiscountType('reais')
-      setDeliveryDiscount(String(o.desconto))
-    } else {
-      setDeliveryDiscountType('percent')
-      setDeliveryDiscount('30')
-    }
-
-    if (o.totalPago != null && o.totalPago !== '' && Number(o.totalPago) > 0) {
-      setDeliveryPaid(String(o.totalPago))
-    } else {
-      setDeliveryPaid('')
-    }
-
-    setDeliveryDataInicio(o.dataInicio || o.date || hoje())
-    setDeliveryDataVenc(o.dataVencimento || '')
-    setDeliveryModalMode(mode)
-    setShowDeliveryModal({ ...o, baseItems })
   }
 
   const salvarAcerto = async (orderId, finalize = false) => {
@@ -4188,7 +4202,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Em Rota" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-undo"></i></button>
                           )}
                           {o.status === 'entregue' && !isFinalizada(o) && (
-                            <button className="action-btn action-confirm" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} title="Avançar para Acerto" onClick={() => updateOrderStatus(o.id, 'acerto')}><i className="fa-solid fa-handshake"></i></button>
+                            <button className="action-btn action-confirm" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} title="Fazer Acerto" onClick={() => openAcertoModal(o, 'acerto')}><i className="fa-solid fa-handshake"></i></button>
                           )}
                           {o.status === 'acerto' && !isFinalizada(o) && (
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Entregues" onClick={() => revertToEntregue(o.id)}><i className="fa-solid fa-undo"></i></button>
@@ -4407,8 +4421,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                           <button
                             type="button"
                             className="aoc-btn aoc-btn-acerto"
-                            title="Avançar para Acerto"
-                            onClick={(ev) => { ev.stopPropagation(); updateOrderStatus(o.id, 'acerto') }}
+                            title="Fazer Acerto"
+                            onClick={(ev) => { ev.stopPropagation(); openAcertoModal(o, 'acerto') }}
                           >
                             <i className="fa-solid fa-handshake"></i> Acerto
                           </button>
@@ -6386,7 +6400,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
             <div className="admin-modal-header">
               <h3>
                 <i className={deliveryModalMode === 'finalizar' ? 'fa-solid fa-circle-check' : 'fa-solid fa-handshake'} style={{ color: deliveryModalMode === 'finalizar' ? 'var(--success)' : '#6366f1' }}></i>
-                {deliveryModalMode === 'finalizar' ? ' Finalizar Pedido' : ' Acerto do Pedido'} #{showDeliveryModal.id.toString().slice(-6)}
+                {deliveryModalMode === 'finalizar' ? ' Finalizar Pedido' : ' Acerto do Pedido'} #{String(showDeliveryModal?.id || '').slice(-6)}
               </h3>
               <button className="admin-modal-close" onClick={() => setShowDeliveryModal(null)}><i className="fa-solid fa-xmark"></i></button>
             </div>
@@ -10116,8 +10130,8 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
                 <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => onStatusChange('em-rota')}>
                   <i className="fa-solid fa-undo"></i> Voltar para Em Rota
                 </button>
-                <button className="admin-btn" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} onClick={() => onStatusChange('acerto')}>
-                  <i className="fa-solid fa-handshake"></i> Avançar para Acerto
+                <button className="admin-btn" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} onClick={() => handleOpenDelivery('acerto')}>
+                  <i className="fa-solid fa-handshake"></i> Fazer Acerto
                 </button>
               </>
             )}
