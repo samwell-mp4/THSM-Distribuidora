@@ -641,53 +641,67 @@ ${msgDatas}
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pedido foi cancelado.
 Em caso de dúvidas, entre em contato conosco.
-━━━━━━━━━━━━━━━━━━`
+━━━━━━━━━━━━━━━━━━`,
+
+    'acerto': `🤝 *PEDIDO EM ACERTO* 🤝
+━━━━━━━━━━━━━━━━━━
+📋 Pedido: ${id}
+👤 Cliente: ${nome}
+${msgDatas}
+━━━━━━━━━━━━━━━━━━
+Olá ${nome}, seu pedido está na etapa de Acerto de devoluções e valores.
+🔗 ${link}`
   }
 
   return templates[newStatus] || `📋 *Atualização do Pedido ${id}* 📋\n━━━━━━━━━━━━━━━━━━\nStatus: ${newStatus}\n🔗 ${link}`
 }
 
 function sendStatusWebhook(order, newStatus, extra = {}) {
-  if (order?.status === 'pre-pedido' && newStatus === 'pendente') return
-  const whatsappMessage = buildStatusWhatsApp(order, newStatus, extra)
-  const returnedItems = extra.returnedItems || order.returnedItems || []
-  const rawPhone = (order.customer?.telefone || '').replace(/\D/g, '')
-  const telefone = rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone
-  const customer = { ...order.customer, telefone }
-  fetch(WEBHOOK_STATUS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      event: 'atualizacao-pedido',
-      whatsappMessage,
-      adminPhones: ADMIN_NOTIFY_PHONES,
-      admin_phones: ADMIN_NOTIFY_PHONES,
-      order: {
-        id: order.id,
-        date: order.date,
-        status: newStatus,
-        pagamento: order.pagamento,
-        total: order.total,
-        totalAvista: order.totalAvista,
-        totalAprazo: order.totalAprazo,
-        customer,
-        items: order.items.map(i => ({ nome: i.nome, qty: i.qty, preco: i.preco, tipo: i.tipo })),
-        ...(returnedItems.length > 0 ? { returnedItems: returnedItems.map(i => ({ nome: i.nome, returnedQty: i.returnedQty || i.qty, preco: i.preco })) } : {})
-      }
-    })
-  }).catch(() => { })
-
-  // Notificação espelho para os administradores
-  ADMIN_NOTIFY_PHONES.forEach(adminTel => {
-    fetch(WHATSAPP_FORCE_URL, {
+  try {
+    if (order?.status === 'pre-pedido' && newStatus === 'pendente') return
+    const whatsappMessage = buildStatusWhatsApp(order, newStatus, extra)
+    const returnedItems = extra.returnedItems || order.returnedItems || []
+    const rawPhone = (order.customer?.telefone || '').replace(/\D/g, '')
+    const telefone = rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone
+    const customer = { ...order.customer, telefone }
+    const itemsList = Array.isArray(order?.items) ? order.items : (Array.isArray(order?.itens) ? order.itens : [])
+    fetch(WEBHOOK_STATUS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        telefone: adminTel,
-        message: `🔔 *[STATUS PEDIDO - THSM DISTRIBUIDORA]*\n\n${whatsappMessage}`
+        event: 'atualizacao-pedido',
+        whatsappMessage,
+        adminPhones: ADMIN_NOTIFY_PHONES,
+        admin_phones: ADMIN_NOTIFY_PHONES,
+        order: {
+          id: order.id,
+          date: order.date,
+          status: newStatus,
+          pagamento: order.pagamento,
+          total: order.total,
+          totalAvista: order.totalAvista,
+          totalAprazo: order.totalAprazo,
+          customer,
+          items: itemsList.map(i => ({ nome: i.nome, qty: i.qty, preco: i.preco, tipo: i.tipo })),
+          ...(returnedItems.length > 0 ? { returnedItems: returnedItems.map(i => ({ nome: i.nome, returnedQty: i.returnedQty || i.qty, preco: i.preco })) } : {})
+        }
       })
     }).catch(() => { })
-  })
+
+    // Notificação espelho para os administradores
+    ADMIN_NOTIFY_PHONES.forEach(adminTel => {
+      fetch(WHATSAPP_FORCE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telefone: adminTel,
+          message: `🔔 *[STATUS PEDIDO - THSM DISTRIBUIDORA]*\n\n${whatsappMessage}`
+        })
+      }).catch(() => { })
+    })
+  } catch (err) {
+    console.warn('Erro ao disparar sendStatusWebhook:', err)
+  }
 }
 
 function sendAlertRota(tipo, contatos, orders, customText = '') {
@@ -2768,6 +2782,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         if (order?.status === 'pre-pedido') updateOrderStatus(id, 'pendente', true)
         else if (order?.status === 'pendente') updateOrderStatus(id, 'em-rota')
         else if (order?.status === 'em-rota') updateOrderStatus(id, 'entregue')
+        else if (order?.status === 'entregue') updateOrderStatus(id, 'acerto')
         else updateOrderStatus(id, 'entregue')
       }
     })
@@ -4173,7 +4188,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Em Rota" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-undo"></i></button>
                           )}
                           {o.status === 'entregue' && !isFinalizada(o) && (
-                            <button className="action-btn action-confirm" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} title="Fazer Acerto (Avançar etapa)" onClick={() => openAcertoModal(o, 'acerto')}><i className="fa-solid fa-handshake"></i></button>
+                            <button className="action-btn action-confirm" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} title="Avançar para Acerto" onClick={() => updateOrderStatus(o.id, 'acerto')}><i className="fa-solid fa-handshake"></i></button>
                           )}
                           {o.status === 'acerto' && !isFinalizada(o) && (
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Entregues" onClick={() => revertToEntregue(o.id)}><i className="fa-solid fa-undo"></i></button>
@@ -4392,8 +4407,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                           <button
                             type="button"
                             className="aoc-btn aoc-btn-acerto"
-                            title="Fazer Acerto de Devoluções e Valores"
-                            onClick={(ev) => { ev.stopPropagation(); openAcertoModal(o, 'acerto') }}
+                            title="Avançar para Acerto"
+                            onClick={(ev) => { ev.stopPropagation(); updateOrderStatus(o.id, 'acerto') }}
                           >
                             <i className="fa-solid fa-handshake"></i> Acerto
                           </button>
@@ -10101,8 +10116,8 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
                 <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => onStatusChange('em-rota')}>
                   <i className="fa-solid fa-undo"></i> Voltar para Em Rota
                 </button>
-                <button className="admin-btn" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} onClick={() => handleOpenDelivery('acerto')}>
-                  <i className="fa-solid fa-handshake"></i> Fazer Acerto
+                <button className="admin-btn" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} onClick={() => onStatusChange('acerto')}>
+                  <i className="fa-solid fa-handshake"></i> Avançar para Acerto
                 </button>
               </>
             )}
