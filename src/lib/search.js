@@ -28,12 +28,21 @@ export function phonesMatch(p1, p2) {
   const d2 = cleanDigits(p2)
   if (!d1 || !d2) return false
   if (d1 === d2) return true
-  if (d1.includes(d2) || d2.includes(d1)) return true
+
+  // Para ser uma comparação de telefone válida, d1 (telefone salvo) deve ter pelo menos 8 dígitos
+  // e d2 (termo de busca) deve ter pelo menos 4 dígitos
+  if (d1.length < 8 || d2.length < 4) return false
 
   // Remove DDI 55 do Brasil se presente
   const s1 = d1.startsWith('55') && d1.length > 10 ? d1.slice(2) : d1
   const s2 = d2.startsWith('55') && d2.length > 10 ? d2.slice(2) : d2
-  if (s1 === s2 || s1.includes(s2) || s2.includes(s1)) return true
+  if (s1 === s2) return true
+
+  // Se o telefone no banco contém o termo buscado
+  if (s1.includes(s2)) return true
+
+  // Se a busca contém o telefone completo no banco (ambos >= 8 dígitos)
+  if (s2.includes(s1) && s1.length >= 8) return true
 
   // Comparação considerando 8 vs 9 dígitos (ex: 32 988074415 vs 32 88074415)
   if (s1.length === 11 && s2.length === 10) {
@@ -66,13 +75,6 @@ export function searchMatches(target, query) {
   const tokens = q.split(/\s+/).filter(Boolean)
   if (tokens.length > 1 && tokens.every(tok => t.includes(tok))) {
     return true
-  }
-
-  // 3. Verificação de dígitos / telefone / documento
-  const qDigits = cleanDigits(q)
-  if (qDigits.length >= 3) {
-    const tDigits = cleanDigits(t)
-    if (phonesMatch(tDigits, qDigits)) return true
   }
 
   return false

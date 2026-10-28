@@ -1994,6 +1994,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   }
 
   const cloneOrder = async (original) => {
+    if (!confirm(`Deseja clonar o pedido #${String(original?.id || '').slice(-6)}?`)) return
     try {
       const origItems = (Array.isArray(original?.items) && original.items.length > 0)
         ? original.items
@@ -2320,13 +2321,14 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const deleteOrder = (id) => {
     if (!confirm('Excluir este pedido?')) return
     const idStr = String(id)
+    const numId = Number(id)
     setOrders(prev => {
-      const next = prev.filter(o => String(o.id) !== idStr)
+      const next = prev.filter(o => String(o.id) !== idStr && String(o.id) !== String(numId))
       LS.set(STORAGE_ORDERS, next)
       return next
     })
     setFinancial(prev => {
-      const next = prev.filter(f => String(f.orderId) !== idStr)
+      const next = prev.filter(f => String(f.orderId) !== idStr && String(f.orderId) !== String(numId))
       LS.set(STORAGE_FINANCIAL, next)
       return next
     })
@@ -2335,14 +2337,16 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       return next
     })
     deletedOrderIdsRef.current?.add?.(idStr)
+    if (!isNaN(numId)) deletedOrderIdsRef.current?.add?.(String(numId))
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_DELETED_ORDERS) || '[]')
       if (!saved.map(String).includes(idStr)) {
         saved.push(idStr)
+        if (!isNaN(numId) && !saved.includes(numId)) saved.push(numId)
         localStorage.setItem(STORAGE_DELETED_ORDERS, JSON.stringify(saved))
       }
       const pending = JSON.parse(localStorage.getItem('thsm_pending_orders') || '[]')
-      const nextPending = pending.filter(p => String(p.id) !== idStr)
+      const nextPending = pending.filter(p => String(p.id) !== idStr && String(p.id) !== String(numId))
       localStorage.setItem('thsm_pending_orders', JSON.stringify(nextPending))
     } catch {}
 

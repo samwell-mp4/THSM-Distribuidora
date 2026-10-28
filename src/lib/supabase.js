@@ -491,17 +491,21 @@ export async function flushPendingOrders() {
     let deletedSet = new Set()
     try {
       const localDel = JSON.parse(localStorage.getItem('thsm_deleted_order_ids') || '[]')
-      localDel.forEach(id => deletedSet.add(Number(id)))
+      localDel.forEach(id => {
+        deletedSet.add(String(id))
+        const n = Number(id)
+        if (!isNaN(n)) deletedSet.add(n)
+      })
     } catch {}
 
-    const validPending = pending.filter(p => !deletedSet.has(Number(p.id)))
+    const validPending = pending.filter(p => !deletedSet.has(String(p.id)) && !deletedSet.has(Number(p.id)))
     if (validPending.length !== pending.length) {
       writePendingOrders(validPending)
     }
 
     const remaining = []
     for (const o of validPending) {
-      if (deletedSet.has(Number(o.id))) continue
+      if (deletedSet.has(String(o.id)) || deletedSet.has(Number(o.id))) continue
       const ok = await upsertOrderBatch([orderRecord(o)], 2)
       if (!ok) remaining.push(o)
     }
@@ -605,17 +609,35 @@ export async function deleteOrder(id) {
     // Store in persistent deleted orders
     try {
       const stored = JSON.parse(localStorage.getItem('thsm_deleted_order_ids') || '[]')
-      if (!stored.includes(numId)) {
-        stored.push(numId)
-        localStorage.setItem('thsm_deleted_order_ids', JSON.stringify(stored))
+      if (!stored.includes(strId)) stored.push(strId)
+      if (!isNaN(numId) && !stored.includes(numId)) stored.push(numId)
+      localStorage.setItem('thsm_deleted_order_ids', JSON.stringify(stored))
+    } catch {}
+
+    // Record in pedidos_deletados table in DB so all clients and sync know it was deleted
+    try {
+      if (!isNaN(numId)) {
+        await supabase.from('pedidos_deletados').upsert({ id: numId, deleted_at: new Date().toISOString() })
       }
     } catch {}
 
-    // Call RPC which inserts into pedidos_deletados and deletes from pedidos and financeiro
-    const { error } = await supabase.rpc('admin_delete_order', { ord_id: numId })
+    // Call RPC which deletes from pedidos and financeiro
+    try {
+      if (!isNaN(numId)) {
+        await supabase.rpc('admin_delete_order', { ord_id: numId })
+      }
+    } catch {}
+
     // Direct delete guarantee
-    await supabase.from('pedidos').delete().eq('id', numId)
-    if (error) console.error('Erro deleteOrder:', error)
+    try {
+      if (!isNaN(numId)) {
+        await supabase.from('financeiro').delete().eq('order_id', numId)
+        await supabase.from('pedidos').delete().eq('id', numId)
+      } else {
+        await supabase.from('pedidos').delete().eq('id', strId)
+      }
+    } catch {}
+
     return { error: null }
   } catch (e) {
     console.error('Exceção deleteOrder:', e)
