@@ -260,8 +260,8 @@ function buildStatusWhatsApp(order, newStatus, extra = {}) {
     const d = new Date(String(str).length <= 10 ? str + 'T12:00:00' : str)
     return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-BR')
   }
-  const dataPedido = formatDate(order.date || order.dataInicio || order.createdAt)
-  const dataVencimento = formatDate(order.dataVencimento)
+  const dataPedido = formatDate(extra.dataInicio || order.dataInicio || order.date || order.createdAt)
+  const dataVencimento = formatDate(extra.dataVencimento || order.dataVencimento)
 
   function formatTelefone(tel) {
     if (!tel) return '—'
@@ -414,14 +414,13 @@ Obrigado pela preferência! 🎉`,
       let remaining = []
       if (extra.remainingItems) {
         remaining = extra.remainingItems.filter(i => (Number(i.qty) || 0) > 0)
-      } else {
-        const base = extra.originalItems || order.originalItems || (order.items || [])
+      } else if (order.originalItems && Array.isArray(order.originalItems) && order.originalItems.length > 0) {
         const retMap = new Map()
         returned.forEach(r => {
           const key = String(r.id || r.nome)
           retMap.set(key, (retMap.get(key) || 0) + (Number(r.returnedQty || r.qty) || 0))
         })
-        base.forEach(i => {
+        order.originalItems.forEach(i => {
           const key = String(i.id || i.nome)
           const retQty = retMap.get(key) || 0
           const initialQty = Number(i.qty) || 0
@@ -430,6 +429,8 @@ Obrigado pela preferência! 🎉`,
             remaining.push({ ...i, qty: keptQty })
           }
         })
+      } else if (Array.isArray(order.items) && order.items.length > 0) {
+        remaining = order.items.filter(i => (Number(i.qty) || 0) > 0)
       }
       const totalQtyPaid = remaining.reduce((s, i) => s + (Number(i.qty) || 0), 0)
 
@@ -438,8 +439,8 @@ Obrigado pela preferência! 🎉`,
         : ''
 
       const pagosBlock = remaining.length > 0
-        ? `📦 *ITENS PAGOS / MANTIDOS*\n\n${remaining.map(formatItemRow).join('\n\n')}\n\n`
-        : (returned.length > 0 ? `📦 *ITENS PAGOS / MANTIDOS*\n  • Nenhum (devolução total dos itens)\n\n` : `📦 *ITENS PAGOS / MANTIDOS*\n  • Nenhum item\n\n`)
+        ? `📦 *ITENS PAGOS*\n\n${remaining.map(formatItemRow).join('\n\n')}\n\n`
+        : (returned.length > 0 ? `📦 *ITENS PAGOS*\n  • Nenhum (devolução total dos itens)\n\n` : `📦 *ITENS PAGOS*\n  • Nenhum item\n\n`)
 
       const totalOriginalNum = Number(
         extra.totalOriginal != null
@@ -461,27 +462,23 @@ Obrigado pela preferência! 🎉`,
           : (extra.totalComanda != null ? extra.totalComanda : (order.totalAcerto != null ? order.totalAcerto : (order.total || 0)))
       )
 
-      const pm = (order.paymentMethod || extra.paymentMethod || '').toLowerCase()
+      const pm = (order.paymentMethod || extra.paymentMethod || 'pix').toLowerCase()
       const splits = order.paymentSplits || extra.paymentSplits || {}
       const totalPagoNum = Number(extra.totalPago != null ? extra.totalPago : (order.totalPago != null ? order.totalPago : 0))
       const valorEmAbertoNum = Number(extra.valorEmAberto != null ? extra.valorEmAberto : Math.max(0, Math.round((totalAcertoNum - totalPagoNum) * 100) / 100))
 
       let paymentLines = []
-      if (totalPagoNum > 0) {
-        if (pm.includes('+')) {
-          pm.split('+').forEach(m => {
-            const val = Number(String(splits[m] || 0).replace(',', '.')) || 0
-            const label = PAG_METHODS[m]?.label || m.toUpperCase()
-            if (val > 0) paymentLines.push(`💰 *PAGOU NO ${label.toUpperCase()}:* *R$ ${formatBr(val)}*`)
-          })
-        } else if (pm) {
-          const label = PAG_METHODS[pm]?.label || pm.toUpperCase()
-          paymentLines.push(`💰 *PAGOU NO ${label.toUpperCase()}:* *R$ ${formatBr(totalPagoNum)}*`)
-        }
-        paymentLines.push(`💰 *TOTAL PAGO:* *R$ ${formatBr(totalPagoNum)}*`)
-      } else {
-        paymentLines.push(`💰 *TOTAL PAGO:* *R$ 0,00*`)
+      if (pm.includes('+')) {
+        pm.split('+').forEach(m => {
+          const val = Number(String(splits[m] || 0).replace(',', '.')) || 0
+          const label = PAG_METHODS[m]?.label || m.toUpperCase()
+          paymentLines.push(`💰 *PAGOU NO ${label.toUpperCase()}:* *R$ ${formatBr(val)}*`)
+        })
+      } else if (pm) {
+        const label = PAG_METHODS[pm]?.label || pm.toUpperCase()
+        paymentLines.push(`💰 *PAGOU NO ${label.toUpperCase()}:* *R$ ${formatBr(totalPagoNum)}*`)
       }
+      paymentLines.push(`💰 *TOTAL PAGO:* *R$ ${formatBr(totalPagoNum)}*`)
 
       if (valorEmAbertoNum > 0) {
         paymentLines.push(`⚠️ *VALOR EM ABERTO:* *R$ ${formatBr(valorEmAbertoNum)}*`)
@@ -641,16 +638,7 @@ ${msgDatas}
 ━━━━━━━━━━━━━━━━━━
 Olá ${nome}, seu pedido foi cancelado.
 Em caso de dúvidas, entre em contato conosco.
-━━━━━━━━━━━━━━━━━━`,
-
-    'acerto': `🤝 *PEDIDO EM ACERTO* 🤝
-━━━━━━━━━━━━━━━━━━
-📋 Pedido: ${id}
-👤 Cliente: ${nome}
-${msgDatas}
-━━━━━━━━━━━━━━━━━━
-Olá ${nome}, seu pedido está na etapa de Acerto de devoluções e valores.
-🔗 ${link}`
+━━━━━━━━━━━━━━━━━━`
   }
 
   return templates[newStatus] || `📋 *Atualização do Pedido ${id}* 📋\n━━━━━━━━━━━━━━━━━━\nStatus: ${newStatus}\n🔗 ${link}`
