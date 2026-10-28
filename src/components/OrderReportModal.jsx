@@ -1037,7 +1037,7 @@ export default function OrderReportModal({
   }
 
   return (
-    <div className="order-report-overlay" onClick={onClose}>
+    <div className="order-report-overlay">
       <div className="order-report-modal" onClick={e => e.stopPropagation()}>
         {/* HEADER */}
         <div className="order-report-header">

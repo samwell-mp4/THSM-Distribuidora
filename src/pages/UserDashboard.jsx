@@ -721,7 +721,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
             <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '0.85rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <div className="admin-search-prod" style={{ flex: 1, minWidth: '160px' }}>
                 <i className="fa-solid fa-search"></i>
-                <input type="text" placeholder="Buscar por produto ou item..." value={orderSearch} onChange={e => setOrderSearch(e.target.value)} style={{ width: '100%' }} />
+                <input type="text" placeholder="Buscar por produto, item ou nº do pedido..." value={orderSearch} onChange={e => setOrderSearch(e.target.value)} style={{ width: '100%' }} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>
                 <span>Data:</span>
@@ -741,8 +741,15 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
                 if (orderDateStart && o.date < orderDateStart) return false
                 if (orderDateEnd && o.date > orderDateEnd) return false
                 if (orderSearch) {
-                  const matchItem = o.items.some(i => searchMatches(i.nome, orderSearch))
-                  if (!matchItem && !searchMatches(o.id, orderSearch)) return false
+                  const matchItem = (o.items || []).some(i => searchMatches(i?.nome, orderSearch) || searchMatches(i?.displayName, orderSearch))
+                  const orderIdStr = String(o.id ?? '')
+                  const cleanSearch = orderSearch.trim().replace(/^(pedido|ped|n[º°\.]?|num|numero|#)\s*/i, '').toLowerCase()
+                  const matchId = (
+                    orderIdStr.toLowerCase().includes(cleanSearch) ||
+                    orderIdStr.slice(-6).toLowerCase().includes(cleanSearch) ||
+                    searchMatches(o.id, orderSearch)
+                  )
+                  if (!matchItem && !matchId) return false
                 }
                 return true
               })
@@ -930,7 +937,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
 
       {/* ORDER DETAIL MODAL */}
       {selectedOrder && (
-        <div className="admin-overlay" onClick={() => setSelectedOrder(null)}>
+        <div className="admin-overlay">
           <div className="admin-modal admin-modal-lg" onClick={e => e.stopPropagation()} style={{ maxWidth: '650px' }}>
             <div className="admin-modal-header">
               <h3><i className="fa-solid fa-receipt"></i> Pedido #{selectedOrder.id.toString().slice(-6)}</h3>
@@ -1187,7 +1194,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
       </nav>
 
       {showPayment && (
-        <div className="admin-overlay" onClick={closePayment}>
+        <div className="admin-overlay">
           <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
             <div className="admin-modal-header">
               <h3><i className="fa-solid fa-credit-card"></i> Pagamento</h3>
@@ -1294,7 +1301,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
 
       {/* PRE-PEDIDO EDIT MODAL */}
       {editPreOrder && selectedOrder && (
-        <div className="admin-overlay" onClick={() => setEditPreOrder(false)}>
+        <div className="admin-overlay">
           <div className="admin-modal admin-modal-lg" onClick={e => e.stopPropagation()} style={{ maxWidth: '550px' }}>
             <div className="admin-modal-header">
               <h3><i className="fa-solid fa-pen"></i> Editar Comanda — Pedido #{selectedOrder.id.toString().slice(-6)} ({editedPreItems.filter(i => i.qty > 0).reduce((s, i) => s + (Number(i.qty) || 0), 0)} peças totais)</h3>
@@ -1400,7 +1407,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
 
       {/* USER DELIVERY MODAL (EM ROTA) */}
       {showUserDelivery && (
-        <div className="admin-overlay" onClick={() => setShowUserDelivery(null)}>
+        <div className="admin-overlay">
           <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
             <div className="admin-modal-header">
               <h3><i className="fa-solid fa-rotate-left"></i> Registrar Pagamento / Devolução</h3>
@@ -1522,7 +1529,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
 
       {/* COMANDA MODAL */}
       {showComanda && (
-        <div className="admin-overlay" onClick={() => setShowComanda(null)}>
+        <div className="admin-overlay">
           <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
             <div className="admin-modal-header" style={{ background: 'var(--accent)', color: 'white' }}>
               <h3 style={{ color: 'white' }}><i className="fa-solid fa-receipt"></i> Comanda #{showComanda.id.toString().slice(-6)}</h3>

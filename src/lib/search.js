@@ -98,21 +98,28 @@ export function clientMatchesSearch(client, query) {
   const cidade = end.cidade || client.cidade || ''
   const bairro = end.bairro || client.bairro || ''
   const rua = end.rua || end.logradouro || client.rua || ''
+  const numero = end.numero || client.numero || ''
+  const complemento = end.complemento || client.complemento || ''
   const cep = end.cep || client.cep || ''
   const rota = end.rota || client.rota || ''
   const rawTel = client.telefone || client.phone || client.whatsapp || ''
   const telDigits = cleanDigits(rawTel)
 
   // Texto unificado contendo todas as propriedades do cliente
-  const unified = normalizeSearch([nome, pushName, apelido, email, doc, cidade, bairro, rua, cep, rota, rawTel, telDigits].filter(Boolean).join(' '))
+  const unified = normalizeSearch([nome, pushName, apelido, email, doc, cidade, bairro, rua, numero, complemento, cep, rota, rawTel, telDigits].filter(Boolean).join(' '))
 
   // 1. Substring direta no texto unificado
   if (unified.includes(q)) return true
+
+  // Se a busca tem "nº", "n°", "numero", remover para tentar substring limpa
+  const qCleanPrefix = q.replace(/\b(n[º°\.]?|num|numero)\s*/gi, '').trim()
+  if (qCleanPrefix && qCleanPrefix !== q && unified.includes(qCleanPrefix)) return true
 
   // 2. Tokens: TODAS as palavras digitadas na query devem existir nos dados do cliente
   // Exemplo: "claudia barbacena" acha Claudia cuja cidade é Barbacena
   const tokens = q.split(/\s+/).filter(Boolean)
   if (tokens.length > 0 && tokens.every(tok => {
+    if (/^(n[º°\.]?|num|numero)$/i.test(tok)) return true
     const tokDigits = cleanDigits(tok)
     if (tokDigits.length >= 3 && phonesMatch(telDigits, tokDigits)) {
       return true
@@ -122,12 +129,20 @@ export function clientMatchesSearch(client, query) {
     return true
   }
 
-  // 3. Verificação de dígitos do telefone / documento
+  // 3. Verificação de dígitos do telefone / documento / cep
   const qDigits = cleanDigits(q)
   if (qDigits.length >= 3) {
     if (phonesMatch(telDigits, qDigits)) return true
     const docDigits = cleanDigits(doc)
     if (docDigits && docDigits.includes(qDigits)) return true
+    const cepDigits = cleanDigits(cep)
+    if (cepDigits && cepDigits.includes(qDigits)) return true
+  }
+
+  // 4. Verificação direta do número de endereço
+  if (numero && String(numero).trim()) {
+    const numNorm = normalizeSearch(numero)
+    if (numNorm === q || (qCleanPrefix && numNorm === qCleanPrefix) || (qDigits && cleanDigits(numero) === qDigits)) return true
   }
 
   return false

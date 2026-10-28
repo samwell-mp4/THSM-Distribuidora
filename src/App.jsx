@@ -1183,7 +1183,7 @@ function App() {
 
       {/* PRODUCT MODAL */}
       {selected && (
-        <div className="overlay" onClick={() => { setSelected(null); setSelectedVariants(prev => { const { [selected.id]: _, ...rest } = prev; return rest }) }}>
+        <div className="overlay">
           <div className="modal" onClick={e => e.stopPropagation()}>
               <button className="modal-close" onClick={() => { setSelected(null); setSelectedVariants(prev => { const { [selected.id]: _, ...rest } = prev; return rest }) }}><i className="fa-solid fa-xmark"></i></button>
             <div className="modal-img">
@@ -1359,7 +1359,7 @@ function App() {
 
       {/* CHECKOUT MODAL */}
       {checkout && (
-        <div className="overlay" onClick={() => setCheckout(null)}>
+        <div className="overlay">
           <div className="modal checkout-modal" onClick={e => e.stopPropagation()}>
             <button className="modal-close" onClick={() => setCheckout(null)}><i className="fa-solid fa-xmark"></i></button>
             <div className="checkout-steps">
@@ -1519,7 +1519,7 @@ function App() {
 
       {/* ADMIN LOGIN MODAL */}
       {showAdminLogin && (
-        <div className="overlay" onClick={() => setShowAdminLogin(false)}>
+        <div className="overlay">
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '380px' }}>
             <button className="modal-close" onClick={() => setShowAdminLogin(false)}><i className="fa-solid fa-xmark"></i></button>
             <div className="modal-body" style={{ textAlign: 'center' }}>
@@ -1546,7 +1546,7 @@ function App() {
 
       {/* LOGIN MODAL */}
       {showLogin && (
-        <div className="overlay" onClick={() => setShowLogin(false)}>
+        <div className="overlay">
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
             <button className="modal-close" onClick={() => setShowLogin(false)}><i className="fa-solid fa-xmark"></i></button>
             <div className="modal-body">
@@ -1599,7 +1599,7 @@ function App() {
 
       {/* FORGOT PASSWORD MODAL */}
       {showForgotPassword && (
-        <div className="overlay" onClick={() => setShowForgotPassword(false)}>
+        <div className="overlay">
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
             <button className="modal-close" onClick={() => setShowForgotPassword(false)}><i className="fa-solid fa-xmark"></i></button>
             <div className="modal-body" style={{ textAlign: 'center' }}>
@@ -1629,7 +1629,7 @@ function App() {
 
       {/* RECOVER PASSWORD OVERLAY */}
       {showRecoverPassword && (
-        <div className="overlay" onClick={() => { setShowRecoverPassword(false); setRecoverTelefone(''); setRecoverNewPassword('') }}>
+        <div className="overlay">
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
             <button className="modal-close" onClick={() => { setShowRecoverPassword(false); setRecoverTelefone(''); setRecoverNewPassword('') }}><i className="fa-solid fa-xmark"></i></button>
             <div className="modal-body" style={{ textAlign: 'center' }}>
@@ -1706,7 +1706,7 @@ function App() {
 
       {/* ADDRESS EDIT MODAL */}
       {showAddressEdit && (
-        <div className="overlay" onClick={() => setShowAddressEdit(false)}>
+        <div className="overlay">
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
             <button className="modal-close" onClick={() => setShowAddressEdit(false)}><i className="fa-solid fa-xmark"></i></button>
             <div className="modal-body">

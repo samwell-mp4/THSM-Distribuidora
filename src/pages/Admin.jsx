@@ -2603,6 +2603,86 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
   const getOrderDue = useCallback((o) => o.dataVencimento || financial.find(f => f.orderId === o.id)?.dueDate || '', [financial])
 
+  const orderMatchesQuery = useCallback((o, searchStr) => {
+    if (!searchStr || !searchStr.trim()) return true
+    const term = searchStr.trim()
+    const digits = term.replace(/\D/g, '')
+    const termClean = term.replace(/^(pedido|ped|n[º°\.]?|num|numero|#)\s*/i, '').trim()
+    const termCleanLower = termClean.toLowerCase()
+
+    // 1. Número / ID do Pedido (#705747, 705747, 1730123705747, etc.)
+    const orderIdStr = String(o.id ?? '').trim()
+    const orderShortId = orderIdStr.length > 6 ? orderIdStr.slice(-6) : orderIdStr
+    const orderNumero = String(o.numero || o.orderNumber || o.numeroPedido || o.codigo || '').trim()
+
+    const matchId = (
+      (orderIdStr && orderIdStr.toLowerCase().includes(term.toLowerCase())) ||
+      (termCleanLower && orderIdStr.toLowerCase().includes(termCleanLower)) ||
+      (termCleanLower && orderShortId.toLowerCase().includes(termCleanLower)) ||
+      (orderNumero && orderNumero.toLowerCase().includes(termCleanLower)) ||
+      (orderShortId && `#${orderShortId}`.toLowerCase().includes(term.toLowerCase())) ||
+      (orderShortId && `pedido #${orderShortId}`.toLowerCase().includes(term.toLowerCase())) ||
+      (digits && digits.length >= 3 && (orderIdStr.endsWith(digits) || orderShortId.includes(digits)))
+    )
+    if (matchId) return true
+
+    // 2. Dados do Cliente e Endereço (nome, telefone, cidade, bairro, rua, número da casa, CEP, rota, CPF)
+    const clientName = getOrderCustomerName(o)
+    const clientPhone = getOrderCustomerPhone(o) || o.customer?.telefone || o.telefone || o.customer?.whatsapp || o.whatsapp || o.customer?.phone || o.phone || ''
+    const clientCity = o.customer?.endereco?.cidade || o.endereco?.cidade || ''
+    const clientBairro = o.customer?.endereco?.bairro || o.endereco?.bairro || ''
+    const clientRua = o.customer?.endereco?.rua || o.endereco?.rua || o.customer?.endereco?.logradouro || o.endereco?.logradouro || ''
+    const clientNumero = o.customer?.endereco?.numero || o.endereco?.numero || o.customer?.numero || o.numero || ''
+    const clientComplemento = o.customer?.endereco?.complemento || o.endereco?.complemento || ''
+    const clientCep = o.customer?.endereco?.cep || o.endereco?.cep || o.customer?.cep || o.cep || ''
+    const clientRota = o.customer?.endereco?.rota || o.endereco?.rota || rotaDeOrder(o)
+    const clientEmail = o.customer?.email || o.email || ''
+    const clientCpf = o.customer?.cpf || o.customer?.cnpj || o.customer?.documento || o.customer?.endereco?.cpf || o.cpf || ''
+
+    const matchCustomer = clientMatchesSearch({
+      nome: clientName || o.customer?.nome || o.cliente || o.nome || o.customerName,
+      pushName: o.customer?.pushName || o.pushName || o.push_name,
+      telefone: clientPhone,
+      email: clientEmail,
+      cpf: clientCpf,
+      endereco: {
+        cidade: clientCity,
+        bairro: clientBairro,
+        rua: clientRua,
+        numero: clientNumero,
+        complemento: clientComplemento,
+        cep: clientCep,
+        rota: clientRota
+      }
+    }, term)
+    if (matchCustomer) return true
+
+    // 3. Número de Telefone direto por dígitos
+    if (digits && digits.length >= 2) {
+      if (phonesMatch(clientPhone, digits) || cleanDigits(clientPhone).includes(digits)) return true
+    }
+
+    // 4. Número de Endereço direto
+    if (clientNumero && String(clientNumero).trim()) {
+      const numStr = String(clientNumero).trim().toLowerCase()
+      if (numStr === term.toLowerCase() || (termCleanLower && numStr === termCleanLower)) return true
+      if (digits && cleanDigits(clientNumero) === digits) return true
+    }
+
+    // 5. CEP ou CPF direto
+    if (digits && digits.length >= 4) {
+      if (clientCep && cleanDigits(clientCep).includes(digits)) return true
+      if (clientCpf && cleanDigits(clientCpf).includes(digits)) return true
+    }
+
+    // 6. Produtos / Itens do pedido
+    const rawItems = Array.isArray(o.items) && o.items.length > 0 ? o.items : (Array.isArray(o.originalItems) && o.originalItems.length > 0 ? o.originalItems : (o.itens || []))
+    const matchItems = rawItems.some(i => searchMatches(i?.nome, term) || searchMatches(i?.displayName, term))
+    if (matchItems) return true
+
+    return false
+  }, [getOrderCustomerName, getOrderCustomerPhone, rotaDeOrder])
+
   const filteredOrders = useMemo(() => {
     let result = orders
     if (orderFilter === 'concluidos') result = result.filter(o => o.status === 'concluido' || isFinalizada(o))
@@ -2611,35 +2691,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     else if (orderFilter !== 'todos') result = result.filter(o => o.status === orderFilter)
     if (selectedUserEmail) result = result.filter(o => o.customer?.email === selectedUserEmail)
     if (orderSearch && orderSearch.trim()) {
-      const term = orderSearch.trim()
-      const digits = term.replace(/\D/g, '')
-      result = result.filter(o => {
-        const clientName = getOrderCustomerName(o)
-        const clientPhone = getOrderCustomerPhone(o)
-        const clientCity = o.customer?.endereco?.cidade || o.endereco?.cidade || ''
-        const clientBairro = o.customer?.endereco?.bairro || o.endereco?.bairro || ''
-        const clientRua = o.customer?.endereco?.rua || o.endereco?.rua || ''
-        const clientRota = o.customer?.endereco?.rota || o.endereco?.rota || rotaDeOrder(o)
-        const clientEmail = o.customer?.email || o.email || ''
-
-        const matchCustomer = clientMatchesSearch({
-          nome: clientName || o.customer?.nome || o.cliente || o.nome || o.customerName,
-          pushName: o.customer?.pushName,
-          telefone: clientPhone,
-          email: clientEmail,
-          endereco: {
-            cidade: clientCity,
-            bairro: clientBairro,
-            rua: clientRua,
-            rota: clientRota
-          }
-        }, term)
-        const matchPhone = digits.length >= 2 && phonesMatch(clientPhone, digits)
-        const matchId = String(o.id).includes(term.replace(/^#/, ''))
-        const matchItems = (Array.isArray(o.items) && o.items.length > 0 ? o.items : (o.itens || [])).some(i => searchMatches(i?.nome, term) || searchMatches(i?.displayName, term))
-
-        return matchCustomer || matchPhone || matchId || matchItems
-      })
+      result = result.filter(o => orderMatchesQuery(o, orderSearch))
     }
     if (orderDateStart) result = result.filter(o => ((o.date || o.createdAt || '').split('T')[0]) >= orderDateStart)
     if (orderDateEnd) result = result.filter(o => ((o.date || o.createdAt || '').split('T')[0]) <= orderDateEnd)
@@ -2664,41 +2716,13 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       }
     })
     return result
-  }, [orders, orderFilter, selectedUserEmail, orderSearch, orderSort, orderDateStart, orderDateEnd, orderDueStart, orderDueEnd, orderCityFilter, orderRoutesSelected, rotaDeTelefone, financial, listaTodasRotas, getOrderCustomerName, getOrderCustomerPhone, rotaDeOrder, getOrderDue])
+  }, [orders, orderFilter, selectedUserEmail, orderSearch, orderMatchesQuery, orderSort, orderDateStart, orderDateEnd, orderDueStart, orderDueEnd, orderCityFilter, orderRoutesSelected, rotaDeTelefone, financial, listaTodasRotas, getOrderCustomerName, getOrderCustomerPhone, rotaDeOrder, getOrderDue])
 
   const crossTabSearchMatchesCount = useMemo(() => {
     if (!orderSearch || !orderSearch.trim()) return 0
     if (orderFilter === 'todos') return 0
-    const term = orderSearch.trim()
-    const digits = term.replace(/\D/g, '')
-    return orders.filter(o => {
-      const clientName = getOrderCustomerName(o)
-      const clientPhone = getOrderCustomerPhone(o)
-      const clientCity = o.customer?.endereco?.cidade || o.endereco?.cidade || ''
-      const clientBairro = o.customer?.endereco?.bairro || o.endereco?.bairro || ''
-      const clientRua = o.customer?.endereco?.rua || o.endereco?.rua || ''
-      const clientRota = o.customer?.endereco?.rota || o.endereco?.rota || rotaDeOrder(o)
-      const clientEmail = o.customer?.email || o.email || ''
-
-      const matchCustomer = clientMatchesSearch({
-        nome: clientName || o.customer?.nome || o.cliente || o.nome || o.customerName,
-        pushName: o.customer?.pushName,
-        telefone: clientPhone,
-        email: clientEmail,
-        endereco: {
-          cidade: clientCity,
-          bairro: clientBairro,
-          rua: clientRua,
-          rota: clientRota
-        }
-      }, term)
-      const matchPhone = digits.length >= 2 && phonesMatch(clientPhone, digits)
-      const matchId = String(o.id).includes(term.replace(/^#/, ''))
-      const matchItems = (Array.isArray(o.items) && o.items.length > 0 ? o.items : (o.itens || [])).some(i => searchMatches(i?.nome, term) || searchMatches(i?.displayName, term))
-
-      return matchCustomer || matchPhone || matchId || matchItems
-    }).length
-  }, [orders, orderSearch, orderFilter, getOrderCustomerName, getOrderCustomerPhone, rotaDeOrder])
+    return orders.filter(o => orderMatchesQuery(o, orderSearch)).length
+  }, [orders, orderSearch, orderFilter, orderMatchesQuery])
 
   const activeAdvancedFiltersCount = (orderDateStart ? 1 : 0) +
     (orderDateEnd ? 1 : 0) +
@@ -2849,24 +2873,17 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     const telefoneCom55 = '55' + cleanPhone
     const msg = buildStatusWhatsApp(o, o.status)
 
-    // 1. Disparo de webhook em segundo plano
-    try {
-      fetch(WHATSAPP_FORCE_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ telefone: telefoneCom55, message: msg })
-      }).then(() => {
-        showToast('WhatsApp disparado via sistema!', 'success')
-      }).catch(err => {
-        console.warn('Falha webhook whatsapp:', err)
-      })
-    } catch (err) {
-      console.warn('Exceção webhook whatsapp:', err)
-    }
-
-    // 2. Abrir diretamente o WhatsApp no celular ou navegador
-    const waUrl = `https://wa.me/${telefoneCom55}?text=${encodeURIComponent(msg)}`
-    window.open(waUrl, '_blank')
+    showToast('Disparando WhatsApp via API...', 'info')
+    fetch(WHATSAPP_FORCE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telefone: telefoneCom55, message: msg })
+    }).then(() => {
+      showToast('WhatsApp enviado com sucesso!', 'success')
+    }).catch(err => {
+      console.warn('Falha webhook whatsapp:', err)
+      showToast('Erro ao disparar WhatsApp via API', 'error')
+    })
   }
 
   // Stats
@@ -3940,7 +3957,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 <i className="fa-solid fa-search admin-search-ico"></i>
                 <input
                   type="text"
-                  placeholder="Buscar por nome, telefone, cidade ou ID..."
+                  placeholder="Buscar por nome, telefone, nº do pedido, rua, número..."
                   value={orderSearch}
                   onChange={e => setOrderSearch(e.target.value)}
                   className="admin-orders-search-input"
@@ -4817,7 +4834,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
         {/* CART DRAWER */}
         {prodCartOpen && (
-          <div className="admin-overlay" onClick={() => setProdCartOpen(false)}>
+          <div className="admin-overlay">
             <div className="admin-cart-drawer" onClick={e => e.stopPropagation()}>
               <div className="admin-cart-header">
                 <h3><i className="fa-solid fa-shopping-cart"></i> Carrinho</h3>
@@ -6118,7 +6135,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       />
 
       {semDevReport && (
-        <div className="admin-overlay semdev-overlay" onClick={() => setSemDevReport(null)}>
+        <div className="admin-overlay semdev-overlay">
           <div className="admin-modal semdev-modal" onClick={e => e.stopPropagation()}>
             <div className="admin-modal-header">
               <h3><i className="fa-solid fa-file-lines"></i> Relatório SEM DEVOLUÇÃO</h3>
@@ -6191,7 +6208,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
       {/* MODAL DATA VENCIMENTO AO ENVIAR PARA ROTA */}
       {showRotaDue && (
-        <div className="admin-overlay" onClick={() => setShowRotaDue(null)}>
+        <div className="admin-overlay">
           <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px' }}>
             <div className="admin-modal-header">
               <h3><i className="fa-solid fa-truck"></i> Enviar para Rota</h3>
@@ -6378,12 +6395,13 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           }}
           onUpdateCustomer={(id, customerData) => updateOrderCustomer(id, customerData)}
           onCancelOrder={(id) => cancelOrder(id)}
+          onSendWhatsApp={(o) => sendWhatsApp(o)}
         />
       )}
 
       {/* MODAL ACERTO & FINALIZAÇÃO */}
       {showDeliveryModal && (
-        <div className="admin-overlay" onClick={() => setShowDeliveryModal(null)}>
+        <div className="admin-overlay">
           <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '560px' }}>
             <div className="admin-modal-header">
               <h3>
@@ -6789,7 +6807,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
       {/* MODAL BULK PRICE */}
       {showBulkPrice && (
-        <div className="admin-overlay" onClick={() => { setShowBulkPrice(false); setBulkPriceValue('') }}>
+        <div className="admin-overlay">
           <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
             <div className="admin-modal-header">
               <h3><i className="fa-solid fa-dollar-sign"></i> Trocar Preço em Massa</h3>
@@ -6815,7 +6833,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       )}
 
       {showBulkStock && (
-        <div className="admin-overlay" onClick={() => { setShowBulkStock(false); setBulkStockValue('') }}>
+        <div className="admin-overlay">
           <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
             <div className="admin-modal-header">
               <h3><i className="fa-solid fa-warehouse"></i> Definir Estoque em Massa</h3>
@@ -6841,7 +6859,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       )}
 
       {customMsgRota && (
-        <div className="admin-overlay" onClick={() => { setCustomMsgRota(null); setCustomMsgText('') }}>
+        <div className="admin-overlay">
           <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '450px' }}>
             <div className="admin-modal-header">
               <h3><i className="fa-solid fa-pen"></i> Mensagem Personalizada</h3>
@@ -6879,7 +6897,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       )}
 
       {showNewRota && (
-        <div className="admin-overlay" onClick={() => setShowNewRota(false)}>
+        <div className="admin-overlay">
           <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
             <div className="admin-modal-header">
               <h3><i className="fa-solid fa-plus-circle"></i> Nova Rota</h3>
@@ -6991,7 +7009,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       )}
 
       {rotaContactModal && (
-        <div className="admin-overlay" onClick={() => setRotaContactModal(null)}>
+        <div className="admin-overlay">
           <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px' }}>
             <div className="admin-modal-header">
               <h3><i className="fa-solid fa-user-plus"></i> {rotaContactModal.mode === 'edit' ? 'Editar Contato' : 'Adicionar Contato'}</h3>
@@ -7035,7 +7053,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       )}
 
       {showRestoreRota && (
-        <div className="admin-overlay" onClick={() => setShowRestoreRota(null)}>
+        <div className="admin-overlay">
           <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
             <div className="admin-modal-header">
               <h3><i className="fa-solid fa-rotate-left"></i> Restaurar contatos</h3>
@@ -7080,7 +7098,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       )}
 
       {editCustomContact && (
-        <div className="admin-overlay" onClick={() => setEditCustomContact(null)}>
+        <div className="admin-overlay">
           <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
             <div className="admin-modal-header">
               <h3><i className="fa-solid fa-pen"></i> Editar Contato</h3>
@@ -7193,7 +7211,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
       {/* MODAL EDIT FINANCIAL */}
       {finEdit && (
-        <div className="admin-overlay" onClick={() => setFinEdit(null)}>
+        <div className="admin-overlay">
           <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
             <div className="admin-modal-header">
               <h3>Editar Vencimento</h3>
@@ -7220,7 +7238,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
       {/* MODAL QUITAR CONTA (payment method) */}
       {quitarFinTarget && (
-        <div className="admin-overlay" onClick={() => setQuitarFinTarget(null)}>
+        <div className="admin-overlay">
           <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px' }}>
             <div className="admin-modal-header">
               <h3><i className="fa-solid fa-check-circle"></i> Quitar Conta</h3>
@@ -7264,7 +7282,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
       {/* RECOVER PASSWORD LINK MODAL */}
       {recoverLinkUser && (
-        <div className="admin-overlay" onClick={() => setRecoverLinkUser(null)}>
+        <div className="admin-overlay">
           <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
             <div className="admin-modal-header">
               <h3><i className="fa-solid fa-key"></i> Link de Recuperação</h3>
@@ -7300,7 +7318,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
       {/* CHANGE PASSWORD MODAL */}
       {pwTarget && (
-        <div className="admin-overlay" onClick={() => { setPwTarget(null); setPwNew('') }}>
+        <div className="admin-overlay">
           <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px' }}>
             <div className="admin-modal-header">
               <h3><i className="fa-solid fa-lock"></i> Mudar Senha</h3>
@@ -8934,7 +8952,7 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
   }
 
   return (
-    <div className="admin-overlay" onClick={onClose}>
+    <div className="admin-overlay">
       <div className="admin-modal admin-modal-lg" onClick={e => e.stopPropagation()}>
         <div className="admin-modal-header">
           <h3><i className="fa-solid fa-plus-circle"></i> Novo Pedido</h3>
@@ -9338,7 +9356,7 @@ function getOrderRawItems(ord) {
   return []
 }
 
-function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onStatusChange, onUpdateDue, onPreApprovar, onEditAndConfirm, onEditSave, onSyncCusto, onOpenDelivery, onUpdateCustomer, onCancelOrder }) {
+function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onStatusChange, onUpdateDue, onPreApprovar, onEditAndConfirm, onEditSave, onSyncCusto, onOpenDelivery, onUpdateCustomer, onCancelOrder, onSendWhatsApp }) {
   const [rejectedItems, setRejectedItems] = useState(new Set())
   const [editMode, setEditMode] = useState(false)
   const [editedItems, setEditedItems] = useState(() => getOrderRawItems(order).map(i => {
@@ -9615,7 +9633,7 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
 
   if (editMode) {
     return (
-      <div className="admin-overlay" onClick={() => { setEditMode(false); resetEditedItems(); setAddCart({}) }}>
+      <div className="admin-overlay">
         <div className="admin-modal admin-modal-lg" onClick={e => e.stopPropagation()} style={{ maxWidth: '550px' }}>
           <div className="admin-modal-header">
             <h3><i className="fa-solid fa-pen"></i> Editar Itens — Pedido #{order.id.toString().slice(-6)} ({editTotalPieces} {editTotalPieces === 1 ? 'item' : 'itens'})</h3>
@@ -9743,7 +9761,7 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
   }
 
   return (
-    <div className="admin-overlay" onClick={onClose}>
+    <div className="admin-overlay">
       <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
         <div className="admin-modal-header">
           <h3><i className="fa-solid fa-receipt"></i> Pedido #{order.id.toString().slice(-6)} <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent)', marginLeft: '0.4rem' }}>({getOrderRawItems(order).reduce((s, i) => s + (Number(i.qty) || 0), 0)} peças totais)</span></h3>
@@ -9997,22 +10015,6 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
             </div>
           </div>
 
-          {financial.length > 0 && (
-            <div className="detail-section">
-              <h4>Contas a Prazo</h4>
-              {financial.map(f => (
-                <div key={f.id} className="detail-item">
-                  <div>
-                    <span className="detail-item-name">{f.itemName}</span>
-                    <span className="detail-item-qty">{formatPreco(f.value)} - Vence {formatDate(f.dueDate)}</span>
-                  </div>
-                  <span className={`status-tag ${f.status === 'pago' ? 'status-pago' : f.status === 'cancelado' ? 'status-cancelado' : 'status-pendente'}`}>
-                    {f.status === 'pago' ? 'Pago' : f.status === 'cancelado' ? 'Cancelado' : 'Pendente'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
           {order.returnedItems?.length > 0 && (
             <div className="detail-section">
               <h4 style={{ color: 'var(--danger)' }}><i className="fa-solid fa-rotate-left"></i> Itens Devolvidos</h4>
@@ -10173,11 +10175,18 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
                 className="admin-btn"
                 style={{ background: '#10b981', color: 'white', borderColor: '#059669' }}
                 onClick={() => {
-                  const raw = (order.customer?.telefone || order.telefone || '').replace(/\D/g, '')
-                  const clean = raw.startsWith('55') ? raw.slice(2) : raw
-                  if (clean) {
+                  if (onSendWhatsApp) {
+                    onSendWhatsApp(order)
+                  } else {
+                    const raw = (order.customer?.telefone || order.telefone || '').replace(/\D/g, '')
+                    const cleanPhone = raw.startsWith('55') ? raw.slice(2) : raw
+                    const telefoneCom55 = '55' + cleanPhone
                     const msg = buildStatusWhatsApp(order, order.status)
-                    window.open(`https://wa.me/55${clean}?text=${encodeURIComponent(msg)}`, '_blank')
+                    fetch(WHATSAPP_FORCE_URL, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ telefone: telefoneCom55, message: msg })
+                    }).catch(() => {})
                   }
                 }}
               >
@@ -10226,7 +10235,7 @@ function KitModal({ produtos, kit, onSave, onClose }) {
   }
 
   return (
-    <div className="admin-overlay" onClick={onClose}>
+    <div className="admin-overlay">
       <div className="admin-modal kit-modal" onClick={e => e.stopPropagation()}>
         <div className="admin-modal-header">
           <h3><i className="fa-solid fa-toolbox"></i> {kit ? 'Editar Kit' : 'Montar Novo Kit'}</h3>
@@ -10400,7 +10409,7 @@ function EditProductModal({ product, categorias = [], onAddCategoria, onSave, on
   }
 
   return (
-    <div className="admin-overlay" onClick={onClose}>
+    <div className="admin-overlay">
       <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '550px' }}>
         <div className="admin-modal-header">
           <h3><i className="fa-solid fa-pen"></i> {product._new ? 'Novo Produto' : 'Editar Produto'}</h3>
@@ -10690,7 +10699,7 @@ function DespesaModal({ despesa, customTipos = [], onAddTipo, onSave, onClose })
   }
 
   return (
-    <div className="admin-overlay" onClick={onClose}>
+    <div className="admin-overlay">
       <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
         <div className="admin-modal-header">
           <h3><i className="fa-solid fa-receipt"></i> {despesa ? 'Editar Despesa' : 'Nova Despesa'}</h3>
