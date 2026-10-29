@@ -231,7 +231,7 @@ ${s.dinheiroDeclarado !== undefined ? `*Declarado pelo motorista:* R$ ${Number(s
         </div>
 
         {!showSummaryView ? (
-          <form onSubmit={handleProcederFechamento}>
+          <form onSubmit={handleProcederFechamento} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
             <div className="mr-modal-body">
               {errorMsg && (
                 <div style={{
@@ -418,7 +418,7 @@ ${s.dinheiroDeclarado !== undefined ? `*Declarado pelo motorista:* R$ ${Number(s
           </form>
         ) : (
           /* Summary Snapshot View */
-          <div>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
             <div className="mr-modal-body">
               <div style={{
                 background: '#f0fdf4',

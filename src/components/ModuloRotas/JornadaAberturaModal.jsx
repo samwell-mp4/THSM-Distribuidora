@@ -94,7 +94,7 @@ export default function JornadaAberturaModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
           <div className="mr-modal-body">
             {errorMsg && (
               <div style={{
