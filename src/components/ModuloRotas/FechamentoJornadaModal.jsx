@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 
 export default function FechamentoJornadaModal({
   isOpen,
@@ -15,6 +15,18 @@ export default function FechamentoJornadaModal({
   const [showSummaryView, setShowSummaryView] = useState(false)
   const [closedSnapshot, setClosedSnapshot] = useState(null)
   const [errorMsg, setErrorMsg] = useState('')
+
+  // Reset modal state whenever isOpen opens or active jornada changes
+  useEffect(() => {
+    if (isOpen && jornada) {
+      setShowSummaryView(false)
+      setClosedSnapshot(null)
+      setKmFinal(jornada?.km_final != null ? String(jornada.km_final) : '')
+      setDinheiroDeclarado('')
+      setObservacoesFinais(jornada?.observacao_final || '')
+      setErrorMsg('')
+    }
+  }, [isOpen, jornada?.id])
 
   // Orders in this journey
   const jornadaOrders = useMemo(() => {
@@ -172,7 +184,16 @@ export default function FechamentoJornadaModal({
       resumo_fechamento: closedSnapshot
     }
 
+    setShowSummaryView(false)
+    setClosedSnapshot(null)
     onConfirmFechamento(updatedJornada)
+  }
+
+  const handleClose = () => {
+    setShowSummaryView(false)
+    setClosedSnapshot(null)
+    setErrorMsg('')
+    onClose()
   }
 
   const gerarTextoCompartilhamento = () => {
@@ -213,7 +234,7 @@ ${s.dinheiroDeclarado !== undefined ? `*Declarado pelo motorista:* R$ ${Number(s
   }
 
   return (
-    <div className="mr-modal-overlay" onClick={onClose}>
+    <div className="mr-modal-overlay" onClick={handleClose}>
       <div className="mr-modal-box" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
         <div className="mr-modal-header">
           <h3>
@@ -223,7 +244,7 @@ ${s.dinheiroDeclarado !== undefined ? `*Declarado pelo motorista:* R$ ${Number(s
           <button
             type="button"
             className="mr-reorder-btn"
-            onClick={onClose}
+            onClick={handleClose}
             title="Fechar"
           >
             <i className="fa-solid fa-xmark"></i>
@@ -404,7 +425,7 @@ ${s.dinheiroDeclarado !== undefined ? `*Declarado pelo motorista:* R$ ${Number(s
               <button
                 type="button"
                 className="mr-btn mr-btn-secondary"
-                onClick={onClose}
+                onClick={handleClose}
               >
                 Cancelar
               </button>

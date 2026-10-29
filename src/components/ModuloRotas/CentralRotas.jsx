@@ -281,11 +281,12 @@ export default function CentralRotas({
                   orders={orders}
                   financial={financial}
                   onSaveRota={handleSaveRotaStops}
+                  onOpenFechamentoModal={() => setShowFechamentoModal(true)}
                   onCancel={() => {
                     if (jornadaAtiva.paradas && jornadaAtiva.paradas.length > 0) {
                       setViewMode('entregador')
                     } else {
-                      showToast?.('Selecione os pedidos para montar a rota.')
+                      setShowFechamentoModal(true)
                     }
                   }}
                   showToast={showToast}

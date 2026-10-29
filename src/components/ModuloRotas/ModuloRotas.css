@@ -311,7 +311,34 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.mr-driver-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mr-driver-bottom-bar {
+  display: flex;
+  align-items: center;
   gap: 10px;
+  background: white;
+  padding: 14px 16px;
+  border-radius: var(--mr-radius-md);
+  border: 1px solid var(--mr-gray-200);
+  box-shadow: var(--mr-shadow-sm);
+  margin-top: 14px;
+}
+
+.mr-driver-bottom-bar .mr-btn {
+  flex: 1 1 auto;
+  justify-content: center;
+  padding: 10px 14px;
+  font-size: 0.88rem;
 }
 
 .mr-driver-title {
@@ -1022,6 +1049,48 @@
   }
   .mr-finance-summary-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* Driver header & actions responsive layout */
+  .mr-driver-header {
+    padding: 10px 12px;
+  }
+  .mr-driver-header-main {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .mr-driver-title {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .mr-driver-header-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.3fr;
+    gap: 6px;
+    width: 100%;
+  }
+  .mr-driver-header-actions .mr-btn {
+    padding: 8px 4px !important;
+    font-size: 0.76rem !important;
+    justify-content: center;
+    white-space: nowrap;
+    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .mr-driver-header-actions .mr-btn i {
+    font-size: 0.8rem;
+  }
+  .mr-driver-bottom-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 12px;
+  }
+  .mr-driver-bottom-bar .mr-btn:last-child {
+    grid-column: span 2;
   }
 }
 

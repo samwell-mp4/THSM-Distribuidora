@@ -63,6 +63,7 @@ export default function MontagemRota({
   financial = [],
   onSaveRota,
   onCancel,
+  onOpenFechamentoModal,
   showToast
 }) {
   const [searchTerm, setSearchTerm] = useState('')
@@ -385,6 +386,17 @@ export default function MontagemRota({
               R$ {summary.totalCobrar.toFixed(2).replace('.', ',')}
             </div>
           </div>
+
+          {onOpenFechamentoModal && (
+            <button
+              type="button"
+              className="mr-btn mr-btn-secondary"
+              onClick={onOpenFechamentoModal}
+              title="Fechar o dia e prestar contas"
+            >
+              <i className="fa-solid fa-flag-checkered" style={{ color: '#059669' }}></i> Fechar Jornada
+            </button>
+          )}
 
           <button
             type="button"

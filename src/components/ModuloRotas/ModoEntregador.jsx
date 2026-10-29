@@ -247,33 +247,30 @@ export default function ModoEntregador({
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div className="mr-driver-header-actions">
             <button
               type="button"
               className="mr-btn mr-btn-secondary"
-              style={{ padding: '8px 12px', fontSize: '0.82rem' }}
               onClick={onVoltarMontagem}
               title="Ajustar Pedidos na Rota"
             >
-              <i className="fa-solid fa-sliders"></i> Ajustar Rota
+              <i className="fa-solid fa-sliders"></i> <span>Ajustar Rota</span>
             </button>
             <button
               type="button"
               className="mr-btn mr-btn-warning"
-              style={{ padding: '8px 12px', fontSize: '0.82rem' }}
               onClick={onOpenDespesasModal}
               title="Lançar Despesa"
             >
-              <i className="fa-solid fa-receipt"></i> + Despesa
+              <i className="fa-solid fa-receipt"></i> <span>+ Despesa</span>
             </button>
             <button
               type="button"
-              className="mr-btn mr-btn-primary"
-              style={{ padding: '8px 14px', fontSize: '0.82rem' }}
+              className="mr-btn mr-btn-primary mr-btn-fechar-jornada"
               onClick={onOpenFechamentoModal}
               title="Fechar o dia e prestar contas"
             >
-              <i className="fa-solid fa-flag-checkered"></i> Fechar Jornada
+              <i className="fa-solid fa-flag-checkered"></i> <span>Fechar Jornada</span>
             </button>
           </div>
         </div>
@@ -509,6 +506,32 @@ export default function ModoEntregador({
             )
           })}
         </div>
+      </div>
+
+      {/* Barra de Ações Rápidas no Rodapé da Jornada */}
+      <div className="mr-driver-bottom-bar">
+        <button
+          type="button"
+          className="mr-btn mr-btn-secondary"
+          onClick={onVoltarMontagem}
+        >
+          <i className="fa-solid fa-sliders"></i> Ajustar Rota
+        </button>
+        <button
+          type="button"
+          className="mr-btn mr-btn-warning"
+          onClick={onOpenDespesasModal}
+        >
+          <i className="fa-solid fa-receipt"></i> + Despesa
+        </button>
+        <button
+          type="button"
+          className="mr-btn mr-btn-primary"
+          onClick={onOpenFechamentoModal}
+          style={{ fontWeight: 800 }}
+        >
+          <i className="fa-solid fa-flag-checkered"></i> Fechar Jornada
+        </button>
       </div>
 
       {/* Modal de Tentativa Sem Sucesso */}
