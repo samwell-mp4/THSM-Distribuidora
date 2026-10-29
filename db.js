@@ -219,6 +219,33 @@ export async function initDb() {
     await client.query('ALTER TABLE leads DISABLE ROW LEVEL SECURITY');
     await client.query('ALTER TABLE pedidos_deletados DISABLE ROW LEVEL SECURITY');
 
+    // 10. JORNADAS_ENTREGA (Central de Rotas & Entregas)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS jornadas_entrega (
+        id text PRIMARY KEY,
+        data text NOT NULL,
+        status text NOT NULL DEFAULT 'aberta',
+        operador text NOT NULL DEFAULT '',
+        veiculo text DEFAULT '',
+        km_inicial numeric DEFAULT 0,
+        km_final numeric,
+        combustivel_inicial text DEFAULT 'cheio',
+        iniciou_em timestamptz DEFAULT now(),
+        finalizou_em timestamptz,
+        observacao_inicial text DEFAULT '',
+        observacao_final text DEFAULT '',
+        pedidos_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+        paradas jsonb NOT NULL DEFAULT '[]'::jsonb,
+        despesas_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+        resumo_fechamento jsonb DEFAULT '{}'::jsonb,
+        created_at timestamptz DEFAULT now(),
+        updated_at timestamptz DEFAULT now()
+      )
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS idx_jornadas_entrega_status ON jornadas_entrega(status)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_jornadas_entrega_data ON jornadas_entrega(data DESC)');
+    await client.query('ALTER TABLE jornadas_entrega DISABLE ROW LEVEL SECURITY');
+
     // Create Functions
     await client.query(`
       CREATE OR REPLACE FUNCTION admin_delete_order(ord_id bigint)

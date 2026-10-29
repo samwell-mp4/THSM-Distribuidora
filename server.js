@@ -1,3 +1,4 @@
+import zlib from 'zlib'
 import express from 'express'
 import fs from 'fs'
 import path from 'path'
@@ -9,6 +10,36 @@ initDb().catch(err => console.error('Database initialization error:', err));
 const app = express()
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ limit: '50mb', extended: true }))
+
+// Native Gzip compression middleware to drastically cut internet GB consumption
+app.use((req, res, next) => {
+  const acceptEncoding = req.headers['accept-encoding'] || ''
+  if (!acceptEncoding.includes('gzip')) return next()
+
+  const originalSend = res.send.bind(res)
+  res.send = function (body) {
+    if (res.headersSent) return originalSend(body)
+
+    if (body && (typeof body === 'string' || Buffer.isBuffer(body))) {
+      const buffer = Buffer.isBuffer(body) ? body : Buffer.from(body, 'utf8')
+      if (buffer.length > 1024) {
+        try {
+          const compressed = zlib.gzipSync(buffer, { level: 6 })
+          res.setHeader('Content-Encoding', 'gzip')
+          res.setHeader('Content-Length', compressed.length)
+          if (!res.getHeader('Content-Type')) {
+            res.setHeader('Content-Type', 'application/json; charset=utf-8')
+          }
+          return originalSend(compressed)
+        } catch (e) {
+          console.warn('Gzip compression fallback:', e.message)
+        }
+      }
+    }
+    return originalSend(body)
+  }
+  next()
+})
 
 // Image static serving and upstream proxy fallback
 const FOTOS_DIRS = [

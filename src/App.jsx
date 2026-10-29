@@ -31,6 +31,7 @@ function App() {
   const [sortBy, setSortBy] = useState('nome-asc')
   const [priceRange, setPriceRange] = useState([0, 5000])
   const [onlyInStock, setOnlyInStock] = useState(false)
+  const [tipoDevolucao, setTipoDevolucao] = useState('todos')
   const [cart, setCart] = useState({})
   const [cartOpen, setCartOpen] = useState(false)
   const [toast, setToast] = useState(null)
@@ -347,6 +348,8 @@ function App() {
       const preco = Number(p.preco) || 0
       if (preco < priceRange[0] || preco > priceRange[1]) return false
       if (onlyInStock && (Number(p.estoque) || 0) <= 0) return false
+      if (tipoDevolucao === 'com' && p.semDevolucao) return false
+      if (tipoDevolucao === 'sem' && !p.semDevolucao) return false
       return true
     }).sort((a, b) => {
       const nameA = String(a?.nome || '')
@@ -360,12 +363,31 @@ function App() {
         default: return nameA.localeCompare(nameB, 'pt-BR')
       }
     })
-  }, [search, categoria, priceRange, onlyInStock, sortBy, produtosMerged])
+  }, [search, categoria, priceRange, onlyInStock, sortBy, tipoDevolucao, produtosMerged])
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE)
   const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
 
-  useEffect(() => { setCurrentPage(1) }, [search, categoria, priceRange, onlyInStock, sortBy])
+  useEffect(() => { setCurrentPage(1) }, [search, categoria, priceRange, onlyInStock, sortBy, tipoDevolucao])
+
+  const clearAllFilters = () => {
+    setSearch('')
+    setCategoria('TODOS')
+    setPriceRange([priceMin, priceMax])
+    setOnlyInStock(false)
+    setTipoDevolucao('todos')
+    setSortBy('nome-asc')
+  }
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0
+    if (categoria !== 'TODOS') count++
+    if (onlyInStock) count++
+    if (tipoDevolucao !== 'todos') count++
+    if (priceRange[0] > priceMin || priceRange[1] < priceMax) count++
+    if (search && search.trim()) count++
+    return count
+  }, [categoria, onlyInStock, tipoDevolucao, priceRange, search, priceMin, priceMax])
 
   const formatPreco = (v) => `R$ ${Number(v).toFixed(2).replace('.', ',')}`
 
@@ -1056,6 +1078,7 @@ function App() {
           </div>
           <button className={`toggle-filters ${showFilters ? 'active' : ''}`} onClick={() => setShowFilters(!showFilters)}>
             <i className="fa-solid fa-sliders"></i> Filtros
+            {activeFiltersCount > 0 && <span className="cat-filter-count">{activeFiltersCount}</span>}
           </button>
           <div className="sort-box">
             <i className="fa-solid fa-arrow-down-wide-short"></i>
@@ -1071,36 +1094,128 @@ function App() {
         {showFilters && (
           <div className="filters-extended">
             <div className="filters-extended-inner">
-              <div className="filter-group">
-                <label><i className="fa-solid fa-tag"></i> Categoria</label>
-                <div className="category-pills">
-                  {categorias.slice(0, 8).map(cat => (
-                    <button key={cat} className={`pill ${categoria === cat ? 'active' : ''}`} onClick={() => setCategoria(cat)}>{cat}</button>
-                  ))}
-                  {categorias.length > 8 && (
-                    <select className="cat-select" value={categoria} onChange={e => setCategoria(e.target.value)}>
-                      {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
-                  )}
+              <div className="filters-panel-header">
+                <div className="fph-title">
+                  <i className="fa-solid fa-sliders"></i>
+                  <span>Filtros do Catálogo</span>
+                  {activeFiltersCount > 0 && <span className="fph-badge">{activeFiltersCount} ativo(s)</span>}
                 </div>
+                {activeFiltersCount > 0 && (
+                  <button className="fph-clear-btn" onClick={clearAllFilters}>
+                    <i className="fa-solid fa-rotate-left"></i> Limpar filtros
+                  </button>
+                )}
               </div>
-              <div className="filter-group">
-                <label><i className="fa-solid fa-dollar-sign"></i> Faixa de Preço</label>
-                <div className="price-range">
-                  <input type="range" min={priceMin} max={priceMax} step={1} value={priceRange[0]} onChange={e => setPriceRange([Number(e.target.value), priceRange[1]])} />
-                  <input type="range" min={priceMin} max={priceMax} step={1} value={priceRange[1]} onChange={e => setPriceRange([priceRange[0], Number(e.target.value)])} />
-                  <div className="price-labels">
-                    <span>{formatPreco(priceRange[0])}</span>
-                    <span>{formatPreco(priceRange[1])}</span>
+
+              <div className="filters-grid">
+                {/* 1. Categorias */}
+                <div className="filter-card">
+                  <span className="filter-card-title"><i className="fa-solid fa-tags"></i> Categoria</span>
+                  <div className="filter-pills-wrap">
+                    {categorias.map(cat => (
+                      <button
+                        key={cat}
+                        className={`filter-chip ${categoria === cat ? 'active' : ''}`}
+                        onClick={() => setCategoria(cat)}
+                      >
+                        {cat === 'TODOS' ? 'Todas as Categorias' : cat}
+                      </button>
+                    ))}
                   </div>
                 </div>
-              </div>
-              <div className="filter-group">
-                <label className="stock-toggle">
-                  <input type="checkbox" checked={onlyInStock} onChange={e => setOnlyInStock(e.target.checked)} />
-                  <span className="toggle-track"></span>
-                  Apenas em estoque
-                </label>
+
+                {/* 2. Faixa de Preço Inteligente */}
+                <div className="filter-card">
+                  <span className="filter-card-title"><i className="fa-solid fa-dollar-sign"></i> Faixa de Preço</span>
+                  <div className="price-inputs-row">
+                    <div className="price-input-box">
+                      <span>R$</span>
+                      <input
+                        type="number"
+                        placeholder="Mínimo"
+                        value={priceRange[0] === 0 ? '' : priceRange[0]}
+                        onChange={e => {
+                          const val = Math.max(0, Number(e.target.value) || 0)
+                          setPriceRange([val, priceRange[1]])
+                        }}
+                      />
+                    </div>
+                    <span className="price-sep">até</span>
+                    <div className="price-input-box">
+                      <span>R$</span>
+                      <input
+                        type="number"
+                        placeholder="Máximo"
+                        value={priceRange[1] >= priceMax ? '' : priceRange[1]}
+                        onChange={e => {
+                          const val = e.target.value === '' ? priceMax : Number(e.target.value)
+                          setPriceRange([priceRange[0], val])
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="price-quick-pills">
+                    {[
+                      { label: 'Todos', range: [0, priceMax || 5000] },
+                      { label: 'Até R$ 50', range: [0, 50] },
+                      { label: 'R$ 50 - 150', range: [50, 150] },
+                      { label: 'R$ 150 - 300', range: [150, 300] },
+                      { label: 'R$ 300+', range: [300, priceMax || 5000] },
+                    ].map(f => (
+                      <button
+                        key={f.label}
+                        className={`price-pill ${priceRange[0] === f.range[0] && priceRange[1] === f.range[1] ? 'active' : ''}`}
+                        onClick={() => setPriceRange(f.range)}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 3. Disponibilidade de Estoque */}
+                <div className="filter-card">
+                  <span className="filter-card-title"><i className="fa-solid fa-boxes-stacked"></i> Estoque</span>
+                  <div className="filter-pills-wrap">
+                    <button
+                      className={`filter-chip ${!onlyInStock ? 'active' : ''}`}
+                      onClick={() => setOnlyInStock(false)}
+                    >
+                      Todos os produtos
+                    </button>
+                    <button
+                      className={`filter-chip ${onlyInStock ? 'active' : ''}`}
+                      onClick={() => setOnlyInStock(true)}
+                    >
+                      <i className="fa-solid fa-circle-check" style={{ color: '#16A34A' }}></i> Pronta Entrega
+                    </button>
+                  </div>
+                </div>
+
+                {/* 4. Política de Devolução / Encomenda */}
+                <div className="filter-card">
+                  <span className="filter-card-title"><i className="fa-solid fa-truck-ramp-box"></i> Tipo de Item</span>
+                  <div className="filter-pills-wrap">
+                    <button
+                      className={`filter-chip ${tipoDevolucao === 'todos' ? 'active' : ''}`}
+                      onClick={() => setTipoDevolucao('todos')}
+                    >
+                      Todos os itens
+                    </button>
+                    <button
+                      className={`filter-chip ${tipoDevolucao === 'com' ? 'active' : ''}`}
+                      onClick={() => setTipoDevolucao('com')}
+                    >
+                      <i className="fa-solid fa-rotate-left" style={{ color: '#2563EB' }}></i> Com Devolução
+                    </button>
+                    <button
+                      className={`filter-chip ${tipoDevolucao === 'sem' ? 'active' : ''}`}
+                      onClick={() => setTipoDevolucao('sem')}
+                    >
+                      <i className="fa-solid fa-building" style={{ color: '#D97706' }}></i> Sob Encomenda
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

@@ -5,7 +5,7 @@ import {
   deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads,
   upsertProducts, upsertDespesas, generateLoginToken, getAllRotaEdits, upsertRotaEdits, deleteRotaEdit as supabaseDeleteRotaEdit,
   deleteProducts as supabaseDeleteProducts, flushPendingOrders, deleteOnlyFinancialByOrder, samePhone, normTel, normalizePhoneDigits,
-  formatImageUrl, reconcileOrdersUsers, saveUserViaWebhook
+  formatImageUrl, reconcileOrdersUsers, saveUserViaWebhook, getRotasContatos
 } from '../lib/supabase'
 import { compressImageDataUrl, capPhotoSize } from '../lib/image'
 import { idbGet, idbSet } from '../lib/idb'
@@ -20,7 +20,6 @@ const STORAGE_CUSTOM_CATS = 'thsm_custom_categorias'
 const STORAGE_CUSTOM_TIPOS = 'thsm_custom_despesa_tipos'
 const STORAGE_DELETED_ORDERS = 'thsm_deleted_order_ids'
 const WEBHOOK_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/novo-pedido'
-const LISTA_CONTATOS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/lista-contatos'
 const ALERTAR_ROTAS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/alertar-rotas'
 const WHATSAPP_FORCE_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/whatsapp-force'
 const ADMIN_NOTIFY_PHONES = ['5531988868362', '5532988157834']
@@ -796,6 +795,7 @@ function sendAlertRota(tipo, contatos, orders, customText = '') {
 import AddressForm from '../components/AddressForm'
 import MapView from '../components/MapView'
 import CentralAnalise from '../components/CentralAnalise'
+import CentralRotas from '../components/ModuloRotas/CentralRotas'
 import OrderReportModal from '../components/OrderReportModal'
 
 export default function Admin({ produtos, refreshProducts, onVoltar }) {
@@ -1036,7 +1036,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [selectedUserIds, setSelectedUserIds] = useState(new Set())
   const [userMsgMenu, setUserMsgMenu] = useState(null)
   const USER_PAGE_SIZE = 50
-  const PROD_PER_PAGE = 50
+  const [prodPerPage, setProdPerPage] = useState(24)
+  const [prodQuickFilter, setProdQuickFilter] = useState('todos')
   const [prodCatFilter, setProdCatFilter] = useState('TODOS')
   const [customCategorias, setCustomCategorias] = useState(() => LS.get(STORAGE_CUSTOM_CATS, []))
   const [customDespesaTipos, setCustomDespesaTipos] = useState(() => LS.get(STORAGE_CUSTOM_TIPOS, []))
@@ -1067,7 +1068,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const ORDER_PAGE_SIZE = 50
   const [semDevReport, setSemDevReport] = useState(null)
   const [semDevGroups, setSemDevGroups] = useState({})
-  const [rotas, setRotas] = useState([])
+  const [rotas, setRotas] = useState(() => LS.get('thsm_rotas_contatos', []))
   const [rotasLoading, setRotasLoading] = useState(false)
   const [importingRotas, setImportingRotas] = useState(false)
   const [rotasError, setRotasError] = useState(null)
@@ -1224,44 +1225,87 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     setRotasError(null)
     try {
       let allContacts = []
-      let offset = 0
-      const PAGE_SIZE = 1000
-      const MAX_PAGES = 10
       const seen = new Set()
 
-      for (let page = 0; page < MAX_PAGES; page++) {
-        const res = await fetch(LISTA_CONTATOS_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ offset, limit: PAGE_SIZE })
+      // 1. Puxar contatos de rotas salvos no banco rotas_contatos
+      try {
+        const dbContatos = await getRotasContatos()
+        if (Array.isArray(dbContatos) && dbContatos.length > 0) {
+          dbContatos.forEach(c => {
+            const key = c.remoteJid || c.telefone || c.pushName
+            if (key && !seen.has(key)) {
+              seen.add(key)
+              allContacts.push(c)
+            }
+          })
+        }
+      } catch (errDb) {
+        console.warn('Rotas contatos db:', errDb)
+      }
+
+      // 2. Puxar todos os clientes cadastrados em usuarios que possuem cidade
+      if (Array.isArray(usuarios) && usuarios.length > 0) {
+        usuarios.forEach(u => {
+          if (!u.telefone) return
+          const rawDigits = String(u.telefone).replace(/\D/g, '')
+          const jid = `${rawDigits}@s.whatsapp.net`
+          if (seen.has(jid) || seen.has(rawDigits)) return
+          const cid = u.endereco?.cidade || u.cidade || ''
+          const rotaNome = u.endereco?.rota || u.rota || cid || 'Geral'
+          seen.add(jid)
+          seen.add(rawDigits)
+          allContacts.push({
+            remoteJid: jid,
+            pushName: u.nome || 'Cliente',
+            nome: u.nome || '',
+            telefone: rawDigits,
+            cidade: cid || 'Sem cidade',
+            rota: rotaNome,
+            profilePicture: ''
+          })
         })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
-        const arr = Array.isArray(data) ? data : (data.code === 0 ? [] : [data])
-        if (arr.length === 0) break
+      }
 
-        const newContacts = arr.filter(c => {
-          const key = c.remoteJid || c.pushName || Math.random()
-          if (seen.has(key)) return false
-          seen.add(key)
-          return true
+      // 3. Puxar contatos de clientes com endereço nos pedidos
+      if (Array.isArray(orders) && orders.length > 0) {
+        orders.forEach(o => {
+          const tel = o.customer?.telefone || o.telefone
+          if (!tel) return
+          const rawDigits = String(tel).replace(/\D/g, '')
+          const jid = `${rawDigits}@s.whatsapp.net`
+          if (seen.has(jid) || seen.has(rawDigits)) return
+          const cid = o.customer?.endereco?.cidade || o.endereco?.cidade || ''
+          const rotaNome = o.customer?.endereco?.rota || cid || 'Geral'
+          seen.add(jid)
+          seen.add(rawDigits)
+          allContacts.push({
+            remoteJid: jid,
+            pushName: o.customer?.nome || o.customer?.pushName || o.nome || 'Cliente',
+            nome: o.customer?.nome || o.nome || '',
+            telefone: rawDigits,
+            cidade: cid || 'Sem cidade',
+            rota: rotaNome,
+            profilePicture: ''
+          })
         })
+      }
 
-        if (newContacts.length === 0) break
-
-        allContacts = allContacts.concat(newContacts)
-        offset += arr.length
-
-        if (arr.length < PAGE_SIZE) break
+      // 4. Fallback cache local
+      if (allContacts.length === 0) {
+        const cached = LS.get('thsm_rotas_contatos', [])
+        if (cached.length > 0) allContacts = cached
       }
 
       setRotas(allContacts)
+      LS.set('thsm_rotas_contatos', allContacts)
     } catch (e) {
-      setRotasError(e.message)
+      console.warn('Erro ao atualizar rotas:', e)
+      const cached = LS.get('thsm_rotas_contatos', [])
+      setRotas(cached)
     } finally {
       setRotasLoading(false)
     }
-  }, [])
+  }, [usuarios, orders])
 
   const rotaEditForAdd = (rota, jid) => rotaEdits.find(e =>
     e.acao === 'adicionar' && e.rota === rota && (
@@ -1481,7 +1525,25 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
     setSyncingUsers(true)
     doSync()
-    const pollInterval = setInterval(doSync, 60000)
+
+    let lastSyncTime = Date.now()
+    const pollInterval = setInterval(() => {
+      // Avoid draining high internet data when user is inactive or in another tab
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      if (Date.now() - lastSyncTime < 240000) return
+      lastSyncTime = Date.now()
+      doSync()
+    }, 300000) // 5 minutes interval
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible' && Date.now() - lastSyncTime > 180000) {
+        lastSyncTime = Date.now()
+        doSync()
+      }
+    }
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange)
+    }
 
     getAllLeads().then(setLeads).catch(() => { })
       // Reenvia leads salvos localmente (fallback quando site ficou offline)
@@ -1498,7 +1560,12 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         } catch { }
       })()
 
-    return () => clearInterval(pollInterval)
+    return () => {
+      clearInterval(pollInterval)
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange)
+      }
+    }
   }, [])
 
   // Auto-expand first rota when rotas load
@@ -1680,7 +1747,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
           sendStatusWebhook(order, order.status)
         } catch (bgErr) {
-          console.error('Erro na persistência em segundo plano do pedido:', bgErr)
+          console.error('Erro na persistência em segundo  do pedido:', bgErr)
         }
       })()
 
@@ -2953,6 +3020,137 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     return orders.filter(o => inRange(o.date || '')).slice(0, 8)
   }, [orders, dashRange])
 
+  // Insights operacionais e percentuais para o Dashboard NexRoute
+  const dashInsights = useMemo(() => {
+    const total = orders.length || 1
+    const entregues = orders.filter(o => o.status === 'entregue').length
+    const emRota = orders.filter(o => o.status === 'em-rota').length
+    const pendentes = orders.filter(o => ['pendente', 'pre-pedido'].includes(o.status)).length
+    const cancelados = orders.filter(o => o.status === 'cancelado').length
+
+    const pctEntregues = Math.round((entregues / total) * 100)
+    const pctEmRota = Math.round((emRota / total) * 100)
+    const pctPendentes = Math.round((pendentes / total) * 100)
+    const pctCancelados = Math.round((cancelados / total) * 100)
+
+    const avista = orders.filter(o => o.pagamento === 'avista').length
+    const aprazo = orders.filter(o => o.pagamento === 'aprazo').length
+    const misto = orders.filter(o => o.pagamento === 'misto').length
+
+    return {
+      pctEntregues,
+      pctEmRota,
+      pctPendentes,
+      pctCancelados,
+      entregues,
+      emRota,
+      pendentes,
+      cancelados,
+      totalOrders: orders.length,
+      avista,
+      aprazo,
+      misto
+    }
+  }, [orders])
+
+  // Alertas inteligentes para o Dashboard (pedidos atrasados, cobranças vencidas, estoque, leads)
+  const dashAlerts = useMemo(() => {
+    const alerts = []
+    const todayStr = hoje()
+
+    // 1. Cobranças em atraso (Financeiro)
+    const vencidosFin = financial.filter(f => f.status === 'pendente' && f.dueDate && f.dueDate < todayStr)
+    if (vencidosFin.length > 0) {
+      const totalVencido = vencidosFin.reduce((sum, f) => sum + (Number(f.value) || 0), 0)
+      alerts.push({
+        id: 'fin-overdue',
+        severity: 'danger',
+        icon: 'fa-triangle-exclamation',
+        badge: 'Financeiro',
+        title: `${vencidosFin.length} cobrança(s) a prazo em atraso`,
+        desc: `Total de ${formatPreco(totalVencido)} vencido aguardando acerto/quitação.`,
+        actionText: 'Ver cobranças',
+        action: () => { setTab('financeiro'); setFinTab('receber') }
+      })
+    }
+
+    // 2. Pedidos pendentes precisando de separação/envio
+    const pendentesCount = orders.filter(o => ['pendente', 'pre-pedido'].includes(o.status)).length
+    if (pendentesCount > 0) {
+      alerts.push({
+        id: 'orders-pending',
+        severity: 'warning',
+        icon: 'fa-boxes-packing',
+        badge: 'Separação',
+        title: `${pendentesCount} pedido(s) aguardando despacho`,
+        desc: 'Pedidos aguardando conferência, separação ou inclusão na rota.',
+        actionText: 'Ver pedidos',
+        action: () => { setTab('pedidos'); setOrderFilter('pendente') }
+      })
+    }
+
+    // 3. Pedidos atualmente em rota
+    const emRotaCount = orders.filter(o => o.status === 'em-rota').length
+    if (emRotaCount > 0) {
+      alerts.push({
+        id: 'orders-in-route',
+        severity: 'info',
+        icon: 'fa-truck-fast',
+        badge: 'Em Rota',
+        title: `${emRotaCount} entrega(s) em trânsito com motoristas`,
+        desc: 'Acompanhe a rota em tempo real e confirme os recebimentos dos clientes.',
+        actionText: 'Acompanhar rotas',
+        action: () => { setTab('pedidos'); setOrderFilter('em-rota') }
+      })
+    }
+
+    // 4. Estoque zerado
+    const outOfStock = (produtosAtuais || []).filter(p => Number(p.estoque) <= 0)
+    if (outOfStock.length > 0) {
+      alerts.push({
+        id: 'stock-out',
+        severity: 'danger',
+        icon: 'fa-ban',
+        badge: 'Estoque',
+        title: `${outOfStock.length} produto(s) com estoque esgotado`,
+        desc: 'Itens marcados como indisponíveis para os clientes no catálogo online.',
+        actionText: 'Repor estoque',
+        action: () => { setTab('produtos'); setProdStockFilter('out') }
+      })
+    } else {
+      const lowStock = (produtosAtuais || []).filter(p => Number(p.estoque) > 0 && Number(p.estoque) <= 5)
+      if (lowStock.length > 0) {
+        alerts.push({
+          id: 'stock-low',
+          severity: 'warning',
+          icon: 'fa-boxes-stacked',
+          badge: 'Estoque Baixo',
+          title: `${lowStock.length} produto(s) com estoque crítico (≤ 5)`,
+          desc: 'Nível reduzido de estoque, recomenda-se programar reabastecimento.',
+          actionText: 'Ver produtos',
+          action: () => { setTab('produtos') }
+        })
+      }
+    }
+
+    // 5. Inscrições de novos clientes (Leads)
+    if (leads && leads.length > 0) {
+      alerts.push({
+        id: 'leads-new',
+        severity: 'neutral',
+        icon: 'fa-address-card',
+        badge: 'Cadastros',
+        title: `${leads.length} novo(s) cadastro(s) no site`,
+        desc: 'Clientes solicitaram cadastro de revendedor e aguardam ativação.',
+        actionText: 'Ver inscrições',
+        action: () => { setTab('leads') }
+      })
+    }
+
+    return alerts
+  }, [financial, orders, produtosAtuais, leads])
+
+
   // Métricas das comandas concluídas
   const concluidosStats = useMemo(() => {
     const concluidos = orders.filter(isFinalizada)
@@ -3305,6 +3503,30 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     })
   }, [allClientesConsolidados, userSearch, userCityFilter, userOrigemFilter, userEnderecoSearch, userSort, selectedUserEmail])
 
+    const userOrderStats = useMemo(() => {
+    const stats = new Map()
+    for (let i = 0; i < orders.length; i++) {
+      const o = orders[i]
+      if (!o) continue
+      const tot = Number(o.total || 0)
+      const rawTel = o.customer?.telefone ? String(o.customer.telefone).replace(/\D/g, '') : null
+      const uid = o.user_id ? String(o.user_id) : null
+      if (rawTel) {
+        const cur = stats.get(rawTel) || { count: 0, total: 0 }
+        cur.count += 1
+        cur.total += tot
+        stats.set(rawTel, cur)
+      }
+      if (uid) {
+        const cur = stats.get(uid) || { count: 0, total: 0 }
+        cur.count += 1
+        cur.total += tot
+        stats.set(uid, cur)
+      }
+    }
+    return stats
+  }, [orders])
+
   const paginatedUsuarios = useMemo(() => {
     const start = (userPage - 1) * USER_PAGE_SIZE
     return filteredUsuarios.slice(start, start + USER_PAGE_SIZE)
@@ -3369,20 +3591,63 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     showToast(`Tipo "${tipo}" criado!`)
   }
 
+  // Métricas do catálogo em tempo real para os KPI cards
+  const prodSummary = useMemo(() => {
+    const list = produtosAtuais || []
+    const total = list.length
+    const emEstoque = list.filter(p => (Number(p.estoque) || 0) > 0).length
+    const criticos = list.filter(p => (Number(p.estoque) || 0) > 0 && (Number(p.estoque) || 0) <= 5).length
+    const esgotados = list.filter(p => (Number(p.estoque) || 0) <= 0).length
+    const semDevolucao = list.filter(p => p.semDevolucao).length
+    const valorTotalEstoque = list.reduce((sum, p) => sum + ((Number(p.estoque) || 0) * (Number(p.preco) || 0)), 0)
+    return { total, emEstoque, criticos, esgotados, semDevolucao, valorTotalEstoque }
+  }, [produtosAtuais])
+
   const filteredProds = useMemo(() => {
     const [pMin, pMax] = prodPriceRange
+    const cleanSearch = (prodSearch || '').trim().toLowerCase()
+
     return (produtosAtuais || []).filter(p => {
       if (!p) return false
-      const nome = String(p.nome || p.displayName || '')
+      const estoqueNum = Number(p.estoque) || 0
+      const precoNum = Number(p.preco) || 0
       const cat = String(p.categoria || '')
-      if (prodSearch && !searchMatches(nome, prodSearch) && !searchMatches(cat, prodSearch) && !searchMatches(p.descricao, prodSearch)) return false
+
+      // 1. Filtro rápido (Pills de status)
+      if (prodQuickFilter === 'disponivel' && estoqueNum <= 0) return false
+      if (prodQuickFilter === 'critico' && (estoqueNum <= 0 || estoqueNum > 5)) return false
+      if (prodQuickFilter === 'esgotado' && estoqueNum > 0) return false
+      if (prodQuickFilter === 'sem_devolucao' && !p.semDevolucao) return false
+      if (prodQuickFilter === 'com_variantes') {
+        const hasVars = p.variantes && typeof p.variantes === 'object' && Object.keys(p.variantes).length > 0
+        if (!hasVars) return false
+      }
+
+      // 2. Filtro de estoque dropdown
+      if (prodStockFilter === 'in' && estoqueNum <= 0) return false
+      if (prodStockFilter === 'out' && estoqueNum > 0) return false
+
+      // 3. Filtro de Categoria
       if (prodCatFilter === 'Encomendas da Empresa') {
         if (!p.semDevolucao) return false
-      } else if (prodCatFilter !== 'TODOS' && cat !== prodCatFilter) return false
-      if (prodStockFilter === 'in' && (Number(p.estoque) || 0) <= 0) return false
-      if (prodStockFilter === 'out' && (Number(p.estoque) || 0) > 0) return false
-      const preco = Number(p.preco) || 0
-      if (preco < pMin || preco > pMax) return false
+      } else if (prodCatFilter !== 'TODOS' && cat !== prodCatFilter) {
+        return false
+      }
+
+      // 4. Faixa de preço
+      if (precoNum < pMin || (pMax > 0 && precoNum > pMax)) return false
+
+      // 5. Busca ultrarrápida (sem regex pesada)
+      if (cleanSearch) {
+        const nome = String(p.nome || p.displayName || '').toLowerCase()
+        const desc = String(p.descricao || '').toLowerCase()
+        const catLower = cat.toLowerCase()
+        const code = String(p.id || '').toLowerCase()
+        if (!nome.includes(cleanSearch) && !desc.includes(cleanSearch) && !catLower.includes(cleanSearch) && !code.includes(cleanSearch)) {
+          return false
+        }
+      }
+
       return true
     }).sort((a, b) => {
       let va = String(a?.nome || a?.displayName || '')
@@ -3402,11 +3667,12 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           return va.localeCompare(vb, 'pt-BR')
       }
     })
-  }, [produtosAtuais, prodSearch, prodCatFilter, prodStockFilter, prodPriceRange, prodSort])
+  }, [produtosAtuais, prodSearch, prodQuickFilter, prodCatFilter, prodStockFilter, prodPriceRange, prodSort])
 
-  const totalProdPages = Math.ceil(filteredProds.length / PROD_PER_PAGE)
-  const paginatedProds = filteredProds.slice((prodPage - 1) * PROD_PER_PAGE, prodPage * PROD_PER_PAGE)
-  useEffect(() => { setProdPage(1) }, [prodSearch, prodCatFilter, prodStockFilter, prodPriceRange])
+  const effectiveProdPerPage = prodPerPage === 'all' ? (filteredProds.length || 1) : Number(prodPerPage) || 24
+  const totalProdPages = Math.ceil(filteredProds.length / effectiveProdPerPage) || 1
+  const paginatedProds = filteredProds.slice((prodPage - 1) * effectiveProdPerPage, prodPage * effectiveProdPerPage)
+  useEffect(() => { setProdPage(1) }, [prodSearch, prodQuickFilter, prodCatFilter, prodStockFilter, prodPriceRange, prodPerPage])
 
   const toggleProdSort = (field) => {
     setProdSort(prev => prev.field === field ? { field, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { field, dir: 'asc' })
@@ -3705,8 +3971,6 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     { id: 'rotas', icon: 'fa-route', label: 'Rotas', count: rotaStats.totalRotas },
     { id: 'financeiro', icon: 'fa-coins', label: 'Financeiro', count: financial.filter(f => f.status === 'pendente').length },
     { id: 'usuarios', icon: 'fa-users', label: 'Usuários', count: usuarios.length },
-    { id: 'leads', icon: 'fa-file-pen', label: 'Inscrições', count: leads.length },
-    { id: 'mapa', icon: 'fa-map', label: 'Mapa' },
     { id: 'analises', icon: 'fa-chart-pie', label: 'Análises' },
   ]
 
@@ -3754,6 +4018,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           </div>
         </div>
         <nav className="admin-nav">
+          <span className="admin-nav-group-title">Menu Principal</span>
           {sidebar.map(s => (
             <button key={s.id} className={`admin-nav-item ${tab === s.id ? 'active' : ''}`} onClick={() => setTab(s.id)}>
               <i className={`fa-solid ${s.icon}`}></i>
@@ -3763,6 +4028,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           ))}
         </nav>
         <div className="admin-sidebar-footer">
+          <span className="admin-nav-group-title">Conta & Sistema</span>
           <button className="admin-nav-item" onClick={onVoltar}>
             <i className="fa-solid fa-arrow-left"></i>
             <span>Voltar ao Catálogo</span>
@@ -3774,113 +4040,260 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       <main className="admin-content">
         {/* DASHBOARD */}
         {tab === 'dashboard' && (
-          <div className="admin-section">
-            <h1>Dashboard</h1>
-            <p className="admin-subtitle">Resumo geral do sistema</p>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-              {[
-                { id: 'day', label: 'Dia' },
-                { id: 'month', label: 'Mês' },
-                { id: 'year', label: 'Ano' },
-                { id: 'all', label: 'Todo período' },
-                { id: 'custom', label: 'Personalizado' },
-              ].map(p => (
-                <button key={p.id} className={`admin-tab ${dashPeriod === p.id ? 'active' : ''}`} onClick={() => setDashPeriod(p.id)}>
-                  {p.label}
+          <div className="admin-section admin-dash-section">
+            <div className="admin-header-row admin-dash-header-row">
+              <div>
+                <h1>Dashboard</h1>
+                <p className="admin-subtitle">Visão executiva e controle operacional da THSM</p>
+              </div>
+              <div className="admin-dash-header-actions">
+                <div className="admin-dash-period-pills">
+                  {[
+                    { id: 'day', label: 'Hoje' },
+                    { id: 'month', label: 'Este Mês' },
+                    { id: 'year', label: 'Ano' },
+                    { id: 'all', label: 'Todo Período' },
+                    { id: 'custom', label: 'Personalizado' },
+                  ].map(p => (
+                    <button key={p.id} className={`admin-tab ${dashPeriod === p.id ? 'active' : ''}`} onClick={() => setDashPeriod(p.id)}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+                {dashPeriod === 'custom' && (
+                  <div className="admin-dash-custom-dates">
+                    <input type="date" value={dashCustomStart} onChange={e => setDashCustomStart(e.target.value)} />
+                    <span>—</span>
+                    <input type="date" value={dashCustomEnd} onChange={e => setDashCustomEnd(e.target.value)} />
+                  </div>
+                )}
+                <button className="admin-btn admin-btn-primary admin-btn-novo-pedido" onClick={() => setShowAddOrder(true)}>
+                  <i className="fa-solid fa-plus"></i> Novo Pedido
                 </button>
-              ))}
-              {dashPeriod === 'custom' && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>
-                  <input type="date" value={dashCustomStart} onChange={e => setDashCustomStart(e.target.value)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', maxWidth: '130px' }} />
-                  <span>—</span>
-                  <input type="date" value={dashCustomEnd} onChange={e => setDashCustomEnd(e.target.value)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', maxWidth: '130px' }} />
+              </div>
+            </div>
+
+            {/* CENTRAL DE ALERTAS E ATENÇÃO OPERACIONAL */}
+            <div className="admin-dash-alerts-section">
+              <div className="admin-dash-section-title">
+                <span><i className="fa-solid fa-bell"></i> Central de Alertas e Notificações</span>
+                {dashAlerts.length > 0 && <span className="admin-badge-count">{dashAlerts.length} pendência(s)</span>}
+              </div>
+              {dashAlerts.length > 0 ? (
+                <div className="admin-dash-alerts-grid">
+                  {dashAlerts.map(alert => (
+                    <div key={alert.id} className={`admin-dash-alert-card alert-${alert.severity}`}>
+                      <div className="adac-icon">
+                        <i className={`fa-solid ${alert.icon}`}></i>
+                      </div>
+                      <div className="adac-info">
+                        <div className="adac-head">
+                          <strong>{alert.title}</strong>
+                          <span className="adac-badge">{alert.badge}</span>
+                        </div>
+                        <p>{alert.desc}</p>
+                      </div>
+                      <button className="adac-action-btn" onClick={alert.action}>
+                        {alert.actionText} <i className="fa-solid fa-arrow-right"></i>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="admin-dash-alert-empty">
+                  <i className="fa-solid fa-circle-check"></i>
+                  <span>Tudo em dia! Nenhuma pendência crítica ou alerta no momento.</span>
                 </div>
               )}
             </div>
 
-            <div className="admin-cards">
-              <div className="admin-card card-blue">
-                <i className="fa-solid fa-shopping-bag"></i>
-                <div>
-                  <strong>{dashStats.total}</strong>
-                  <span>Total de Pedidos</span>
+            {/* KPI METRICS OVERVIEW (NEXROUTE SAAS STYLE) */}
+            <div className="admin-orders-kpi-grid admin-dash-kpi-grid">
+              <div className="admin-kpi-card" onClick={() => setDashPeriod('all')} title="Faturamento total dos pedidos">
+                <div className="akc-head">
+                  <span className="akc-title"><i className="fa-solid fa-dollar-sign"></i> Faturamento</span>
+                  <i className="fa-solid fa-ellipsis akc-more"></i>
+                </div>
+                <div className="akc-body">
+                  <span className="akc-value">{formatPreco(dashStats.faturamento)}</span>
+                  <span className="akc-badge akc-badge-neutral"><i className="fa-solid fa-arrow-trend-up"></i> Período</span>
                 </div>
               </div>
-              <div className="admin-card card-yellow">
-                <i className="fa-solid fa-hourglass-half"></i>
-                <div>
-                  <strong>{dashStats.pendentes}</strong>
-                  <span>Pendentes</span>
+
+              <div className="admin-kpi-card" onClick={() => { setTab('pedidos'); setOrderFilter('todos') }} title="Total de pedidos">
+                <div className="akc-head">
+                  <span className="akc-title"><i className="fa-regular fa-clipboard"></i> Total de Pedidos</span>
+                  <i className="fa-solid fa-ellipsis akc-more"></i>
+                </div>
+                <div className="akc-body">
+                  <span className="akc-value">{dashStats.total}</span>
+                  <span className="akc-badge akc-badge-success"><i className="fa-solid fa-check"></i> {dashInsights.pctEntregues}% entregues</span>
                 </div>
               </div>
-              <div className="admin-card card-green">
-                <i className="fa-solid fa-check-circle"></i>
-                <div>
-                  <strong>{dashStats.entregues}</strong>
-                  <span>Entregues</span>
+
+              <div className="admin-kpi-card" onClick={() => { setTab('pedidos'); setOrderFilter('pendente') }} title="Pedidos pendentes ou em processo">
+                <div className="akc-head">
+                  <span className="akc-title"><i className="fa-solid fa-hourglass-half"></i> Em Aberto / Pendente</span>
+                  <i className="fa-solid fa-ellipsis akc-more"></i>
+                </div>
+                <div className="akc-body">
+                  <span className="akc-value">{dashStats.pendentes}</span>
+                  <span className="akc-badge akc-badge-warning">{dashInsights.pctPendentes}% do total</span>
                 </div>
               </div>
-              <div className="admin-card card-blue" style={{ cursor: 'pointer' }} onClick={() => { setTab('pedidos'); setOrderFilter('acerto') }}>
-                <i className="fa-solid fa-handshake"></i>
-                <div>
-                  <strong>{dashStats.acertos}</strong>
-                  <span>Acertos</span>
+
+              <div className="admin-kpi-card" onClick={() => { setTab('financeiro'); setFinTab('receber') }} title="Contas a receber a prazo">
+                <div className="akc-head">
+                  <span className="akc-title"><i className="fa-solid fa-clock"></i> A Receber (Prazo)</span>
+                  <i className="fa-solid fa-ellipsis akc-more"></i>
+                </div>
+                <div className="akc-body">
+                  <span className="akc-value">{formatPreco(dashStats.aReceber)}</span>
+                  <span className="akc-badge akc-badge-neutral">{formatPreco(dashStats.recebido)} já pago</span>
                 </div>
               </div>
-              <div className="admin-card card-purple">
-                <i className="fa-solid fa-dollar-sign"></i>
-                <div>
-                  <strong>{formatPreco(dashStats.faturamento)}</strong>
-                  <span>Faturamento Total</span>
+
+              <div className="admin-kpi-card" onClick={() => { setTab('pedidos'); setOrderFilter('acerto') }} title="Acertos de motoristas">
+                <div className="akc-head">
+                  <span className="akc-title"><i className="fa-solid fa-handshake"></i> Acertos / Conferência</span>
+                  <i className="fa-solid fa-ellipsis akc-more"></i>
                 </div>
-              </div>
-              <div className="admin-card card-red">
-                <i className="fa-solid fa-clock"></i>
-                <div>
-                  <strong>{formatPreco(dashStats.aReceber)}</strong>
-                  <span>A Receber (Prazo)</span>
-                </div>
-              </div>
-              <div className="admin-card card-teal">
-                <i className="fa-solid fa-sack-dollar"></i>
-                <div>
-                  <strong>{formatPreco(dashStats.recebido)}</strong>
-                  <span>Recebido (Prazo)</span>
+                <div className="akc-body">
+                  <span className="akc-value">{dashStats.acertos}</span>
+                  <span className="akc-badge akc-badge-neutral"><i className="fa-solid fa-truck"></i> Motoristas</span>
                 </div>
               </div>
             </div>
 
-            <div className="admin-chart-section">
-              <h2>Últimos Pedidos</h2>
-              <div className="admin-table-wrap">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Cliente</th>
-                      <th>Região</th>
-                      <th>Data</th>
-                      <th>Total</th>
-                      <th>Pagamento</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dashLastOrders.map(o => (
-                      <tr key={o.id}>
-                        <td>#{o.id.toString().slice(-6)}</td>
-                        <td style={{ fontWeight: 600 }}>{getOrderCustomerName(o)}</td>
-                        <td>{[o.customer.endereco?.cidade, o.customer.endereco?.estado].filter(Boolean).join('/') || '-'}</td>
-                        <td>{formatDate(o.date)}</td>
-                        <td className="td-price">{formatPreco(o.total)}</td>
-                        <td>{o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}</td>
-                        <td><span className={`status-tag status-${o.status}`}>{o.status}</span></td>
+            {/* SPLIT GRID: ÚLTIMOS PEDIDOS + PAINEL LATERAL */}
+            <div className="admin-dash-split-grid">
+              {/* Tabela de Últimos Pedidos */}
+              <div className="admin-dash-table-card">
+                <div className="admin-dash-card-header">
+                  <div>
+                    <h3>Últimos Pedidos</h3>
+                    <span>Pedidos mais recentes sincronizados</span>
+                  </div>
+                  <button className="admin-btn-link" onClick={() => { setTab('pedidos'); setOrderFilter('todos') }}>
+                    Ver todos os pedidos ({orders.length}) <i className="fa-solid fa-arrow-right"></i>
+                  </button>
+                </div>
+                <div className="admin-table-wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: '80px' }}>Pedido</th>
+                        <th>Cliente</th>
+                        <th>Cidade / Região</th>
+                        <th>Data</th>
+                        <th>Total</th>
+                        <th>Pagamento</th>
+                        <th>Status</th>
                       </tr>
-                    ))}
-                    {dashLastOrders.length === 0 && <tr><td colSpan="7" className="td-empty">Nenhum pedido no período</td></tr>}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {dashLastOrders.map(o => (
+                        <tr key={o.id} onClick={() => { setTab('pedidos'); setOrderFilter('todos') }} style={{ cursor: 'pointer' }}>
+                          <td><span className="td-order-id">#{o.id.toString().slice(-6)}</span></td>
+                          <td>
+                            <div className="td-client-cell">
+                              <span className="td-client-avatar"><i className="fa-solid fa-user"></i></span>
+                              <span className="td-client-name" title={getOrderCustomerName(o)}>{getOrderCustomerName(o)}</span>
+                            </div>
+                          </td>
+                          <td>{[o.customer?.endereco?.cidade, o.customer?.endereco?.estado].filter(Boolean).join('/') || '-'}</td>
+                          <td style={{ color: 'var(--admin-text-sec)', fontSize: '0.78rem' }}>{formatDate(o.date)}</td>
+                          <td className="td-price">{formatPreco(o.total)}</td>
+                          <td>
+                            <span className="admin-pill-tag">
+                              {o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}
+                            </span>
+                          </td>
+                          <td><span className={`status-tag status-${o.status}`}>{o.status}</span></td>
+                        </tr>
+                      ))}
+                      {dashLastOrders.length === 0 && (
+                        <tr><td colSpan="7" className="td-empty">Nenhum pedido registrado no período</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Painel Lateral de Ações Rápidas & Insights */}
+              <div className="admin-dash-sidebar-widgets">
+                {/* Ações Rápidas */}
+                <div className="admin-dash-widget-card">
+                  <h4 className="adw-title"><i className="fa-solid fa-bolt"></i> Ações Rápidas</h4>
+                  <div className="admin-quick-actions-list">
+                    <button className="admin-quick-action-item" onClick={() => setShowAddOrder(true)}>
+                      <div className="aqai-icon" style={{ background: '#EFF6FF', color: '#2563EB' }}><i className="fa-solid fa-plus"></i></div>
+                      <div className="aqai-text">
+                        <strong>Criar Pedido</strong>
+                        <span>Lançar comanda manual</span>
+                      </div>
+                      <i className="fa-solid fa-chevron-right aqai-arrow"></i>
+                    </button>
+
+                    <button className="admin-quick-action-item" onClick={() => setTab('rotas')}>
+                      <div className="aqai-icon" style={{ background: '#ECFDF5', color: '#059669' }}><i className="fa-solid fa-route"></i></div>
+                      <div className="aqai-text">
+                        <strong>Rotas do Dia</strong>
+                        <span>{rotaStats.totalRotas} rotas mapeadas</span>
+                      </div>
+                      <i className="fa-solid fa-chevron-right aqai-arrow"></i>
+                    </button>
+
+                    <button className="admin-quick-action-item" onClick={() => { setTab('produtos'); setEditingProd({ id: Math.floor(Math.random() * 1000000000), nome: '', preco: 0, estoque: 0, imagem: '', categoria: '', descricao: '', variantes: {}, _new: true }) }}>
+                      <div className="aqai-icon" style={{ background: '#F5F3FF', color: '#7C3AED' }}><i className="fa-solid fa-box-open"></i></div>
+                      <div className="aqai-text">
+                        <strong>Cadastrar Produto</strong>
+                        <span>Adicionar ao catálogo</span>
+                      </div>
+                      <i className="fa-solid fa-chevron-right aqai-arrow"></i>
+                    </button>
+
+                    <button className="admin-quick-action-item" onClick={() => { setTab('financeiro'); setFinTab('relatorios') }}>
+                      <div className="aqai-icon" style={{ background: '#FEF3C7', color: '#D97706' }}><i className="fa-solid fa-file-invoice-dollar"></i></div>
+                      <div className="aqai-text">
+                        <strong>Relatório Financeiro</strong>
+                        <span>DRE e faturamento</span>
+                      </div>
+                      <i className="fa-solid fa-chevron-right aqai-arrow"></i>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Eficiência Operacional */}
+                <div className="admin-dash-widget-card">
+                  <h4 className="adw-title"><i className="fa-solid fa-chart-pie"></i> Eficiência das Entregas</h4>
+                  <div className="adw-progress-wrap">
+                    <div className="adw-progress-bar">
+                      <div className="adw-progress-segment seg-entregue" style={{ width: `${dashInsights.pctEntregues}%` }} title={`Entregues: ${dashInsights.entregues} (${dashInsights.pctEntregues}%)`}></div>
+                      <div className="adw-progress-segment seg-em-rota" style={{ width: `${dashInsights.pctEmRota}%` }} title={`Em Rota: ${dashInsights.emRota} (${dashInsights.pctEmRota}%)`}></div>
+                      <div className="adw-progress-segment seg-pendente" style={{ width: `${dashInsights.pctPendentes}%` }} title={`Pendentes: ${dashInsights.pendentes} (${dashInsights.pctPendentes}%)`}></div>
+                      <div className="adw-progress-segment seg-cancelado" style={{ width: `${dashInsights.pctCancelados}%` }} title={`Cancelados: ${dashInsights.cancelados} (${dashInsights.pctCancelados}%)`}></div>
+                    </div>
+                    <div className="adw-legend-grid">
+                      <div className="adw-legend-item">
+                        <span className="dot dot-entregue"></span>
+                        <span>Entregues: <strong>{dashInsights.entregues}</strong> ({dashInsights.pctEntregues}%)</span>
+                      </div>
+                      <div className="adw-legend-item">
+                        <span className="dot dot-em-rota"></span>
+                        <span>Em Rota: <strong>{dashInsights.emRota}</strong> ({dashInsights.pctEmRota}%)</span>
+                      </div>
+                      <div className="adw-legend-item">
+                        <span className="dot dot-pendente"></span>
+                        <span>Pendentes: <strong>{dashInsights.pendentes}</strong> ({dashInsights.pctPendentes}%)</span>
+                      </div>
+                      <div className="adw-legend-item">
+                        <span className="dot dot-cancelado"></span>
+                        <span>Cancelados: <strong>{dashInsights.cancelados}</strong> ({dashInsights.pctCancelados}%)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -3903,15 +4316,59 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                     </button>
                   </span>
                 )}
-                <button className="admin-btn admin-btn-sec admin-btn-conciliar" disabled={reconcilingOrders} onClick={handleReconcileOrders} title="Localiza pedidos sem ID e vincula aos usuários existentes ou cadastra os novos clientes">
-                  <i className={`fa-solid ${reconcilingOrders ? 'fa-spinner fa-spin' : 'fa-link'}`}></i> <span>{reconcilingOrders ? 'Conciliando...' : 'Conciliar'}</span>
-                </button>
                 <button className="admin-btn admin-btn-relatorio" style={{ background: '#0284c7', color: 'white', borderColor: '#0284c7', fontSize: '0.8rem', padding: '0.45rem 0.85rem' }} onClick={() => setShowOrderReportModal(true)} title="Emitir Relatório de Pedidos em PDF ou Excel com filtros e resumo">
                   <i className="fa-solid fa-file-invoice-dollar"></i> <span>Relatório (PDF / Excel)</span>
                 </button>
                 <button className="admin-btn admin-btn-primary admin-btn-novo-pedido" onClick={() => setShowAddOrder(true)}>
                   <i className="fa-solid fa-plus"></i> Novo Pedido
                 </button>
+              </div>
+            </div>
+
+            {/* KPI METRICS OVERVIEW (NEXROUTE SAAS STYLE) */}
+            <div className="admin-orders-kpi-grid">
+              <div className="admin-kpi-card" onClick={() => setOrderFilter('todos')} title="Ver todos os pedidos">
+                <div className="akc-head">
+                  <span className="akc-title"><i className="fa-regular fa-clipboard"></i> Total de Pedidos</span>
+                  <i className="fa-solid fa-ellipsis akc-more"></i>
+                </div>
+                <div className="akc-body">
+                  <span className="akc-value">{orders.length}</span>
+                  <span className="akc-badge akc-badge-neutral"><i className="fa-solid fa-arrow-trend-up"></i> Total</span>
+                </div>
+              </div>
+
+              <div className="admin-kpi-card" onClick={() => setOrderFilter('em-rota')} title="Filtrar pedidos em rota">
+                <div className="akc-head">
+                  <span className="akc-title"><i className="fa-solid fa-truck-fast"></i> Em Processo / Rota</span>
+                  <i className="fa-solid fa-ellipsis akc-more"></i>
+                </div>
+                <div className="akc-body">
+                  <span className="akc-value">{orders.filter(o => ['pre-pedido', 'pendente', 'em-rota'].includes(o.status)).length}</span>
+                  <span className="akc-badge akc-badge-warning">{orders.filter(o => o.status === 'em-rota').length} em rota</span>
+                </div>
+              </div>
+
+              <div className="admin-kpi-card" onClick={() => setOrderFilter('cancelado')} title="Filtrar cancelados">
+                <div className="akc-head">
+                  <span className="akc-title"><i className="fa-solid fa-ban"></i> Cancelados</span>
+                  <i className="fa-solid fa-ellipsis akc-more"></i>
+                </div>
+                <div className="akc-body">
+                  <span className="akc-value">{orders.filter(o => o.status === 'cancelado').length}</span>
+                  <span className="akc-badge akc-badge-danger">Cancelados</span>
+                </div>
+              </div>
+
+              <div className="admin-kpi-card" onClick={() => setOrderFilter('concluidos')} title="Filtrar concluídos">
+                <div className="akc-head">
+                  <span className="akc-title"><i className="fa-regular fa-circle-check"></i> Concluídos</span>
+                  <i className="fa-solid fa-ellipsis akc-more"></i>
+                </div>
+                <div className="akc-body">
+                  <span className="akc-value">{orders.filter(o => o.status === 'concluido' || isFinalizada(o)).length}</span>
+                  <span className="akc-badge akc-badge-success">Finalizados</span>
+                </div>
               </div>
             </div>
 
@@ -4144,7 +4601,12 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                       <td>
                         <input type="checkbox" checked={selectedIds.has(o.id)} onChange={() => toggleSelect(o.id)} style={{ cursor: 'pointer', width: '15px', height: '15px' }} />
                       </td>
-                      <td style={{ fontWeight: 600 }}>{getOrderCustomerName(o)}</td>
+                      <td>
+                        <div className="td-client-cell">
+                          <span className="td-client-avatar"><i className="fa-solid fa-user"></i></span>
+                          <span className="td-client-name" title={getOrderCustomerName(o)}>{getOrderCustomerName(o)}</span>
+                        </div>
+                      </td>
                       <td>{getOrderCustomerPhone(o) || '-'}</td>
                       <td>{[o.customer?.endereco?.cidade, o.customer?.endereco?.estado].filter(Boolean).join('/') || '-'}</td>
                       <td onClick={e => e.stopPropagation()}>
@@ -4608,161 +5070,368 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
         {/* PRODUTOS */}
         {tab === 'produtos' && (
-          <div className="admin-section">
-            <div className="admin-header-row">
+          <div className="admin-section admin-prod-section">
+            {/* HEADER ROW */}
+            <div className="admin-header-row admin-prod-header-row">
               <div>
                 <h1>Produtos</h1>
-                <p className="admin-subtitle">{produtosAtuais.length} produtos cadastrados</p>
+                <p className="admin-subtitle">
+                  {produtosAtuais.length} itens cadastrados &middot; {filteredProds.length} exibidos
+                </p>
               </div>
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                <button className="admin-btn" style={{ background: '#2563eb', color: 'white', borderColor: '#2563eb', fontSize: '0.78rem', padding: '0.35rem 0.7rem' }} onClick={() => setEditingProd({ id: Math.floor(Math.random() * 1000000000), nome: '', preco: 0, estoque: 0, imagem: '', categoria: '', descricao: '', variantes: {}, _new: true })}>
-                  <i className="fa-solid fa-plus"></i> Novo Produto
-                </button>
-                <button className="admin-btn" style={{ background: '#059669', color: 'white', borderColor: '#059669', fontSize: '0.78rem', padding: '0.35rem 0.7rem' }} onClick={() => { setEditingKit(null); setShowKitModal(true) }}>
-                  <i className="fa-solid fa-toolbox"></i> Montar Kit
-                </button>
+              <div className="admin-prod-header-actions">
                 {prodCartCount > 0 && (
-                  <button className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6', position: 'relative' }} onClick={() => setProdCartOpen(true)}>
-                    <i className="fa-solid fa-shopping-cart"></i> Carrinho
-                    <span style={{ position: 'absolute', top: '-6px', right: '-6px', background: '#dc2626', color: 'white', borderRadius: '50%', width: '18px', height: '18px', fontSize: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{prodCartCount}</span>
+                  <button className="admin-btn admin-btn-cart" onClick={() => setProdCartOpen(true)}>
+                    <i className="fa-solid fa-shopping-cart"></i> <span>Carrinho</span>
+                    <span className="admin-cart-pill-count">{prodCartCount}</span>
                   </button>
                 )}
-                <div style={{ display: 'flex', gap: '0.25rem', background: '#e5e7eb', borderRadius: '8px', padding: '2px' }}>
-                  <button className={`admin-btn ${prodViewMode === 'visual' ? 'admin-btn-primary' : 'admin-btn-sec'}`} style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', border: 'none' }} onClick={() => setProdViewMode('visual')}>
-                    <i className="fa-solid fa-th"></i>
+                <button className="admin-btn admin-btn-kit" onClick={() => { setEditingKit(null); setShowKitModal(true) }}>
+                  <i className="fa-solid fa-toolbox"></i> <span>Montar Kit</span>
+                </button>
+                <button
+                  className="admin-btn admin-btn-primary admin-btn-novo-prod"
+                  onClick={() => setEditingProd({ id: Math.floor(Math.random() * 1000000000), nome: '', preco: 0, estoque: 0, imagem: '', categoria: '', descricao: '', variantes: {}, _new: true })}
+                >
+                  <i className="fa-solid fa-plus"></i> Novo Produto
+                </button>
+                <div className="admin-view-toggle-pills">
+                  <button
+                    className={`admin-view-pill ${prodViewMode === 'visual' ? 'active' : ''}`}
+                    onClick={() => setProdViewMode('visual')}
+                    title="Visualização em Grade"
+                  >
+                    <i className="fa-solid fa-border-all"></i> Grade
                   </button>
-                  <button className={`admin-btn ${prodViewMode === 'tabela' ? 'admin-btn-primary' : 'admin-btn-sec'}`} style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', border: 'none' }} onClick={() => setProdViewMode('tabela')}>
-                    <i className="fa-solid fa-list"></i>
+                  <button
+                    className={`admin-view-pill ${prodViewMode === 'tabela' ? 'active' : ''}`}
+                    onClick={() => setProdViewMode('tabela')}
+                    title="Visualização em Tabela"
+                  >
+                    <i className="fa-solid fa-list-ul"></i> Tabela
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Search + Filter bar */}
-            <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '0.85rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <div className="admin-search-prod" style={{ flex: '1', minWidth: '180px' }}>
-                <i className="fa-solid fa-search"></i>
-                <input type="text" placeholder="Buscar produto..." value={prodSearch} onChange={e => setProdSearch(e.target.value)} style={{ width: '100%' }} />
+            {/* KPI INVENTORY SUMMARY CARDS (NEXROUTE SAAS STYLE) */}
+            <div className="admin-orders-kpi-grid admin-prod-kpi-grid">
+              <div
+                className={`admin-kpi-card ${prodQuickFilter === 'todos' ? 'kpi-active' : ''}`}
+                onClick={() => setProdQuickFilter('todos')}
+                title="Mostrar todos os produtos"
+              >
+                <div className="akc-head">
+                  <span className="akc-title"><i className="fa-solid fa-boxes-stacked"></i> Total Cadastrados</span>
+                  <i className="fa-solid fa-ellipsis akc-more"></i>
+                </div>
+                <div className="akc-body">
+                  <span className="akc-value">{prodSummary.total}</span>
+                  <span className="akc-badge akc-badge-neutral">Catálogo ativo</span>
+                </div>
               </div>
-              <select value={prodCatFilter} onChange={e => {
-                if (e.target.value === '__nova__') {
-                  const nome = prompt('Nome da nova categoria:')
-                  if (nome && nome.trim()) {
-                    const cat = nome.trim()
-                    setCustomCategorias(prev => prev.includes(cat) ? prev : [...prev, cat])
-                    setProdCatFilter(cat)
-                    showToast(`Categoria "${cat}" criada!`)
-                  }
-                  return
-                }
-                setProdCatFilter(e.target.value)
-              }} style={{ padding: '0.45rem 0.7rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', background: 'white', cursor: 'pointer' }}>
-                <option value="Encomendas da Empresa">Encomendas da Empresa</option>
-                {categoriasProd.filter(c => c !== 'TODOS').map(c => <option key={c} value={c}>{c}</option>)}
-                <option value="__nova__">＋ Nova categoria...</option>
-              </select>
-              <select value={prodStockFilter} onChange={e => setProdStockFilter(e.target.value)} style={{ padding: '0.45rem 0.7rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', background: 'white', cursor: 'pointer' }}>
-                <option value="todos">Todos os estoques</option>
-                <option value="in">Em estoque</option>
-                <option value="out">Indisponível</option>
-              </select>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>
-                <span>Preço:</span>
-                <input type="number" min="0" step="1" value={prodPriceRange[0]} onChange={e => setProdPriceRange([Number(e.target.value) || 0, prodPriceRange[1]])} style={{ width: '65px', padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem' }} placeholder="Min" />
-                <span>—</span>
-                <input type="number" min="0" step="1" value={prodPriceRange[1]} onChange={e => setProdPriceRange([prodPriceRange[0], Number(e.target.value) || 5000])} style={{ width: '65px', padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem' }} placeholder="Max" />
+
+              <div
+                className={`admin-kpi-card ${prodQuickFilter === 'disponivel' ? 'kpi-active' : ''}`}
+                onClick={() => setProdQuickFilter('disponivel')}
+                title="Filtrar produtos disponíveis em estoque"
+              >
+                <div className="akc-head">
+                  <span className="akc-title"><i className="fa-solid fa-circle-check"></i> Em Estoque</span>
+                  <i className="fa-solid fa-ellipsis akc-more"></i>
+                </div>
+                <div className="akc-body">
+                  <span className="akc-value">{prodSummary.emEstoque}</span>
+                  <span className="akc-badge akc-badge-success">Pronto p/ venda</span>
+                </div>
+              </div>
+
+              <div
+                className={`admin-kpi-card ${prodQuickFilter === 'critico' ? 'kpi-active' : ''}`}
+                onClick={() => setProdQuickFilter('critico')}
+                title="Filtrar produtos com estoque baixo (≤ 5 unidades)"
+              >
+                <div className="akc-head">
+                  <span className="akc-title"><i className="fa-solid fa-triangle-exclamation"></i> Estoque Crítico (≤ 5)</span>
+                  <i className="fa-solid fa-ellipsis akc-more"></i>
+                </div>
+                <div className="akc-body">
+                  <span className="akc-value">{prodSummary.criticos}</span>
+                  <span className="akc-badge akc-badge-warning">Repor logo</span>
+                </div>
+              </div>
+
+              <div
+                className={`admin-kpi-card ${prodQuickFilter === 'esgotado' ? 'kpi-active' : ''}`}
+                onClick={() => setProdQuickFilter('esgotado')}
+                title="Filtrar produtos sem estoque"
+              >
+                <div className="akc-head">
+                  <span className="akc-title"><i className="fa-solid fa-ban"></i> Esgotados</span>
+                  <i className="fa-solid fa-ellipsis akc-more"></i>
+                </div>
+                <div className="akc-body">
+                  <span className="akc-value">{prodSummary.esgotados}</span>
+                  <span className="akc-badge akc-badge-danger">Indisponíveis</span>
+                </div>
+              </div>
+
+              <div className="admin-kpi-card" title="Valor estimado total do estoque">
+                <div className="akc-head">
+                  <span className="akc-title"><i className="fa-solid fa-coins"></i> Valor do Estoque</span>
+                  <i className="fa-solid fa-ellipsis akc-more"></i>
+                </div>
+                <div className="akc-body">
+                  <span className="akc-value">{formatPreco(prodSummary.valorTotalEstoque)}</span>
+                  <span className="akc-badge akc-badge-neutral">Patrimônio</span>
+                </div>
               </div>
             </div>
 
-            {/* Bulk actions bar */}
+            {/* QUICK PILL FILTER TABS */}
+            <div className="admin-tabs admin-prod-quick-tabs">
+              {[
+                { id: 'todos', label: 'Todos', count: prodSummary.total },
+                { id: 'disponivel', label: 'Disponíveis', count: prodSummary.emEstoque },
+                { id: 'critico', label: 'Estoque Baixo (≤ 5)', count: prodSummary.criticos },
+                { id: 'esgotado', label: 'Esgotados', count: prodSummary.esgotados },
+                { id: 'sem_devolucao', label: 'Sem Devolução', count: prodSummary.semDevolucao },
+                { id: 'com_variantes', label: 'Com Variações' },
+              ].map(t => (
+                <button
+                  key={t.id}
+                  className={`admin-tab ${prodQuickFilter === t.id ? 'active' : ''}`}
+                  onClick={() => setProdQuickFilter(t.id)}
+                >
+                  {t.label} {t.count !== undefined && <span className="tab-count">{t.count}</span>}
+                </button>
+              ))}
+            </div>
+
+            {/* SEARCH & ADVANCED FILTERS BAR */}
+            <div className="admin-prod-search-bar">
+              <div className="admin-prod-search-input-box">
+                <i className="fa-solid fa-search admin-search-ico"></i>
+                <input
+                  type="text"
+                  placeholder="Buscar por nome, categoria, código ou descrição..."
+                  value={prodSearch}
+                  onChange={e => setProdSearch(e.target.value)}
+                  className="admin-prod-search-input"
+                />
+                {prodSearch && (
+                  <button
+                    type="button"
+                    className="admin-search-clear-btn"
+                    onClick={() => setProdSearch('')}
+                    title="Limpar busca"
+                  >
+                    <i className="fa-solid fa-xmark"></i>
+                  </button>
+                )}
+              </div>
+
+              <div className="admin-prod-filter-controls">
+                {/* Categoria */}
+                <select
+                  value={prodCatFilter}
+                  onChange={e => {
+                    if (e.target.value === '__nova__') {
+                      const nome = prompt('Nome da nova categoria:')
+                      if (nome && nome.trim()) {
+                        const cat = nome.trim()
+                        setCustomCategorias(prev => prev.includes(cat) ? prev : [...prev, cat])
+                        setProdCatFilter(cat)
+                        showToast(`Categoria "${cat}" criada!`)
+                      }
+                      return
+                    }
+                    setProdCatFilter(e.target.value)
+                  }}
+                  className="admin-prod-select"
+                >
+                  <option value="TODOS">Todas as Categorias</option>
+                  <option value="Encomendas da Empresa">Encomendas da Empresa</option>
+                  {categoriasProd.filter(c => c !== 'TODOS').map(c => <option key={c} value={c}>{c}</option>)}
+                  <option value="__nova__">＋ Nova categoria...</option>
+                </select>
+
+                {/* Estoque */}
+                <select
+                  value={prodStockFilter}
+                  onChange={e => setProdStockFilter(e.target.value)}
+                  className="admin-prod-select"
+                >
+                  <option value="todos">Todos os Estoques</option>
+                  <option value="in">Em estoque</option>
+                  <option value="out">Indisponível</option>
+                </select>
+
+                {/* Ordenação */}
+                <select
+                  value={`${prodSort.field}_${prodSort.dir}`}
+                  onChange={e => {
+                    const [field, dir] = e.target.value.split('_')
+                    setProdSort({ field, dir })
+                  }}
+                  className="admin-prod-select"
+                >
+                  <option value="nome_asc">Nome (A-Z)</option>
+                  <option value="nome_desc">Nome (Z-A)</option>
+                  <option value="preco_asc">Menor Preço</option>
+                  <option value="preco_desc">Maior Preço</option>
+                  <option value="estoque_desc">Maior Estoque</option>
+                  <option value="estoque_asc">Menor Estoque</option>
+                  <option value="categoria_asc">Categoria</option>
+                </select>
+
+                {/* Itens por página */}
+                <select
+                  value={prodPerPage}
+                  onChange={e => setProdPerPage(e.target.value)}
+                  className="admin-prod-select"
+                  title="Itens por página"
+                >
+                  <option value="24">24 por página</option>
+                  <option value="48">48 por página</option>
+                  <option value="96">96 por página</option>
+                  <option value="all">Exibir Todos</option>
+                </select>
+              </div>
+            </div>
+
+            {/* BULK ACTIONS BAR */}
             {prodSelectedIds.size > 0 && (
-              <div style={{ marginBottom: '0.65rem', padding: '0.5rem 0.75rem', background: 'rgba(37,99,235,0.05)', borderRadius: '8px', border: '1px solid rgba(37,99,235,0.15)', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--accent)' }}>{prodSelectedIds.size} selecionado(s)</span>
-                <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', background: '#dc2626', color: 'white', borderColor: '#dc2626' }} onClick={() => bulkProdAction('zerar')}>
-                  <i className="fa-solid fa-ban"></i> Zerar Estoque
-                </button>
-                <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => bulkProdAction('ocultar')}>
-                  <i className="fa-solid fa-eye-slash"></i> Indisponível
-                </button>
-                <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', background: 'var(--accent)', color: 'white', borderColor: 'var(--accent)' }} onClick={() => bulkProdAction('preco')}>
-                  <i className="fa-solid fa-dollar-sign"></i> Trocar Preço
-                </button>
-                <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', background: '#10b981', color: 'white', borderColor: '#10b981' }} onClick={() => bulkProdAction('estoque')}>
-                  <i className="fa-solid fa-warehouse"></i> Definir Estoque
-                </button>
-                <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', background: '#dc2626', color: 'white', borderColor: '#dc2626' }} onClick={() => bulkProdAction('semdev')}>
-                  <i className="fa-solid fa-ban"></i> Sem Devolução
-                </button>
-                <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', background: '#000', color: 'white', borderColor: '#000' }} onClick={() => deleteSelectedProducts(prodSelectedIds)}>
-                  <i className="fa-solid fa-trash"></i> Excluir
-                </button>
-                <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }} onClick={() => setProdSelectedIds(new Set())}>
-                  <i className="fa-solid fa-xmark"></i> Limpar
-                </button>
+              <div className="admin-prod-bulk-bar">
+                <span className="apbb-count">
+                  <i className="fa-solid fa-check-circle"></i> {prodSelectedIds.size} selecionado(s)
+                </span>
+                <div className="apbb-actions">
+                  <button className="admin-btn admin-btn-sm" onClick={() => bulkProdAction('zerar')}>
+                    <i className="fa-solid fa-ban"></i> Zerar Estoque
+                  </button>
+                  <button className="admin-btn admin-btn-sm" onClick={() => bulkProdAction('ocultar')}>
+                    <i className="fa-solid fa-eye-slash"></i> Indisponível
+                  </button>
+                  <button className="admin-btn admin-btn-sm" onClick={() => bulkProdAction('preco')}>
+                    <i className="fa-solid fa-dollar-sign"></i> Trocar Preço
+                  </button>
+                  <button className="admin-btn admin-btn-sm" onClick={() => bulkProdAction('estoque')}>
+                    <i className="fa-solid fa-warehouse"></i> Definir Estoque
+                  </button>
+                  <button className="admin-btn admin-btn-sm" onClick={() => bulkProdAction('semdev')}>
+                    <i className="fa-solid fa-ban"></i> Sem Devolução
+                  </button>
+                  <button className="admin-btn admin-btn-sm admin-btn-danger" onClick={() => deleteSelectedProducts(prodSelectedIds)}>
+                    <i className="fa-solid fa-trash"></i> Excluir
+                  </button>
+                  <button className="admin-btn admin-btn-sm admin-btn-sec" onClick={() => setProdSelectedIds(new Set())}>
+                    <i className="fa-solid fa-xmark"></i> Desmarcar
+                  </button>
+                </div>
               </div>
             )}
 
-            {/* Visual Grid View */}
+            {/* VISUAL GRID VIEW */}
             {prodViewMode === 'visual' && (
               <>
                 <div className="admin-prod-grid">
-                  {paginatedProds.map((p, i) => (
-                    <div key={p.id} className={`admin-prod-card ${prodSelectedIds.has(p.id) ? 'selected' : ''}`} style={{ animationDelay: `${i * 25}ms` }}>
-                      <div className="admin-prod-card-check">
-                        <input type="checkbox" checked={prodSelectedIds.has(p.id)} onChange={() => toggleProdSelect(p.id)} />
-                      </div>
-                      <div className="admin-prod-card-img" onClick={() => setEditingProd(p)}>
-                        {p.imagem && !prodImageErrors[p.id] ? (
-                          <img src={formatImageUrl(p.imagem)} alt={p.nome} loading="lazy" onError={() => toggleProdImageError(p.id)} />
-                        ) : (
-                          <div className="admin-prod-card-img-fallback"><i className="fa-solid fa-image"></i></div>
-                        )}
-                        <div className="admin-prod-card-badges">
-                          {p.estoque <= 0 ? <span className="admin-badge out">Indisponível</span>
-                            : p.estoque <= 5 ? <span className="admin-badge low">Últimas {p.estoque}</span>
-                              : <span className="admin-badge in">Disponível</span>}
-                          {p.semDevolucao && <span className="admin-badge nodev">SEM DEVOLUÇÃO</span>}
+                  {paginatedProds.map((p) => {
+                    const isOutOfStock = (Number(p.estoque) || 0) <= 0
+                    const isLowStock = !isOutOfStock && (Number(p.estoque) || 0) <= 5
+                    const hasVariations = p.variantes && typeof p.variantes === 'object' && Object.keys(p.variantes).length > 0
+                    const varCount = hasVariations ? Object.keys(p.variantes).length : 0
+
+                    return (
+                      <div key={p.id} className={`admin-prod-card ${prodSelectedIds.has(p.id) ? 'selected' : ''}`}>
+                        <div className="admin-prod-card-check">
+                          <input type="checkbox" checked={prodSelectedIds.has(p.id)} onChange={() => toggleProdSelect(p.id)} />
                         </div>
-                        <div className="admin-prod-card-cat">{p.categoria}</div>
-                      </div>
-                      <div className="admin-prod-card-body">
-                        <h3 className="admin-prod-card-title" onClick={() => setEditingProd(p)}>{p.nome}</h3>
-                        <div className="admin-prod-card-price">{formatPreco(p.preco)}</div>
-                        {p.preco_custo != null && <div className="admin-prod-card-custo" style={{ fontSize: '0.72rem', color: 'var(--admin-text-sec)', marginTop: '0.15rem' }}>Custo: {formatPreco(p.preco_custo)}</div>}
-                        {prodCart[p.id] ? (
-                          <div className="admin-cart-item-qty" style={{ justifyContent: 'center' }}>
-                            <button className="qty-btn-sm" onClick={() => removeFromProdCart(p.id)}><i className="fa-solid fa-minus"></i></button>
-                            <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>{prodCart[p.id].qty}</span>
-                            <button className="qty-btn-sm" onClick={() => addToProdCart(p)} disabled={p.estoque <= 0}><i className="fa-solid fa-plus"></i></button>
+
+                        <div className="admin-prod-card-badges">
+                          {isOutOfStock ? (
+                            <span className="admin-badge out">Esgotado</span>
+                          ) : isLowStock ? (
+                            <span className="admin-badge low">Últimas {p.estoque} un</span>
+                          ) : (
+                            <span className="admin-badge in">Em estoque ({p.estoque})</span>
+                          )}
+                          {p.semDevolucao && <span className="admin-badge nodev">Sem Devolução</span>}
+                          {hasVariations && <span className="admin-badge vars">{varCount} var.</span>}
+                        </div>
+
+                        <div className="admin-prod-card-img" onClick={() => setEditingProd(p)}>
+                          {p.imagem && !prodImageErrors[p.id] ? (
+                            <img src={formatImageUrl(p.imagem)} alt={p.nome} loading="lazy" onError={() => toggleProdImageError(p.id)} />
+                          ) : (
+                            <div className="admin-prod-card-img-fallback"><i className="fa-solid fa-image"></i></div>
+                          )}
+                          <div className="admin-prod-card-cat">{p.categoria || 'Geral'}</div>
+                        </div>
+
+                        <div className="admin-prod-card-body">
+                          <h3 className="admin-prod-card-title" onClick={() => setEditingProd(p)} title={p.nome}>{p.nome}</h3>
+                          <div className="admin-prod-card-pricing">
+                            <span className="admin-prod-card-price">{formatPreco(p.preco)}</span>
+                            {p.preco_custo != null && (
+                              <span className="admin-prod-card-custo" title="Preço de custo">
+                                Custo: {formatPreco(p.preco_custo)}
+                              </span>
+                            )}
                           </div>
-                        ) : (
-                          <button className={`admin-prod-card-btn ${prodCart[p.id] ? 'in-cart' : ''}`} onClick={() => addToProdCart(p)} disabled={p.estoque <= 0}>
-                            <i className="fa-solid fa-plus"></i> Adicionar
-                          </button>
-                        )}
+
+                          <div className="admin-prod-card-actions">
+                            <button className="admin-btn admin-btn-sm admin-btn-edit-prod" onClick={() => setEditingProd(p)} title="Editar produto">
+                              <i className="fa-solid fa-pen"></i> Editar
+                            </button>
+
+                            {prodCart[p.id] ? (
+                              <div className="admin-cart-item-qty">
+                                <button className="qty-btn-sm" onClick={() => removeFromProdCart(p.id)}><i className="fa-solid fa-minus"></i></button>
+                                <span className="qty-val">{prodCart[p.id].qty}</span>
+                                <button className="qty-btn-sm" onClick={() => addToProdCart(p)} disabled={isOutOfStock}><i className="fa-solid fa-plus"></i></button>
+                              </div>
+                            ) : (
+                              <button className={`admin-prod-card-btn ${prodCart[p.id] ? 'in-cart' : ''}`} onClick={() => addToProdCart(p)} disabled={isOutOfStock}>
+                                <i className="fa-solid fa-cart-plus"></i> Carrinho
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
+
                   {paginatedProds.length === 0 && (
                     <div className="admin-prod-empty">
-                      <i className="fa-solid fa-box-open"></i>
+                      <div className="ape-icon"><i className="fa-solid fa-box-open"></i></div>
                       <h3>Nenhum produto encontrado</h3>
-                      <p>Tente ajustar os filtros</p>
+                      <p>Tente ajustar os termos da busca ou os filtros de estoque e categoria.</p>
+                      <button className="admin-btn admin-btn-sec" onClick={() => { setProdSearch(''); setProdQuickFilter('todos'); setProdCatFilter('TODOS'); setProdStockFilter('todos') }}>
+                        <i className="fa-solid fa-rotate-left"></i> Limpar Filtros
+                      </button>
                     </div>
                   )}
                 </div>
 
                 {totalProdPages > 1 && (
-                  <div className="admin-pagination">
-                    <button disabled={prodPage === 1} onClick={() => setProdPage(p => p - 1)}><i className="fa-solid fa-chevron-left"></i></button>
-                    <span>{prodPage} de {totalProdPages}</span>
-                    <button disabled={prodPage === totalProdPages} onClick={() => setProdPage(p => p + 1)}><i className="fa-solid fa-chevron-right"></i></button>
+                  <div className="admin-pagination admin-prod-pagination">
+                    <button disabled={prodPage === 1} onClick={() => setProdPage(p => p - 1)} className="admin-pag-btn">
+                      <i className="fa-solid fa-chevron-left"></i> Anterior
+                    </button>
+                    <div className="admin-pag-numbers">
+                      <span>Página <strong>{prodPage}</strong> de <strong>{totalProdPages}</strong></span>
+                      <span className="admin-pag-total">({filteredProds.length} produtos)</span>
+                    </div>
+                    <button disabled={prodPage === totalProdPages} onClick={() => setProdPage(p => p + 1)} className="admin-pag-btn">
+                      Próxima <i className="fa-solid fa-chevron-right"></i>
+                    </button>
                   </div>
                 )}
               </>
             )}
 
-            {/* Table View */}
+            {/* TABLE VIEW */}
             {prodViewMode === 'tabela' && (
               <>
                 <div className="admin-table-wrap">
@@ -4788,16 +5457,19 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                             <input type="checkbox" checked={prodSelectedIds.has(p.id)} onChange={() => toggleProdSelect(p.id)} style={{ cursor: 'pointer', width: '15px', height: '15px' }} />
                           </td>
                           <td>
-                            <div className="prod-thumb">
-                              {p.imagem ? <img src={formatImageUrl(p.imagem)} alt={p.nome} /> : <i className="fa-solid fa-image"></i>}
+                            <div className="prod-thumb" onClick={() => setEditingProd(p)} style={{ cursor: 'pointer' }}>
+                              {p.imagem ? <img src={formatImageUrl(p.imagem)} alt={p.nome} loading="lazy" /> : <i className="fa-solid fa-image"></i>}
                             </div>
                           </td>
-                          <td className="td-prod-name">{p.nome}{p.semDevolucao && <span className="prod-nodev-tag">SEM DEVOLUÇÃO</span>}</td>
-                          <td><span className="cat-tag">{p.categoria}</span></td>
+                          <td className="td-prod-name">
+                            <strong onClick={() => setEditingProd(p)} style={{ cursor: 'pointer' }}>{p.nome}</strong>
+                            {p.semDevolucao && <span className="prod-nodev-tag">SEM DEVOLUÇÃO</span>}
+                          </td>
+                          <td><span className="cat-tag">{p.categoria || 'Geral'}</span></td>
                           <td className="td-price">{formatPreco(p.preco)}</td>
                           <td className="td-price" style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>{p.preco_custo ? formatPreco(p.preco_custo) : '-'}</td>
                           <td>
-                            <span className={`stock-tag ${p.estoque > 0 ? 'in' : 'out'}`}>
+                            <span className={`stock-tag ${p.estoque > 5 ? 'in' : p.estoque > 0 ? 'low' : 'out'}`}>
                               {p.estoque > 0 ? `${p.estoque} un` : 'Indisponível'}
                             </span>
                           </td>
@@ -4825,10 +5497,17 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 </div>
 
                 {totalProdPages > 1 && (
-                  <div className="admin-pagination">
-                    <button disabled={prodPage === 1} onClick={() => setProdPage(p => p - 1)}><i className="fa-solid fa-chevron-left"></i></button>
-                    <span>{prodPage} de {totalProdPages}</span>
-                    <button disabled={prodPage === totalProdPages} onClick={() => setProdPage(p => p + 1)}><i className="fa-solid fa-chevron-right"></i></button>
+                  <div className="admin-pagination admin-prod-pagination">
+                    <button disabled={prodPage === 1} onClick={() => setProdPage(p => p - 1)} className="admin-pag-btn">
+                      <i className="fa-solid fa-chevron-left"></i> Anterior
+                    </button>
+                    <div className="admin-pag-numbers">
+                      <span>Página <strong>{prodPage}</strong> de <strong>{totalProdPages}</strong></span>
+                      <span className="admin-pag-total">({filteredProds.length} produtos)</span>
+                    </div>
+                    <button disabled={prodPage === totalProdPages} onClick={() => setProdPage(p => p + 1)} className="admin-pag-btn">
+                      Próxima <i className="fa-solid fa-chevron-right"></i>
+                    </button>
                   </div>
                 )}
               </>
@@ -5230,11 +5909,11 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                       onClick={() => { setSyncingUsers(true); syncAllForAdmin().then(({ users: u }) => { LS.set('thsm_usuarios', u); setUsuarios(u) }).catch(e => console.error('sync error:', e)).finally(() => setSyncingUsers(false)) }}>
                       <i className={`fa-solid ${syncingUsers ? 'fa-spinner fa-spin' : 'fa-rotate'}`}></i> {syncingUsers ? 'Sincronizando' : 'Sincronizar'}
                     </button>
-                    <button className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6', fontSize: '0.82rem', padding: '0.45rem 0.85rem' }}
+                    <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.82rem', padding: '0.45rem 0.85rem', color: '#4F46E5', borderColor: '#E2E8F0' }}
                       onClick={gerarSenhasUsuarios}>
                       <i className="fa-solid fa-key"></i> Gerar Senhas
                     </button>
-                    <button className="admin-btn" style={{ background: '#dc2626', color: 'white', borderColor: '#dc2626', fontSize: '0.82rem', padding: '0.45rem 0.85rem' }}
+                    <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.82rem', padding: '0.45rem 0.85rem', color: '#DC2626', borderColor: '#E2E8F0' }}
                       onClick={definirSenhasTodos}>
                       <i className="fa-solid fa-lock"></i> Senha = 1234
                     </button>
@@ -5323,8 +6002,10 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                     <tbody>
                       {paginatedUsuarios.map(u => {
                         const uid = u.telefone || u.id
-                        const userOrders = orders.filter(o => o.customer?.telefone === u.telefone || o.user_id === u.id)
-                        const totalGasto = userOrders.reduce((s, o) => s + o.total, 0)
+                        const cleanTel = (u.telefone || '').replace(/\D/g, '')
+                        const stat = userOrderStats.get(cleanTel) || (u.id ? userOrderStats.get(String(u.id)) : null) || { count: 0, total: 0 }
+                        const userOrdersCount = stat.count
+                        const totalGasto = stat.total
                         const e = u.endereco || {}
                         const endStr = [e.rua && `${e.rua}${e.numero ? `, ${e.numero}` : ''}`, e.bairro, e.cidade].filter(Boolean).join(', ') || '-'
                         const origem = e.origem || '—'
@@ -5359,8 +6040,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                             </td>
                             <td>{formatDate(u.created_at ? new Date(u.created_at).toISOString().split('T')[0] : (u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : ''))}</td>
                             <td>
-                              <span className="cat-tag">{userOrders.length} pedidos</span>
-                              {userOrders.length > 0 && (
+                              <span className="cat-tag">{userOrdersCount} pedidos</span>
+                              {userOrdersCount > 0 && (
                                 <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>
                                   {formatPreco(totalGasto)}
                                 </span>
@@ -5515,24 +6196,35 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
         {/* ROTAS */}
         {tab === 'rotas' && (
-          <div className="admin-section">
+          <CentralRotas
+            orders={orders}
+            financial={financial}
+            despesas={despesas}
+            setDespesas={setDespesas}
+            openAcertoModal={openAcertoModal}
+            updateOrderStatus={updateOrderStatus}
+            usuarios={usuarios}
+            produtosAtuais={produtosAtuais}
+            showToast={showToast}
+            renderContatosTab={() => (
+              <div className="admin-section">
             <div className="admin-header-row">
               <div>
                 <h1 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <span className="rota-title-icon"><i className="fa-solid fa-route"></i></span>
-                  Rotas
+                  Contatos & Cidades WhatsApp
                 </h1>
-                <p className="admin-subtitle">Mapa de rotas e contatos de WhatsApp</p>
+                <p className="admin-subtitle">Clientes e contatos organizados por rota e região</p>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button className="admin-btn" style={{ background: '#059669', color: 'white', borderColor: '#059669' }} onClick={() => { setNewRotaName(''); setNewRotaSearch(''); setNewRotaSelected([]); setNewContactPhone(''); setNewContactName(''); setShowNewRota(true) }}>
+                <button className="admin-btn admin-btn-primary" onClick={() => { setNewRotaName(''); setNewRotaSearch(''); setNewRotaSelected([]); setNewContactPhone(''); setNewContactName(''); setShowNewRota(true) }}>
                   <i className="fa-solid fa-plus"></i> Nova Rota
                 </button>
-                <button className="admin-btn admin-btn-primary" onClick={fetchRotas} disabled={rotasLoading}>
+                <button className="admin-btn admin-btn-secondary" onClick={fetchRotas} disabled={rotasLoading}>
                   <i className={`fa-solid ${rotasLoading ? 'fa-spinner fa-spin' : 'fa-rotate'}`}></i>
-                  {rotasLoading ? 'Buscando...' : 'Atualizar'}
+                  {rotasLoading ? 'Atualizando...' : 'Atualizar'}
                 </button>
-                <button className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }}
+                <button className="admin-btn admin-btn-secondary"
                   disabled={rotas.length === 0 || importingRotas}
                   onClick={async () => {
                     if (importingRotas) return
@@ -5560,15 +6252,25 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
             </div>
 
             {rotasError && (
-              <div className="rota-error-card">
-                <div className="rota-error-icon"><i className="fa-solid fa-exclamation-triangle"></i></div>
-                <div className="rota-error-body">
-                  <strong>Erro ao carregar</strong>
+              <div style={{
+                background: '#FEF2F2',
+                border: '1px solid #FECACA',
+                color: '#991B1B',
+                borderRadius: '10px',
+                padding: '10px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: '0.85rem',
+                marginBottom: '1rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <i className="fa-solid fa-circle-exclamation" style={{ color: '#DC2626' }}></i>
                   <span>{rotasError}</span>
-                  <button className="admin-btn" style={{ fontSize: '0.78rem', padding: '0.3rem 0.7rem' }} onClick={fetchRotas}>
-                    <i className="fa-solid fa-rotate"></i> Tentar novamente
-                  </button>
                 </div>
+                <button className="admin-btn admin-btn-secondary" style={{ padding: '4px 10px', fontSize: '0.78rem' }} onClick={fetchRotas}>
+                  <i className="fa-solid fa-rotate"></i> Tentar novamente
+                </button>
               </div>
             )}
 
@@ -5815,6 +6517,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
               </div>
             )}
           </div>
+            )}
+          />
         )}
 
         {tab === 'financeiro' && (
@@ -10306,10 +11010,11 @@ function KitModal({ produtos, kit, onSave, onClose }) {
 }
 
 // =============================================
-// MODAL: EDIT PRODUCT
+// MODAL: EDIT PRODUCT (NEXROUTE SAAS STYLE)
 // =============================================
 function EditProductModal({ product, categorias = [], onAddCategoria, onSave, onClose }) {
-  const [nome, setNome] = useState(product.nome)
+  const [modalTab, setModalTab] = useState('geral')
+  const [nome, setNome] = useState(product.nome || '')
   const formatInitialDecimal = (v) => {
     if (v == null || v === '') return ''
     if (product._new && (v === 0 || v === '0')) return ''
@@ -10317,15 +11022,27 @@ function EditProductModal({ product, categorias = [], onAddCategoria, onSave, on
   }
   const [preco, setPreco] = useState(() => formatInitialDecimal(product.preco))
   const [precoCusto, setPrecoCusto] = useState(() => formatInitialDecimal(product.preco_custo))
-  const [estoque, setEstoque] = useState(String(product.estoque))
+  const [estoque, setEstoque] = useState(String(product.estoque ?? 0))
   const [imagem, setImagem] = useState(product.imagem || '')
-  const [categoria, setCategoria] = useState(product.categoria)
+  const [categoria, setCategoria] = useState(product.categoria || '')
   const [descricao, setDescricao] = useState(product.descricao || '')
   const [variantes, setVariantes] = useState(() => {
     return product.variantes && typeof product.variantes === 'object' ? product.variantes : {}
   })
   const [semDevolucao, setSemDevolucao] = useState(!!product.semDevolucao)
   const [newVarTypeName, setNewVarTypeName] = useState('')
+
+  // Lucro e margem calculados em tempo real
+  const marginInfo = useMemo(() => {
+    const numPreco = parseDecimalToNumber(preco)
+    const numCusto = parseDecimalToNumber(precoCusto)
+    if (numPreco > 0 && numCusto > 0) {
+      const lucro = numPreco - numCusto
+      const margem = Math.round((lucro / numPreco) * 100)
+      return { lucro, margem }
+    }
+    return null
+  }, [preco, precoCusto])
 
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0]
@@ -10353,16 +11070,6 @@ function EditProductModal({ product, categorias = [], onAddCategoria, onSave, on
     setVariantes(prev => {
       const { [key]: _, ...rest } = prev
       return rest
-    })
-  }
-
-  const renameVariantType = (oldKey, newKey) => {
-    const trimmed = newKey.trim()
-    if (!trimmed || trimmed === oldKey) return
-    if (variantes[trimmed]) return
-    setVariantes(prev => {
-      const { [oldKey]: val, ...rest } = prev
-      return { ...rest, [trimmed]: val }
     })
   }
 
@@ -10413,182 +11120,277 @@ function EditProductModal({ product, categorias = [], onAddCategoria, onSave, on
   }
 
   return (
-    <div className="admin-overlay">
-      <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '550px' }}>
+    <div className="admin-overlay" onClick={onClose}>
+      <div className="admin-modal admin-modal-product-modern" onClick={e => e.stopPropagation()}>
         <div className="admin-modal-header">
-          <h3><i className="fa-solid fa-pen"></i> {product._new ? 'Novo Produto' : 'Editar Produto'}</h3>
+          <div className="amh-title-box">
+            <div className="amh-icon"><i className="fa-solid fa-box-archive"></i></div>
+            <div>
+              <h3>{product._new ? 'Novo Produto' : 'Editar Produto'}</h3>
+              <span className="amh-subtitle">{product._new ? 'Cadastre um novo item no catálogo' : `ID: #${product.id} · ${product.nome}`}</span>
+            </div>
+          </div>
           <button className="admin-modal-close" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
         </div>
+
+        {/* Modal Navigation Tabs */}
+        <div className="admin-modal-tabs">
+          <button className={`admin-modal-tab ${modalTab === 'geral' ? 'active' : ''}`} onClick={() => setModalTab('geral')}>
+            <i className="fa-solid fa-file-lines"></i> Informações & Preço
+          </button>
+          <button className={`admin-modal-tab ${modalTab === 'variacoes' ? 'active' : ''}`} onClick={() => setModalTab('variacoes')}>
+            <i className="fa-solid fa-tags"></i> Variações & Devolução
+            {Object.keys(variantes).length > 0 && <span className="amt-badge">{Object.keys(variantes).length}</span>}
+          </button>
+        </div>
+
         <div className="admin-modal-body">
-          <div className="form-group">
-            <label>Nome do produto <span style={{ color: 'var(--danger)' }}>*</span></label>
-            <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Camiseta Masculina" />
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label>Preço (R$) <span style={{ color: 'var(--danger)' }}>*</span></label>
-              <input type="text" inputMode="decimal" value={preco} onChange={e => setPreco(cleanDecimalInput(e.target.value))} placeholder="0,00" />
-            </div>
-            <div className="form-group">
-              <label>Preço de Custo (R$)</label>
-              <input type="text" inputMode="decimal" value={precoCusto} onChange={e => setPrecoCusto(cleanDecimalInput(e.target.value))} placeholder="0,00" />
-            </div>
-            <div className="form-group">
-              <label>Estoque</label>
-              <input type="number" step="1" value={estoque} onChange={e => setEstoque(e.target.value)} placeholder="0" />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label>Imagem do Produto</label>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.4rem' }}>
-              <label className="admin-btn" style={{ cursor: 'pointer', fontSize: '0.78rem', padding: '0.35rem 0.75rem', background: '#f0f0f0', border: '1px solid var(--admin-border)', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                <i className="fa-solid fa-upload"></i> Upload
-                <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
-              </label>
-              <span style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>ou URL:</span>
-            </div>
-            <input type="text" value={imagem} onChange={e => setImagem(e.target.value)} placeholder="https://...png" />
-            {imagem && (
-              <div style={{ position: 'relative', display: 'inline-block', marginTop: '0.4rem' }}>
-                <img src={imagem} alt="" className="edit-preview" onError={e => e.target.style.display = 'none'} />
-                <button className="action-btn action-delete" style={{ position: 'absolute', top: '-6px', right: '-6px', width: '20px', height: '20px', borderRadius: '50%', fontSize: '0.65rem', display: imagem ? 'flex' : 'none' }} onClick={() => setImagem('')}>
-                  <i className="fa-solid fa-xmark"></i>
-                </button>
+          {modalTab === 'geral' && (
+            <div className="amp-tab-content">
+              {/* Nome */}
+              <div className="form-group">
+                <label className="amp-label">Nome do Produto <span className="amp-required">*</span></label>
+                <input
+                  type="text"
+                  value={nome}
+                  onChange={e => setNome(e.target.value)}
+                  placeholder="Ex: Conjunto de Moletom Unissex"
+                  className="amp-input"
+                  autoFocus
+                />
               </div>
-            )}
-          </div>
 
-          <div className="form-group">
-            <label>Categoria</label>
-            <select
-              value={categoria}
-              onChange={e => {
-                if (e.target.value === '__nova__') {
-                  const nome = prompt('Nome da nova categoria:')
-                  if (nome && nome.trim()) {
-                    const n = nome.trim()
-                    setCategoria(n)
-                    if (onAddCategoria) onAddCategoria(n)
-                  }
-                  return
-                }
-                setCategoria(e.target.value)
-              }}
-            >
-              {categoria && !categorias.includes(categoria) && <option value={categoria}>{categoria}</option>}
-              {categorias.map(c => <option key={c} value={c}>{c}</option>)}
-              <option value="__nova__">＋ Nova categoria...</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', background: semDevolucao ? '#fef2f2' : '#f0fdf4', border: `1px solid ${semDevolucao ? '#fecaca' : '#bbf7d0'}`, borderRadius: '8px', padding: '0.6rem 0.75rem' }}>
-              <div>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: semDevolucao ? '#b91c1c' : '#15803d' }}>
-                  {semDevolucao ? 'Sem devolução' : 'Com devolução'}
+              {/* Grid 3 colunas: Preço, Custo, Estoque */}
+              <div className="amp-form-grid-3">
+                <div className="form-group">
+                  <label className="amp-label">Preço de Venda (R$) <span className="amp-required">*</span></label>
+                  <div className="amp-input-prefix-box">
+                    <span className="amp-prefix">R$</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={preco}
+                      onChange={e => setPreco(cleanDecimalInput(e.target.value))}
+                      placeholder="0,00"
+                      className="amp-input"
+                    />
+                  </div>
                 </div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--admin-text-sec)', marginTop: '0.1rem' }}>
-                  {semDevolucao ? 'Cliente confirma que não há troca/devolução no checkout' : 'Produto aceita troca/devolução'}
+
+                <div className="form-group">
+                  <label className="amp-label">Preço de Custo (R$)</label>
+                  <div className="amp-input-prefix-box">
+                    <span className="amp-prefix">R$</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={precoCusto}
+                      onChange={e => setPrecoCusto(cleanDecimalInput(e.target.value))}
+                      placeholder="0,00"
+                      className="amp-input"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="amp-label">Estoque (unidades)</label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={estoque}
+                    onChange={e => setEstoque(e.target.value)}
+                    placeholder="0"
+                    className="amp-input"
+                  />
                 </div>
               </div>
-              <label className="stock-toggle" style={{ margin: 0 }}>
-                <input type="checkbox" checked={semDevolucao} onChange={e => setSemDevolucao(e.target.checked)} />
-                <span className="toggle-track"></span>
-              </label>
-            </div>
-          </div>
-          <div className="form-group">
-            <label>Descrição</label>
-            <textarea rows="3" value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descrição detalhada do produto..." style={{ width: '100%', padding: '0.5rem 0.65rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', resize: 'vertical', fontFamily: 'inherit' }} />
-          </div>
 
-          <div className="form-group" style={{ borderTop: '1px solid var(--admin-border)', paddingTop: '0.75rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
-              <label style={{ margin: 0, fontWeight: 700, fontSize: '0.9rem' }}>
-                <i className="fa-solid fa-tags" style={{ color: '#8b5cf6' }}></i> Variações do Produto
-              </label>
-            </div>
+              {/* Margem de Lucro Indicator */}
+              {marginInfo && (
+                <div className="amp-margin-badge-card">
+                  <i className="fa-solid fa-chart-line"></i>
+                  <span>
+                    Margem Bruta Estimada: <strong>+{marginInfo.margem}%</strong> ({formatPreco(marginInfo.lucro)} de lucro por peça)
+                  </span>
+                </div>
+              )}
 
-            {Object.keys(variantes).length > 0 && (
-              <div style={{ marginBottom: '0.75rem' }}>
-                {Object.entries(variantes).map(([type, options]) => (
-                  <div key={type} style={{ marginBottom: '0.65rem', padding: '0.65rem 0.75rem', background: '#f9fafb', borderRadius: '10px', border: '1px solid var(--admin-border)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                      <input
-                        type="text"
-                        value={type}
-                        onChange={e => {
-                          const { [type]: val, ...rest } = variantes
-                          const key = e.target.value.trim()
-                          if (key) {
-                            setVariantes({ ...rest, [key]: val })
-                          } else {
-                            setVariantes({ ...rest, [type]: val })
-                          }
-                        }}
-                        style={{ fontWeight: 700, fontSize: '0.85rem', textTransform: 'uppercase', color: '#8b5cf6', border: '1px solid transparent', borderRadius: '4px', padding: '0.15rem 0.3rem', background: 'transparent', width: '140px' }}
-                        onFocus={e => { e.target.style.borderColor = '#d1d5db'; e.target.style.background = 'white' }}
-                        onBlur={e => { e.target.style.borderColor = 'transparent'; e.target.style.background = 'transparent' }}
-                      />
-                      <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--admin-text-sec)', background: '#e5e7eb', borderRadius: '10px', padding: '0.1rem 0.45rem' }}>{options.filter(o => o.trim()).length} opções</span>
-                        <button className="action-btn" style={{ color: '#059669', width: '24px', height: '24px' }} title="Adicionar opção" onClick={() => addVariantOption(type)}>
-                          <i className="fa-solid fa-plus"></i>
-                        </button>
-                        <button className="action-btn action-delete" style={{ width: '24px', height: '24px' }} title="Remover variação" onClick={() => removeVariantType(type)}>
+              {/* Categoria */}
+              <div className="form-group">
+                <label className="amp-label">Categoria</label>
+                <select
+                  value={categoria}
+                  onChange={e => {
+                    if (e.target.value === '__nova__') {
+                      const n = prompt('Nome da nova categoria:')
+                      if (n && n.trim()) {
+                        const clean = n.trim()
+                        setCategoria(clean)
+                        if (onAddCategoria) onAddCategoria(clean)
+                      }
+                      return
+                    }
+                    setCategoria(e.target.value)
+                  }}
+                  className="amp-select"
+                >
+                  <option value="">Selecione uma categoria...</option>
+                  {categoria && !categorias.includes(categoria) && <option value={categoria}>{categoria}</option>}
+                  {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                  <option value="__nova__">＋ Criar nova categoria...</option>
+                </select>
+              </div>
+
+              {/* Imagem do Produto */}
+              <div className="form-group">
+                <label className="amp-label">Foto / Imagem do Produto</label>
+                <div className="amp-image-uploader-card">
+                  <div className="amp-image-preview-box">
+                    {imagem ? (
+                      <div className="amp-preview-wrapper">
+                        <img src={formatImageUrl(imagem)} alt="Preview" onError={e => e.target.style.display = 'none'} />
+                        <button type="button" className="amp-remove-img-btn" onClick={() => setImagem('')} title="Remover imagem">
                           <i className="fa-solid fa-trash-can"></i>
                         </button>
                       </div>
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                      {options.map((opt, idx) => (
-                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.15rem', background: 'white', borderRadius: '8px', border: '1px solid var(--admin-border)', padding: '0.15rem 0.3rem 0.15rem 0.55rem' }}>
-                          <input
-                            type="text"
-                            value={opt}
-                            onChange={e => updateVariantOption(type, idx, e.target.value)}
-                            placeholder={`Opção ${idx + 1}`}
-                            style={{ width: '80px', padding: '0.25rem 0', border: 'none', fontSize: '0.82rem', background: 'transparent', outline: 'none' }}
-                          />
-                          {options.length > 1 && (
-                            <button className="action-btn action-delete" style={{ padding: '0.1rem', width: '18px', height: '18px' }} title="Remover" onClick={() => removeVariantOption(type, idx)}>
-                              <i className="fa-solid fa-xmark"></i>
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                    ) : (
+                      <div className="amp-no-image-placeholder">
+                        <i className="fa-solid fa-cloud-arrow-up"></i>
+                        <span>Nenhuma foto selecionada</span>
+                      </div>
+                    )}
                   </div>
-                ))}
+
+                  <div className="amp-image-inputs">
+                    <label className="amp-upload-btn">
+                      <i className="fa-solid fa-upload"></i> Escolher arquivo do computador
+                      <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
+                    </label>
+                    <span className="amp-or-text">ou cole o link da imagem:</span>
+                    <input
+                      type="text"
+                      value={imagem}
+                      onChange={e => setImagem(e.target.value)}
+                      placeholder="https://exemplo.com/foto.jpg"
+                      className="amp-input"
+                    />
+                  </div>
+                </div>
               </div>
-            )}
 
-            <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-              <input
-                type="text"
-                value={newVarTypeName}
-                onChange={e => setNewVarTypeName(e.target.value)}
-                placeholder="Ex: Cor, Tamanho, Aroma..."
-                style={{ flex: 1, padding: '0.4rem 0.65rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.82rem' }}
-                onKeyDown={e => { if (e.key === 'Enter') addVariantType() }}
-              />
-              <button className="admin-btn" style={{ fontSize: '0.78rem', padding: '0.35rem 0.7rem', background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6', whiteSpace: 'nowrap' }} onClick={addVariantType} disabled={!newVarTypeName.trim()}>
-                <i className="fa-solid fa-plus"></i> Adicionar
-              </button>
+              {/* Descrição */}
+              <div className="form-group">
+                <label className="amp-label">Descrição do Produto (opcional)</label>
+                <textarea
+                  rows="3"
+                  value={descricao}
+                  onChange={e => setDescricao(e.target.value)}
+                  placeholder="Detalhes sobre tecido, medidas, modelo, recomendações de uso..."
+                  className="amp-textarea"
+                />
+              </div>
             </div>
-            {Object.keys(variantes).length === 0 && (
-              <p style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)', marginTop: '0.35rem' }}>
-                Digite o nome da variação acima (Cor, Tamanho, etc.) e clique em "Adicionar".
-              </p>
-            )}
-          </div>
+          )}
 
-          <div className="modal-actions">
-            <button className="admin-btn admin-btn-sec" onClick={onClose}>Cancelar</button>
-            <button className="admin-btn admin-btn-primary" disabled={!nome.trim() || preco === '' || isNaN(Number(preco))} onClick={handleSave}>
-              <i className="fa-solid fa-check"></i> Salvar
-            </button>
-          </div>
+          {modalTab === 'variacoes' && (
+            <div className="amp-tab-content">
+              {/* Devolução Toggle Card */}
+              <div className={`amp-toggle-card ${semDevolucao ? 'active-nodev' : 'active-dev'}`}>
+                <div className="atc-icon">
+                  <i className={`fa-solid ${semDevolucao ? 'fa-ban' : 'fa-rotate-left'}`}></i>
+                </div>
+                <div className="atc-info">
+                  <strong>{semDevolucao ? 'Produto Sem Devolução (Encomenda)' : 'Produto com Troca / Devolução Padrão'}</strong>
+                  <p>
+                    {semDevolucao
+                      ? 'O cliente é alertado no checkout de que não será permitida troca ou devolução deste item.'
+                      : 'O produto segue as regras normais de garantia e devolução da THSM.'}
+                  </p>
+                </div>
+                <label className="stock-toggle">
+                  <input type="checkbox" checked={semDevolucao} onChange={e => setSemDevolucao(e.target.checked)} />
+                  <span className="toggle-track"></span>
+                </label>
+              </div>
+
+              {/* Variações */}
+              <div className="amp-variations-section">
+                <div className="amp-variations-header">
+                  <div>
+                    <h4>Grade de Variações</h4>
+                    <span>Defina tamanhos, cores, estampas ou modelos disponíveis</span>
+                  </div>
+                </div>
+
+                {Object.keys(variantes).length > 0 ? (
+                  <div className="amp-var-list">
+                    {Object.entries(variantes).map(([type, options]) => (
+                      <div key={type} className="amp-var-group">
+                        <div className="amp-var-group-head">
+                          <span className="amp-var-title"><i className="fa-solid fa-tag"></i> {type}</span>
+                          <div className="amp-var-head-actions">
+                            <span className="amp-var-count">{options.filter(o => o.trim()).length} opções</span>
+                            <button type="button" className="amp-var-btn-add" onClick={() => addVariantOption(type)} title="Adicionar opção">
+                              <i className="fa-solid fa-plus"></i> Opção
+                            </button>
+                            <button type="button" className="amp-var-btn-del" onClick={() => removeVariantType(type)} title="Remover variação">
+                              <i className="fa-solid fa-trash-can"></i>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="amp-var-options-wrap">
+                          {options.map((opt, idx) => (
+                            <div key={idx} className="amp-var-option-pill">
+                              <input
+                                type="text"
+                                value={opt}
+                                onChange={e => updateVariantOption(type, idx, e.target.value)}
+                                placeholder={`Opção ${idx + 1}`}
+                              />
+                              {options.length > 1 && (
+                                <button type="button" onClick={() => removeVariantOption(type, idx)} title="Remover">
+                                  <i className="fa-solid fa-xmark"></i>
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="amp-var-empty">
+                    <i className="fa-solid fa-tags"></i>
+                    <p>Nenhuma variação cadastrada para este produto.</p>
+                  </div>
+                )}
+
+                {/* Adicionar novo tipo de variação */}
+                <div className="amp-add-var-bar">
+                  <input
+                    type="text"
+                    value={newVarTypeName}
+                    onChange={e => setNewVarTypeName(e.target.value)}
+                    placeholder="Ex: Cor, Tamanho, Voltagem, Aroma..."
+                    className="amp-input"
+                    onKeyDown={e => { if (e.key === 'Enter') addVariantType() }}
+                  />
+                  <button type="button" className="admin-btn admin-btn-primary" onClick={addVariantType} disabled={!newVarTypeName.trim()}>
+                    <i className="fa-solid fa-plus"></i> Adicionar Variação
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="admin-modal-footer">
+          <button type="button" className="admin-btn admin-btn-sec" onClick={onClose}>Cancelar</button>
+          <button type="button" className="admin-btn admin-btn-primary" disabled={!nome.trim() || preco === '' || isNaN(parseDecimalToNumber(preco))} onClick={handleSave}>
+            <i className="fa-solid fa-check"></i> Salvar Produto
+          </button>
         </div>
       </div>
     </div>

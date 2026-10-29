@@ -14,7 +14,7 @@ class SupabaseQueryBuilder {
     this.countVal = null;
     this.headVal = false;
   }
-  
+
   select(columns = '*', options = {}) {
     // If a mutation method is already set (insert, upsert, update, delete), do NOT overwrite method or args!
     if (this.method && ['insert', 'upsert', 'update', 'delete'].includes(this.method)) {
@@ -29,70 +29,70 @@ class SupabaseQueryBuilder {
     if (options.head) this.headVal = options.head;
     return this;
   }
-  
+
   insert(values) {
     this.method = 'insert';
     this.args = values;
     return this;
   }
-  
+
   upsert(values, options = {}) {
     this.method = 'upsert';
     this.args = { values, options };
     return this;
   }
-  
+
   update(values) {
     this.method = 'update';
     this.args = values;
     return this;
   }
-  
+
   delete() {
     this.method = 'delete';
     return this;
   }
-  
+
   eq(column, value) {
     this.filters.push({ type: 'eq', column, value });
     return this;
   }
-  
+
   in(column, value) {
     this.filters.push({ type: 'in', column, value });
     return this;
   }
-  
+
   ilike(column, value) {
     this.filters.push({ type: 'ilike', column, value });
     return this;
   }
-  
+
   or(queryString) {
     this.filters.push({ type: 'or', value: queryString });
     return this;
   }
-  
+
   order(column, options = {}) {
     this.orders.push({ column, ascending: options.ascending !== false });
     return this;
   }
-  
+
   range(from, to) {
     this.rangeVal = { from, to };
     return this;
   }
-  
+
   single() {
     this.singleVal = true;
     return this;
   }
-  
+
   maybeSingle() {
     this.maybeSingleVal = true;
     return this;
   }
-  
+
   async then(onfulfilled, onrejected) {
     try {
       const result = await this.execute();
@@ -102,7 +102,7 @@ class SupabaseQueryBuilder {
       throw err;
     }
   }
-  
+
   async execute() {
     try {
       const res = await fetch('/api/db', {
@@ -301,7 +301,7 @@ export async function upsertUser(user) {
     const pendentes = JSON.parse(localStorage.getItem('thsm_pending_users') || '[]')
     pendentes.push({ ...dbUser, savedAt: Date.now() })
     localStorage.setItem('thsm_pending_users', JSON.stringify(pendentes))
-  } catch {}
+  } catch { }
   return null
 }
 
@@ -354,7 +354,7 @@ export async function getAllOrders() {
     if (res && !res.error && Array.isArray(res.data)) {
       data = res.data
     }
-  } catch {}
+  } catch { }
 
   if (!data) {
     data = await paginateAll('pedidos', 2000)
@@ -365,7 +365,7 @@ export async function getAllOrders() {
   try {
     const localDel = JSON.parse(localStorage.getItem('thsm_deleted_order_ids') || '[]')
     localDel.forEach(id => deletedSet.add(Number(id)))
-  } catch {}
+  } catch { }
 
   return (data || [])
     .filter(r => r && r.id != null && !deletedSet.has(Number(r.id)))
@@ -400,7 +400,7 @@ function writePendingOrders(list) {
   try {
     if (list.length) localStorage.setItem(PENDING_ORDERS_KEY, JSON.stringify(list))
     else localStorage.removeItem(PENDING_ORDERS_KEY)
-  } catch {}
+  } catch { }
 }
 
 function orderRecord(o) {
@@ -462,7 +462,7 @@ function queueOrderWrite(order) {
   try {
     const stored = JSON.parse(localStorage.getItem('thsm_deleted_order_ids') || '[]')
     if (stored.includes(numId)) return
-  } catch {}
+  } catch { }
 
   const compact = { ...order, identityPhoto: capPhotoSize(order.identityPhoto, 8000), addressProof: capPhotoSize(order.addressProof, 8000) }
   const pending = readPendingOrders()
@@ -496,7 +496,7 @@ export async function flushPendingOrders() {
         const n = Number(id)
         if (!isNaN(n)) deletedSet.add(n)
       })
-    } catch {}
+    } catch { }
 
     const validPending = pending.filter(p => !deletedSet.has(String(p.id)) && !deletedSet.has(Number(p.id)))
     if (validPending.length !== pending.length) {
@@ -530,7 +530,7 @@ export async function upsertOrder(order) {
       removePendingOrder(numId)
       return true
     }
-  } catch {}
+  } catch { }
 
   const now = Date.now()
   const cleanOrder = {
@@ -579,7 +579,7 @@ export async function upsertOrders(orders) {
   try {
     const localDel = JSON.parse(localStorage.getItem('thsm_deleted_order_ids') || '[]')
     localDel.forEach(id => deletedSet.add(Number(id)))
-  } catch {}
+  } catch { }
 
   const seen = new Map()
   orders.forEach(o => {
@@ -612,21 +612,21 @@ export async function deleteOrder(id) {
       if (!stored.includes(strId)) stored.push(strId)
       if (!isNaN(numId) && !stored.includes(numId)) stored.push(numId)
       localStorage.setItem('thsm_deleted_order_ids', JSON.stringify(stored))
-    } catch {}
+    } catch { }
 
     // Record in pedidos_deletados table in DB so all clients and sync know it was deleted
     try {
       if (!isNaN(numId)) {
         await supabase.from('pedidos_deletados').upsert({ id: numId, deleted_at: new Date().toISOString() })
       }
-    } catch {}
+    } catch { }
 
     // Call RPC which deletes from pedidos and financeiro
     try {
       if (!isNaN(numId)) {
         await supabase.rpc('admin_delete_order', { ord_id: numId })
       }
-    } catch {}
+    } catch { }
 
     // Direct delete guarantee
     try {
@@ -636,7 +636,7 @@ export async function deleteOrder(id) {
       } else {
         await supabase.from('pedidos').delete().eq('id', strId)
       }
-    } catch {}
+    } catch { }
 
     return { error: null }
   } catch (e) {
@@ -706,7 +706,7 @@ export async function deleteOnlyFinancialByOrder(orderId) {
   if (error) console.error('Erro ao deletar financeiro:', error)
 }
 
-// ---- ROTAS ----
+// ---- ROTAS ----3
 export async function getRotasContatos() {
   const { data } = await supabase.from('rotas_contatos').select('*')
   return data || []
@@ -792,12 +792,12 @@ export async function reconcileOrdersUsers() {
           return json.result
         }
       }
-    } catch {}
+    } catch { }
 
     // 1. Buscar todos os pedidos sem user_id
     const { data: rawOrders } = await supabase.from('pedidos').select('*')
     const allUsers = await getAllUsers()
-    
+
     // Mapear telefones normalizados para usuários existentes
     const userByPhone = new Map()
     allUsers.forEach(u => {
@@ -1033,3 +1033,51 @@ export function formatImageUrl(url) {
   return trimmed
 }
 
+
+export async function getAllJornadas() {
+  try {
+    const { data, error } = await supabase.from('jornadas_entrega').select('*').order('created_at', { ascending: false })
+    if (error) {
+      console.warn('Erro ao carregar jornadas_entrega:', error)
+      return []
+    }
+    return data || []
+  } catch (err) {
+    console.warn('Falha na requisição de jornadas_entrega:', err)
+    return []
+  }
+}
+
+export async function upsertJornada(jornada) {
+  if (!jornada || !jornada.id) return null
+  const payload = {
+    ...jornada,
+    updated_at: new Date().toISOString()
+  }
+  try {
+    const { data, error } = await supabase.from('jornadas_entrega').upsert(payload, { onConflict: 'id' }).select()
+    if (error) {
+      console.error('Erro ao salvar jornada:', error)
+      return null
+    }
+    return data
+  } catch (err) {
+    console.error('Falha de rede ao salvar jornada:', err)
+    return null
+  }
+}
+
+export async function deleteJornada(id) {
+  if (!id) return false
+  try {
+    const { error } = await supabase.from('jornadas_entrega').delete().eq('id', id)
+    if (error) {
+      console.error('Erro ao deletar jornada:', error)
+      return false
+    }
+    return true
+  } catch (err) {
+    console.error('Falha ao deletar jornada:', err)
+    return false
+  }
+}
