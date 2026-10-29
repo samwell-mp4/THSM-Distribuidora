@@ -335,6 +335,12 @@ function App() {
     ...[...new Set((produtosMerged || []).map(p => p?.categoria).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'pt-BR'))
   ], [produtosMerged])
 
+  const [priceMin, priceMax] = useMemo(() => {
+    const prices = (produtosMerged || []).map(p => Number(p.preco) || 0)
+    if (prices.length === 0) return [0, 5000]
+    return [Math.floor(Math.min(...prices)), Math.ceil(Math.max(...prices)) || 5000]
+  }, [produtosMerged])
+
   const filtered = useMemo(() => {
     const term = (search || '').toLowerCase().trim()
     return (produtosMerged || []).filter(p => {
@@ -398,11 +404,7 @@ function App() {
   const cartCount = useMemo(() => cartItems.reduce((s, i) => s + i.qty, 0), [cartItems])
   const hasSemDevolucao = useMemo(() => cartItems.some(i => i.semDevolucao), [cartItems])
 
-  const [priceMin, priceMax] = useMemo(() => {
-    const prices = produtosMerged.map(p => Number(p.preco) || 0)
-    if (prices.length === 0) return [0, 0]
-    return [Math.floor(Math.min(...prices)), Math.ceil(Math.max(...prices))]
-  }, [produtosMerged])
+
 
   // --- Auth ---
   const fazerLogin = async () => {
