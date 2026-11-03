@@ -767,6 +767,13 @@ html, body {
   border-color: rgba(16, 185, 129, 0.2);
 }
 
+.status-calote {
+  background: #FEF2F2;
+  color: #991B1B;
+  border-color: #F87171;
+  font-weight: 700;
+}
+
 .status-cancelado {
   background: #FEE2E2;
   color: #B91C1C;
@@ -5227,6 +5234,7 @@ html, body {
 }
 
 .status-cancelado,
+.status-calote,
 .status-atrasado {
   background: #FEF2F2;
   color: #DC2626;

@@ -63,6 +63,7 @@ const STATUS_LABELS = {
 const STATUS_OPTIONS = [
   { id: 'todos', label: 'Todos os Status (exceto cancelados)' },
   { id: 'concluido', label: 'Concluído / Acertado' },
+  { id: 'calote', label: 'Inadimplência / Calote 100%' },
   { id: 'em-rota', label: 'Em Rota' },
   { id: 'acerto', label: 'Em Acerto' },
   { id: 'entregue', label: 'Entregue' },
@@ -253,7 +254,8 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
 
   const matchStatus = (o, st) => {
     if (!st || st === 'todos') return o.status !== 'cancelado'
-    if (st === 'concluido') return o.status === 'concluido' || o.isFinalizado === true || o.status === 'acerto'
+    if (st === 'concluido') return (o.status === 'concluido' || o.isFinalizado === true || o.status === 'acerto') && !o.isCalote && o.status !== 'calote' && o.motivoEncerramento !== 'calote_100'
+    if (st === 'calote') return !!(o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
     return o.status === st
   }
 
@@ -265,20 +267,20 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
 
   const prodCostMap = useMemo(() => {
     const map = new Map()
-    ;(produtos || []).forEach(p => {
-      if (p) {
-        const c = Number(p.preco_custo) || Number(p.custo) || Number(p.precoCusto) || 0
-        if (p.id != null) map.set(String(p.id), c)
-        if (p.nome) {
-          map.set(p.nome.trim().toLowerCase(), c)
-          map.set(normStr(p.nome), c)
+      ; (produtos || []).forEach(p => {
+        if (p) {
+          const c = Number(p.preco_custo) || Number(p.custo) || Number(p.precoCusto) || 0
+          if (p.id != null) map.set(String(p.id), c)
+          if (p.nome) {
+            map.set(p.nome.trim().toLowerCase(), c)
+            map.set(normStr(p.nome), c)
+          }
+          if (p.displayName) {
+            map.set(p.displayName.trim().toLowerCase(), c)
+            map.set(normStr(p.displayName), c)
+          }
         }
-        if (p.displayName) {
-          map.set(p.displayName.trim().toLowerCase(), c)
-          map.set(normStr(p.displayName), c)
-        }
-      }
-    })
+      })
     return map
   }, [produtos])
 
@@ -327,9 +329,9 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
       mercadoriaColocada += vOriginal
 
       let itensPedido = 0
-      ;(o.items || []).forEach(i => {
-        itensPedido += Number(i.qty) || 0
-      })
+        ; (o.items || []).forEach(i => {
+          itensPedido += Number(i.qty) || 0
+        })
       totalItensColocados += itensPedido
 
       if (isCalote) {
@@ -349,21 +351,21 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         desc += d
 
         const retMap = {}
-        ;(o.returnedItems || []).forEach(r => {
-          if (!r) return
-          const k = r.id != null ? String(r.id) : (r.nome || '')
-          retMap[k] = (retMap[k] || 0) + (Number(r.returnedQty || r.qty) || 0)
-        })
+          ; (o.returnedItems || []).forEach(r => {
+            if (!r) return
+            const k = r.id != null ? String(r.id) : (r.nome || '')
+            retMap[k] = (retMap[k] || 0) + (Number(r.returnedQty || r.qty) || 0)
+          })
 
-        ;(o.items || []).forEach(i => {
-          const k = i.id != null ? String(i.id) : (i.nome || '')
-          const totalQ = Number(i.qty) || 0
-          const retQ = retMap[k] || 0
-          const soldQ = Math.max(0, totalQ - retQ)
-          totalItensVendidos += soldQ
-          totalItensDevolvidos += retQ
-          custoConcluido += getItemCost(i) * soldQ
-        })
+          ; (o.items || []).forEach(i => {
+            const k = i.id != null ? String(i.id) : (i.nome || '')
+            const totalQ = Number(i.qty) || 0
+            const retQ = retMap[k] || 0
+            const soldQ = Math.max(0, totalQ - retQ)
+            totalItensVendidos += soldQ
+            totalItensDevolvidos += retQ
+            custoConcluido += getItemCost(i) * soldQ
+          })
       } else {
         desc += Number(o.desconto) || 0
       }
@@ -443,9 +445,9 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
       map[k].mercadoriaColocada += vOriginal
 
       let itensPedido = 0
-      ;(o.items || []).forEach(i => {
-        itensPedido += Number(i.qty) || 0
-      })
+        ; (o.items || []).forEach(i => {
+          itensPedido += Number(i.qty) || 0
+        })
       map[k].itensColocados += itensPedido
       map[k].n += 1
 
@@ -465,21 +467,21 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         map[k].frete += o.frete || 0
 
         const retMap = {}
-        ;(o.returnedItems || []).forEach(r => {
-          if (!r) return
-          const key = r.id != null ? String(r.id) : (r.nome || '')
-          retMap[key] = (retMap[key] || 0) + (Number(r.returnedQty || r.qty) || 0)
-        })
+          ; (o.returnedItems || []).forEach(r => {
+            if (!r) return
+            const key = r.id != null ? String(r.id) : (r.nome || '')
+            retMap[key] = (retMap[key] || 0) + (Number(r.returnedQty || r.qty) || 0)
+          })
 
-        ;(o.items || []).forEach(i => {
-          const key = i.id != null ? String(i.id) : (i.nome || '')
-          const totalQ = Number(i.qty) || 0
-          const retQ = retMap[key] || 0
-          const soldQ = Math.max(0, totalQ - retQ)
-          map[k].itensVendidos += soldQ
-          map[k].qtd += soldQ
-          map[k].custo += getItemCost(i) * soldQ
-        })
+          ; (o.items || []).forEach(i => {
+            const key = i.id != null ? String(i.id) : (i.nome || '')
+            const totalQ = Number(i.qty) || 0
+            const retQ = retMap[key] || 0
+            const soldQ = Math.max(0, totalQ - retQ)
+            map[k].itensVendidos += soldQ
+            map[k].qtd += soldQ
+            map[k].custo += getItemCost(i) * soldQ
+          })
       } else {
         map[k].desc += o.desconto || 0
         map[k].frete += o.frete || 0
@@ -513,7 +515,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         })
       }
 
-      ;(o.items || []).forEach(i => {
+      ; (o.items || []).forEach(i => {
         const name = i.displayName || i.nome || i.produto || 'Produto'
         if (!map[name]) map[name] = { nome: name, qty: 0, bruto: 0, custo: 0, hasCost: false, itensColocados: 0 }
         const totalQ = Number(i.qty) || 0
@@ -1071,7 +1073,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
   const linhasProduto = useMemo(() => {
     const out = []
     ordersWin.forEach(o => {
-      ;(o.items || []).forEach(i => {
+      ; (o.items || []).forEach(i => {
         out.push({
           _k: `${o.id}-${i.index ?? out.length}`,
           produto: i.displayName || i.nome || i.produto || 'Produto',
@@ -1232,7 +1234,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
     const produtosMotivos = {}
 
     ordersWin.forEach(o => {
-      ;(o.returnedItems || []).forEach(r => {
+      ; (o.returnedItems || []).forEach(r => {
         if (!r) return
         const mot = r.motivoDevolucao || 'mau_planejamento'
         const q = Number(r.returnedQty || r.qty) || 0
@@ -1257,7 +1259,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
   const comprasSugestao = useMemo(() => {
     const demandMap = {}
     ordersWin.forEach(o => {
-      ;(o.items || []).forEach(i => {
+      ; (o.items || []).forEach(i => {
         const prodNome = i.displayName || i.nome || i.produto || 'Produto'
         if (!demandMap[prodNome]) demandMap[prodNome] = 0
         demandMap[prodNome] += Number(i.qty) || 0
@@ -1797,13 +1799,13 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
       <div className="ca-content">
         {page === 'geral' ? renderGeral()
           : page === 'vendas' ? renderVendas()
-          : page === 'produtos' ? renderProdutos()
-          : page === 'servicos' ? renderServicos()
-          : page === 'financeiro' ? renderFinanceiro()
-          : page === 'clientes' ? renderClientes()
-          : page === 'performance' ? renderPerformance()
-          : page === 'relatorios' ? renderRelatoriosPagina()
-          : renderPerformance()}
+            : page === 'produtos' ? renderProdutos()
+              : page === 'servicos' ? renderServicos()
+                : page === 'financeiro' ? renderFinanceiro()
+                  : page === 'clientes' ? renderClientes()
+                    : page === 'performance' ? renderPerformance()
+                      : page === 'relatorios' ? renderRelatoriosPagina()
+                        : renderPerformance()}
       </div>
     </div>
   )

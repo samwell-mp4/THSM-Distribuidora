@@ -54,6 +54,7 @@ const STATUS_LABELS = {
   'entregue': 'Entregue',
   'acerto': 'Acerto',
   'concluido': 'Concluído',
+  'calote': 'Calote 100%',
   'cancelado': 'Cancelado'
 }
 
@@ -851,7 +852,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
   const isFinalizada = useCallback((o) => {
     if (!o) return false
-    return o.status === 'concluido' || o.isFinalizado === true
+    return o.status === 'concluido' || o.status === 'calote' || o.isFinalizado === true || o.isCalote === true
   }, [])
 
   const revertToEntregue = async (orderId) => {
@@ -898,6 +899,11 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       totalPago: 0,
       status: 'acerto',
       isFinalizado: false,
+      isCalote: false,
+      calotePecas: 0,
+      caloteTotalCusto: 0,
+      caloteTotalVenda: 0,
+      motivoEncerramento: null,
       returnedItems: [],
       totalReembolso: 0,
       paymentMethod: '',
@@ -2141,7 +2147,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     reader.readAsDataURL(file)
   }
 
-  const openAcertoModal = (orderParam, mode = 'acerto') => {
+  const openAcertoModal = (orderParam, mode = 'acerto', isCaloteInitial = false) => {
     try {
       const freshOrder = orders.find(ord => String(ord.id) === String(orderParam?.id)) || orderParam
       const o = { ...freshOrder, ...orderParam }
@@ -2180,7 +2186,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         })
       }
       setReturnReasons(reasonsMap)
-      setDeliveryIsCalote(!!(o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100'))
+      setDeliveryIsCalote(Boolean(isCaloteInitial || o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100'))
       setDeliveryItemPrices(priceMap)
       setDeliveryItemCosts(costMap)
       setPayQuantities({})
@@ -2225,6 +2231,118 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     const baseItems = (Array.isArray(showDeliveryModal?.baseItems) && showDeliveryModal.baseItems.length > 0)
       ? showDeliveryModal.baseItems
       : getOrderBaseItems(order, produtosAtuais)
+
+    if (deliveryIsCalote) {
+      // CALOTE 100% / PERDA TOTAL (Inadimplência Total)
+      let calotePecas = 0
+      let caloteTotalVenda = 0
+      let caloteTotalCusto = 0
+
+      const processedItems = baseItems.map((i, idx) => {
+        const key = i.id != null ? String(i.id) : (i.nome ? String(i.nome) : String(idx))
+        const pRaw = deliveryItemPrices[key] !== undefined ? String(deliveryItemPrices[key]).replace(',', '.') : String(i.preco || 0)
+        const unitPreco = Math.round((Number(pRaw) || 0) * 100) / 100
+        const cRaw = deliveryItemCosts[key] !== undefined ? String(deliveryItemCosts[key]).replace(',', '.') : ''
+        const unitCusto = cRaw !== '' ? (Math.round((Number(cRaw) || 0) * 100) / 100) : (getItemCost(i, produtosAtuais) || 0)
+        const qty = Number(i.qty) || 0
+
+        calotePecas += qty
+        caloteTotalVenda += unitPreco * qty
+        caloteTotalCusto += (unitCusto || 0) * qty
+
+        if (cRaw !== '') {
+          const prod = produtosAtuais.find(p => p && (String(p.id) === String(i.id)))
+          if (prod && Number(prod.preco_custo) !== unitCusto) {
+            updateProduct(prod.id, { preco_custo: unitCusto })
+          }
+        }
+
+        return {
+          ...i,
+          preco: unitPreco,
+          preco_custo: unitCusto > 0 ? unitCusto : null,
+          qty
+        }
+      })
+
+      caloteTotalVenda = Math.round(caloteTotalVenda * 100) / 100
+      caloteTotalCusto = Math.round(caloteTotalCusto * 100) / 100
+
+      const now = Date.now()
+      const updatedOrder = {
+        ...order,
+        originalItems: processedItems,
+        items: processedItems,
+        itens: processedItems,
+        totalOriginal: caloteTotalVenda,
+        totalNota: caloteTotalVenda,
+        totalAcerto: 0,
+        totalAvista: 0,
+        totalAprazo: 0,
+        total: 0,
+        desconto: 0,
+        descontoPercent: null,
+        totalPago: 0,
+        valorEmAberto: 0,
+        status: 'calote',
+        isCalote: true,
+        motivoEncerramento: 'calote_100',
+        isFinalizado: true,
+        calotePecas,
+        caloteTotalCusto,
+        caloteTotalVenda,
+        returnedItems: [], // No calote 100% não há devolução, perda total
+        totalReembolso: 0,
+        dataInicio: deliveryDataInicio || order.dataInicio || order.date || null,
+        dataVencimento: deliveryDataVenc || order.dataVencimento || null,
+        identityPhoto: identityPreview || order.identityPhoto || '',
+        addressProof: addressPreview || order.addressProof || '',
+        deliveredAt: order.deliveredAt || now,
+        finalizadoAt: now,
+        paymentMethod: 'calote',
+        paymentSplits: null,
+        lastModified: now,
+        updatedAt: now
+      }
+
+      setOrders(prev => {
+        const next = prev.map(o => String(o.id) === String(orderId) ? updatedOrder : o)
+        LS.set(STORAGE_ORDERS, next)
+        return next
+      })
+      await upsertOrder(updatedOrder)
+
+      // Remover do financeiro a receber
+      await deleteOnlyFinancialByOrder(orderId)
+      setFinancial(prev => {
+        const remaining = prev.filter(f => String(f.orderId) !== String(orderId))
+        LS.set(STORAGE_FINANCIAL, remaining)
+        return remaining
+      })
+
+      showToast(`⚠️ Pedido #${String(orderId).slice(-6)} registrado como CALOTE 100%! Prejuízo de ${formatPreco(caloteTotalCusto)} (${calotePecas} peças perdidas).`, 'warning')
+      sendStatusWebhook(updatedOrder, 'calote', {
+        isCalote: true,
+        calotePecas,
+        caloteTotalCusto,
+        caloteTotalVenda,
+        motivo: 'calote_100'
+      })
+
+      setShowDeliveryModal(null)
+      setDeliveryIsCalote(false)
+      setReturnQuantities({})
+      setDeliveryItemPrices({})
+      setDeliveryItemCosts({})
+      setPayQuantities({})
+      setDeliveryDiscount('')
+      setDeliveryPaid('')
+      setDeliveryDataVenc('')
+      setIdentityPreview('')
+      setAddressPreview('')
+      return
+    }
+
     const returnedItems = []
     const remainingItems = []
 
@@ -2782,7 +2900,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
   const filteredOrders = useMemo(() => {
     let result = orders
-    if (orderFilter === 'concluidos') result = result.filter(o => o.status === 'concluido' || isFinalizada(o))
+    if (orderFilter === 'concluidos') result = result.filter(o => (o.status === 'concluido' || isFinalizada(o)) && !o.isCalote && o.status !== 'calote' && o.motivoEncerramento !== 'calote_100')
+    else if (orderFilter === 'calote') result = result.filter(o => o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
     else if (orderFilter === 'entregue') result = result.filter(o => o.status === 'entregue' && !isFinalizada(o))
     else if (orderFilter === 'acerto') result = result.filter(o => o.status === 'acerto' && !isFinalizada(o))
     else if (orderFilter !== 'todos') result = result.filter(o => o.status === orderFilter)
@@ -4459,7 +4578,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 { id: 'em-rota', label: 'Em Rota', count: orders.filter(o => o.status === 'em-rota').length },
                 { id: 'entregue', label: 'Entregues', count: orders.filter(o => o.status === 'entregue' && !isFinalizada(o)).length },
                 { id: 'acerto', label: 'Acertos', count: orders.filter(o => o.status === 'acerto' && !isFinalizada(o)).length },
-                { id: 'concluidos', label: 'Concluídos', count: orders.filter(o => (o.status === 'concluido' || isFinalizada(o))).length },
+                { id: 'concluidos', label: 'Concluídos', count: orders.filter(o => (o.status === 'concluido' || isFinalizada(o)) && !o.isCalote && o.status !== 'calote' && o.motivoEncerramento !== 'calote_100').length },
+                { id: 'calote', label: 'Calotes 100%', count: orders.filter(o => o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100').length },
                 { id: 'cancelado', label: 'Cancelados', count: orders.filter(o => o.status === 'cancelado').length },
               ].map(t => (
                 <button key={t.id} className={`admin-tab ${orderFilter === t.id ? 'active' : ''}`} onClick={() => setOrderFilter(t.id)}>
@@ -4729,7 +4849,10 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Em Rota" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-undo"></i></button>
                           )}
                           {o.status === 'entregue' && !isFinalizada(o) && (
-                            <button className="action-btn action-confirm" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} title="Fazer Acerto" onClick={() => openAcertoModal(o, 'acerto')}><i className="fa-solid fa-handshake"></i></button>
+                            <>
+                              <button className="action-btn action-confirm" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} title="Fazer Acerto" onClick={() => openAcertoModal(o, 'acerto')}><i className="fa-solid fa-handshake"></i></button>
+                              <button className="action-btn" style={{ color: '#dc2626', borderColor: '#dc2626' }} title="Registrar Calote 100%" onClick={() => openAcertoModal(o, 'acerto', true)}><i className="fa-solid fa-triangle-exclamation"></i></button>
+                            </>
                           )}
                           {o.status === 'acerto' && !isFinalizada(o) && (
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Entregues" onClick={() => revertToEntregue(o.id)}><i className="fa-solid fa-undo"></i></button>
@@ -4740,8 +4863,14 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                           {o.status === 'acerto' && !isFinalizada(o) && (
                             <button className="action-btn action-confirm" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} title="Finalizar Pedido" onClick={() => openAcertoModal(o, 'finalizar')}><i className="fa-solid fa-check-double"></i></button>
                           )}
-                          {(o.status === 'concluido' || isFinalizada(o)) && (
+                          {o.status === 'acerto' && !isFinalizada(o) && (
+                            <button className="action-btn" style={{ color: '#dc2626', borderColor: '#dc2626' }} title="Registrar Calote 100%" onClick={() => openAcertoModal(o, 'acerto', true)}><i className="fa-solid fa-triangle-exclamation"></i></button>
+                          )}
+                          {(o.status === 'concluido' || o.status === 'calote' || isFinalizada(o)) && (
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Acertos" onClick={() => revertOrderFinalization(o.id)}><i className="fa-solid fa-undo"></i></button>
+                          )}
+                          {(o.status === 'calote' || o.isCalote) && (
+                            <button className="action-btn" style={{ color: '#dc2626', borderColor: '#dc2626' }} title="Ver Detalhes do Calote" onClick={() => openAcertoModal(o, 'acerto')}><i className="fa-solid fa-eye"></i></button>
                           )}
                           {(() => {
                             const e = o.customer?.endereco || {}
@@ -4963,6 +5092,15 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                           </button>
                           <button
                             type="button"
+                            className="aoc-btn"
+                            style={{ background: '#fef2f2', color: '#dc2626', borderColor: '#fca5a5' }}
+                            title="Registrar Calote 100%"
+                            onClick={(ev) => { ev.stopPropagation(); openAcertoModal(o, 'acerto', true) }}
+                          >
+                            <i className="fa-solid fa-triangle-exclamation"></i> Calote
+                          </button>
+                          <button
+                            type="button"
                             className="aoc-btn aoc-btn-revert"
                             title="Voltar para Em Rota"
                             onClick={(ev) => { ev.stopPropagation(); updateOrderStatus(o.id, 'em-rota') }}
@@ -4992,6 +5130,15 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                           </button>
                           <button
                             type="button"
+                            className="aoc-btn"
+                            style={{ background: '#fef2f2', color: '#dc2626', borderColor: '#fca5a5' }}
+                            title="Registrar Calote 100%"
+                            onClick={(ev) => { ev.stopPropagation(); openAcertoModal(o, 'acerto', true) }}
+                          >
+                            <i className="fa-solid fa-triangle-exclamation"></i> Calote
+                          </button>
+                          <button
+                            type="button"
                             className="aoc-btn aoc-btn-revert"
                             title="Voltar para Entregues"
                             onClick={(ev) => { ev.stopPropagation(); revertToEntregue(o.id) }}
@@ -5009,7 +5156,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                             title="Ver Acerto e Devoluções"
                             onClick={(ev) => { ev.stopPropagation(); openAcertoModal(o, 'finalizar') }}
                           >
-                            <i className="fa-solid fa-eye"></i> Ver Acerto
+                            <i className="fa-solid fa-eye"></i> {o.isCalote || o.status === 'calote' ? 'Ver Calote' : 'Ver Acerto'}
                           </button>
                           <button
                             type="button"
@@ -7533,7 +7680,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           onStatusChange={(s) => { updateOrderStatus(showOrderDetail.id, s, false, null, showOrderDetail); setShowOrderDetail(null) }}
           onUpdateDue={(due) => updateOrderDue(showOrderDetail.id, due)}
           onPreApprovar={(rejectedIds, replacements, venc) => preApprovarPedido(showOrderDetail.id, rejectedIds, replacements, venc)}
-          onOpenDelivery={(order, mode = 'acerto') => { openAcertoModal({ ...(orders.find(o => String(o.id) === String(showOrderDetail.id)) || showOrderDetail), ...showOrderDetail, ...order }, mode); setShowOrderDetail(null) }}
+          onOpenDelivery={(order, mode = 'acerto', isCalote = false) => { openAcertoModal({ ...(orders.find(o => String(o.id) === String(showOrderDetail.id)) || showOrderDetail), ...showOrderDetail, ...order }, mode, isCalote); setShowOrderDetail(null) }}
           onEditAndConfirm={(editedItems, currentStatus) => {
             const now = Date.now()
             const totalAvista = Math.round(editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
@@ -7708,9 +7855,160 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                   </button>
                 </div>
               </div>
-              <p style={{ fontSize: '0.85rem', color: 'var(--admin-text-sec)', marginBottom: '0.75rem' }}>
-                Informe a quantidade de itens <strong>devolvidos</strong> (não vendidos). Apenas os itens vendidos serão cobrados.
-              </p>
+              {/* BANNER E BOTÃO DE CALOTE 100% / PERDA TOTAL */}
+              <div style={{
+                background: deliveryIsCalote ? '#fef2f2' : '#f8fafc',
+                border: deliveryIsCalote ? '2px solid #ef4444' : '1px dashed #cbd5e1',
+                borderRadius: '10px',
+                padding: '0.75rem 0.9rem',
+                marginBottom: '1rem',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '0.75rem',
+                transition: 'all 0.2s ease'
+              }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <i className={`fa-solid ${deliveryIsCalote ? 'fa-triangle-exclamation' : 'fa-handshake-slash'}`} style={{ color: deliveryIsCalote ? '#dc2626' : '#64748b', fontSize: '1.15rem' }}></i>
+                    <strong style={{ fontSize: '0.92rem', color: deliveryIsCalote ? '#991b1b' : '#334155' }}>
+                      {deliveryIsCalote ? 'MODO CALOTE 100% / PERDA TOTAL ATIVO' : 'Inadimplência / Perda Total?'}
+                    </strong>
+                  </div>
+                  <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.76rem', color: deliveryIsCalote ? '#b91c1c' : 'var(--admin-text-sec)', lineHeight: 1.35 }}>
+                    {deliveryIsCalote
+                      ? 'Nenhum valor pago. As peças não retornaram ao estoque. Prejuízo de custo e perda de venda apurados nas métricas.'
+                      : 'Caso o cliente não tenha pago e não tenha devolvido as peças, marque como calote total.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !deliveryIsCalote
+                    setDeliveryIsCalote(next)
+                    if (next) {
+                      setReturnQuantities({})
+                      setDeliveryPaid('0')
+                      setDeliverySplits({ pix: '', dinheiro: '', cartao: '' })
+                    }
+                  }}
+                  style={{
+                    background: deliveryIsCalote ? '#dc2626' : 'white',
+                    color: deliveryIsCalote ? 'white' : '#dc2626',
+                    border: '1.5px solid #dc2626',
+                    borderRadius: '8px',
+                    padding: '0.45rem 0.85rem',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    boxShadow: deliveryIsCalote ? '0 2px 6px rgba(220, 38, 38, 0.3)' : 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem'
+                  }}
+                >
+                  <i className={`fa-solid ${deliveryIsCalote ? 'fa-circle-check' : 'fa-triangle-exclamation'}`}></i>
+                  {deliveryIsCalote ? 'Calote Ativo (Desmarcar)' : 'Calote 100% / Perda Total'}
+                </button>
+              </div>
+
+              {deliveryIsCalote ? (() => {
+                const modalBase = (Array.isArray(showDeliveryModal.baseItems) && showDeliveryModal.baseItems.length > 0)
+                  ? showDeliveryModal.baseItems
+                  : getOrderBaseItems(showDeliveryModal, produtosAtuais)
+
+                let totalPecas = 0
+                let totalCusto = 0
+                let totalVenda = 0
+
+                modalBase.forEach((i, idx) => {
+                  const key = i.id != null ? String(i.id) : (i.nome ? String(i.nome) : String(idx))
+                  const p = deliveryItemPrices[key] !== undefined ? (Number(String(deliveryItemPrices[key]).replace(',', '.')) || 0) : (Number(i.preco) || 0)
+                  const c = deliveryItemCosts[key] !== undefined ? (Number(String(deliveryItemCosts[key]).replace(',', '.')) || 0) : (getItemCost(i, produtosAtuais) || 0)
+                  const qty = Number(i.qty) || 0
+                  totalPecas += qty
+                  totalVenda += p * qty
+                  totalCusto += c * qty
+                })
+
+                return (
+                  <div style={{ background: '#fff1f2', border: '1.5px solid #fecdd3', borderRadius: '10px', padding: '1rem', marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', color: '#991b1b' }}>
+                      <i className="fa-solid fa-circle-exclamation" style={{ fontSize: '1.2rem' }}></i>
+                      <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800 }}>Resumo Matemático do Calote 100%</h4>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.6rem', marginBottom: '0.85rem' }}>
+                      <div style={{ background: 'white', padding: '0.55rem 0.7rem', borderRadius: '8px', border: '1px solid #fecdd3' }}>
+                        <span style={{ fontSize: '0.72rem', color: '#991b1b', fontWeight: 600, display: 'block' }}>Peças Perdidas</span>
+                        <strong style={{ fontSize: '1.15rem', color: '#b91c1c' }}>{totalPecas} un</strong>
+                      </div>
+                      <div style={{ background: 'white', padding: '0.55rem 0.7rem', borderRadius: '8px', border: '1px solid #fecdd3' }}>
+                        <span style={{ fontSize: '0.72rem', color: '#047857', fontWeight: 600, display: 'block' }}>Prejuízo Real (Custo)</span>
+                        <strong style={{ fontSize: '1.15rem', color: '#b91c1c' }}>{formatPreco(totalCusto)}</strong>
+                      </div>
+                      <div style={{ background: 'white', padding: '0.55rem 0.7rem', borderRadius: '8px', border: '1px solid #fecdd3' }}>
+                        <span style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600, display: 'block' }}>Faturamento Perdido</span>
+                        <strong style={{ fontSize: '1.15rem', color: '#475569' }}>{formatPreco(totalVenda)}</strong>
+                      </div>
+                      <div style={{ background: 'white', padding: '0.55rem 0.7rem', borderRadius: '8px', border: '1px solid #fecdd3' }}>
+                        <span style={{ fontSize: '0.72rem', color: '#1e40af', fontWeight: 600, display: 'block' }}>Recebimento Efetuado</span>
+                        <strong style={{ fontSize: '1.15rem', color: '#16a34a' }}>R$ 0,00</strong>
+                      </div>
+                    </div>
+
+                    <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #fecdd3', padding: '0.6rem 0.75rem', marginBottom: '0.85rem' }}>
+                      <p style={{ fontSize: '0.78rem', fontWeight: 700, color: '#991b1b', margin: '0 0 0.4rem 0' }}>
+                        <i className="fa-solid fa-boxes-stacked"></i> Itens caloteados (Perda total das peças — Não voltam ao estoque):
+                      </p>
+                      <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                        {modalBase.map((i, idx) => {
+                          const key = i.id != null ? String(i.id) : (i.nome ? String(i.nome) : String(idx))
+                          const maxQty = Number(i.qty) || 0
+                          const currentCost = deliveryItemCosts[key] !== undefined ? deliveryItemCosts[key] : (i.preco_custo ?? (getItemCost(i, produtosAtuais) || ''))
+                          const currentCostNum = Number(String(currentCost).replace(',', '.')) || 0
+                          const currentPrice = deliveryItemPrices[key] !== undefined ? deliveryItemPrices[key] : (i.preco ?? '')
+                          const currentPriceNum = Number(String(currentPrice).replace(',', '.')) || 0
+
+                          return (
+                            <div key={key} style={{ padding: '0.45rem 0', borderBottom: '1px solid #fee2e2' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                                <span style={{ fontSize: '0.82rem', fontWeight: 700 }}>{i.nome} ({maxQty}x)</span>
+                                <span style={{ fontSize: '0.8rem', color: '#dc2626', fontWeight: 700 }}>Perda: {maxQty} un</span>
+                              </div>
+                              <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.74rem', color: '#059669', margin: 0 }}>
+                                  <span style={{ fontWeight: 600 }}>Custo unitário: R$</span>
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={currentCost}
+                                    placeholder="0,00"
+                                    onChange={e => setDeliveryItemCosts(prev => ({ ...prev, [key]: cleanDecimalInput(e.target.value) }))}
+                                    style={{ width: '70px', padding: '0.2rem 0.35rem', borderRadius: '4px', border: '1px solid #10b981', fontSize: '0.78rem', textAlign: 'right', background: 'white' }}
+                                  />
+                                </label>
+                                <span style={{ fontSize: '0.74rem', color: '#b91c1c' }}>
+                                  Prejuízo custo: <strong>{formatPreco(currentCostNum * maxQty)}</strong> | Venda: {formatPreco(currentPriceNum * maxQty)}
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: '0.76rem', color: '#991b1b', lineHeight: 1.4 }}>
+                      <i className="fa-solid fa-triangle-exclamation"></i> <strong>Atenção:</strong> Ao confirmar o calote 100%, essas <strong>{totalPecas} peças</strong> serão consideradas perda definitiva (não voltam ao estoque nem à rota), o faturamento será zerado, o contas a receber deste pedido será baixado e o custo de <strong>{formatPreco(totalCusto)}</strong> entrará nas métricas de prejuízo por calote.
+                    </div>
+                  </div>
+                )
+              })() : (
+                <>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--admin-text-sec)', marginBottom: '0.75rem' }}>
+                    Informe a quantidade de itens <strong>devolvidos</strong> (não vendidos). Apenas os itens vendidos serão cobrados.
+                  </p>
 
               {(() => {
                 const modalBase = (Array.isArray(showDeliveryModal.baseItems) && showDeliveryModal.baseItems.length > 0)
@@ -8033,6 +8331,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                   </div>
                 )
               })()}
+                </>
+              )}
 
               {/* Datas da comanda */}
               <div style={{ marginBottom: '1rem' }}>
@@ -8058,9 +8358,9 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 <button className="admin-btn admin-btn-sec" onClick={() => setShowDeliveryModal(null)}>Cancelar</button>
 
                 {deliveryIsCalote ? (
-                  <button className="admin-btn" style={{ background: '#dc2626', color: 'white', borderColor: '#b91c1c', fontWeight: 700 }}
+                  <button className="admin-btn" style={{ background: '#dc2626', color: 'white', borderColor: '#b91c1c', fontWeight: 700, padding: '0.5rem 1.1rem' }}
                     onClick={() => salvarAcerto(showDeliveryModal.id, true)}>
-                    <i className="fa-solid fa-triangle-exclamation"></i> Confirmar e Registrar Calote 100%
+                    <i className="fa-solid fa-triangle-exclamation"></i> Confirmar e Salvar Calote 100% / Perda Total
                   </button>
                 ) : (
                   <>
@@ -8832,7 +9132,7 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
   const [pagamentoF, setPagamentoF] = useState('todos')
   const [itemTipoF, setItemTipoF] = useState('todos')
 
-  const ORDER_STATUS = ['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'acerto', 'entregue', 'concluido']
+  const ORDER_STATUS = ['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'acerto', 'entregue', 'concluido', 'calote']
   const FIN_LIKE = ['contratos', 'fin_cliente', 'pagamentos', 'caixa', 'despesas']
   const isFinLike = FIN_LIKE.includes(rep)
   const effStatusF = isFinLike ? (statusF === 'pago' || statusF === 'pendente' ? statusF : 'todos') : (ORDER_STATUS.includes(statusF) ? statusF : 'todos')
@@ -11003,7 +11303,7 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
     }))
   }
 
-  const handleOpenDelivery = (mode = 'acerto') => {
+  const handleOpenDelivery = (mode = 'acerto', isCalote = false) => {
     const raw = getOrderRawItems(order)
     const activeItems = (editedItems && editedItems.length > 0)
       ? editedItems.map(i => ({
@@ -11019,7 +11319,7 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
       itens: activeItems.length > 0 ? activeItems : raw,
       originalItems: (Array.isArray(order.originalItems) && order.originalItems.length > 0) ? order.originalItems : (activeItems.length > 0 ? activeItems : raw)
     }
-    onOpenDelivery?.(orderWithLatest, mode)
+    onOpenDelivery?.(orderWithLatest, mode, isCalote)
   }
 
   const setItemPreco = (idx, val) => {
@@ -11661,6 +11961,7 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
                 <option value="entregue">Entregue</option>
                 <option value="acerto">Acerto</option>
                 <option value="concluido">Concluído</option>
+                <option value="calote">Calote 100%</option>
                 <option value="cancelado">Cancelado</option>
               </select>
             </div>
@@ -11679,6 +11980,9 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
                 <button className="admin-btn" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} onClick={() => handleOpenDelivery('acerto')}>
                   <i className="fa-solid fa-handshake"></i> Fazer Acerto
                 </button>
+                <button className="admin-btn" style={{ background: '#dc2626', color: 'white', borderColor: '#b91c1c' }} onClick={() => handleOpenDelivery('acerto', true)}>
+                  <i className="fa-solid fa-triangle-exclamation"></i> Calote 100%
+                </button>
               </>
             )}
             {order.status === 'acerto' && (
@@ -11692,6 +11996,9 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
                 <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} onClick={() => handleOpenDelivery('finalizar')}>
                   <i className="fa-solid fa-check-double"></i> Finalizar Pedido
                 </button>
+                <button className="admin-btn" style={{ background: '#dc2626', color: 'white', borderColor: '#b91c1c' }} onClick={() => handleOpenDelivery('acerto', true)}>
+                  <i className="fa-solid fa-triangle-exclamation"></i> Calote 100%
+                </button>
               </>
             )}
             {order.status === 'concluido' && (
@@ -11701,6 +12008,16 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
                 </button>
                 <button className="admin-btn" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} onClick={() => handleOpenDelivery('finalizar')}>
                   <i className="fa-solid fa-eye"></i> Ver Acerto / Devoluções
+                </button>
+              </>
+            )}
+            {(order.status === 'calote' || order.isCalote) && (
+              <>
+                <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => { if (confirm('Reabrir comanda e retornar para Acertos?')) onStatusChange('acerto') }}>
+                  <i className="fa-solid fa-rotate-left"></i> Reverter Calote (Voltar para Acertos)
+                </button>
+                <button className="admin-btn" style={{ background: '#dc2626', color: 'white', borderColor: '#dc2626' }} onClick={() => handleOpenDelivery('acerto')}>
+                  <i className="fa-solid fa-eye"></i> Ver Detalhes do Calote
                 </button>
               </>
             )}
