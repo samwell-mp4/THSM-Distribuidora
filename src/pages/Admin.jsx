@@ -3736,7 +3736,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     showToast(`Tipo "${tipo}" criado!`)
   }
 
-  // Métricas do catálogo em tempo real para os KPI cards
+  // Métricas do catálogo em tempo real para os KPI cards (considerando 30% de comissão)
   const prodSummary = useMemo(() => {
     const list = produtosAtuais || []
     const total = list.length
@@ -3745,7 +3745,15 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     const esgotados = list.filter(p => (Number(p.estoque) || 0) <= 0).length
     const semDevolucao = list.filter(p => p.semDevolucao).length
     const valorTotalEstoque = list.reduce((sum, p) => sum + ((Number(p.estoque) || 0) * (Number(p.preco) || 0)), 0)
-    return { total, emEstoque, criticos, esgotados, semDevolucao, valorTotalEstoque }
+    const valorTotalCusto = list.reduce((sum, p) => sum + ((Number(p.estoque) || 0) * (Number(p.preco_custo) || 0)), 0)
+    const lucroEstoqueProjetado = list.reduce((sum, p) => {
+      const q = Number(p.estoque) || 0
+      const pr = Number(p.preco) || 0
+      const pc = Number(p.preco_custo) || 0
+      const lucroUnit = (pr * 0.70) - pc
+      return sum + (q * lucroUnit)
+    }, 0)
+    return { total, emEstoque, criticos, esgotados, semDevolucao, valorTotalEstoque, valorTotalCusto, lucroEstoqueProjetado }
   }, [produtosAtuais])
 
   const filteredProds = useMemo(() => {
@@ -5379,14 +5387,18 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 </div>
               </div>
 
-              <div className="admin-kpi-card" title="Valor estimado total do estoque">
+              <div className="admin-kpi-card" title="Valor estimado total do estoque (Venda, Custo e Lucro Líquido Real após 30% de comissão)">
                 <div className="akc-head">
                   <span className="akc-title"><i className="fa-solid fa-coins"></i> Valor do Estoque</span>
                   <i className="fa-solid fa-ellipsis akc-more"></i>
                 </div>
                 <div className="akc-body">
                   <span className="akc-value">{formatPreco(prodSummary.valorTotalEstoque)}</span>
-                  <span className="akc-badge akc-badge-neutral">Patrimônio</span>
+                  <span className="akc-badge akc-badge-neutral">Venda Total</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--admin-text-sec)', marginTop: '0.4rem', paddingTop: '0.35rem', borderTop: '1px dashed var(--admin-border)' }}>
+                  <span title="Custo total de fábrica das peças em estoque">Custo: <strong style={{ color: 'var(--admin-text)' }}>{formatPreco(prodSummary.valorTotalCusto)}</strong></span>
+                  <span title="Lucro líquido estimado após 30% de comissão">Lucro Real: <strong style={{ color: 'var(--success)' }}>{formatPreco(prodSummary.lucroEstoqueProjetado)}</strong></span>
                 </div>
               </div>
             </div>
@@ -5574,13 +5586,37 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
                         <div className="admin-prod-card-body">
                           <h3 className="admin-prod-card-title" onClick={() => setEditingProd(p)} title={p.nome}>{p.nome}</h3>
-                          <div className="admin-prod-card-pricing">
+                          <div className="admin-prod-card-pricing" style={{ flexWrap: 'wrap', gap: '0.35rem' }}>
                             <span className="admin-prod-card-price">{formatPreco(p.preco)}</span>
                             {p.preco_custo != null && (
                               <span className="admin-prod-card-custo" title="Preço de custo">
                                 Custo: {formatPreco(p.preco_custo)}
                               </span>
                             )}
+                            {Number(p.preco) > 0 && Number(p.preco_custo) > 0 && (() => {
+                              const pr = Number(p.preco) || 0
+                              const pc = Number(p.preco_custo) || 0
+                              const comissao = pr * 0.30
+                              const lucro = (pr * 0.70) - pc
+                              const margem = Math.round((lucro / pr) * 100)
+                              return (
+                                <span
+                                  style={{
+                                    fontSize: '0.72rem',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    background: margem >= 20 ? '#ecfdf5' : margem >= 0 ? '#fef3c7' : '#fee2e2',
+                                    color: margem >= 20 ? '#065f46' : margem >= 0 ? '#92400e' : '#991b1b',
+                                    fontWeight: 600,
+                                    display: 'inline-block',
+                                    width: '100%'
+                                  }}
+                                  title={`Margem Líquida Real (Venda: ${formatPreco(pr)} - Comissão 30%: ${formatPreco(comissao)} - Custo: ${formatPreco(pc)} = Lucro Líquido: ${formatPreco(lucro)})`}
+                                >
+                                  Margem Real: <strong>{margem >= 0 ? `+${margem}%` : `${margem}%`}</strong> ({formatPreco(lucro)}/un)
+                                </span>
+                              )
+                            })()}
                           </div>
 
                           <div className="admin-prod-card-actions">
@@ -5649,6 +5685,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                         <th style={{ cursor: 'pointer' }} onClick={() => toggleProdSort('categoria')}>Categoria {prodSortIcon('categoria')}</th>
                         <th style={{ cursor: 'pointer' }} onClick={() => toggleProdSort('preco')}>Preço {prodSortIcon('preco')}</th>
                         <th style={{ cursor: 'pointer' }}>Custo</th>
+                        <th title="Margem líquida real após deduzir 30% de comissão padrão do consignado">Margem Real (30%)</th>
                         <th style={{ cursor: 'pointer' }} onClick={() => toggleProdSort('estoque')}>Estoque {prodSortIcon('estoque')}</th>
                         <th>Ações</th>
                       </tr>
@@ -5672,6 +5709,29 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                           <td className="td-price">{formatPreco(p.preco)}</td>
                           <td className="td-price" style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>{p.preco_custo ? formatPreco(p.preco_custo) : '-'}</td>
                           <td>
+                            {(() => {
+                              const pr = Number(p.preco) || 0
+                              const pc = Number(p.preco_custo) || 0
+                              if (pr > 0 && pc > 0) {
+                                const comissao = pr * 0.30
+                                const lucro = (pr * 0.70) - pc
+                                const margem = Math.round((lucro / pr) * 100)
+                                const isGood = margem >= 20
+                                const isNeut = margem >= 0
+                                return (
+                                  <span
+                                    className={`stock-tag ${isGood ? 'in' : isNeut ? 'low' : 'out'}`}
+                                    title={`Venda: ${formatPreco(pr)} | (-) Comissão 30%: ${formatPreco(comissao)} | (-) Custo: ${formatPreco(pc)} | (=) Lucro Líquido: ${formatPreco(lucro)}`}
+                                    style={{ cursor: 'help', fontWeight: 600 }}
+                                  >
+                                    {margem >= 0 ? `+${margem}%` : `${margem}%`} ({formatPreco(lucro)})
+                                  </span>
+                                )
+                              }
+                              return <span style={{ fontSize: '0.74rem', color: 'var(--admin-text-sec)', opacity: 0.6 }}>-</span>
+                            })()}
+                          </td>
+                          <td>
                             <span className={`stock-tag ${p.estoque > 5 ? 'in' : p.estoque > 0 ? 'low' : 'out'}`}>
                               {p.estoque > 0 ? `${p.estoque} un` : 'Indisponível'}
                             </span>
@@ -5694,7 +5754,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                           </td>
                         </tr>
                       ))}
-                      {paginatedProds.length === 0 && <tr><td colSpan="8" className="td-empty">Nenhum produto encontrado</td></tr>}
+                      {paginatedProds.length === 0 && <tr><td colSpan="9" className="td-empty">Nenhum produto encontrado</td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -12264,17 +12324,48 @@ function EditProductModal({ product, categorias = [], onAddCategoria, onSave, on
   const [semDevolucao, setSemDevolucao] = useState(!!product.semDevolucao)
   const [newVarTypeName, setNewVarTypeName] = useState('')
 
-  // Lucro e margem calculados em tempo real
+  // Lucro e margem calculados em tempo real considerando comissão de 30% do consignado
   const marginInfo = useMemo(() => {
     const numPreco = parseDecimalToNumber(preco)
     const numCusto = parseDecimalToNumber(precoCusto)
-    if (numPreco > 0 && numCusto > 0) {
-      const lucro = numPreco - numCusto
-      const margem = Math.round((lucro / numPreco) * 100)
-      return { lucro, margem }
+    const numEstoque = Math.max(0, Number(estoque) || 0)
+
+    if (numPreco > 0) {
+      const comissao = Math.round(numPreco * 0.30 * 100) / 100
+      const receitaLiquida = Math.round((numPreco - comissao) * 100) / 100
+
+      if (numCusto > 0) {
+        const lucro = Math.round((receitaLiquida - numCusto) * 100) / 100
+        const margem = Math.round((lucro / numPreco) * 100)
+        const margemExata = ((lucro / numPreco) * 100).toFixed(1)
+        const lucroTotalEstoque = Math.round(lucro * numEstoque * 100) / 100
+        return {
+          numPreco,
+          numCusto,
+          comissao,
+          receitaLiquida,
+          lucro,
+          margem,
+          margemExata,
+          numEstoque,
+          lucroTotalEstoque,
+          isNegative: lucro < 0
+        }
+      } else {
+        return {
+          numPreco,
+          numCusto: 0,
+          comissao,
+          receitaLiquida,
+          lucro: null,
+          margem: null,
+          numEstoque,
+          semCusto: true
+        }
+      }
     }
     return null
-  }, [preco, precoCusto])
+  }, [preco, precoCusto, estoque])
 
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0]
@@ -12438,13 +12529,52 @@ function EditProductModal({ product, categorias = [], onAddCategoria, onSave, on
                 </div>
               </div>
 
-              {/* Margem de Lucro Indicator */}
+              {/* Margem de Lucro Indicator considerando comissão de 30% do consignado */}
               {marginInfo && (
-                <div className="amp-margin-badge-card">
-                  <i className="fa-solid fa-chart-line"></i>
-                  <span>
-                    Margem Bruta Estimada: <strong>+{marginInfo.margem}%</strong> ({formatPreco(marginInfo.lucro)} de lucro por peça)
-                  </span>
+                <div className={`amp-margin-badge-card ${marginInfo.isNegative ? 'is-negative' : ''}`}>
+                  <div className="amp-margin-badge-header">
+                    <i className={`fa-solid ${marginInfo.isNegative ? 'fa-triangle-exclamation' : 'fa-chart-line'}`}></i>
+                    <div>
+                      {marginInfo.semCusto ? (
+                        <span>
+                          Receita Líquida Estimada: <strong>{formatPreco(marginInfo.receitaLiquida)}</strong> (após 30% de comissão: -{formatPreco(marginInfo.comissao)}) · <em style={{ opacity: 0.85 }}>Informe o preço de custo para calcular a margem líquida</em>
+                        </span>
+                      ) : (
+                        <span>
+                          {marginInfo.isNegative ? 'Prejuízo / Margem Negativa: ' : 'Margem Líquida Estimada: '}
+                          <strong>{marginInfo.margem >= 0 ? `+${marginInfo.margem}%` : `${marginInfo.margem}%`}</strong>
+                          {' '}({formatPreco(marginInfo.lucro)} de lucro líquido por peça após 30% de comissão)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {!marginInfo.semCusto && (
+                    <div className="amp-margin-breakdown">
+                      <div className="amp-margin-pill">
+                        <span>Preço Venda:</span>
+                        <strong>{formatPreco(marginInfo.numPreco)}</strong>
+                      </div>
+                      <div className="amp-margin-pill pill-sub">
+                        <span>(-) Comissão (30%):</span>
+                        <strong>-{formatPreco(marginInfo.comissao)}</strong>
+                      </div>
+                      <div className="amp-margin-pill pill-sub">
+                        <span>(-) Custo Fábrica:</span>
+                        <strong>-{formatPreco(marginInfo.numCusto)}</strong>
+                      </div>
+                      <div className={`amp-margin-pill ${marginInfo.isNegative ? 'pill-danger' : 'pill-highlight'}`}>
+                        <span>(=) Lucro Líquido THSM:</span>
+                        <strong>{formatPreco(marginInfo.lucro)} ({marginInfo.margemExata}%)</strong>
+                      </div>
+                      {marginInfo.numEstoque > 0 && (
+                        <div className="amp-margin-pill pill-stock">
+                          <span>Lucro no Estoque ({marginInfo.numEstoque} un):</span>
+                          <strong>{formatPreco(marginInfo.lucroTotalEstoque)}</strong>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -555,10 +555,16 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
     })
     return Object.values(map).map(p => {
       const hasValidCost = p.hasCost && p.custo > 0
-      const margem = (hasValidCost && p.bruto > 0) ? ((p.bruto - p.custo) / p.bruto) * 100 : null
+      // Considerar a comissão padrão de 30% do consignado
+      const comissao = p.bruto * 0.30
+      const receitaLiquida = p.bruto - comissao
+      const lucro = hasValidCost ? (receitaLiquida - p.custo) : 0
+      const margem = (hasValidCost && p.bruto > 0) ? (lucro / p.bruto) * 100 : null
       return {
         ...p,
-        lucro: hasValidCost ? p.bruto - p.custo : 0,
+        comissao,
+        receitaLiquida,
+        lucro,
         margem: margem !== null ? margem : 0,
         hasCost: hasValidCost
       }
