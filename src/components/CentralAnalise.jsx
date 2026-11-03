@@ -22,6 +22,7 @@ function today() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
+const hoje = today
 function addDays(dt, n) {
   const d = new Date(dt + 'T12:00:00')
   d.setDate(d.getDate() + n)
