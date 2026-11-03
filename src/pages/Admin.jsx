@@ -828,6 +828,7 @@ function sendAlertRota(tipo, contatos, orders, customText = '') {
 }
 
 import AddressForm from '../components/AddressForm'
+import CloneOrderModal from '../components/CloneOrderModal'
 import MapView from '../components/MapView'
 import CentralAnalise from '../components/CentralAnalise'
 import CentralRotas from '../components/ModuloRotas/CentralRotas'
@@ -837,6 +838,12 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [tab, setTab] = useState(() => sessionStorage.getItem('thsm_admin_tab') || 'dashboard')
   useEffect(() => { sessionStorage.setItem('thsm_admin_tab', tab) }, [tab])
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [adminLocalProds, setAdminLocalProds] = useState(null)
+  useEffect(() => { setAdminLocalProds(produtos || []) }, [produtos])
+
+  const produtosAtuais = useMemo(() => {
+    return adminLocalProds || produtos || []
+  }, [adminLocalProds, produtos])
   const [orders, setOrders] = useState(() => LS.get(STORAGE_ORDERS, []))
   useEffect(() => {
     idbGet(STORAGE_ORDERS).then(cached => {
@@ -1000,6 +1007,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [showOrderReportModal, setShowOrderReportModal] = useState(false)
   const [preselectedUserForOrder, setPreselectedUserForOrder] = useState(null)
   const [showOrderDetail, setShowOrderDetail] = useState(null)
+  const [cloningOrder, setCloningOrder] = useState(null)
   const [showRotaDue, setShowRotaDue] = useState(null)
   const [rotaDueDate, setRotaDueDate] = useState('')
   const [showDeliveryModal, setShowDeliveryModal] = useState(null)
@@ -1637,12 +1645,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     if (rotas.length > 0 && !expandedRota) setExpandedRota(rotas[0].rota)
   }, [rotas, expandedRota])
 
-  const [adminLocalProds, setAdminLocalProds] = useState(null)
-  useEffect(() => { setAdminLocalProds(produtos || []) }, [produtos])
-
-  const produtosAtuais = useMemo(() => {
-    return adminLocalProds || produtos || []
-  }, [adminLocalProds, produtos])
+  // produtosAtuais hoisted to top of Admin component
 
   // Map of known product prices from orders history and current products
   const productPriceMap = useMemo(() => {
@@ -2140,62 +2143,118 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     sendStatusWebhook(order, 'cancelado')
   }
 
-  const cloneOrder = async (original) => {
-    if (!confirm(`Deseja clonar o pedido #${String(original?.id || '').slice(-6)}?`)) return
+  const handleOpenCloneModal = (order) => {
+    setCloningOrder(order)
+  }
+
+  const handleSaveClonedOrder = async (clonedData) => {
     try {
-      const origItems = (Array.isArray(original?.items) && original.items.length > 0)
-        ? original.items
-        : ((Array.isArray(original?.originalItems) && original.originalItems.length > 0) ? original.originalItems : (original?.itens || []))
-      const clonedItems = origItems.map(i => ({ ...i }))
       const newId = Date.now()
+      const items = (clonedData.items || []).map(i => {
+        const cost = (i.preco_custo != null && i.preco_custo !== '')
+          ? Number(String(i.preco_custo).replace(',', '.'))
+          : getItemCost(i, produtosAtuais)
+        return {
+          ...i,
+          preco: Number(String(i.preco).replace(',', '.')) || 0,
+          preco_custo: cost > 0 ? cost : null,
+          qty: Number(i.qty) || 1
+        }
+      })
+
+      const totalAvista = Math.round(items.filter(i => i.tipo === 'avista').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
+      const totalAprazo = Math.round(items.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
+      const total = Math.round((totalAvista + totalAprazo) * 100) / 100
+      const pagamento = totalAvista > 0 && totalAprazo > 0 ? 'misto' : (totalAprazo > 0 ? 'aprazo' : 'avista')
+      const now = Date.now()
+
       const newOrder = {
-        ...original,
         id: newId,
-        date: hoje(),
-        createdAt: Date.now(),
-        items: clonedItems,
-        itens: clonedItems,
-        originalItems: clonedItems.map(i => ({ ...i })),
-        status: 'pendente',
-        preApprovedAt: null,
-        pre_approved_at: null,
-        lastModified: Date.now(),
-        updatedAt: Date.now()
+        user_id: clonedData.customer?.id || null,
+        date: clonedData.date || hoje(),
+        customer: clonedData.customer,
+        items,
+        itens: items,
+        originalItems: items.map(i => ({ ...i })),
+        pagamento,
+        totalAvista,
+        totalAprazo,
+        total,
+        totalNota: total,
+        totalOriginal: total,
+        status: clonedData.status || 'pendente',
+        notificarWhatsApp: clonedData.notificarWhatsApp !== false,
+        dataVencimento: clonedData.dataVencimento || null,
+        isFinalizado: clonedData.status === 'concluido',
+        isCalote: false,
+        motivoEncerramento: null,
+        totalPago: 0,
+        valorEmAberto: total,
+        createdAt: now,
+        lastModified: now,
+        updatedAt: now,
+        deliveredAt: clonedData.status === 'entregue' ? now : null,
+        deliveryDataInicio: clonedData.status === 'entregue' ? (clonedData.date || hoje()) : null,
+        clonedFromId: clonedData.origemId || null
       }
+
       setOrders(prev => {
         const next = [newOrder, ...prev]
         LS.set(STORAGE_ORDERS, next)
         return next
       })
-      const finRecords = clonedItems.filter(i => i.tipo === 'aprazo').map(i => {
-        const origFin = financial.find(f => f.id === original.id + '-' + i.id)
-        const dueDate = origFin?.dueDate || (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0] })()
+
+      // Gerar contas a receber se houver itens a prazo
+      const finRecords = items.filter(i => i.tipo === 'aprazo').map(i => {
+        const dueDate = clonedData.dataVencimento || (() => {
+          const d = new Date()
+          d.setDate(d.getDate() + 30)
+          return d.toISOString().split('T')[0]
+        })()
         return {
           id: newId + '-' + i.id,
           orderId: newId,
-          customerName: original.customer?.nome || '',
-          itemName: i.nome,
+          customerName: clonedData.customer?.nome || '',
+          itemName: i.nome || i.displayName || 'Produto',
           qty: i.qty,
-          value: (Number(i.preco) || 0) * (Number(i.qty) || 0),
-          precoCusto: ((i.preco_custo != null && i.preco_custo !== '') ? Number(i.preco_custo) : getItemCost(i, produtosAtuais)) * (Number(i.qty) || 0),
+          value: Math.round((Number(i.preco) || 0) * (Number(i.qty) || 0) * 100) / 100,
+          precoCusto: Math.round(((i.preco_custo != null && i.preco_custo !== '') ? Number(i.preco_custo) : getItemCost(i, produtosAtuais)) * (Number(i.qty) || 0) * 100) / 100,
           dueDate,
           paidDate: null,
           status: 'pendente'
         }
       })
+
       if (finRecords.length > 0) {
         setFinancial(prev => {
           const next = [...finRecords, ...prev]
           LS.set(STORAGE_FINANCIAL, next)
           return next
         })
-        upsertFinancial(finRecords)
+        upsertFinancial(finRecords).catch(() => {})
       }
+
       await upsertOrder(newOrder)
-      showToast(`Pedido #${String(original.id).slice(-6)} clonado como #${String(newId).slice(-6)} com sucesso!`)
+
+      if (clonedData.isNovoCliente && clonedData.customer?.telefone) {
+        const raw = (clonedData.customer.telefone || '').replace(/\D/g, '')
+        const normPhone = raw.startsWith('55') ? raw : '55' + raw
+        const userPayload = {
+          nome: clonedData.customer.nome,
+          telefone: normPhone,
+          cpf: clonedData.customer.cpf || '',
+          endereco: clonedData.customer.endereco || {}
+        }
+        saveUserViaWebhook(userPayload).catch(() => {})
+      }
+
+      showToast(`Pedido duplicado com sucesso! Nova comanda #${String(newId).slice(-6)} criada como "${STATUS_LABELS[newOrder.status] || newOrder.status}"!`, 'success')
+      if (newOrder.status !== 'pre-pedido' && newOrder.notificarWhatsApp !== false) {
+        sendStatusWebhook(newOrder, newOrder.status)
+      }
     } catch (err) {
-      console.error('Erro ao clonar pedido:', err)
-      showToast('Erro ao clonar pedido', 'error')
+      console.error('Erro ao salvar pedido clonado:', err)
+      showToast('Erro ao criar pedido duplicado', 'error')
     }
   }
 
@@ -5021,7 +5080,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                             return <button className="action-btn" style={{ color: '#ea4335', borderColor: '#ea4335' }} title="Abrir no Maps" onClick={() => window.open(url, '_blank')}><i className="fa-solid fa-location-dot"></i></button>
                           })()}
                           <button className="action-btn action-delete" title="Excluir" onClick={() => deleteOrder(o.id)}><i className="fa-solid fa-trash"></i></button>
-                          <button className="action-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }} title="Clonar" onClick={() => cloneOrder(o)}><i className="fa-solid fa-copy"></i></button>
+                          <button className="action-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }} title="Duplicar / Clonar" onClick={() => handleOpenCloneModal(o)}><i className="fa-solid fa-copy"></i></button>
                         </div>
                       </td>
                     </tr>
@@ -5362,7 +5421,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                         type="button"
                         className="aoc-btn aoc-btn-icon"
                         title="Clonar pedido"
-                        onClick={(ev) => { ev.stopPropagation(); cloneOrder(o) }}
+                        onClick={(ev) => { ev.stopPropagation(); handleOpenCloneModal(o) }}
                       >
                         <i className="fa-solid fa-copy" style={{ color: '#8b5cf6' }}></i>
                       </button>
@@ -7901,6 +7960,20 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         </div>
       )}
 
+            {/* MODAL DUPLICAR / CLONAR PEDIDO */}
+      {cloningOrder && (
+        <CloneOrderModal
+          originalOrder={cloningOrder}
+          usuarios={allClientesConsolidados}
+          produtos={produtosAtuais}
+          onSave={async (clonedData) => {
+            await handleSaveClonedOrder(clonedData)
+            setCloningOrder(null)
+          }}
+          onClose={() => setCloningOrder(null)}
+        />
+      )}
+
       {/* MODAL ORDER DETAIL */}
       {showOrderDetail && (
         <OrderDetailModal
@@ -7914,6 +7987,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           onPreApprovar={(rejectedIds, replacements, venc) => preApprovarPedido(showOrderDetail.id, rejectedIds, replacements, venc)}
           onOpenDelivery={(order, mode = 'acerto', isCalote = false) => { openAcertoModal({ ...(orders.find(o => String(o.id) === String(showOrderDetail.id)) || showOrderDetail), ...showOrderDetail, ...order }, mode, isCalote); setShowOrderDetail(null) }}
           onToggleWhatsAppNotify={toggleOrderWhatsAppNotify}
+          onCloneOrder={(o) => { setShowOrderDetail(null); handleOpenCloneModal(o) }}
           onEditAndConfirm={(editedItems, currentStatus) => {
             const now = Date.now()
             const totalAvista = Math.round(editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
@@ -11711,7 +11785,7 @@ function getOrderRawItems(ord) {
   return []
 }
 
-function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onStatusChange, onUpdateDue, onPreApprovar, onEditAndConfirm, onEditSave, onSyncCusto, onOpenDelivery, onUpdateCustomer, onCancelOrder, onSendWhatsApp, onToggleWhatsAppNotify }) {
+function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onStatusChange, onUpdateDue, onPreApprovar, onEditAndConfirm, onEditSave, onSyncCusto, onOpenDelivery, onUpdateCustomer, onCancelOrder, onSendWhatsApp, onToggleWhatsAppNotify, onCloneOrder }) {
   const [rejectedItems, setRejectedItems] = useState(new Set())
   const [editMode, setEditMode] = useState(false)
   const [editedItems, setEditedItems] = useState(() => getOrderRawItems(order).map(i => {
@@ -12506,6 +12580,9 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
             </label>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', justifyContent: 'flex-end' }}>
+              <button type="button" className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }} title="Duplicar esta comanda em um novo pedido" onClick={() => onCloneOrder?.(order)}>
+                <i className="fa-solid fa-copy"></i> Duplicar Comanda
+              </button>
               <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
                 onClick={() => { setEditMode(true); resetEditedItems() }}>
                 <i className="fa-solid fa-pen"></i> Editar Itens / Custo
