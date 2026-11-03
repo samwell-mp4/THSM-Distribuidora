@@ -973,6 +973,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [returnQuantities, setReturnQuantities] = useState({})
   const [returnReasons, setReturnReasons] = useState({})
   const [deliveryIsCalote, setDeliveryIsCalote] = useState(false)
+  const [deliveryCaloteQuantities, setDeliveryCaloteQuantities] = useState({})
   const [deliveryItemPrices, setDeliveryItemPrices] = useState({})
   const [deliveryItemCosts, setDeliveryItemCosts] = useState({})
   const [payQuantities, setPayQuantities] = useState({})
@@ -2186,7 +2187,21 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         })
       }
       setReturnReasons(reasonsMap)
-      setDeliveryIsCalote(Boolean(isCaloteInitial || o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100'))
+      const isCaloteActive = Boolean(isCaloteInitial || o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
+      setDeliveryIsCalote(isCaloteActive)
+      const initialCaloteMap = {}
+      baseItems.forEach((i, idx) => {
+        const key = i.id != null ? String(i.id) : (i.nome ? String(i.nome) : String(idx))
+        const q = Number(i.qty) || 0
+        if (i.caloteQty !== undefined && i.caloteQty !== null) {
+          initialCaloteMap[key] = Number(i.caloteQty)
+        } else if (retMap[key] !== undefined) {
+          initialCaloteMap[key] = Math.max(0, q - Number(retMap[key]))
+        } else {
+          initialCaloteMap[key] = q
+        }
+      })
+      setDeliveryCaloteQuantities(initialCaloteMap)
       setDeliveryItemPrices(priceMap)
       setDeliveryItemCosts(costMap)
       setPayQuantities({})
@@ -2233,10 +2248,11 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       : getOrderBaseItems(order, produtosAtuais)
 
     if (deliveryIsCalote) {
-      // CALOTE 100% / PERDA TOTAL (Inadimplência Total)
+      // CALOTE (Inadimplência de Pagamento com perda total ou parcial de peças)
       let calotePecas = 0
       let caloteTotalVenda = 0
       let caloteTotalCusto = 0
+      const returnedItemsCalote = []
 
       const processedItems = baseItems.map((i, idx) => {
         const key = i.id != null ? String(i.id) : (i.nome ? String(i.nome) : String(idx))
@@ -2244,11 +2260,24 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         const unitPreco = Math.round((Number(pRaw) || 0) * 100) / 100
         const cRaw = deliveryItemCosts[key] !== undefined ? String(deliveryItemCosts[key]).replace(',', '.') : ''
         const unitCusto = cRaw !== '' ? (Math.round((Number(cRaw) || 0) * 100) / 100) : (getItemCost(i, produtosAtuais) || 0)
-        const qty = Number(i.qty) || 0
+        const maxQty = Number(i.qty) || 0
 
-        calotePecas += qty
-        caloteTotalVenda += unitPreco * qty
-        caloteTotalCusto += (unitCusto || 0) * qty
+        const userCaloteVal = deliveryCaloteQuantities[key] !== undefined ? deliveryCaloteQuantities[key] : maxQty
+        const itemCaloteQty = Math.max(0, Math.min(maxQty, Number(userCaloteVal) || 0))
+        const itemDevolvidoQty = Math.max(0, maxQty - itemCaloteQty)
+
+        calotePecas += itemCaloteQty
+        caloteTotalVenda += unitPreco * itemCaloteQty
+        caloteTotalCusto += (unitCusto || 0) * itemCaloteQty
+
+        if (itemDevolvidoQty > 0) {
+          returnedItemsCalote.push({
+            ...i,
+            qty: itemDevolvidoQty,
+            returnedQty: itemDevolvidoQty,
+            motivoDevolucao: 'Devolvido no acerto (Calote parcial)'
+          })
+        }
 
         if (cRaw !== '') {
           const prod = produtosAtuais.find(p => p && (String(p.id) === String(i.id)))
@@ -2261,7 +2290,9 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           ...i,
           preco: unitPreco,
           preco_custo: unitCusto > 0 ? unitCusto : null,
-          qty
+          qty: maxQty,
+          caloteQty: itemCaloteQty,
+          returnedQty: itemDevolvidoQty
         }
       })
 
@@ -2291,7 +2322,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         calotePecas,
         caloteTotalCusto,
         caloteTotalVenda,
-        returnedItems: [], // No calote 100% não há devolução, perda total
+        returnedItems: returnedItemsCalote,
         totalReembolso: 0,
         dataInicio: deliveryDataInicio || order.dataInicio || order.date || null,
         dataVencimento: deliveryDataVenc || order.dataVencimento || null,
@@ -2320,7 +2351,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         return remaining
       })
 
-      showToast(`⚠️ Pedido #${String(orderId).slice(-6)} registrado como CALOTE 100%! Prejuízo de ${formatPreco(caloteTotalCusto)} (${calotePecas} peças perdidas).`, 'warning')
+      showToast(`⚠️ Pedido #${String(orderId).slice(-6)} registrado como CALOTE! Prejuízo de ${formatPreco(caloteTotalCusto)} (${calotePecas} peças perdidas${returnedItemsCalote.length > 0 ? `, ${returnedItemsCalote.reduce((s, r) => s + r.qty, 0)} devolvidas` : ''}).`, 'warning')
       sendStatusWebhook(updatedOrder, 'calote', {
         isCalote: true,
         calotePecas,
@@ -2331,6 +2362,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
       setShowDeliveryModal(null)
       setDeliveryIsCalote(false)
+      setDeliveryCaloteQuantities({})
       setReturnQuantities({})
       setDeliveryItemPrices({})
       setDeliveryItemCosts({})
@@ -7978,79 +8010,176 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                   ? showDeliveryModal.baseItems
                   : getOrderBaseItems(showDeliveryModal, produtosAtuais)
 
-                let totalPecas = 0
+                let totalPecasCalote = 0
+                let totalPecasDevolvidas = 0
                 let totalCusto = 0
                 let totalVenda = 0
 
                 modalBase.forEach((i, idx) => {
                   const key = i.id != null ? String(i.id) : (i.nome ? String(i.nome) : String(idx))
+                  const maxQty = Number(i.qty) || 0
+                  const userCaloteVal = deliveryCaloteQuantities[key] !== undefined ? deliveryCaloteQuantities[key] : maxQty
+                  const caloteQty = Math.max(0, Math.min(maxQty, Number(userCaloteVal) || 0))
+                  const devolvidoQty = Math.max(0, maxQty - caloteQty)
+
                   const p = deliveryItemPrices[key] !== undefined ? (Number(String(deliveryItemPrices[key]).replace(',', '.')) || 0) : (Number(i.preco) || 0)
                   const c = deliveryItemCosts[key] !== undefined ? (Number(String(deliveryItemCosts[key]).replace(',', '.')) || 0) : (getItemCost(i, produtosAtuais) || 0)
-                  const qty = Number(i.qty) || 0
-                  totalPecas += qty
-                  totalVenda += p * qty
-                  totalCusto += c * qty
+
+                  totalPecasCalote += caloteQty
+                  totalPecasDevolvidas += devolvidoQty
+                  totalVenda += p * caloteQty
+                  totalCusto += c * caloteQty
                 })
 
                 return (
                   <div style={{ background: '#fff1f2', border: '1.5px solid #fecdd3', borderRadius: '10px', padding: '1rem', marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', color: '#991b1b' }}>
-                      <i className="fa-solid fa-circle-exclamation" style={{ fontSize: '1.2rem' }}></i>
-                      <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800 }}>Resumo Matemático do Calote 100%</h4>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#991b1b' }}>
+                        <i className="fa-solid fa-circle-exclamation" style={{ fontSize: '1.2rem' }}></i>
+                        <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800 }}>Resumo Matemático do Calote</h4>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.35rem' }}>
+                        <button
+                          type="button"
+                          className="admin-btn"
+                          style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', background: '#fee2e2', color: '#991b1b', borderColor: '#fca5a5' }}
+                          onClick={() => {
+                            const allLost = {}
+                            modalBase.forEach((i, idx) => {
+                              const key = i.id != null ? String(i.id) : (i.nome ? String(i.nome) : String(idx))
+                              allLost[key] = Number(i.qty) || 0
+                            })
+                            setDeliveryCaloteQuantities(allLost)
+                          }}
+                          title="Marcar todas as peças como perda de calote (100%)"
+                        >
+                          Marcar Tudo Calote
+                        </button>
+                      </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.6rem', marginBottom: '0.85rem' }}>
-                      <div style={{ background: 'white', padding: '0.55rem 0.7rem', borderRadius: '8px', border: '1px solid #fecdd3' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.5rem', marginBottom: '0.85rem' }}>
+                      <div style={{ background: 'white', padding: '0.55rem 0.65rem', borderRadius: '8px', border: '1px solid #fecdd3' }}>
                         <span style={{ fontSize: '0.72rem', color: '#991b1b', fontWeight: 600, display: 'block' }}>Peças Perdidas</span>
-                        <strong style={{ fontSize: '1.15rem', color: '#b91c1c' }}>{totalPecas} un</strong>
+                        <strong style={{ fontSize: '1.15rem', color: '#b91c1c' }}>{totalPecasCalote} un</strong>
                       </div>
-                      <div style={{ background: 'white', padding: '0.55rem 0.7rem', borderRadius: '8px', border: '1px solid #fecdd3' }}>
+                      <div style={{ background: 'white', padding: '0.55rem 0.65rem', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                        <span style={{ fontSize: '0.72rem', color: '#166534', fontWeight: 600, display: 'block' }}>Peças Devolvidas</span>
+                        <strong style={{ fontSize: '1.15rem', color: '#16a34a' }}>{totalPecasDevolvidas} un</strong>
+                        <span style={{ fontSize: '0.65rem', color: '#15803d', display: 'block' }}>Retornam ao estoque</span>
+                      </div>
+                      <div style={{ background: 'white', padding: '0.55rem 0.65rem', borderRadius: '8px', border: '1px solid #fecdd3' }}>
                         <span style={{ fontSize: '0.72rem', color: '#047857', fontWeight: 600, display: 'block' }}>Prejuízo Real (Custo)</span>
                         <strong style={{ fontSize: '1.15rem', color: '#b91c1c' }}>{formatPreco(totalCusto)}</strong>
                       </div>
-                      <div style={{ background: 'white', padding: '0.55rem 0.7rem', borderRadius: '8px', border: '1px solid #fecdd3' }}>
+                      <div style={{ background: 'white', padding: '0.55rem 0.65rem', borderRadius: '8px', border: '1px solid #fecdd3' }}>
                         <span style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600, display: 'block' }}>Faturamento Perdido</span>
                         <strong style={{ fontSize: '1.15rem', color: '#475569' }}>{formatPreco(totalVenda)}</strong>
                       </div>
-                      <div style={{ background: 'white', padding: '0.55rem 0.7rem', borderRadius: '8px', border: '1px solid #fecdd3' }}>
-                        <span style={{ fontSize: '0.72rem', color: '#1e40af', fontWeight: 600, display: 'block' }}>Recebimento Efetuado</span>
+                      <div style={{ background: 'white', padding: '0.55rem 0.65rem', borderRadius: '8px', border: '1px solid #fecdd3' }}>
+                        <span style={{ fontSize: '0.72rem', color: '#1e40af', fontWeight: 600, display: 'block' }}>Recebimento</span>
                         <strong style={{ fontSize: '1.15rem', color: '#16a34a' }}>R$ 0,00</strong>
                       </div>
                     </div>
 
-                    <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #fecdd3', padding: '0.6rem 0.75rem', marginBottom: '0.85rem' }}>
-                      <p style={{ fontSize: '0.78rem', fontWeight: 700, color: '#991b1b', margin: '0 0 0.4rem 0' }}>
-                        <i className="fa-solid fa-boxes-stacked"></i> Itens caloteados (Perda total das peças — Não voltam ao estoque):
+                    <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #fecdd3', padding: '0.65rem 0.75rem', marginBottom: '0.85rem' }}>
+                      <p style={{ fontSize: '0.78rem', fontWeight: 700, color: '#991b1b', margin: '0 0 0.5rem 0' }}>
+                        <i className="fa-solid fa-boxes-stacked"></i> Selecione as unidades caloteadas (perda) e devolvidas:
                       </p>
-                      <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                      <div style={{ maxHeight: '240px', overflowY: 'auto' }}>
                         {modalBase.map((i, idx) => {
                           const key = i.id != null ? String(i.id) : (i.nome ? String(i.nome) : String(idx))
                           const maxQty = Number(i.qty) || 0
+                          const userCaloteVal = deliveryCaloteQuantities[key] !== undefined ? deliveryCaloteQuantities[key] : maxQty
+                          const caloteQty = Math.max(0, Math.min(maxQty, Number(userCaloteVal) || 0))
+                          const devolvidoQty = Math.max(0, maxQty - caloteQty)
+                          const isAllLost = caloteQty === maxQty
+                          const isAllReturned = caloteQty === 0
+
                           const currentCost = deliveryItemCosts[key] !== undefined ? deliveryItemCosts[key] : (i.preco_custo ?? (getItemCost(i, produtosAtuais) || ''))
                           const currentCostNum = Number(String(currentCost).replace(',', '.')) || 0
                           const currentPrice = deliveryItemPrices[key] !== undefined ? deliveryItemPrices[key] : (i.preco ?? '')
                           const currentPriceNum = Number(String(currentPrice).replace(',', '.')) || 0
 
                           return (
-                            <div key={key} style={{ padding: '0.45rem 0', borderBottom: '1px solid #fee2e2' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                                <span style={{ fontSize: '0.82rem', fontWeight: 700 }}>{i.nome} ({maxQty}x)</span>
-                                <span style={{ fontSize: '0.8rem', color: '#dc2626', fontWeight: 700 }}>Perda: {maxQty} un</span>
+                            <div key={key} style={{ padding: '0.55rem 0.4rem', borderBottom: '1px solid #fee2e2', background: isAllReturned ? '#f0fdf4' : 'transparent', borderRadius: '6px', marginBottom: '0.35rem' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem', flexWrap: 'wrap', gap: '0.3rem' }}>
+                                <div>
+                                  <strong style={{ fontSize: '0.84rem', color: isAllReturned ? '#166534' : '#1e293b' }}>{i.nome}</strong>
+                                  <span style={{ fontSize: '0.74rem', color: 'var(--admin-text-sec)', marginLeft: '0.35rem' }}>(Total entregue: {maxQty} un)</span>
+                                </div>
+                                <div>
+                                  {isAllReturned ? (
+                                    <span style={{ fontSize: '0.74rem', color: '#16a34a', fontWeight: 700, background: '#dcfce7', padding: '2px 8px', borderRadius: '4px' }}>
+                                      <i className="fa-solid fa-rotate-left"></i> 100% Devolvido ({devolvidoQty} un)
+                                    </span>
+                                  ) : isAllLost ? (
+                                    <span style={{ fontSize: '0.74rem', color: '#dc2626', fontWeight: 700, background: '#fee2e2', padding: '2px 8px', borderRadius: '4px' }}>
+                                      <i className="fa-solid fa-ban"></i> Perda Total ({caloteQty} un)
+                                    </span>
+                                  ) : (
+                                    <span style={{ fontSize: '0.74rem', color: '#d97706', fontWeight: 700, background: '#fef3c7', padding: '2px 8px', borderRadius: '4px' }}>
+                                      ⚠️ Parcial: {caloteQty} calote / {devolvidoQty} devolvido
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                              <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: '#fef2f2', border: '1px solid #fca5a5', padding: '0.2rem 0.45rem', borderRadius: '6px' }}>
+                                  <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#991b1b' }}>Calote (Perda):</span>
+                                  <button
+                                    type="button"
+                                    className="action-btn"
+                                    style={{ width: '22px', height: '22px', fontSize: '0.7rem' }}
+                                    disabled={caloteQty <= 0}
+                                    onClick={() => setDeliveryCaloteQuantities(prev => ({ ...prev, [key]: Math.max(0, caloteQty - 1) }))}
+                                  >
+                                    -
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={maxQty}
+                                    value={caloteQty}
+                                    onChange={e => {
+                                      const val = e.target.value === '' ? 0 : Math.max(0, Math.min(maxQty, Number(e.target.value) || 0))
+                                      setDeliveryCaloteQuantities(prev => ({ ...prev, [key]: val }))
+                                    }}
+                                    style={{ width: '42px', padding: '0.15rem 0.25rem', textAlign: 'center', borderRadius: '4px', border: '1px solid #ef4444', fontWeight: 700, fontSize: '0.8rem', color: '#dc2626' }}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="action-btn"
+                                    style={{ width: '22px', height: '22px', fontSize: '0.7rem' }}
+                                    disabled={caloteQty >= maxQty}
+                                    onClick={() => setDeliveryCaloteQuantities(prev => ({ ...prev, [key]: Math.min(maxQty, caloteQty + 1) }))}
+                                  >
+                                    +
+                                  </button>
+                                  <span style={{ fontSize: '0.72rem', color: '#991b1b' }}>un</span>
+                                </div>
+
+                                {devolvidoQty > 0 && (
+                                  <span style={{ fontSize: '0.74rem', color: '#047857', fontWeight: 600, background: '#dcfce7', padding: '0.25rem 0.55rem', borderRadius: '6px' }}>
+                                    <i className="fa-solid fa-rotate-left"></i> {devolvidoQty} un devolvida(s)
+                                  </span>
+                                )}
+
                                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.74rem', color: '#059669', margin: 0 }}>
-                                  <span style={{ fontWeight: 600 }}>Custo unitário: R$</span>
+                                  <span style={{ fontWeight: 600 }}>Custo unit: R$</span>
                                   <input
                                     type="text"
                                     inputMode="decimal"
                                     value={currentCost}
                                     placeholder="0,00"
                                     onChange={e => setDeliveryItemCosts(prev => ({ ...prev, [key]: cleanDecimalInput(e.target.value) }))}
-                                    style={{ width: '70px', padding: '0.2rem 0.35rem', borderRadius: '4px', border: '1px solid #10b981', fontSize: '0.78rem', textAlign: 'right', background: 'white' }}
+                                    style={{ width: '65px', padding: '0.2rem 0.35rem', borderRadius: '4px', border: '1px solid #10b981', fontSize: '0.78rem', textAlign: 'right', background: 'white' }}
                                   />
                                 </label>
+
                                 <span style={{ fontSize: '0.74rem', color: '#b91c1c' }}>
-                                  Prejuízo custo: <strong>{formatPreco(currentCostNum * maxQty)}</strong> | Venda: {formatPreco(currentPriceNum * maxQty)}
+                                  Prejuízo custo: <strong>{formatPreco(currentCostNum * caloteQty)}</strong> | Venda perdida: {formatPreco(currentPriceNum * caloteQty)}
                                 </span>
                               </div>
                             </div>
@@ -8060,7 +8189,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                     </div>
 
                     <div style={{ fontSize: '0.76rem', color: '#991b1b', lineHeight: 1.4 }}>
-                      <i className="fa-solid fa-triangle-exclamation"></i> <strong>Atenção:</strong> Ao confirmar o calote 100%, essas <strong>{totalPecas} peças</strong> serão consideradas perda definitiva (não voltam ao estoque nem à rota), o faturamento será zerado, o contas a receber deste pedido será baixado e o custo de <strong>{formatPreco(totalCusto)}</strong> entrará nas métricas de prejuízo por calote.
+                      <i className="fa-solid fa-triangle-exclamation"></i> <strong>Atenção:</strong> Ao confirmar o calote, as <strong>{totalPecasCalote} peças</strong> caloteadas serão consideradas perda definitiva (prejuízo de custo de <strong>{formatPreco(totalCusto)}</strong>), e as <strong>{totalPecasDevolvidas} peças</strong> devolvidas serão registradas como devolução de mercadoria que retornam ao estoque/rota.
                     </div>
                   </div>
                 )

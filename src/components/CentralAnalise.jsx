@@ -343,6 +343,8 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         totalItensCalote += pecas
         caloteTotalCusto += cCusto
         caloteTotalVenda += cVenda
+        const devPecasCalote = (o.returnedItems || []).reduce((s, r) => s + (Number(r.returnedQty || r.qty) || 0), 0)
+        totalItensDevolvidos += devPecasCalote
       } else if (isConcluido) {
         pedidosConcluidos += 1
         const fat = Number(o.totalAcerto ?? o.totalPago ?? o.total) || 0
