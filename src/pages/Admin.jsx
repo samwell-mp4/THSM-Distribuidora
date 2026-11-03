@@ -9673,14 +9673,42 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
       const totalPecas = calotesList.reduce((s, o) => s + (Number(o.calotePecas) || 0), 0)
       const totalCusto = calotesList.reduce((s, o) => s + (Number(o.caloteTotalCusto) || 0), 0)
       const totalVenda = calotesList.reduce((s, o) => s + (Number(o.caloteTotalVenda || o.total) || 0), 0)
+      const totalItensDeixados = ordersF.reduce((s, o) => s + (o.items || []).reduce((acc, i) => acc + (Number(i.qty) || 0), 0), 0)
+      const mercadoriaColocadaTotal = ordersF.reduce((s, o) => s + (Number(o.totalOriginal || o.totalConsignado || o.total) || 0), 0)
+      const taxaInadimplenciaPecas = totalItensDeixados > 0 ? (totalPecas / totalItensDeixados) * 100 : 0
+      const taxaInadimplenciaVenda = mercadoriaColocadaTotal > 0 ? (totalVenda / mercadoriaColocadaTotal) * 100 : 0
+      const mediaPecas = calotesList.length > 0 ? Math.round(totalPecas / calotesList.length) : 0
+      const margemPerdida = Math.max(0, totalVenda - totalCusto)
+
       return (
         <div>
           <RepTotals items={[
-            { label: 'Clientes / Pedidos Calote', value: calotesList.length, color: '#dc2626' },
-            { label: 'Peças perdidas', value: `${totalPecas} un`, color: '#ef4444' },
+            { label: 'Pessoas / Pedidos Calote', value: `${calotesList.length} pessoas`, color: '#dc2626' },
+            { label: 'Peças perdidas', value: `${totalPecas} un (${taxaInadimplenciaPecas.toFixed(1)}%)`, color: '#ef4444' },
             { label: 'Prejuízo Real (Custo)', value: formatPreco(totalCusto), color: '#b91c1c' },
             { label: 'Faturamento Perdido (Venda)', value: formatPreco(totalVenda), color: '#7f1d1d' },
           ]} />
+
+          <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '8px', padding: '12px 16px', margin: '14px 0', fontSize: '0.85rem', color: '#991b1b', lineHeight: 1.5 }}>
+            <p style={{ margin: '0 0 6px 0', fontWeight: 700 }}>
+              <i className="fa-solid fa-triangle-exclamation"></i> Relação Matemática de Inadimplência:
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px' }}>
+              <div style={{ background: 'white', padding: '10px', borderRadius: '6px', border: '1px solid #fecdd3' }}>
+                <strong>1. Itens Deixados × Pessoas Calote:</strong>
+                <div>{calotesList.length} pessoas deram calote (média de {mediaPecas} itens/pessoa), somando {totalPecas} peças perdidas. De {totalItensDeixados} peças deixadas na praça, a inadimplência física é de <strong>{taxaInadimplenciaPecas.toFixed(1)}%</strong>.</div>
+              </div>
+              <div style={{ background: 'white', padding: '10px', borderRadius: '6px', border: '1px solid #fecdd3' }}>
+                <strong>2. Calote em Faturamento (R$):</strong>
+                <div>De {formatPreco(mercadoriaColocadaTotal)} em mercadoria colocada, {formatPreco(totalVenda)} não foram recebidos (<strong>{taxaInadimplenciaVenda.toFixed(1)}% de perda sobre o faturamento potencial</strong>).</div>
+              </div>
+              <div style={{ background: 'white', padding: '10px', borderRadius: '6px', border: '1px solid #fecdd3' }}>
+                <strong>3. Prejuízo em Custo (R$):</strong>
+                <div>Prejuízo real de mercadoria (saído do bolso): <strong>{formatPreco(totalCusto)}</strong>, comparado ao faturamento potencial de {formatPreco(totalVenda)} (margem de lucro perdida de {formatPreco(margemPerdida)}).</div>
+              </div>
+            </div>
+          </div>
+
           <table className="admin-table">
             <thead><tr><th>Pedido</th><th>Cliente</th><th>Telefone</th><th>Cidade</th><th>Data</th><th>Peças Caloteadas</th><th>Prejuízo Real (Custo)</th><th>Venda Não Recebida</th></tr></thead>
             <tbody>
@@ -9703,27 +9731,45 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
       )
     }
     if (rep === 'atrasos') {
+      const hojeStr = hoje()
+      const hojeTime = new Date(hojeStr + 'T12:00:00').getTime()
       const pagosAtraso = finRecordsIn.filter(f => f.status === 'pago' && f.paidDate && f.dueDate && f.paidDate > f.dueDate).map(f => {
         const diffMs = new Date(f.paidDate + 'T12:00:00').getTime() - new Date(f.dueDate + 'T12:00:00').getTime()
         const dias = Math.max(1, Math.round(diffMs / 86400000))
         return { ...f, diasAtraso: dias }
       })
+      const pendentesAtraso = finRecordsIn.filter(f => f.status === 'pendente' && f.dueDate && f.dueDate < hojeStr).map(f => {
+        const diffMs = hojeTime - new Date(f.dueDate + 'T12:00:00').getTime()
+        const dias = Math.max(1, Math.round(diffMs / 86400000))
+        return { ...f, diasAtraso: dias }
+      })
       const totalR = pagosAtraso.reduce((s, f) => s + (Number(f.value) || 0), 0)
       const mediaDias = pagosAtraso.length ? Math.round(pagosAtraso.reduce((s, f) => s + f.diasAtraso, 0) / pagosAtraso.length) : 0
+      const totalPendente = pendentesAtraso.reduce((s, f) => s + (Number(f.value) || 0), 0)
+
       return (
         <div>
           <RepTotals items={[
             { label: 'Total recebido em atraso', value: formatPreco(totalR), color: '#d97706' },
-            { label: 'Média de atraso', value: `${mediaDias} dias`, color: '#ef4444' },
-            { label: 'Títulos quitados com atraso', value: pagosAtraso.length, color: '#3b82f6' },
+            { label: 'Demora média para receber', value: `${mediaDias} dias`, color: '#ef4444' },
+            { label: 'Títulos quitados com atraso', value: `${pagosAtraso.length} quitações`, color: '#3b82f6' },
+            { label: 'Vencidos pendentes hoje', value: formatPreco(totalPendente), color: '#dc2626' },
           ]} />
+
+          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '12px 16px', margin: '14px 0', fontSize: '0.85rem', color: '#92400e', lineHeight: 1.5 }}>
+            <p style={{ margin: 0 }}>
+              <i className="fa-solid fa-clock-rotate-left"></i> Você recebeu <strong>{formatPreco(totalR)}</strong> ({pagosAtraso.length} pagamentos) após o vencimento. Em média, quando o cliente atrasa, a demora é de <strong>{mediaDias} dias após a data de vencimento</strong> para o recebimento entrar no caixa.
+            </p>
+          </div>
+
+          <h4 style={{ fontSize: '0.9rem', margin: '1rem 0 0.5rem 0' }}>Recebimentos quitados após o vencimento</h4>
           <table className="admin-table">
             <thead><tr><th>Cliente</th><th>Valor Recebido</th><th>Vencimento Original</th><th>Data do Pagamento</th><th>Atraso</th><th>Forma</th></tr></thead>
             <tbody>
               {pagosAtraso.map((f, i) => (
                 <tr key={f.id || i}>
                   <td className="td-prod-name">{f.customerName || '-'}</td>
-                  <td className="td-price">{formatPreco(f.value)}</td>
+                  <td className="td-price" style={{ color: '#059669' }}><strong>{formatPreco(f.value)}</strong></td>
                   <td>{formatDate(f.dueDate)}</td>
                   <td>{formatDate(f.paidDate)}</td>
                   <td><strong style={{ color: '#dc2626' }}>+{f.diasAtraso} dias</strong></td>
@@ -9733,6 +9779,26 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
               {pagosAtraso.length === 0 && <tr><td colSpan="6" className="td-empty">Nenhum pagamento em atraso no período</td></tr>}
             </tbody>
           </table>
+
+          {pendentesAtraso.length > 0 && (
+            <>
+              <h4 style={{ fontSize: '0.9rem', margin: '1.5rem 0 0.5rem 0', color: '#dc2626' }}>Títulos atualmente vencidos aguardando quitação</h4>
+              <table className="admin-table">
+                <thead><tr><th>Cliente</th><th>Valor em Aberto</th><th>Venceu em</th><th>Dias Vencido Hoje</th><th>Forma Prevista</th></tr></thead>
+                <tbody>
+                  {pendentesAtraso.map((f, i) => (
+                    <tr key={f.id || i}>
+                      <td className="td-prod-name">{f.customerName || '-'}</td>
+                      <td className="td-price" style={{ color: '#dc2626' }}><strong>{formatPreco(f.value)}</strong></td>
+                      <td>{formatDate(f.dueDate)}</td>
+                      <td><strong style={{ color: '#dc2626' }}>+{f.diasAtraso} dias</strong></td>
+                      <td>{f.paymentMethod || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
         </div>
       )
     }

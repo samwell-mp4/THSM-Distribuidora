@@ -374,6 +374,10 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
     const faturamentoConcluidoLiq = Math.max(0, faturamentoConcluido - descConcluido)
     const taxaConversao = totalItensColocados > 0 ? (totalItensVendidos / totalItensColocados) * 100 : 0
     const taxaCalote = totalItensColocados > 0 ? (totalItensCalote / totalItensColocados) * 100 : 0
+    const taxaCaloteVenda = mercadoriaColocada > 0 ? (caloteTotalVenda / mercadoriaColocada) * 100 : 0
+    const mediaPecasPorCalote = pedidosCalote > 0 ? Math.round(totalItensCalote / pedidosCalote) : 0
+    const mediaCustoPorCalote = pedidosCalote > 0 ? Math.round((caloteTotalCusto / pedidosCalote) * 100) / 100 : 0
+    const mediaVendaPorCalote = pedidosCalote > 0 ? Math.round((caloteTotalVenda / pedidosCalote) * 100) / 100 : 0
     const lucroConcluido = faturamentoConcluidoLiq - custoConcluido
     const margemConcluida = faturamentoConcluido ? (lucroConcluido / faturamentoConcluido) * 100 : 0
 
@@ -401,6 +405,10 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
       caloteTotalVenda,
       taxaConversao,
       taxaCalote,
+      taxaCaloteVenda,
+      mediaPecasPorCalote,
+      mediaCustoPorCalote,
+      mediaVendaPorCalote,
       custoConcluido,
       lucroConcluido,
       margemConcluida
@@ -436,6 +444,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         calotePecas: 0,
         caloteCusto: 0,
         caloteVenda: 0,
+        pedidosCalote: 0,
         faturamentoConcluido: 0,
         mercadoriaColocada: 0,
       }
@@ -452,6 +461,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
       map[k].n += 1
 
       if (isCalote) {
+        map[k].pedidosCalote += 1
         const pecas = Number(o.calotePecas) || itensPedido
         const cCusto = Number(o.caloteTotalCusto) || (o.items || []).reduce((s, i) => s + getItemCost(i) * (Number(i.qty) || 0), 0)
         const cVenda = Number(o.caloteTotalVenda) || vOriginal
@@ -495,6 +505,9 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         lucro: liq - m.custo,
         margem: m.faturamentoConcluido ? ((liq - m.custo) / m.faturamentoConcluido) * 100 : 0,
         taxaConversao: m.itensColocados > 0 ? (m.itensVendidos / m.itensColocados) * 100 : 0,
+        taxaCalotePecas: m.itensColocados > 0 ? (m.calotePecas / m.itensColocados) * 100 : 0,
+        taxaCaloteVenda: m.mercadoriaColocada > 0 ? (m.caloteVenda / m.mercadoriaColocada) * 100 : 0,
+        mediaPecasPorCalote: m.pedidosCalote > 0 ? Math.round(m.calotePecas / m.pedidosCalote) : 0,
         ticket: m.nConcluidos > 0 ? m.faturamentoConcluido / m.nConcluidos : 0
       }
     })
@@ -929,6 +942,31 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
           ]} rows={finCliPorCliente} />
         </Card>
       </div>
+      <div className="ca-grid">
+        <Card title="Recebimentos em atraso" icon="fa-clock-rotate-left">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', marginBottom: '12px' }}>
+            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '10px' }}>
+              <span style={{ fontSize: '11px', color: '#b45309', fontWeight: 600, display: 'block' }}>Recebido em Atraso</span>
+              <strong style={{ fontSize: '1.05rem', color: '#b45309' }}>{formatPreco(atrasosStats.totalValorAtraso)}</strong>
+            </div>
+            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px' }}>
+              <span style={{ fontSize: '11px', color: '#dc2626', fontWeight: 600, display: 'block' }}>Média de Demora</span>
+              <strong style={{ fontSize: '1.05rem', color: '#dc2626' }}>{atrasosStats.mediaDias} dias</strong>
+            </div>
+            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px' }}>
+              <span style={{ fontSize: '11px', color: '#166534', fontWeight: 600, display: 'block' }}>Quitações em Atraso</span>
+              <strong style={{ fontSize: '1.05rem', color: '#166534' }}>{atrasosStats.countPagosComAtraso} títulos</strong>
+            </div>
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px' }}>
+              <span style={{ fontSize: '11px', color: '#475569', fontWeight: 600, display: 'block' }}>Vencidos Hoje (Aguardando)</span>
+              <strong style={{ fontSize: '1.05rem', color: '#475569' }}>{formatPreco(atrasosStats.totalPendenteAtraso)}</strong>
+            </div>
+          </div>
+          <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
+            Métrica de pontualidade: quando o cliente atrasa, a média é de <strong>{atrasosStats.mediaDias} dias após o vencimento</strong> para o recebimento entrar no caixa.
+          </p>
+        </Card>
+      </div>
     </>
   )
 
@@ -1195,11 +1233,24 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
     let countPagosComAtraso = 0
     const linhasAtraso = []
 
+    let totalPendenteAtraso = 0
+    let totalDiasPendenteAtraso = 0
+    let countPendenteAtraso = 0
+    const linhasPendentes = []
+
+    const hojeStr = hoje()
+    const hojeTime = new Date(hojeStr + 'T12:00:00').getTime()
+    const orderIdsCovered = new Set()
+
     financial.forEach(f => {
-      if (f.status === 'pago' && f.paidDate && f.dueDate && f.paidDate > f.dueDate) {
-        const diffMs = new Date(f.paidDate + 'T12:00:00').getTime() - new Date(f.dueDate + 'T12:00:00').getTime()
+      if (f.orderId) orderIdsCovered.add(String(f.orderId))
+      const due = f.dueDate ? f.dueDate.split('T')[0] : ''
+      const paid = f.paidDate ? f.paidDate.split('T')[0] : ''
+      const val = Number(f.value) || 0
+
+      if (f.status === 'pago' && paid && due && paid > due) {
+        const diffMs = new Date(paid + 'T12:00:00').getTime() - new Date(due + 'T12:00:00').getTime()
         const dias = Math.max(1, Math.round(diffMs / 86400000))
-        const val = Number(f.value) || 0
         totalValorAtraso += val
         totalDiasAtraso += dias
         countPagosComAtraso += 1
@@ -1207,22 +1258,86 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
           _k: f.id,
           cliente: f.customerName || '-',
           valor: val,
-          dueDate: formatDate(f.dueDate),
-          paidDate: formatDate(f.paidDate),
+          dueDate: formatDate(due),
+          paidDate: formatDate(paid),
+          diasAtraso: dias,
+          metodo: f.paymentMethod || '-'
+        })
+      } else if (f.status === 'pendente' && due && due < hojeStr) {
+        const diffMs = hojeTime - new Date(due + 'T12:00:00').getTime()
+        const dias = Math.max(1, Math.round(diffMs / 86400000))
+        totalPendenteAtraso += val
+        totalDiasPendenteAtraso += dias
+        countPendenteAtraso += 1
+        linhasPendentes.push({
+          _k: f.id,
+          cliente: f.customerName || '-',
+          valor: val,
+          dueDate: formatDate(due),
           diasAtraso: dias,
           metodo: f.paymentMethod || '-'
         })
       }
     })
 
+    // Complementar com pedidos concluídos com atraso que não foram fatiados no financial
+    orders.forEach(o => {
+      if (orderIdsCovered.has(String(o.id))) return
+      const due = o.dataVencimento ? o.dataVencimento.split('T')[0] : ''
+      if (!due) return
+      const isConcluido = o.status === 'concluido' || o.isFinalizado === true
+      const payDate = o.finalizadoAt ? new Date(o.finalizadoAt).toISOString().split('T')[0] : (o.date ? o.date.split('T')[0] : '')
+      const val = Number(o.totalPago ?? o.totalAcerto ?? o.total) || 0
+
+      if (isConcluido && payDate && payDate > due) {
+        const diffMs = new Date(payDate + 'T12:00:00').getTime() - new Date(due + 'T12:00:00').getTime()
+        const dias = Math.max(1, Math.round(diffMs / 86400000))
+        totalValorAtraso += val
+        totalDiasAtraso += dias
+        countPagosComAtraso += 1
+        linhasAtraso.push({
+          _k: `order-${o.id}`,
+          cliente: o.customer?.nome || '-',
+          valor: val,
+          dueDate: formatDate(due),
+          paidDate: formatDate(payDate),
+          diasAtraso: dias,
+          metodo: o.paymentMethod || '-'
+        })
+      } else if (!isConcluido && o.status !== 'cancelado' && o.status !== 'calote' && due < hojeStr) {
+        const pendVal = Number(o.valorEmAberto ?? o.total) || 0
+        if (pendVal > 0) {
+          const diffMs = hojeTime - new Date(due + 'T12:00:00').getTime()
+          const dias = Math.max(1, Math.round(diffMs / 86400000))
+          totalPendenteAtraso += pendVal
+          totalDiasPendenteAtraso += dias
+          countPendenteAtraso += 1
+          linhasPendentes.push({
+            _k: `order-pend-${o.id}`,
+            cliente: o.customer?.nome || '-',
+            valor: pendVal,
+            dueDate: formatDate(due),
+            diasAtraso: dias,
+            metodo: o.paymentMethod || '-'
+          })
+        }
+      }
+    })
+
     const mediaDias = countPagosComAtraso > 0 ? Math.round(totalDiasAtraso / countPagosComAtraso) : 0
+    const mediaDiasPendentes = countPendenteAtraso > 0 ? Math.round(totalDiasPendenteAtraso / countPendenteAtraso) : 0
+
     return {
       totalValorAtraso,
       countPagosComAtraso,
       mediaDias,
-      linhasAtraso: linhasAtraso.sort((a, b) => b.diasAtraso - a.diasAtraso)
+      totalPendenteAtraso,
+      countPendenteAtraso,
+      mediaDiasPendentes,
+      linhasAtraso: linhasAtraso.sort((a, b) => b.diasAtraso - a.diasAtraso),
+      linhasPendentes: linhasPendentes.sort((a, b) => b.diasAtraso - a.diasAtraso)
     }
-  }, [financial])
+  }, [financial, orders])
 
   const motivosDevolucaoStats = useMemo(() => {
     const counts = {
@@ -1401,12 +1516,29 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
       return (
         <>
           <div className="ca-kpis">
-            <Kpi icon="fa-truck-ramp-box" label="Itens deixados na praça" value={`${fmtNum(cur.totalItensColocados)} un`} change={null} hint="Consignado total" />
-            <Kpi icon="fa-box-check" label="Itens vendidos efetivos" value={`${fmtNum(cur.totalItensVendidos)} un`} change={null} hint="Pós-acerto" />
-            <Kpi icon="fa-percent" label="Taxa de conversão geral" value={`${cur.taxaConversao.toFixed(1)}%`} change={null} hint="Vendidos / deixados" />
-            <Kpi icon="fa-rotate-left" label="Itens devolvidos" value={`${fmtNum(cur.totalItensDevolvidos)} un`} change={null} hint="Recusados ou sobras" />
+            <Kpi icon="fa-truck-ramp-box" label="Itens deixados na praça" value={`${fmtNum(cur.totalItensColocados)} un`} change={null} hint="Consignado total distribuído" />
+            <Kpi icon="fa-box-check" label="Itens vendidos efetivos" value={`${fmtNum(cur.totalItensVendidos)} un`} change={null} hint="Pós-acertos e quitações" />
+            <Kpi icon="fa-percent" label="Taxa de conversão (% Vendido)" value={`${cur.taxaConversao.toFixed(1)}%`} change={null} hint="Vendidos / Deixados" />
+            <Kpi icon="fa-rotate-left" label="Itens devolvidos / sobras" value={`${fmtNum(cur.totalItensDevolvidos)} un`} change={null} hint="Devoluções de consignação" />
           </div>
-          <Card title="Total de itens deixados x % de itens vendidos" icon="fa-percent">
+
+          <div className="ca-formula-banner success">
+            <h4><i className="fa-solid fa-percent"></i> Relação: Total de Itens Deixados × % de Itens Vendidos</h4>
+            <p>
+              De um total de <strong>{fmtNum(cur.totalItensColocados)} itens deixados</strong> na praça no período, <strong>{fmtNum(cur.totalItensVendidos)} itens foram efetivamente vendidos</strong>, representando uma <strong>conversão (giro) de {cur.taxaConversao.toFixed(1)}%</strong>. Os <strong>{fmtNum(cur.totalItensDevolvidos)} itens restantes</strong> retornaram como sobra/devolução.
+            </p>
+          </div>
+
+          <div className="ca-grid">
+            <Card title="Itens Vendidos por mês" icon="fa-chart-column">
+              <BarChart data={serie} getLabel={d => monthLabel(d.mes)} getValue={d => d.itensVendidos} color="#059669" />
+            </Card>
+            <Card title="Giro de Praça (% Conversão mensal)" icon="fa-percent">
+              <BarChart data={serie} getLabel={d => monthLabel(d.mes)} getValue={d => d.taxaConversao} color="#4f46e5" />
+            </Card>
+          </div>
+
+          <Card title="Histórico mensal: Itens deixados x % de itens vendidos" icon="fa-percent">
             <TabelaPaginada per={20} cols={[
               { key: 'mes', label: 'Mês', render: r => <strong>{monthLabel(r.mes)}</strong> },
               { key: 'itensColocados', label: 'Deixados (Praça)', num: true, render: r => `${fmtNum(r.itensColocados)} un` },
@@ -1419,15 +1551,60 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
       )
     }
     if (rep === 'inadimplencia_calote') {
+      const taxaInadimplenciaPecas = cur.totalItensColocados > 0 ? (cur.totalItensCalote / cur.totalItensColocados) * 100 : 0
+      const taxaInadimplenciaVenda = cur.mercadoriaColocada > 0 ? (cur.caloteTotalVenda / cur.mercadoriaColocada) * 100 : 0
+      const margemPerdida = Math.max(0, cur.caloteTotalVenda - cur.caloteTotalCusto)
+
       return (
         <>
           <div className="ca-kpis">
-            <Kpi icon="fa-triangle-exclamation" label="Pessoas / Pedidos com Calote" value={fmtNum(cur.pedidosCalote)} change={null} hint="Calote 100% registrado" />
-            <Kpi icon="fa-box-open" label="Peças perdidas (Calote)" value={`${fmtNum(cur.totalItensCalote)} un`} change={null} hint={`${cur.taxaCalote.toFixed(1)}% das peças deixadas`} />
-            <Kpi icon="fa-hand-holding-dollar" label="Prejuízo real de mercadoria (Custo)" value={formatPreco(cur.caloteTotalCusto)} change={null} hint="Custo de reposição perdido" />
-            <Kpi icon="fa-file-invoice-dollar" label="Faturamento não recebido (Venda)" value={formatPreco(cur.caloteTotalVenda)} change={null} hint="Preço de venda total" />
+            <Kpi icon="fa-triangle-exclamation" label="Pessoas / Pedidos com Calote" value={`${fmtNum(cur.pedidosCalote)} pessoas`} change={null} hint={`Média de ${cur.mediaPecasPorCalote} itens / pessoa`} />
+            <Kpi icon="fa-box-open" label="Peças perdidas (Calote)" value={`${fmtNum(cur.totalItensCalote)} un`} change={null} hint={`${taxaInadimplenciaPecas.toFixed(1)}% das ${fmtNum(cur.totalItensColocados)} peças deixadas`} />
+            <Kpi icon="fa-hand-holding-dollar" label="Prejuízo real de mercadoria (Custo)" value={formatPreco(cur.caloteTotalCusto)} change={null} hint="Prejuízo direto tirado do bolso" />
+            <Kpi icon="fa-file-invoice-dollar" label="Faturamento não recebido (Venda)" value={formatPreco(cur.caloteTotalVenda)} change={null} hint={`${taxaInadimplenciaVenda.toFixed(1)}% da praça colocada`} />
           </div>
-          <Card title="Relatório de Inadimplência e Calotes 100%" icon="fa-triangle-exclamation">
+
+          {/* PAINEL DIDÁTICO DAS 3 RELAÇÕES SOLICITADAS */}
+          <div className="ca-formula-grid">
+            <div className="ca-formula-banner danger">
+              <h4><i className="fa-solid fa-boxes-stacked"></i> 1. Total Itens Deixados × Pessoas com Calote</h4>
+              <p>
+                <strong>{fmtNum(cur.pedidosCalote)} pessoas</strong> deram calote (média de <strong>{cur.mediaPecasPorCalote} itens</strong> por pessoa).
+                Logo, calote em <strong>{fmtNum(cur.totalItensCalote)} itens</strong> perdidos. Comparado aos <strong>{fmtNum(cur.totalItensColocados)} itens deixados</strong> na praça, a taxa de <strong>inadimplência física de itens é de {taxaInadimplenciaPecas.toFixed(1)}%</strong>.
+              </p>
+            </div>
+
+            <div className="ca-formula-banner warning">
+              <h4><i className="fa-solid fa-file-invoice-dollar"></i> 2. Total de Calote em R$ (Faturamento)</h4>
+              <p>
+                De <strong>{formatPreco(cur.mercadoriaColocada)}</strong> em mercadorias colocadas na praça, <strong>{formatPreco(cur.caloteTotalVenda)}</strong> não foram recebidos por calote.
+                Isso representa <strong>{taxaInadimplenciaVenda.toFixed(1)}% de perda sobre o faturamento potencial</strong>.
+              </p>
+            </div>
+
+            <div className="ca-formula-banner">
+              <h4><i className="fa-solid fa-hand-holding-dollar"></i> 3. Total de Calote em R$ (Custo Real vs Potencial)</h4>
+              <p>
+                Você tomou <strong>{formatPreco(cur.caloteTotalCusto)}</strong> de calote em <strong>custo de fábrica/reposição</strong> (custo direto saído do bolso), comparado com o faturamento que poderia ser de <strong>{formatPreco(cur.caloteTotalVenda)}</strong> (margem bruta de lucro que deixou de entrar: <strong>{formatPreco(margemPerdida)}</strong>).
+              </p>
+            </div>
+          </div>
+
+          {/* HISTÓRICO MENSAL DE INADIMPLÊNCIA E CALOTES */}
+          <Card title="Histórico mensal de inadimplência e calotes" icon="fa-chart-column">
+            <TabelaPaginada per={12} cols={[
+              { key: 'mes', label: 'Mês', render: r => <strong>{monthLabel(r.mes)}</strong> },
+              { key: 'pedidosCalote', label: 'Pessoas com Calote', num: true, render: r => `${fmtNum(r.pedidosCalote || 0)} pessoas` },
+              { key: 'itensColocados', label: 'Peças Deixadas (Praça)', num: true, render: r => `${fmtNum(r.itensColocados || 0)} un` },
+              { key: 'calotePecas', label: 'Peças Caloteadas', num: true, render: r => <strong style={{ color: '#dc2626' }}>{fmtNum(r.calotePecas || 0)} un</strong> },
+              { key: 'taxaCalotePecas', label: '% Inadimplência (Peças)', num: true, render: r => <span className={`ca-margem-badge ${(r.taxaCalotePecas || 0) > 10 ? 'ca-t-bad' : 'ca-t-good'}`}>{(r.taxaCalotePecas || 0).toFixed(1)}%</span> },
+              { key: 'caloteVenda', label: 'Venda Perdida (R$)', num: true, render: r => formatPreco(r.caloteVenda || 0) },
+              { key: 'caloteCusto', label: 'Prejuízo Real Custo (R$)', num: true, render: r => <strong style={{ color: '#b91c1c' }}>{formatPreco(r.caloteCusto || 0)}</strong> },
+            ]} rows={serie.filter(s => (s.calotePecas || 0) > 0 || (s.pedidosCalote || 0) > 0 || (s.itensColocados || 0) > 0)} />
+          </Card>
+
+          {/* TABELA DE PEDIDOS COM CALOTE REGISTRADO */}
+          <Card title="Relação detalhada de pessoas e pedidos com Calote 100%" icon="fa-triangle-exclamation">
             <TabelaPaginada per={15} cols={[
               { key: 'pedido', label: 'Pedido' },
               { key: 'cliente', label: 'Cliente' },
@@ -1448,18 +1625,40 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
           <div className="ca-kpis">
             <Kpi icon="fa-clock-rotate-left" label="Total recebido em atraso" value={formatPreco(atrasosStats.totalValorAtraso)} change={null} hint="Quitações após vencimento" />
             <Kpi icon="fa-hourglass-end" label="Média de dias de atraso" value={`${atrasosStats.mediaDias} dias`} change={null} hint="Demora média para pagar" />
-            <Kpi icon="fa-receipt" label="Pagamentos em atraso" value={fmtNum(atrasosStats.countPagosComAtraso)} change={null} hint="Títulos quitados com atraso" />
+            <Kpi icon="fa-receipt" label="Pagamentos em atraso" value={`${fmtNum(atrasosStats.countPagosComAtraso)} títulos`} change={null} hint="Títulos quitados com atraso" />
+            <Kpi icon="fa-triangle-exclamation" label="Vencidos pendentes hoje" value={formatPreco(atrasosStats.totalPendenteAtraso)} change={null} hint={`${atrasosStats.countPendenteAtraso} títulos aguardando`} />
           </div>
+
+          <div className="ca-formula-banner warning">
+            <h4><i className="fa-solid fa-clock"></i> Métrica de Recebimentos em Atraso</h4>
+            <p>
+              Você recebeu <strong>{formatPreco(atrasosStats.totalValorAtraso)}</strong> ({atrasosStats.countPagosComAtraso} quitações) que foram pagas após a data de vencimento original.
+              Em média, quando o cliente atrasa, a demora é de <strong>{atrasosStats.mediaDias} dias após o vencimento</strong> para o dinheiro entrar.
+            </p>
+          </div>
+
           <Card title="Relação de recebimentos quitados com atraso" icon="fa-clock-rotate-left">
             <TabelaPaginada per={15} cols={[
               { key: 'cliente', label: 'Cliente' },
-              { key: 'valor', label: 'Valor recebido', num: true, render: r => <strong>{formatPreco(r.valor)}</strong> },
+              { key: 'valor', label: 'Valor recebido', num: true, render: r => <strong style={{ color: '#059669' }}>{formatPreco(r.valor)}</strong> },
               { key: 'dueDate', label: 'Vencimento original' },
               { key: 'paidDate', label: 'Data do pagamento' },
               { key: 'diasAtraso', label: 'Dias de atraso', num: true, render: r => <span style={{ color: '#dc2626', fontWeight: 700 }}>+{r.diasAtraso} dias</span> },
               { key: 'metodo', label: 'Forma' },
             ]} rows={atrasosStats.linhasAtraso} />
           </Card>
+
+          {atrasosStats.linhasPendentes.length > 0 && (
+            <Card title="Títulos atualmente em atraso (Vencidos aguardando quitação)" icon="fa-triangle-exclamation">
+              <TabelaPaginada per={15} cols={[
+                { key: 'cliente', label: 'Cliente' },
+                { key: 'valor', label: 'Valor em aberto', num: true, render: r => <strong style={{ color: '#b91c1c' }}>{formatPreco(r.valor)}</strong> },
+                { key: 'dueDate', label: 'Venceu em' },
+                { key: 'diasAtraso', label: 'Dias vencido hoje', num: true, render: r => <span style={{ color: '#dc2626', fontWeight: 700 }}>+{r.diasAtraso} dias</span> },
+                { key: 'metodo', label: 'Forma prevista' },
+              ]} rows={atrasosStats.linhasPendentes} />
+            </Card>
+          )}
         </>
       )
     }
