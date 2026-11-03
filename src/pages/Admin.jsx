@@ -646,6 +646,10 @@ Em caso de dúvidas, entre em contato conosco.
 
 function sendStatusWebhook(order, newStatus, extra = {}) {
   try {
+    if (order?.notificarWhatsApp === false) {
+      console.log(`[WhatsApp] Disparo abortado: comanda #${order?.id} está com notificarWhatsApp desativado.`)
+      return
+    }
     if (order?.status === 'pre-pedido' && newStatus === 'pendente') return
     const whatsappMessage = buildStatusWhatsApp(order, newStatus, extra)
     const returnedItems = extra.returnedItems || order.returnedItems || []
@@ -1848,6 +1852,22 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     const isNewOrder = prevIndex === -1 && STATUS_ORDER.includes(status)
     const isPreToPendente = order?.status === 'pre-pedido' && status === 'pendente'
     if (updated && !skipWebhook && !isPreToPendente && (isAdvance || isNewOrder)) sendStatusWebhook(updated, status)
+  }
+
+  const toggleOrderWhatsAppNotify = async (orderId, enabled) => {
+    setOrders(prev => {
+      const next = prev.map(o => String(o.id) === String(orderId) ? { ...o, notificarWhatsApp: enabled, lastModified: Date.now() } : o)
+      LS.set(STORAGE_ORDERS, next)
+      return next
+    })
+    setShowOrderDetail(prev => (prev && String(prev.id) === String(orderId) ? { ...prev, notificarWhatsApp: enabled } : prev))
+    setShowDeliveryModal(prev => (prev && String(prev.id) === String(orderId) ? { ...prev, notificarWhatsApp: enabled } : prev))
+    setShowRotaDue(prev => (prev && String(prev.id) === String(orderId) ? { ...prev, notificarWhatsApp: enabled } : prev))
+    const targetOrder = orders.find(o => String(o.id) === String(orderId))
+    if (targetOrder) {
+      await upsertOrder({ ...targetOrder, notificarWhatsApp: enabled, lastModified: Date.now() })
+    }
+    showToast(`WhatsApp ${enabled ? 'LIGADO' : 'DESLIGADO'} para o pedido #${String(orderId).slice(-6)}`, enabled ? 'success' : 'info')
   }
 
   const updateOrderDue = (id, due) => {
@@ -4875,7 +4895,23 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                       <td><span className={`status-tag status-${o.status}`}>{o.status}</span></td>
                       <td>
                         <div className="td-actions">
-                          <button className="action-btn action-green" title="Enviar WhatsApp" onClick={() => sendWhatsApp(o)}><i className="fa-brands fa-whatsapp"></i></button>
+                          {/* Switch de envio de WhatsApp por comanda */}
+                          <label
+                            className={`action-zap-switch ${o.notificarWhatsApp !== false ? 'zap-on' : 'zap-off'}`}
+                            onClick={e => e.stopPropagation()}
+                            title={o.notificarWhatsApp !== false ? 'Envio de WhatsApp ATIVO nesta comanda (Clique para desligar)' : 'Envio de WhatsApp DESLIGADO nesta comanda (Clique para ativar)'}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={o.notificarWhatsApp !== false}
+                              onChange={e => toggleOrderWhatsAppNotify(o.id, e.target.checked)}
+                              style={{ display: 'none' }}
+                            />
+                            <i className="fa-brands fa-whatsapp"></i>
+                            <span>{o.notificarWhatsApp !== false ? 'Zap ON' : 'Zap OFF'}</span>
+                          </label>
+
+                          <button className="action-btn action-green" title="Enviar WhatsApp manualmente agora" onClick={() => sendWhatsApp(o)}><i className="fa-brands fa-whatsapp"></i></button>
                           <button className="action-btn" title="Ver detalhes" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-eye"></i></button>
                           {o.status === 'pre-pedido' && <button className="action-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }} title="Revisar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-clipboard-check"></i></button>}
                           {o.status === 'pre-pedido' && <button className="action-btn action-confirm" title="Confirmar (Próxima etapa)" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-check"></i></button>}
@@ -5050,6 +5086,23 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
                     {/* Action buttons */}
                     <div className="aoc-actions">
+                      {/* Switch de envio de WhatsApp por comanda */}
+                      <label
+                        className={`action-zap-switch ${o.notificarWhatsApp !== false ? 'zap-on' : 'zap-off'}`}
+                        onClick={e => e.stopPropagation()}
+                        title={o.notificarWhatsApp !== false ? 'Envio de WhatsApp ATIVO nesta comanda (Clique para desligar)' : 'Envio de WhatsApp DESLIGADO nesta comanda (Clique para ativar)'}
+                        style={{ padding: '0.35rem 0.6rem', fontSize: '0.76rem' }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={o.notificarWhatsApp !== false}
+                          onChange={e => toggleOrderWhatsAppNotify(o.id, e.target.checked)}
+                          style={{ display: 'none' }}
+                        />
+                        <i className="fa-brands fa-whatsapp"></i>
+                        <span>{o.notificarWhatsApp !== false ? 'Zap ON' : 'Zap OFF'}</span>
+                      </label>
+
                       <button
                         type="button"
                         className="aoc-btn aoc-btn-wa"
@@ -7747,6 +7800,28 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 <input type="date" value={rotaDueDate} onChange={e => setRotaDueDate(e.target.value)}
                   style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', background: 'var(--admin-bg)', color: 'var(--admin-text)' }} />
               </div>
+
+              <div style={{ marginTop: '0.75rem', padding: '0.55rem 0.75rem', background: showRotaDue.notificarWhatsApp !== false ? '#f0fdf4' : '#f8fafc', borderRadius: '6px', border: showRotaDue.notificarWhatsApp !== false ? '1px solid #bbf7d0' : '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: showRotaDue.notificarWhatsApp !== false ? '#15803d' : '#64748b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <i className="fa-brands fa-whatsapp"></i> Disparar WhatsApp ao cliente:
+                </span>
+                <label
+                  className={`action-zap-switch ${showRotaDue.notificarWhatsApp !== false ? 'zap-on' : 'zap-off'}`}
+                  title={showRotaDue.notificarWhatsApp !== false ? 'Disparo no WhatsApp ATIVO' : 'Disparo no WhatsApp DESATIVADO'}
+                >
+                  <input
+                    type="checkbox"
+                    checked={showRotaDue.notificarWhatsApp !== false}
+                    onChange={e => {
+                      const enabled = e.target.checked
+                      setShowRotaDue(prev => ({ ...prev, notificarWhatsApp: enabled }))
+                      toggleOrderWhatsAppNotify(showRotaDue.id, enabled)
+                    }}
+                    style={{ display: 'none' }}
+                  />
+                  <span>{showRotaDue.notificarWhatsApp !== false ? 'Zap ON' : 'Zap OFF'}</span>
+                </label>
+              </div>
             </div>
             <div className="modal-actions">
               <button className="admin-btn admin-btn-sec" onClick={() => setShowRotaDue(null)}>Cancelar</button>
@@ -7773,6 +7848,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           onUpdateDue={(due) => updateOrderDue(showOrderDetail.id, due)}
           onPreApprovar={(rejectedIds, replacements, venc) => preApprovarPedido(showOrderDetail.id, rejectedIds, replacements, venc)}
           onOpenDelivery={(order, mode = 'acerto', isCalote = false) => { openAcertoModal({ ...(orders.find(o => String(o.id) === String(showOrderDetail.id)) || showOrderDetail), ...showOrderDetail, ...order }, mode, isCalote); setShowOrderDetail(null) }}
+          onToggleWhatsAppNotify={toggleOrderWhatsAppNotify}
           onEditAndConfirm={(editedItems, currentStatus) => {
             const now = Date.now()
             const totalAvista = Math.round(editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
@@ -7934,9 +8010,27 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
             </div>
             <div className="admin-modal-body">
               <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '0.5rem 0.75rem', marginBottom: '0.75rem' }}>
-                <p style={{ fontSize: '0.78rem', color: '#1e40af', margin: 0 }}>
-                  <i className="fa-solid fa-info-circle"></i> O cliente receberá a mensagem formatada de <strong>{deliveryModalMode === 'finalizar' ? 'Pedido Finalizado' : 'Acerto'}</strong> no WhatsApp.
-                </p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  <p style={{ fontSize: '0.78rem', color: '#1e40af', margin: 0 }}>
+                    <i className="fa-solid fa-info-circle"></i> Notificação de <strong>{deliveryModalMode === 'finalizar' ? 'Pedido Finalizado' : 'Acerto'}</strong> no WhatsApp:
+                  </p>
+                  <label
+                    className={`action-zap-switch ${showDeliveryModal.notificarWhatsApp !== false ? 'zap-on' : 'zap-off'}`}
+                    title={showDeliveryModal.notificarWhatsApp !== false ? 'Disparo no WhatsApp ATIVO' : 'Disparo no WhatsApp DESATIVADO'}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={showDeliveryModal.notificarWhatsApp !== false}
+                      onChange={e => {
+                        const enabled = e.target.checked
+                        setShowDeliveryModal(prev => ({ ...prev, notificarWhatsApp: enabled }))
+                        toggleOrderWhatsAppNotify(showDeliveryModal.id, enabled)
+                      }}
+                      style={{ display: 'none' }}
+                    />
+                    <span>{showDeliveryModal.notificarWhatsApp !== false ? 'Zap LIGADO' : 'Zap DESLIGADO'}</span>
+                  </label>
+                </div>
                 <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', marginTop: '0.35rem' }}>
                   <input type="text" readOnly value={(() => { try { return buildOrderLink(showDeliveryModal.id) } catch { return '' } })()}
                     style={{ flex: 1, fontSize: '0.7rem', padding: '0.2rem 0.35rem', borderRadius: '4px', border: '1px solid #bfdbfe', background: 'white', color: '#1e40af' }}
@@ -11468,7 +11562,7 @@ function getOrderRawItems(ord) {
   return []
 }
 
-function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onStatusChange, onUpdateDue, onPreApprovar, onEditAndConfirm, onEditSave, onSyncCusto, onOpenDelivery, onUpdateCustomer, onCancelOrder, onSendWhatsApp }) {
+function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onStatusChange, onUpdateDue, onPreApprovar, onEditAndConfirm, onEditSave, onSyncCusto, onOpenDelivery, onUpdateCustomer, onCancelOrder, onSendWhatsApp, onToggleWhatsAppNotify }) {
   const [rejectedItems, setRejectedItems] = useState(new Set())
   const [editMode, setEditMode] = useState(false)
   const [editedItems, setEditedItems] = useState(() => getOrderRawItems(order).map(i => {
@@ -12194,8 +12288,8 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
             </div>
           )}
 
-          <div className="detail-section" style={{ background: 'var(--admin-card)', borderRadius: '8px', padding: '0.5rem 0.75rem', border: '1px solid var(--admin-border)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <div className="detail-section" style={{ background: 'var(--admin-card)', borderRadius: '8px', padding: '0.5rem 0.75rem', border: '1px solid var(--admin-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.6rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>
                 <i className="fa-solid fa-shuffle"></i> Mudar Etapa Diretamente:
               </span>
@@ -12221,13 +12315,52 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
                 <option value="cancelado">Cancelado</option>
               </select>
             </div>
+
+            <label
+              className={`action-zap-switch ${order.notificarWhatsApp !== false ? 'zap-on' : 'zap-off'}`}
+              title={order.notificarWhatsApp !== false ? 'Envio de WhatsApp ATIVO para esta comanda (Clique para desligar)' : 'Envio de WhatsApp DESLIGADO para esta comanda (Clique para ativar)'}
+              style={{ padding: '0.35rem 0.6rem', fontSize: '0.78rem' }}
+            >
+              <input
+                type="checkbox"
+                checked={order.notificarWhatsApp !== false}
+                onChange={e => {
+                  const enabled = e.target.checked
+                  order.notificarWhatsApp = enabled
+                  onToggleWhatsAppNotify?.(order.id, enabled)
+                }}
+                style={{ display: 'none' }}
+              />
+              <i className="fa-brands fa-whatsapp"></i>
+              <span>{order.notificarWhatsApp !== false ? 'Zap ON' : 'Zap OFF'}</span>
+            </label>
           </div>
 
-          <div className="modal-actions" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', justifyContent: 'flex-end' }}>
-            <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
-              onClick={() => { setEditMode(true); resetEditedItems() }}>
-              <i className="fa-solid fa-pen"></i> Editar Itens / Custo
-            </button>
+          <div className="modal-actions" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', justifyContent: 'space-between', alignItems: 'center' }}>
+            <label
+              className={`action-zap-switch ${order.notificarWhatsApp !== false ? 'zap-on' : 'zap-off'}`}
+              title={order.notificarWhatsApp !== false ? 'Envio de WhatsApp ATIVO nesta comanda' : 'Envio de WhatsApp DESLIGADO nesta comanda'}
+              style={{ padding: '0.35rem 0.6rem', fontSize: '0.76rem' }}
+            >
+              <input
+                type="checkbox"
+                checked={order.notificarWhatsApp !== false}
+                onChange={e => {
+                  const enabled = e.target.checked
+                  order.notificarWhatsApp = enabled
+                  onToggleWhatsAppNotify?.(order.id, enabled)
+                }}
+                style={{ display: 'none' }}
+              />
+              <i className="fa-brands fa-whatsapp"></i>
+              <span>{order.notificarWhatsApp !== false ? 'Zap ON' : 'Zap OFF'}</span>
+            </label>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', justifyContent: 'flex-end' }}>
+              <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
+                onClick={() => { setEditMode(true); resetEditedItems() }}>
+                <i className="fa-solid fa-pen"></i> Editar Itens / Custo
+              </button>
             {order.status === 'entregue' && (
               <>
                 <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => onStatusChange('em-rota')}>
@@ -12333,6 +12466,7 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
               </button>
             )}
             <button type="button" className="admin-btn admin-btn-sec" onClick={onClose}>Fechar</button>
+            </div>
           </div>
         </div>
       </div>
