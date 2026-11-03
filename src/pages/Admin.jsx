@@ -9118,6 +9118,7 @@ function RepTotals({ items }) {
 }
 
 function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rotas }) {
+  const produtosAtuais = produtos || []
   const [rep, setRep] = useState('dashboard')
   const [period, setPeriod] = useState('all')
   const [month, setMonth] = useState(hoje().slice(0, 7))
