@@ -965,6 +965,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [showDeliveryModal, setShowDeliveryModal] = useState(null)
   const [deliveryModalMode, setDeliveryModalMode] = useState('acerto')
   const [returnQuantities, setReturnQuantities] = useState({})
+  const [returnReasons, setReturnReasons] = useState({})
+  const [deliveryIsCalote, setDeliveryIsCalote] = useState(false)
   const [deliveryItemPrices, setDeliveryItemPrices] = useState({})
   const [deliveryItemCosts, setDeliveryItemCosts] = useState({})
   const [payQuantities, setPayQuantities] = useState({})
@@ -1077,6 +1079,14 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [filterRota, setFilterRota] = useState('TODAS')
   const [filterRotaSearch, setFilterRotaSearch] = useState('')
   const [filterTipo, setFilterTipo] = useState('TODOS')
+  const [subTabContatos, setSubTabContatos] = useState('rotas')
+  const [listaNome, setListaNome] = useState('')
+  const [listaCidade, setListaCidade] = useState('TODAS')
+  const [listaComportamento, setListaComportamento] = useState('todos')
+  const [listaSearch, setListaSearch] = useState('')
+  const [listaSelectedPhones, setListaSelectedPhones] = useState(new Set())
+  const [listaSavedTags, setListaSavedTags] = useState(() => LS.get('thsm_whatsapp_listas', []))
+  const [listaDefaultMsg, setListaDefaultMsg] = useState('Olá! Aqui é da THSM Distribuidora. Estamos com novidades no catálogo, confira e faça seu pedido!')
   const [customMsgRota, setCustomMsgRota] = useState(null)
   const [customMsgText, setCustomMsgText] = useState('')
   const [showNewRota, setShowNewRota] = useState(false)
@@ -2161,6 +2171,16 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         })
       }
       setReturnQuantities(retMap)
+      const reasonsMap = {}
+      if (Array.isArray(returnedList)) {
+        returnedList.forEach(r => {
+          if (!r) return
+          const key = r.id != null ? String(r.id) : (r.nome ? String(r.nome) : '')
+          if (key && r.motivoDevolucao) reasonsMap[key] = r.motivoDevolucao
+        })
+      }
+      setReturnReasons(reasonsMap)
+      setDeliveryIsCalote(!!(o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100'))
       setDeliveryItemPrices(priceMap)
       setDeliveryItemCosts(costMap)
       setPayQuantities({})
@@ -2225,7 +2245,13 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       const maxQty = Number(i.qty) || 0
       const retQty = Math.max(0, Math.min(maxQty, Number(returnQuantities[key] ?? (i.nome ? returnQuantities[i.nome] : 0)) || 0))
       if (retQty > 0) {
-        returnedItems.push({ ...i, preco: unitPreco, preco_custo: unitCusto > 0 ? unitCusto : null, returnedQty: retQty })
+        returnedItems.push({
+          ...i,
+          preco: unitPreco,
+          preco_custo: unitCusto > 0 ? unitCusto : null,
+          returnedQty: retQty,
+          motivoDevolucao: returnReasons[key] || 'mau_planejamento'
+        })
       }
       const keptQty = maxQty - retQty
       if (keptQty > 0) {
@@ -3939,6 +3965,36 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     })
     return set
   }, [usuarios])
+
+  const usuariosComHistorico = useMemo(() => {
+    return (usuarios || []).map(u => {
+      const tel = (u.telefone || '').replace(/\D/g, '')
+      const userOrders = (orders || []).filter(o => {
+        const oTel = (o.customer?.telefone || o.telefone || '').replace(/\D/g, '')
+        return (tel && oTel && oTel === tel) || o.user_id === u.id
+      })
+      const concluidos = userOrders.filter(o => (o.status === 'concluido' || o.isFinalizado) && !o.isCalote && o.motivoEncerramento !== 'calote_100')
+      const calotes = userOrders.filter(o => o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
+      const emAberto = userOrders.filter(o => !['cancelado', 'concluido'].includes(o.status) && !o.isCalote)
+
+      let comportamento = 'nao_pega'
+      if (calotes.length > 0) {
+        comportamento = 'calote'
+      } else if (concluidos.length > 0) {
+        comportamento = 'comprou'
+      }
+
+      return {
+        ...u,
+        telDigits: tel,
+        totalOrders: userOrders.length,
+        concluidosCount: concluidos.length,
+        calotesCount: calotes.length,
+        emAbertoCount: emAberto.length,
+        comportamento
+      }
+    })
+  }, [usuarios, orders])
 
   const isClienteContato = (ct) => {
     const phone = normalizePhone(String(ct.remoteJid || ct.telefone || '').replace(/@.*/, ''))
@@ -6251,6 +6307,15 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
               </div>
             </div>
 
+            <div className="fin-view-toggle fin-segmented" style={{ margin: '1rem 0 1.25rem' }}>
+              <button className={`admin-tab ${subTabContatos === 'rotas' ? 'active' : ''}`} onClick={() => setSubTabContatos('rotas')}>
+                <i className="fa-solid fa-map-location-dot"></i> Rotas & Regiões WhatsApp
+              </button>
+              <button className={`admin-tab ${subTabContatos === 'listas_whatsapp' ? 'active' : ''}`} onClick={() => setSubTabContatos('listas_whatsapp')}>
+                <i className="fa-brands fa-whatsapp"></i> Listas & Etiquetas (2º WhatsApp)
+              </button>
+            </div>
+
             {rotasError && (
               <div style={{
                 background: '#FEF2F2',
@@ -6506,16 +6571,395 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
               </>
             )}
 
-            {rotas.length === 0 && !rotasLoading && !rotasError && (
-              <div className="rota-empty-state">
-                <div className="rota-empty-icon"><i className="fa-solid fa-route"></i></div>
-                <h3>Nenhuma rota carregada</h3>
-                <p>Clique em "Atualizar" para buscar as rotas do WhatsApp</p>
-                <button className="admin-btn admin-btn-primary" onClick={fetchRotas}>
-                  <i className="fa-solid fa-rotate"></i> Atualizar Rotas
-                </button>
-              </div>
+            {subTabContatos === 'rotas' && (
+              <>
+                {rotas.length === 0 && !rotasLoading && !rotasError && (
+                  <div className="rota-empty-state">
+                    <div className="rota-empty-icon"><i className="fa-solid fa-route"></i></div>
+                    <h3>Nenhuma rota carregada</h3>
+                    <p>Clique em "Atualizar" para buscar as rotas do WhatsApp</p>
+                    <button className="admin-btn admin-btn-primary" onClick={fetchRotas}>
+                      <i className="fa-solid fa-rotate"></i> Atualizar Rotas
+                    </button>
+                  </div>
+                )}
+              </>
             )}
+
+            {subTabContatos === 'listas_whatsapp' && (() => {
+              const cidadesDisponiveis = Array.from(new Set(usuariosComHistorico.map(u => u.endereco?.cidade || u.cidade).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+
+              const contatosFiltrados = usuariosComHistorico.filter(u => {
+                if (listaCidade !== 'TODAS') {
+                  const c = (u.endereco?.cidade || u.cidade || '').toLowerCase()
+                  if (c !== listaCidade.toLowerCase()) return false
+                }
+                if (listaComportamento !== 'todos') {
+                  if (u.comportamento !== listaComportamento) return false
+                }
+                if (listaSearch.trim()) {
+                  const s = listaSearch.toLowerCase()
+                  const hay = `${u.nome || ''} ${u.telefone || ''} ${u.endereco?.cidade || ''} ${u.endereco?.bairro || ''}`.toLowerCase()
+                  if (!hay.includes(s)) return false
+                }
+                return true
+              })
+
+              const countComprou = usuariosComHistorico.filter(u => u.comportamento === 'comprou').length
+              const countNaoPega = usuariosComHistorico.filter(u => u.comportamento === 'nao_pega').length
+              const countCalote = usuariosComHistorico.filter(u => u.comportamento === 'calote').length
+
+              const togglePhone = (phone) => {
+                const next = new Set(listaSelectedPhones)
+                if (next.has(phone)) next.delete(phone)
+                else next.add(phone)
+                setListaSelectedPhones(next)
+              }
+
+              const selectAllFiltered = () => {
+                const next = new Set(listaSelectedPhones)
+                contatosFiltrados.forEach(c => {
+                  if (c.telDigits) next.add(c.telDigits)
+                })
+                setListaSelectedPhones(next)
+                showToast(`${contatosFiltrados.length} contato(s) selecionado(s)!`, 'success')
+              }
+
+              const clearSelection = () => {
+                setListaSelectedPhones(new Set())
+              }
+
+              const copySelectedPhones = () => {
+                const phones = Array.from(listaSelectedPhones)
+                if (phones.length === 0) {
+                  showToast('Selecione pelo menos um contato para copiar', 'warning')
+                  return
+                }
+                const text = phones.map(p => `55${p}`).join('\n')
+                navigator.clipboard.writeText(text).then(() => {
+                  showToast(`${phones.length} telefone(s) copiado(s) para a área de transferência!`, 'success')
+                }).catch(() => {
+                  showToast('Erro ao copiar telefones', 'error')
+                })
+              }
+
+              const saveCurrentList = () => {
+                if (!listaNome.trim()) {
+                  showToast('Dê um nome para a lista antes de salvar', 'warning')
+                  return
+                }
+                const selectedList = usuariosComHistorico.filter(u => listaSelectedPhones.has(u.telDigits)).map(u => ({
+                  id: u.id,
+                  nome: u.nome,
+                  telefone: u.telefone,
+                  cidade: u.endereco?.cidade || u.cidade
+                }))
+                const nova = {
+                  id: Date.now(),
+                  nome: listaNome.trim(),
+                  cidade: listaCidade,
+                  comportamento: listaComportamento,
+                  data: hoje(),
+                  count: selectedList.length,
+                  phones: Array.from(listaSelectedPhones)
+                }
+                const updated = [nova, ...listaSavedTags]
+                setListaSavedTags(updated)
+                LS.set('thsm_whatsapp_listas', updated)
+                setListaNome('')
+                showToast(`Lista "${nova.nome}" salva com sucesso (${selectedList.length} contatos)!`, 'success')
+              }
+
+              const loadSavedList = (tag) => {
+                setListaSelectedPhones(new Set(tag.phones || []))
+                if (tag.cidade) setListaCidade(tag.cidade)
+                if (tag.comportamento) setListaComportamento(tag.comportamento)
+                showToast(`Lista "${tag.nome}" carregada com ${tag.count || (tag.phones || []).length} contatos!`, 'info')
+              }
+
+              const deleteSavedList = (tagId) => {
+                const updated = listaSavedTags.filter(t => t.id !== tagId)
+                setListaSavedTags(updated)
+                LS.set('thsm_whatsapp_listas', updated)
+                showToast('Lista removida com sucesso', 'info')
+              }
+
+              return (
+                <div>
+                  {/* SUMMARY CARDS */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                    <div style={{ background: '#fff', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <span style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#e0e7ff', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                        <i className="fa-solid fa-users"></i>
+                      </span>
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>TOTAL CONTATOS</div>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#1e293b' }}>{usuariosComHistorico.length}</div>
+                      </div>
+                    </div>
+
+                    <div style={{ background: '#fff', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <span style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#dcfce7', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                        <i className="fa-solid fa-cart-check"></i>
+                      </span>
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 600 }}>JÁ COMPRARAM</div>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#166534' }}>{countComprou}</div>
+                      </div>
+                    </div>
+
+                    <div style={{ background: '#fff', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid #fef08a', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <span style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#fef9c3', color: '#ca8a04', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                        <i className="fa-solid fa-user-clock"></i>
+                      </span>
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: '#ca8a04', fontWeight: 600 }}>CADASTRA E NÃO PEGA</div>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#854d0e' }}>{countNaoPega}</div>
+                      </div>
+                    </div>
+
+                    <div style={{ background: '#fff', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <span style={{ width: '40px', height: '40px', borderRadius: '8px', background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                        <i className="fa-solid fa-triangle-exclamation"></i>
+                      </span>
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 600 }}>CALOTE / INADIMPLENTE</div>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#991b1b' }}>{countCalote}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SAVED LISTS BAR */}
+                  {listaSavedTags.length > 0 && (
+                    <div style={{ background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '1.25rem' }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <i className="fa-solid fa-bookmark" style={{ color: '#6366f1' }}></i> Listas & Etiquetas Salvas ({listaSavedTags.length}):
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {listaSavedTags.map(tag => (
+                          <div key={tag.id} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+                            background: '#fff', padding: '4px 10px', borderRadius: '6px',
+                            border: '1px solid #cbd5e1', fontSize: '0.8rem'
+                          }}>
+                            <span style={{ fontWeight: 600, color: '#1e293b', cursor: 'pointer' }} onClick={() => loadSavedList(tag)}>
+                              <i className="fa-brands fa-whatsapp" style={{ color: '#22c55e', marginRight: '4px' }}></i>
+                              {tag.nome} ({tag.count} contatos)
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => deleteSavedList(tag.id)}
+                              style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', padding: '0 2px' }}
+                              title="Excluir lista salva"
+                            >
+                              <i className="fa-solid fa-xmark"></i>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* FILTER CONTROLS */}
+                  <div style={{ background: '#fff', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '1.25rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                      <div>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px' }}>
+                          <i className="fa-solid fa-city"></i> CIDADE
+                        </label>
+                        <select
+                          value={listaCidade}
+                          onChange={e => setListaCidade(e.target.value)}
+                          style={{ width: '100%', padding: '0.55rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                        >
+                          <option value="TODAS">Todas as cidades ({usuariosComHistorico.length})</option>
+                          {cidadesDisponiveis.map(c => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px' }}>
+                          <i className="fa-solid fa-filter"></i> COMPORTAMENTO
+                        </label>
+                        <select
+                          value={listaComportamento}
+                          onChange={e => setListaComportamento(e.target.value)}
+                          style={{ width: '100%', padding: '0.55rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                        >
+                          <option value="todos">Todos os cadastrados</option>
+                          <option value="comprou">🟢 Já comprou / Pegou mercadoria</option>
+                          <option value="nao_pega">⚠️ Cadastra e não pega (0 pedidos concluídos)</option>
+                          <option value="calote">🔴 Inadimplente / Calote 100%</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px' }}>
+                          <i className="fa-solid fa-magnifying-glass"></i> BUSCA
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Buscar por nome, telefone ou bairro..."
+                          value={listaSearch}
+                          onChange={e => setListaSearch(e.target.value)}
+                          style={{ width: '100%', padding: '0.55rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* ACTIONS AND SAVE LIST */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #f1f5f9' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn-secondary"
+                          style={{ fontSize: '0.78rem', padding: '0.4rem 0.75rem' }}
+                          onClick={selectAllFiltered}
+                        >
+                          <i className="fa-solid fa-check-double"></i> Selecionar Todos ({contatosFiltrados.length})
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn-secondary"
+                          style={{ fontSize: '0.78rem', padding: '0.4rem 0.75rem' }}
+                          onClick={clearSelection}
+                        >
+                          <i className="fa-solid fa-xmark"></i> Desmarcar Todos
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-btn"
+                          style={{ fontSize: '0.78rem', padding: '0.4rem 0.75rem', background: '#22c55e', color: '#fff', borderColor: '#22c55e' }}
+                          onClick={copySelectedPhones}
+                        >
+                          <i className="fa-solid fa-copy"></i> Copiar Telefones ({listaSelectedPhones.size})
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                        <input
+                          type="text"
+                          placeholder="Nome da lista / etiqueta..."
+                          value={listaNome}
+                          onChange={e => setListaNome(e.target.value)}
+                          style={{ padding: '0.45rem 0.65rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.82rem', width: '200px' }}
+                        />
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn-primary"
+                          style={{ fontSize: '0.78rem', padding: '0.45rem 0.75rem' }}
+                          onClick={saveCurrentList}
+                        >
+                          <i className="fa-solid fa-floppy-disk"></i> Salvar Lista
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* DEFAULT MESSAGE FOR 2nd WHATSAPP */}
+                  <div style={{ background: '#f0fdf4', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid #bbf7d0', marginBottom: '1.25rem' }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#166534', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <i className="fa-brands fa-whatsapp"></i> Mensagem Padrão do 2º WhatsApp:
+                    </div>
+                    <textarea
+                      value={listaDefaultMsg}
+                      onChange={e => setListaDefaultMsg(e.target.value)}
+                      rows={2}
+                      style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #86efac', fontSize: '0.82rem', resize: 'vertical' }}
+                    />
+                  </div>
+
+                  {/* TABLE OF CONTACTS */}
+                  <div className="admin-table-wrap" style={{ background: '#fff', borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                    <div style={{ padding: '0.75rem 1rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#334155' }}>
+                        Mostrando <strong>{contatosFiltrados.length}</strong> contato(s) &middot; <strong>{listaSelectedPhones.size}</strong> selecionado(s)
+                      </span>
+                    </div>
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: '40px', textAlign: 'center' }}>
+                            <input
+                              type="checkbox"
+                              checked={contatosFiltrados.length > 0 && contatosFiltrados.every(c => listaSelectedPhones.has(c.telDigits))}
+                              onChange={e => {
+                                if (e.target.checked) selectAllFiltered()
+                                else clearSelection()
+                              }}
+                            />
+                          </th>
+                          <th>Nome do Cliente</th>
+                          <th>Telefone / WhatsApp</th>
+                          <th>Cidade / Região</th>
+                          <th>Comportamento</th>
+                          <th>Pedidos Concluídos</th>
+                          <th style={{ textAlign: 'center' }}>Ação (2º WhatsApp)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {contatosFiltrados.map(c => {
+                          const isSelected = listaSelectedPhones.has(c.telDigits)
+                          const telClean = (c.telefone || '').replace(/\D/g, '')
+                          const waUrl = `https://wa.me/55${telClean}?text=${encodeURIComponent(listaDefaultMsg)}`
+
+                          return (
+                            <tr key={c.id || c.telefone} style={{ background: isSelected ? '#f0fdf4' : 'inherit' }}>
+                              <td style={{ textAlign: 'center' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => togglePhone(c.telDigits)}
+                                />
+                              </td>
+                              <td className="td-prod-name">
+                                <strong>{c.nome || '-'}</strong>
+                              </td>
+                              <td>{c.telefone || '-'}</td>
+                              <td>{c.endereco?.cidade || c.cidade || '-'} {c.endereco?.bairro ? `(${c.endereco.bairro})` : ''}</td>
+                              <td>
+                                {c.comportamento === 'comprou' ? (
+                                  <span style={{ background: '#dcfce7', color: '#166534', padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>
+                                    🟢 Já comprou ({c.concluidosCount} concluído(s))
+                                  </span>
+                                ) : c.comportamento === 'calote' ? (
+                                  <span style={{ background: '#fee2e2', color: '#991b1b', padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>
+                                    🔴 Calote / Inadimplente
+                                  </span>
+                                ) : (
+                                  <span style={{ background: '#fef9c3', color: '#854d0e', padding: '3px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>
+                                    ⚠️ Cadastra e não pega
+                                  </span>
+                                )}
+                              </td>
+                              <td>{c.concluidosCount} concluídos {c.emAbertoCount > 0 ? `(${c.emAbertoCount} em aberto)` : ''}</td>
+                              <td style={{ textAlign: 'center' }}>
+                                <a
+                                  href={waUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="admin-btn"
+                                  style={{ padding: '4px 10px', fontSize: '0.75rem', background: '#25d366', color: '#fff', borderColor: '#25d366', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                >
+                                  <i className="fa-brands fa-whatsapp"></i> Chamar
+                                </a>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                        {contatosFiltrados.length === 0 && (
+                          <tr>
+                            <td colSpan="7" className="td-empty">Nenhum contato encontrado para os filtros selecionados</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
             )}
           />
@@ -6563,6 +7007,137 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 </div>
               </div>
             </div>
+
+            {/* CHECKLIST DE COBRANÇA AUTOMÁTICA DE DESPESAS DO MÊS (ITEM 11) */}
+            {(() => {
+              const mesAtualStr = hoje().slice(0, 7)
+              const despesasMes = despesas.filter(d => (d.dueDate || d.paidDate || '').startsWith(mesAtualStr))
+              const norm = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+              const despFunc = despesasMes.filter(d => {
+                const text = norm(`${d.tipo || ''} ${d.descricao || ''}`)
+                return text.includes('funciona') || text.includes('salar') || text.includes('folha') || text.includes('equipe') || text.includes('pro-labore')
+              })
+              const totalFunc = despFunc.reduce((s, d) => s + (Number(d.value) || 0), 0)
+
+              const despCarro = despesasMes.filter(d => {
+                const text = norm(`${d.tipo || ''} ${d.descricao || ''}`)
+                return text.includes('veiculo') || text.includes('carro') || text.includes('manuten') || text.includes('pneu') || text.includes('mecanic') || text.includes('revisao') || text.includes('oleo')
+              })
+              const totalCarro = despCarro.reduce((s, d) => s + (Number(d.value) || 0), 0)
+
+              const despCombust = despesasMes.filter(d => {
+                const text = norm(`${d.tipo || ''} ${d.descricao || ''}`)
+                return text.includes('combust') || text.includes('gasolina') || text.includes('etanol') || text.includes('diesel') || text.includes('posto') || text.includes('abastec')
+              })
+              const totalCombust = despCombust.reduce((s, d) => s + (Number(d.value) || 0), 0)
+
+              const itens = [
+                {
+                  id: 'funcionarios',
+                  label: 'Funcionários / Salários',
+                  icon: 'fa-users',
+                  tipoPadrao: 'Funcionários',
+                  ok: despFunc.length > 0,
+                  total: totalFunc,
+                  count: despFunc.length
+                },
+                {
+                  id: 'carro',
+                  label: 'Despesa de Carro / Veículo',
+                  icon: 'fa-car',
+                  tipoPadrao: 'Veículo / Manutenção',
+                  ok: despCarro.length > 0,
+                  total: totalCarro,
+                  count: despCarro.length
+                },
+                {
+                  id: 'combustivel',
+                  label: 'Combustível',
+                  icon: 'fa-gas-pump',
+                  tipoPadrao: 'Combustível',
+                  ok: despCombust.length > 0,
+                  total: totalCombust,
+                  count: despCombust.length
+                }
+              ]
+
+              const pendentes = itens.filter(i => !i.ok).length
+              const tudoOk = pendentes === 0
+              const nomeMes = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+
+              return (
+                <div style={{
+                  margin: '1.25rem 0',
+                  padding: '1rem 1.25rem',
+                  borderRadius: '12px',
+                  border: tudoOk ? '1px solid #86efac' : '2px solid #f59e0b',
+                  background: tudoOk ? '#f0fdf4' : '#fffbeb',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.85rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <span style={{
+                        width: '36px', height: '36px', borderRadius: '50%',
+                        background: tudoOk ? '#16a34a' : '#f59e0b',
+                        color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem'
+                      }}>
+                        <i className={`fa-solid ${tudoOk ? 'fa-check' : 'fa-triangle-exclamation'}`}></i>
+                      </span>
+                      <div>
+                        <strong style={{ fontSize: '0.96rem', color: '#1e293b' }}>
+                          Checklist de Fechamento de Mês — Despesas Essenciais (${nomeMes})
+                        </strong>
+                        <div style={{ fontSize: '0.78rem', color: tudoOk ? '#16a34a' : '#b45309', fontWeight: 600 }}>
+                          {tudoOk
+                            ? '✅ Excelente! Todos os campos obrigatórios deste mês foram lançados.'
+                            : `⚠️ Atenção: Faltam lançar ${pendentes} grupo(s) de despesa(s) obrigatória(s) para fechar o mês com precisão.`}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.75rem' }}>
+                    {itens.map(item => (
+                      <div key={item.id} style={{
+                        background: '#fff',
+                        borderRadius: '8px',
+                        padding: '0.8rem 1rem',
+                        border: item.ok ? '1px solid #bbf7d0' : '1px solid #fed7aa',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '0.5rem'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                          <i className={`fa-solid ${item.icon}`} style={{ color: item.ok ? '#16a34a' : '#ea580c', fontSize: '1.15rem' }}></i>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: '0.86rem', color: '#1e293b' }}>{item.label}</div>
+                            <div style={{ fontSize: '0.73rem', color: item.ok ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
+                              {item.ok ? `Lançado: ${formatPreco(item.total)} (${item.count} reg)` : '⚠️ Faltando no mês!'}
+                            </div>
+                          </div>
+                        </div>
+                        {!item.ok ? (
+                          <button
+                            className="admin-btn"
+                            style={{ padding: '4px 10px', fontSize: '0.75rem', background: '#f97316', color: '#fff', borderColor: '#f97316', whiteSpace: 'nowrap' }}
+                            onClick={() => {
+                              setEditingDespesa({ tipo: item.tipoPadrao, dueDate: hoje(), status: 'pago' })
+                              setShowDespesaModal(true)
+                            }}
+                          >
+                            <i className="fa-solid fa-plus"></i> Lançar
+                          </button>
+                        ) : (
+                          <span style={{ color: '#16a34a', fontSize: '0.95rem' }}><i className="fa-solid fa-circle-check"></i></span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
 
             <div className="fin-view-toggle fin-segmented">
               <button className={`admin-tab ${finTab === 'receber' ? 'active' : ''}`} onClick={() => setFinTab('receber')}>
@@ -7482,29 +8057,38 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
               <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <button className="admin-btn admin-btn-sec" onClick={() => setShowDeliveryModal(null)}>Cancelar</button>
 
-                {deliveryModalMode === 'acerto' && (
+                {deliveryIsCalote ? (
+                  <button className="admin-btn" style={{ background: '#dc2626', color: 'white', borderColor: '#b91c1c', fontWeight: 700 }}
+                    onClick={() => salvarAcerto(showDeliveryModal.id, true)}>
+                    <i className="fa-solid fa-triangle-exclamation"></i> Confirmar e Registrar Calote 100%
+                  </button>
+                ) : (
                   <>
-                    <button className="admin-btn" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }}
-                      onClick={() => salvarAcerto(showDeliveryModal.id, false)}>
-                      <i className="fa-solid fa-handshake"></i> Salvar e Mover para Acertos
-                    </button>
-                    <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }}
-                      onClick={() => salvarAcerto(showDeliveryModal.id, true)}>
-                      <i className="fa-solid fa-check-double"></i> Finalizar Pedido Agora
-                    </button>
-                  </>
-                )}
+                    {deliveryModalMode === 'acerto' && (
+                      <>
+                        <button className="admin-btn" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }}
+                          onClick={() => salvarAcerto(showDeliveryModal.id, false)}>
+                          <i className="fa-solid fa-handshake"></i> Salvar e Mover para Acertos
+                        </button>
+                        <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }}
+                          onClick={() => salvarAcerto(showDeliveryModal.id, true)}>
+                          <i className="fa-solid fa-check-double"></i> Finalizar Pedido Agora
+                        </button>
+                      </>
+                    )}
 
-                {deliveryModalMode === 'finalizar' && (
-                  <>
-                    <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
-                      onClick={() => salvarAcerto(showDeliveryModal.id, false)}>
-                      <i className="fa-solid fa-floppy-disk"></i> Salvar Alterações
-                    </button>
-                    <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }}
-                      onClick={() => salvarAcerto(showDeliveryModal.id, true)}>
-                      <i className="fa-solid fa-check-double"></i> Finalizar Pedido
-                    </button>
+                    {deliveryModalMode === 'finalizar' && (
+                      <>
+                        <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
+                          onClick={() => salvarAcerto(showDeliveryModal.id, false)}>
+                          <i className="fa-solid fa-floppy-disk"></i> Salvar Alterações
+                        </button>
+                        <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }}
+                          onClick={() => salvarAcerto(showDeliveryModal.id, true)}>
+                          <i className="fa-solid fa-check-double"></i> Finalizar Pedido
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -8516,6 +9100,13 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
 
   const kpis = useMemo(() => {
     const bruto = ordersF.reduce((s, o) => s + (o.total || 0), 0)
+    const mercadoriaColocada = ordersF.reduce((s, o) => s + (Number(o.totalOriginal || o.totalConsignado || o.total) || 0), 0)
+    const concluidos = ordersF.filter(o => (o.status === 'concluido' || o.isFinalizado) && !o.isCalote && o.motivoEncerramento !== 'calote_100')
+    const faturamentoConcluido = concluidos.reduce((s, o) => s + (Number(o.totalAcerto ?? o.totalPago ?? o.total) || 0), 0)
+    const calotes = ordersF.filter(o => o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
+    const calotesCusto = calotes.reduce((s, o) => s + (Number(o.caloteTotalCusto) || 0), 0)
+    const calotesVenda = calotes.reduce((s, o) => s + (Number(o.caloteTotalVenda || o.total) || 0), 0)
+    const calotesPecas = calotes.reduce((s, o) => s + (Number(o.calotePecas) || 0), 0)
     const desc = ordersF.reduce((s, o) => s + (o.desconto || 0), 0)
     const liq = Math.max(0, bruto - desc)
     const pedidos = ordersF.length
@@ -8523,7 +9114,24 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
     const custo = produtosVendidos.reduce((s, p) => s + p.preco_custo * p.qty, 0)
     const aberto = finRecordsIn.filter(f => f.status === 'pendente').reduce((s, f) => s + (f.value || 0), 0)
     const atrasado = finRecordsIn.filter(f => f.status === 'pendente' && f.dueDate < hoje()).reduce((s, f) => s + (f.value || 0), 0)
-    return { bruto, desc, liq, pedidos, itens, custo, aberto, atrasado, ticket: pedidos ? bruto / pedidos : 0 }
+    return {
+      bruto,
+      mercadoriaColocada,
+      faturamentoConcluido,
+      pedidosConcluidos: concluidos.length,
+      calotesCusto,
+      calotesVenda,
+      calotesPecas,
+      calotesCount: calotes.length,
+      desc,
+      liq,
+      pedidos,
+      itens,
+      custo,
+      aberto,
+      atrasado,
+      ticket: pedidos ? bruto / pedidos : 0
+    }
   }, [ordersF, produtosVendidos, finRecordsIn])
 
   const REPORTS = [
@@ -8531,6 +9139,11 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
     { id: 'vendas', label: 'Relação detalhada das vendas', icon: 'fa-file-invoice-dollar', group: 'Vendas / Financeiro' },
     { id: 'produtos_vendidos', label: 'Produtos vendidos', icon: 'fa-box-open', group: 'Vendas / Financeiro' },
     { id: 'vendas_mes', label: 'Vendas por período', icon: 'fa-chart-column', group: 'Vendas / Financeiro' },
+    { id: 'itens_mes', label: 'Itens vendidos por mês', icon: 'fa-cubes', group: 'Vendas / Financeiro' },
+    { id: 'conversao_giro', label: 'Itens deixados x % Vendidos', icon: 'fa-percent', group: 'Vendas / Financeiro' },
+    { id: 'inadimplencia_calote', label: 'Inadimplência e Calotes (Custo e Venda)', icon: 'fa-triangle-exclamation', group: 'Vendas / Financeiro' },
+    { id: 'atrasos', label: 'Recebimentos em atraso', icon: 'fa-clock-rotate-left', group: 'Vendas / Financeiro' },
+    { id: 'motivos_recusa', label: 'Motivos de recusa (Encomenda vs Planejamento)', icon: 'fa-clipboard-question', group: 'Vendas / Financeiro' },
     { id: 'graf_lucro', label: 'Lucro e margem por mês', icon: 'fa-chart-line', group: 'Vendas / Financeiro' },
     { id: 'pagamentos', label: 'Formas de pagamento', icon: 'fa-credit-card', group: 'Vendas / Financeiro' },
     { id: 'maiores', label: 'Ranking de clientes', icon: 'fa-trophy', group: 'Vendas / Financeiro' },
@@ -8544,6 +9157,7 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
     { id: 'impostos', label: 'Relatório de impostos', icon: 'fa-scale-balanced', group: 'Vendas / Financeiro' },
     { id: 'inativos', label: 'Clientes inativos', icon: 'fa-user-clock', group: 'Vendas / Financeiro' },
     { id: 'clientes', label: 'Relação de clientes', icon: 'fa-users', group: 'Vendas / Financeiro' },
+    { id: 'compras_sugestao', label: 'Sugestão / Relatório de Compras', icon: 'fa-cart-flatbed', group: 'Estoque' },
     { id: 'custo_margem', label: 'Custo, margem e lucro por mês', icon: 'fa-calculator', group: 'Estoque' },
     { id: 'cmv', label: 'Análise de custo (CMV)', icon: 'fa-scale-balanced', group: 'Estoque' },
     { id: 'abc', label: 'Curva ABC', icon: 'fa-ranking-star', group: 'Estoque' },
@@ -8569,13 +9183,13 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
     return (
       <div className="rep-dash">
         <RepKpis items={[
-          { icon: 'fa-sack-dollar', label: 'Faturamento bruto', value: formatPreco(kpis.bruto), color: '#8b5cf6' },
-          { icon: 'fa-hand-holding-dollar', label: 'Valor líquido', value: formatPreco(kpis.liq), color: '#10b981' },
-          { icon: 'fa-tags', label: 'Descontos', value: formatPreco(kpis.desc), color: '#ef4444' },
-          { icon: 'fa-clipboard-list', label: 'Pedidos', value: kpis.pedidos, color: '#3b82f6' },
-          { icon: 'fa-box', label: 'Itens vendidos', value: kpis.itens, color: '#f59e0b' },
+          { icon: 'fa-sack-dollar', label: 'Faturamento concluído', value: formatPreco(kpis.faturamentoConcluido || kpis.liq), color: '#10b981' },
+          { icon: 'fa-truck-ramp-box', label: 'Mercadoria colocada (Praça)', value: formatPreco(kpis.mercadoriaColocada || kpis.bruto), color: '#8b5cf6' },
+          { icon: 'fa-triangle-exclamation', label: 'Prejuízo calotes (Custo)', value: formatPreco(kpis.calotesCusto), color: '#dc2626' },
+          { icon: 'fa-clipboard-list', label: 'Pedidos concluídos', value: kpis.pedidosConcluidos, color: '#3b82f6' },
+          { icon: 'fa-box', label: 'Itens faturados', value: kpis.itens, color: '#f59e0b' },
           { icon: 'fa-receipt', label: 'Ticket médio', value: formatPreco(kpis.ticket), color: '#06b6d4' },
-          { icon: 'fa-chart-pie', label: 'Lucro bruto estimado', value: formatPreco(Math.max(0, kpis.bruto - kpis.custo)), color: '#ec4899' },
+          { icon: 'fa-chart-pie', label: 'Lucro bruto est.', value: formatPreco(Math.max(0, (kpis.faturamentoConcluido || kpis.bruto) - kpis.custo)), color: '#ec4899' },
           { icon: 'fa-hourglass-half', label: 'Em aberto', value: formatPreco(kpis.aberto), color: '#f97316' },
           { icon: 'fa-triangle-exclamation', label: 'Vencidos', value: formatPreco(kpis.atrasado), color: '#dc2626' },
         ]} />
@@ -8684,6 +9298,240 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
                 </tr>
               ))}
               {linhasAgrupadas.length === 0 && <tr><td colSpan="6" className="td-empty">Nenhum produto vendido no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'itens_mes') {
+      const totalItens = vendasMes.reduce((s, v) => s + v.qtd, 0)
+      return (
+        <div>
+          <RepTotals items={[
+            { label: 'Total itens faturados', value: `${totalItens} un`, color: '#3b82f6' },
+            { label: 'Média por mês', value: `${vendasMes.length ? Math.round(totalItens / vendasMes.length) : 0} un`, color: '#10b981' },
+            { label: 'Meses listados', value: vendasMes.length, color: '#8b5cf6' },
+          ]} />
+          <table className="admin-table">
+            <thead><tr><th>Mês</th><th>Itens Vendidos</th><th>Pedidos</th><th>Faturamento Bruto</th><th>Ticket Médio</th></tr></thead>
+            <tbody>
+              {vendasMes.map(v => (
+                <tr key={v.mes}>
+                  <td className="td-prod-name">{v.mes}</td>
+                  <td><strong>{v.qtd} un</strong></td>
+                  <td>{v.pedidos}</td>
+                  <td className="td-price">{formatPreco(v.bruto)}</td>
+                  <td className="td-price">{v.pedidos ? formatPreco(v.bruto / v.pedidos) : '-'}</td>
+                </tr>
+              ))}
+              {vendasMes.length === 0 && <tr><td colSpan="5" className="td-empty">Nenhum dado encontrado no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'conversao_giro') {
+      const totalDeixado = ordersF.reduce((s, o) => s + (o.items || []).reduce((acc, i) => acc + (Number(i.qty) || 0), 0), 0)
+      const totalVendido = produtosVendidos.reduce((s, p) => s + p.qty, 0)
+      const conv = totalDeixado ? (totalVendido / totalDeixado) * 100 : 0
+      return (
+        <div>
+          <RepTotals items={[
+            { label: 'Itens deixados (Praça)', value: `${totalDeixado} un`, color: '#8b5cf6' },
+            { label: 'Itens vendidos efetivos', value: `${totalVendido} un`, color: '#10b981' },
+            { label: 'Taxa de conversão / Giro', value: `${conv.toFixed(1)}%`, color: conv >= 50 ? '#10b981' : '#f59e0b' },
+          ]} />
+          <table className="admin-table">
+            <thead><tr><th>Pedido</th><th>Cliente</th><th>Data</th><th>Itens Deixados</th><th>Itens Vendidos</th><th>Devolvidos</th><th>% Giro</th><th>Status</th></tr></thead>
+            <tbody>
+              {ordersF.map(o => {
+                const totalItemPedido = (o.items || []).reduce((s, i) => s + (Number(i.qty) || 0), 0)
+                const totalDevolvido = (o.returnedItems || []).reduce((s, r) => s + (Number(r.returnedQty || r.qty) || 0), 0)
+                const totalVendidoPed = Math.max(0, totalItemPedido - totalDevolvido)
+                const pct = totalItemPedido ? (totalVendidoPed / totalItemPedido) * 100 : 0
+                return (
+                  <tr key={o.id}>
+                    <td className="td-prod-name">#{String(o.id).slice(-6)}</td>
+                    <td>{o.customer?.nome || '-'}</td>
+                    <td>{formatDate(o.date)}</td>
+                    <td>{totalItemPedido} un</td>
+                    <td><strong style={{ color: '#059669' }}>{totalVendidoPed} un</strong></td>
+                    <td>{totalDevolvido} un</td>
+                    <td><span className={`status-tag ${pct >= 50 ? 'status-concluido' : 'status-pendente'}`}>{pct.toFixed(0)}%</span></td>
+                    <td><span className={`status-tag status-${o.status}`}>{STATUS_LABELS[o.status] || o.status}</span></td>
+                  </tr>
+                )
+              })}
+              {ordersF.length === 0 && <tr><td colSpan="8" className="td-empty">Nenhum pedido no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'inadimplencia_calote') {
+      const calotesList = ordersF.filter(o => o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
+      const totalPecas = calotesList.reduce((s, o) => s + (Number(o.calotePecas) || 0), 0)
+      const totalCusto = calotesList.reduce((s, o) => s + (Number(o.caloteTotalCusto) || 0), 0)
+      const totalVenda = calotesList.reduce((s, o) => s + (Number(o.caloteTotalVenda || o.total) || 0), 0)
+      return (
+        <div>
+          <RepTotals items={[
+            { label: 'Clientes / Pedidos Calote', value: calotesList.length, color: '#dc2626' },
+            { label: 'Peças perdidas', value: `${totalPecas} un`, color: '#ef4444' },
+            { label: 'Prejuízo Real (Custo)', value: formatPreco(totalCusto), color: '#b91c1c' },
+            { label: 'Faturamento Perdido (Venda)', value: formatPreco(totalVenda), color: '#7f1d1d' },
+          ]} />
+          <table className="admin-table">
+            <thead><tr><th>Pedido</th><th>Cliente</th><th>Telefone</th><th>Cidade</th><th>Data</th><th>Peças Caloteadas</th><th>Prejuízo Real (Custo)</th><th>Venda Não Recebida</th></tr></thead>
+            <tbody>
+              {calotesList.map(o => (
+                <tr key={o.id}>
+                  <td className="td-prod-name">#{String(o.id).slice(-6)}</td>
+                  <td>{o.customer?.nome || '-'}</td>
+                  <td>{o.customer?.telefone || '-'}</td>
+                  <td>{o.customer?.endereco?.cidade || '-'}</td>
+                  <td>{formatDate(o.date)}</td>
+                  <td><strong style={{ color: '#dc2626' }}>{o.calotePecas || (o.items || []).reduce((s, i) => s + (Number(i.qty) || 0), 0)} un</strong></td>
+                  <td className="td-price" style={{ color: '#b91c1c' }}>{formatPreco(o.caloteTotalCusto || 0)}</td>
+                  <td className="td-price">{formatPreco(o.caloteTotalVenda || o.total || 0)}</td>
+                </tr>
+              ))}
+              {calotesList.length === 0 && <tr><td colSpan="8" className="td-empty">Nenhum calote registrado no período selecionado!</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'atrasos') {
+      const pagosAtraso = finRecordsIn.filter(f => f.status === 'pago' && f.paidDate && f.dueDate && f.paidDate > f.dueDate).map(f => {
+        const diffMs = new Date(f.paidDate + 'T12:00:00').getTime() - new Date(f.dueDate + 'T12:00:00').getTime()
+        const dias = Math.max(1, Math.round(diffMs / 86400000))
+        return { ...f, diasAtraso: dias }
+      })
+      const totalR = pagosAtraso.reduce((s, f) => s + (Number(f.value) || 0), 0)
+      const mediaDias = pagosAtraso.length ? Math.round(pagosAtraso.reduce((s, f) => s + f.diasAtraso, 0) / pagosAtraso.length) : 0
+      return (
+        <div>
+          <RepTotals items={[
+            { label: 'Total recebido em atraso', value: formatPreco(totalR), color: '#d97706' },
+            { label: 'Média de atraso', value: `${mediaDias} dias`, color: '#ef4444' },
+            { label: 'Títulos quitados com atraso', value: pagosAtraso.length, color: '#3b82f6' },
+          ]} />
+          <table className="admin-table">
+            <thead><tr><th>Cliente</th><th>Valor Recebido</th><th>Vencimento Original</th><th>Data do Pagamento</th><th>Atraso</th><th>Forma</th></tr></thead>
+            <tbody>
+              {pagosAtraso.map((f, i) => (
+                <tr key={f.id || i}>
+                  <td className="td-prod-name">{f.customerName || '-'}</td>
+                  <td className="td-price">{formatPreco(f.value)}</td>
+                  <td>{formatDate(f.dueDate)}</td>
+                  <td>{formatDate(f.paidDate)}</td>
+                  <td><strong style={{ color: '#dc2626' }}>+{f.diasAtraso} dias</strong></td>
+                  <td>{f.paymentMethod || '-'}</td>
+                </tr>
+              ))}
+              {pagosAtraso.length === 0 && <tr><td colSpan="6" className="td-empty">Nenhum pagamento em atraso no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'motivos_recusa') {
+      const prodDevMap = {}
+      ordersF.forEach(o => {
+        ;(o.returnedItems || []).forEach(r => {
+          if (!r) return
+          const nome = r.displayName || r.nome || 'Produto'
+          if (!prodDevMap[nome]) prodDevMap[nome] = { nome, nao_encomendado: 0, mau_planejamento: 0, avaria: 0, outro: 0, total: 0 }
+          const q = Number(r.returnedQty || r.qty) || 0
+          const m = r.motivoDevolucao || 'mau_planejamento'
+          prodDevMap[nome].total += q
+          if (prodDevMap[nome][m] !== undefined) prodDevMap[nome][m] += q
+          else prodDevMap[nome].outro += q
+        })
+      })
+      const listDev = Object.values(prodDevMap).sort((a, b) => b.total - a.total)
+      const totalDevGeral = listDev.reduce((s, p) => s + p.total, 0)
+      const totalEncomenda = listDev.reduce((s, p) => s + p.nao_encomendado, 0)
+      const totalPlanejamento = listDev.reduce((s, p) => s + p.mau_planejamento, 0)
+      return (
+        <div>
+          <RepTotals items={[
+            { label: 'Total devolvido', value: `${totalDevGeral} un`, color: '#64748b' },
+            { label: 'Teria sido encomenda', value: `${totalEncomenda} un`, color: '#d97706' },
+            { label: 'Mau planejamento THSM', value: `${totalPlanejamento} un`, color: '#dc2626' },
+          ]} />
+          <table className="admin-table">
+            <thead><tr><th>Produto</th><th>Teria sido encomenda</th><th>Mau planejamento THSM</th><th>Avaria / Defeito</th><th>Total Devolvido</th></tr></thead>
+            <tbody>
+              {listDev.map(p => (
+                <tr key={p.nome}>
+                  <td className="td-prod-name">{p.nome}</td>
+                  <td>{p.nao_encomendado > 0 ? <strong style={{ color: '#d97706' }}>{p.nao_encomendado} un</strong> : '-'}</td>
+                  <td>{p.mau_planejamento > 0 ? <strong style={{ color: '#dc2626' }}>{p.mau_planejamento} un</strong> : '-'}</td>
+                  <td>{p.avaria > 0 ? `${p.avaria} un` : '-'}</td>
+                  <td><strong>{p.total} un</strong></td>
+                </tr>
+              ))}
+              {listDev.length === 0 && <tr><td colSpan="5" className="td-empty">Nenhuma devolução registrada no período</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+    if (rep === 'compras_sugestao') {
+      const demandMap = {}
+      ordersF.forEach(o => {
+        ;(o.items || []).forEach(i => {
+          const nome = i.displayName || i.nome || i.produto || 'Produto'
+          if (!demandMap[nome]) demandMap[nome] = 0
+          demandMap[nome] += Number(i.qty) || 0
+        })
+      })
+      const sugestoes = produtosAtuais.map(p => {
+        const nome = p.displayName || p.nome || p.id
+        const demandado = demandMap[nome] || 0
+        const estoqueAtual = Number(p.estoque) || 0
+        const custo = Number(p.preco_custo) || Number(p.custo) || Number(p.precoCusto) || 0
+        const comprarQtd = Math.max(0, demandado - estoqueAtual)
+        const custoTotal = comprarQtd * custo
+        return {
+          id: p.id,
+          nome,
+          categoria: p.categoria || 'Geral',
+          demandado,
+          estoqueAtual,
+          comprarQtd,
+          custo,
+          custoTotal,
+          status: comprarQtd > 0 ? (estoqueAtual === 0 ? 'critico' : 'comprar') : 'ok'
+        }
+      }).sort((a, b) => b.comprarQtd - a.comprarQtd || b.demandado - a.demandado)
+
+      const totalPecasComprar = sugestoes.reduce((s, c) => s + c.comprarQtd, 0)
+      const totalCustoCompra = sugestoes.reduce((s, c) => s + c.custoTotal, 0)
+      return (
+        <div>
+          <RepTotals items={[
+            { label: 'Peças a comprar', value: `${totalPecasComprar} un`, color: '#dc2626' },
+            { label: 'Investimento em compra', value: formatPreco(totalCustoCompra), color: '#b91c1c' },
+            { label: 'Itens com necessidade', value: sugestoes.filter(s => s.comprarQtd > 0).length, color: '#f59e0b' },
+          ]} />
+          <table className="admin-table">
+            <thead><tr><th>Produto</th><th>Categoria</th><th>Demanda (Pedidos)</th><th>Estoque Atual</th><th>Sugestão de Compra</th><th>Custo Unit.</th><th>Custo Total Compra</th><th>Situação</th></tr></thead>
+            <tbody>
+              {sugestoes.map(s => (
+                <tr key={s.id}>
+                  <td className="td-prod-name">{s.nome}</td>
+                  <td>{s.categoria}</td>
+                  <td>{s.demandado} un</td>
+                  <td><strong style={{ color: s.estoqueAtual <= 0 ? 'var(--danger)' : 'inherit' }}>{s.estoqueAtual} un</strong></td>
+                  <td>{s.comprarQtd > 0 ? <strong style={{ color: 'var(--danger)', background: '#fee2e2', padding: '2px 6px', borderRadius: '4px' }}>+{s.comprarQtd} un</strong> : <span style={{ color: 'var(--success)' }}>Estoque OK</span>}</td>
+                  <td className="td-price">{s.custo > 0 ? formatPreco(s.custo) : '-'}</td>
+                  <td className="td-price">{s.custoTotal > 0 ? <strong>{formatPreco(s.custoTotal)}</strong> : '-'}</td>
+                  <td><span className={`status-tag status-${s.status === 'ok' ? 'concluido' : 'cancelado'}`}>{s.status === 'ok' ? 'Estoque Suficiente' : s.status === 'critico' ? 'Esgotado' : 'Comprar'}</span></td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -11566,7 +12414,7 @@ function DespesaModal({ despesa, customTipos = [], onAddTipo, onSave, onClose })
           </div>
           <div className="modal-actions">
             <button className="admin-btn admin-btn-sec" onClick={onClose}>Cancelar</button>
-            <button className="admin-btn admin-btn-primary" disabled={!value || isNaN(Number(value)) || Number(value) <= 0 || !tipo.trim()} onClick={handleSave}>
+            <button className="admin-btn admin-btn-primary" disabled={!value || parseDecimalToNumber(value) <= 0 || !tipo.trim()} onClick={handleSave}>
               <i className="fa-solid fa-check"></i> Salvar
             </button>
           </div>

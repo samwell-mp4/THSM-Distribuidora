@@ -19,9 +19,19 @@ export default function DespesasJornadaModal({
     e.preventDefault()
     setErrorMsg('')
 
-    const val = Number(String(valor).replace(',', '.'))
+    const valStr = String(valor || '').trim().replace(/\s/g, '')
+    // Suporte a 1.234,56 ou 1234,56 ou 1234.56
+    let val = 0
+    if (valStr.includes(',') && valStr.includes('.')) {
+      val = Number(valStr.replace(/\./g, '').replace(',', '.'))
+    } else if (valStr.includes(',')) {
+      val = Number(valStr.replace(',', '.'))
+    } else {
+      val = Number(valStr)
+    }
+
     if (!valor || isNaN(val) || val <= 0) {
-      setErrorMsg('Informe um valor de despesa válido maior que zero.')
+      setErrorMsg('Informe um valor de despesa válido maior que zero (ex: 25,50).')
       return
     }
 
@@ -124,13 +134,12 @@ export default function DespesasJornadaModal({
               <div className="mr-form-group">
                 <label className="mr-form-label">Valor (R$) *</label>
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
+                  type="text"
+                  inputMode="decimal"
                   className="mr-form-input"
                   placeholder="0,00"
                   value={valor}
-                  onChange={(e) => setValor(e.target.value)}
+                  onChange={(e) => setValor(e.target.value.replace(/[^0-9.,]/g, ''))}
                   required
                 />
               </div>

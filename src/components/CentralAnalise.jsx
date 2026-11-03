@@ -46,6 +46,8 @@ const PERIODOS = [
 
 const PAL = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f97316']
 
+const normStr = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+
 const STATUS_LABELS = {
   'pre-pedido': 'Pré-Pedido',
   'pendente': 'Pendente',
@@ -245,10 +247,16 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
     const map = new Map()
     ;(produtos || []).forEach(p => {
       if (p) {
-        const c = Number(p.preco_custo) || Number(p.custo) || 0
+        const c = Number(p.preco_custo) || Number(p.custo) || Number(p.precoCusto) || 0
         if (p.id != null) map.set(String(p.id), c)
-        if (p.nome) map.set(p.nome.trim().toLowerCase(), c)
-        if (p.displayName) map.set(p.displayName.trim().toLowerCase(), c)
+        if (p.nome) {
+          map.set(p.nome.trim().toLowerCase(), c)
+          map.set(normStr(p.nome), c)
+        }
+        if (p.displayName) {
+          map.set(p.displayName.trim().toLowerCase(), c)
+          map.set(normStr(p.displayName), c)
+        }
       }
     })
     return map
@@ -264,29 +272,116 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
       const n = Number(i.custo)
       if (!isNaN(n) && n >= 0) return n
     }
+    if (i.precoCusto !== null && i.precoCusto !== undefined && i.precoCusto !== '') {
+      const n = Number(i.precoCusto)
+      if (!isNaN(n) && n >= 0) return n
+    }
     if (i.id != null && prodCostMap.has(String(i.id))) return prodCostMap.get(String(i.id))
-    const name = (i.nome || i.displayName || i.produto || '').trim().toLowerCase()
-    if (name && prodCostMap.has(name)) return prodCostMap.get(name)
+    const raw = (i.nome || i.displayName || i.produto || '').trim().toLowerCase()
+    if (raw && prodCostMap.has(raw)) return prodCostMap.get(raw)
+    const normalized = normStr(i.nome || i.displayName || i.produto || '')
+    if (normalized && prodCostMap.has(normalized)) return prodCostMap.get(normalized)
     return 0
   }, [prodCostMap])
 
   const agg = (list) => {
     let bruto = 0, desc = 0, qty = 0, custo = 0, n = 0
+    let mercadoriaColocada = 0
+    let faturamentoConcluido = 0
+    let pedidosConcluidos = 0
+    let pedidosCalote = 0
+    let totalItensColocados = 0
+    let totalItensVendidos = 0
+    let totalItensDevolvidos = 0
+    let totalItensCalote = 0
+    let caloteTotalCusto = 0
+    let caloteTotalVenda = 0
+
     list.forEach(o => {
-      bruto += o.total || 0
-      desc += o.desconto || 0
       n += 1
+      const isConcluido = o.status === 'concluido' || o.isFinalizado === true
+      const isCalote = !!(o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
+      const vOriginal = Number(o.totalOriginal || o.totalConsignado || o.total) || 0
+      mercadoriaColocada += vOriginal
+
+      let itensPedido = 0
       ;(o.items || []).forEach(i => {
-        qty += Number(i.qty) || 0
-        custo += getItemCost(i) * (Number(i.qty) || 0)
+        itensPedido += Number(i.qty) || 0
       })
+      totalItensColocados += itensPedido
+
+      if (isCalote) {
+        pedidosCalote += 1
+        const pecas = Number(o.calotePecas) || itensPedido
+        const cCusto = Number(o.caloteTotalCusto) || (o.items || []).reduce((s, i) => s + getItemCost(i) * (Number(i.qty) || 0), 0)
+        const cVenda = Number(o.caloteTotalVenda) || vOriginal
+        totalItensCalote += pecas
+        caloteTotalCusto += cCusto
+        caloteTotalVenda += cVenda
+      } else if (isConcluido) {
+        pedidosConcluidos += 1
+        const fat = Number(o.totalAcerto ?? o.totalPago ?? o.total) || 0
+        faturamentoConcluido += fat
+        bruto += fat
+        desc += Number(o.desconto) || 0
+
+        const retMap = {}
+        ;(o.returnedItems || []).forEach(r => {
+          if (!r) return
+          const k = r.id != null ? String(r.id) : (r.nome || '')
+          retMap[k] = (retMap[k] || 0) + (Number(r.returnedQty || r.qty) || 0)
+        })
+
+        ;(o.items || []).forEach(i => {
+          const k = i.id != null ? String(i.id) : (i.nome || '')
+          const totalQ = Number(i.qty) || 0
+          const retQ = retMap[k] || 0
+          const soldQ = Math.max(0, totalQ - retQ)
+          totalItensVendidos += soldQ
+          totalItensDevolvidos += retQ
+          qty += soldQ
+          custo += getItemCost(i) * soldQ
+        })
+      } else {
+        bruto += vOriginal
+        ;(o.items || []).forEach(i => {
+          qty += Number(i.qty) || 0
+          custo += getItemCost(i) * (Number(i.qty) || 0)
+        })
+      }
     })
+
     const liq = Math.max(0, bruto - desc)
-    return { bruto, liq, desc, custo, qty, n, ticket: n ? liq / n : 0, lucro: liq - custo, margem: bruto ? ((liq - custo) / bruto) * 100 : 0 }
+    const taxaConversao = totalItensColocados > 0 ? (totalItensVendidos / totalItensColocados) * 100 : 0
+    const taxaCalote = totalItensColocados > 0 ? (totalItensCalote / totalItensColocados) * 100 : 0
+
+    return {
+      bruto,
+      liq,
+      desc,
+      custo,
+      qty,
+      n,
+      ticket: n ? liq / n : 0,
+      lucro: liq - custo,
+      margem: bruto ? ((liq - custo) / bruto) * 100 : 0,
+      mercadoriaColocada,
+      faturamentoConcluido,
+      pedidosConcluidos,
+      pedidosCalote,
+      totalItensColocados,
+      totalItensVendidos,
+      totalItensDevolvidos,
+      totalItensCalote,
+      caloteTotalCusto,
+      caloteTotalVenda,
+      taxaConversao,
+      taxaCalote
+    }
   }
 
-  const cur = useMemo(() => agg(ordersWin), [ordersWin, prodCostMap])
-  const prev = useMemo(() => agg(ordersPrev), [ordersPrev, prodCostMap])
+  const cur = useMemo(() => agg(ordersWin), [ordersWin, prodCostMap, getItemCost])
+  const prev = useMemo(() => agg(ordersPrev), [ordersPrev, prodCostMap, getItemCost])
 
   const delta = (c, p) => {
     if (!p) return null
@@ -299,35 +394,96 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
     ordersWin.forEach(o => {
       const k = (o.date || '').slice(0, 7)
       if (!k) return
-      if (!map[k]) map[k] = { mes: k, bruto: 0, liq: 0, custo: 0, n: 0, desc: 0, frete: 0, qtd: 0 }
-      map[k].bruto += o.total || 0
-      map[k].desc += o.desconto || 0
-      map[k].frete += o.frete || 0
-      map[k].n += 1
+      if (!map[k]) map[k] = { mes: k, bruto: 0, liq: 0, custo: 0, n: 0, desc: 0, frete: 0, qtd: 0, itensColocados: 0, itensVendidos: 0, calotePecas: 0, caloteCusto: 0, caloteVenda: 0 }
+      const isConcluido = o.status === 'concluido' || o.isFinalizado === true
+      const isCalote = !!(o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
+      const vOriginal = Number(o.totalOriginal || o.totalConsignado || o.total) || 0
+
+      let itensPedido = 0
       ;(o.items || []).forEach(i => {
-        map[k].custo += getItemCost(i) * (Number(i.qty) || 0)
-        map[k].qtd += Number(i.qty) || 0
+        itensPedido += Number(i.qty) || 0
       })
+      map[k].itensColocados += itensPedido
+      map[k].n += 1
+
+      if (isCalote) {
+        const pecas = Number(o.calotePecas) || itensPedido
+        const cCusto = Number(o.caloteTotalCusto) || (o.items || []).reduce((s, i) => s + getItemCost(i) * (Number(i.qty) || 0), 0)
+        const cVenda = Number(o.caloteTotalVenda) || vOriginal
+        map[k].calotePecas += pecas
+        map[k].caloteCusto += cCusto
+        map[k].caloteVenda += cVenda
+      } else if (isConcluido) {
+        const fat = Number(o.totalAcerto ?? o.totalPago ?? o.total) || 0
+        map[k].bruto += fat
+        map[k].desc += Number(o.desconto) || 0
+        map[k].frete += o.frete || 0
+
+        const retMap = {}
+        ;(o.returnedItems || []).forEach(r => {
+          if (!r) return
+          const key = r.id != null ? String(r.id) : (r.nome || '')
+          retMap[key] = (retMap[key] || 0) + (Number(r.returnedQty || r.qty) || 0)
+        })
+
+        ;(o.items || []).forEach(i => {
+          const key = i.id != null ? String(i.id) : (i.nome || '')
+          const totalQ = Number(i.qty) || 0
+          const retQ = retMap[key] || 0
+          const soldQ = Math.max(0, totalQ - retQ)
+          map[k].itensVendidos += soldQ
+          map[k].qtd += soldQ
+          map[k].custo += getItemCost(i) * soldQ
+        })
+      } else {
+        map[k].bruto += vOriginal
+        map[k].desc += o.desconto || 0
+        map[k].frete += o.frete || 0
+        ;(o.items || []).forEach(i => {
+          const q = Number(i.qty) || 0
+          map[k].qtd += q
+          map[k].custo += getItemCost(i) * q
+        })
+      }
     })
     return Object.values(map).sort((a, b) => a.mes.localeCompare(b.mes)).map(m => {
       const liq = Math.max(0, m.bruto - m.desc)
-      return { ...m, liq, lucro: liq - m.custo, margem: m.bruto ? ((liq - m.custo) / m.bruto) * 100 : 0 }
+      return {
+        ...m,
+        liq,
+        lucro: liq - m.custo,
+        margem: m.bruto ? ((liq - m.custo) / m.bruto) * 100 : 0,
+        taxaConversao: m.itensColocados > 0 ? (m.itensVendidos / m.itensColocados) * 100 : 0
+      }
     })
-  }, [ordersWin, prodCostMap])
+  }, [ordersWin, prodCostMap, getItemCost])
 
   const prodRank = useMemo(() => {
     const map = {}
     ordersWin.forEach(o => {
       ;(o.items || []).forEach(i => {
         const name = i.displayName || i.nome || i.produto || 'Produto'
-        if (!map[name]) map[name] = { nome: name, qty: 0, bruto: 0, custo: 0 }
-        map[name].qty += Number(i.qty) || 0
-        map[name].bruto += (Number(i.preco) || 0) * (Number(i.qty) || 0)
-        map[name].custo += getItemCost(i) * (Number(i.qty) || 0)
+        if (!map[name]) map[name] = { nome: name, qty: 0, bruto: 0, custo: 0, hasCost: false }
+        const q = Number(i.qty) || 0
+        const c = getItemCost(i)
+        map[name].qty += q
+        map[name].bruto += (Number(i.preco) || 0) * q
+        if (c > 0) {
+          map[name].custo += c * q
+          map[name].hasCost = true
+        }
       })
     })
-    return Object.values(map).map(p => ({ ...p, lucro: p.bruto - p.custo, margem: p.bruto ? ((p.bruto - p.custo) / p.bruto) * 100 : 0 })).sort((a, b) => b.bruto - a.bruto)
-  }, [ordersWin, prodCostMap])
+    return Object.values(map).map(p => {
+      const margem = p.hasCost && p.bruto > 0 ? ((p.bruto - p.custo) / p.bruto) * 100 : null
+      return {
+        ...p,
+        lucro: p.hasCost ? p.bruto - p.custo : 0,
+        margem: margem !== null ? margem : 0,
+        hasCost: p.hasCost
+      }
+    }).sort((a, b) => b.bruto - a.bruto)
+  }, [ordersWin, prodCostMap, getItemCost])
 
   const cliRank = useMemo(() => {
     const map = {}
@@ -544,7 +700,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
 
   const renderProdutos = () => {
     const top = prodRank.slice(0, 10)
-    const bestMargem = prodRank.filter(p => p.bruto > 0).sort((a, b) => b.margem - a.margem).slice(0, 10)
+    const bestMargem = prodRank.filter(p => p.hasCost && p.bruto > 0).sort((a, b) => b.margem - a.margem).slice(0, 10)
     const bestQty = prodRank.filter(p => p.qty > 0).sort((a, b) => b.qty - a.qty).slice(0, 10)
     return (
       <>
@@ -563,15 +719,19 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
           </Card>
         </div>
         <div className="ca-grid">
-          <Card title="Melhor margem" icon="fa-gauge-high">
-            <HBar data={bestMargem} getLabel={p => p.nome} getValue={p => p.margem} fmt={v => `${v.toFixed(1)}%`} maxVal={Math.max(1, ...bestMargem.map(p => p.margem))} />
+          <Card title="Melhor margem (itens com custo cadastrado)" icon="fa-gauge-high">
+            {bestMargem.length > 0 ? (
+              <HBar data={bestMargem} getLabel={p => p.nome} getValue={p => p.margem} fmt={v => `${v.toFixed(1)}%`} maxVal={Math.max(1, ...bestMargem.map(p => p.margem))} />
+            ) : (
+              <div className="ca-empty" style={{ padding: '1rem', color: '#64748b' }}>Cadastre o custo dos produtos para calcular margens reais.</div>
+            )}
           </Card>
           <Card title="Ranking completo" icon="fa-table-list">
             <TabelaPaginada per={15} cols={[
               { key: 'nome', label: 'Produto' },
               { key: 'qty', label: 'Qtd', num: true },
               { key: 'bruto', label: 'Faturamento', num: true, render: r => formatPreco(r.bruto) },
-              { key: 'margem', label: 'Margem', num: true, render: r => <span className="ca-margem-badge">{r.margem.toFixed(1)}%</span> },
+              { key: 'margem', label: 'Margem', num: true, render: r => r.hasCost ? <span className="ca-margem-badge">{r.margem.toFixed(1)}%</span> : <span style={{ fontSize: '0.72rem', color: '#64748b', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>Sem custo</span> },
             ]} rows={prodRank} />
           </Card>
         </div>
@@ -672,7 +832,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
   const renderPerformance = () => {
     const lucro = cur.liq - cur.custo
     const margem = cur.liq ? (lucro / cur.liq) * 100 : 0
-    const perfMargem = prodRank.filter(p => p.bruto > 0).sort((a, b) => b.margem - a.margem).slice(0, 8)
+    const perfMargem = prodRank.filter(p => p.hasCost && p.bruto > 0).sort((a, b) => b.margem - a.margem).slice(0, 8)
     const classes = { A: 0, B: 0, C: 0 }
     let totalBruto = prodRank.reduce((s, p) => s + p.bruto, 0)
     let acc = 0
@@ -721,6 +881,12 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
     { id: 'vendas', label: 'Relação detalhada das vendas', icon: 'fa-file-invoice-dollar' },
     { id: 'produtos_vendidos', label: 'Produtos vendidos', icon: 'fa-box-open' },
     { id: 'vendas_mes', label: 'Vendas por período', icon: 'fa-chart-column' },
+    { id: 'itens_mes', label: 'Itens vendidos por mês', icon: 'fa-cubes' },
+    { id: 'conversao_giro', label: 'Itens deixados x % Vendidos', icon: 'fa-percent' },
+    { id: 'inadimplencia_calote', label: 'Inadimplência e Calotes (Custo e Venda)', icon: 'fa-triangle-exclamation' },
+    { id: 'atrasos', label: 'Recebimentos em atraso', icon: 'fa-clock-rotate-left' },
+    { id: 'motivos_recusa', label: 'Motivos de recusa/devolução (Encomenda vs Planejamento)', icon: 'fa-clipboard-question' },
+    { id: 'compras_sugestao', label: 'Sugestão / Relatório de Compras', icon: 'fa-cart-flatbed' },
     { id: 'custo', label: 'Custo da mercadoria', icon: 'fa-calculator' },
     { id: 'cmv', label: 'Análise de custo (CMV)', icon: 'fa-scale-balanced' },
     { id: 'lucro_mes', label: 'Lucro e margem por mês', icon: 'fa-chart-line' },
@@ -856,6 +1022,126 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
     return { bruto, desc, liq, imp: liq * 0.18 }
   }, [ordersWin])
 
+  const linhasCalote = useMemo(() => {
+    return ordersWin.filter(o => o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100').map(o => {
+      const pecas = Number(o.calotePecas) || (o.items || []).reduce((s, i) => s + (Number(i.qty) || 0), 0)
+      const custo = Number(o.caloteTotalCusto) || (o.items || []).reduce((s, i) => s + getItemCost(i) * (Number(i.qty) || 0), 0)
+      const venda = Number(o.caloteTotalVenda) || Number(o.totalOriginal || o.total) || 0
+      return {
+        _k: o.id,
+        pedido: `#${String(o.id).slice(-6)}`,
+        cliente: o.customer?.nome || '-',
+        telefone: o.customer?.telefone || '-',
+        cidade: o.customer?.endereco?.cidade || '-',
+        data: formatDate(o.date),
+        pecas,
+        custo,
+        venda
+      }
+    })
+  }, [ordersWin, getItemCost])
+
+  const atrasosStats = useMemo(() => {
+    let totalValorAtraso = 0
+    let totalDiasAtraso = 0
+    let countPagosComAtraso = 0
+    const linhasAtraso = []
+
+    financial.forEach(f => {
+      if (f.status === 'pago' && f.paidDate && f.dueDate && f.paidDate > f.dueDate) {
+        const diffMs = new Date(f.paidDate + 'T12:00:00').getTime() - new Date(f.dueDate + 'T12:00:00').getTime()
+        const dias = Math.max(1, Math.round(diffMs / 86400000))
+        const val = Number(f.value) || 0
+        totalValorAtraso += val
+        totalDiasAtraso += dias
+        countPagosComAtraso += 1
+        linhasAtraso.push({
+          _k: f.id,
+          cliente: f.customerName || '-',
+          valor: val,
+          dueDate: formatDate(f.dueDate),
+          paidDate: formatDate(f.paidDate),
+          diasAtraso: dias,
+          metodo: f.paymentMethod || '-'
+        })
+      }
+    })
+
+    const mediaDias = countPagosComAtraso > 0 ? Math.round(totalDiasAtraso / countPagosComAtraso) : 0
+    return {
+      totalValorAtraso,
+      countPagosComAtraso,
+      mediaDias,
+      linhasAtraso: linhasAtraso.sort((a, b) => b.diasAtraso - a.diasAtraso)
+    }
+  }, [financial])
+
+  const motivosDevolucaoStats = useMemo(() => {
+    const counts = {
+      nao_encomendado: { label: 'Teria sido encomenda', qty: 0, valor: 0 },
+      mau_planejamento: { label: 'Mau planejamento THSM', qty: 0, valor: 0 },
+      avaria: { label: 'Avaria / Defeito', qty: 0, valor: 0 },
+      outro: { label: 'Outro motivo', qty: 0, valor: 0 }
+    }
+    const produtosMotivos = {}
+
+    ordersWin.forEach(o => {
+      ;(o.returnedItems || []).forEach(r => {
+        if (!r) return
+        const mot = r.motivoDevolucao || 'mau_planejamento'
+        const q = Number(r.returnedQty || r.qty) || 0
+        const p = Number(r.preco) || 0
+        if (!counts[mot]) counts[mot] = { label: mot, qty: 0, valor: 0 }
+        counts[mot].qty += q
+        counts[mot].valor += p * q
+
+        const prodNome = r.displayName || r.nome || 'Produto'
+        if (!produtosMotivos[prodNome]) produtosMotivos[prodNome] = { nome: prodNome, nao_encomendado: 0, mau_planejamento: 0, avaria: 0, total: 0 }
+        produtosMotivos[prodNome].total += q
+        if (produtosMotivos[prodNome][mot] !== undefined) produtosMotivos[prodNome][mot] += q
+      })
+    })
+
+    return {
+      counts,
+      porProduto: Object.values(produtosMotivos).sort((a, b) => b.total - a.total)
+    }
+  }, [ordersWin])
+
+  const comprasSugestao = useMemo(() => {
+    const demandMap = {}
+    ordersWin.forEach(o => {
+      ;(o.items || []).forEach(i => {
+        const prodNome = i.displayName || i.nome || i.produto || 'Produto'
+        if (!demandMap[prodNome]) demandMap[prodNome] = 0
+        demandMap[prodNome] += Number(i.qty) || 0
+      })
+    })
+
+    return (produtos || []).map(p => {
+      const nome = p.displayName || p.nome || p.id
+      const demandado = demandMap[nome] || 0
+      const estoqueAtual = Number(p.estoque) || 0
+      const custo = Number(p.preco_custo) || Number(p.custo) || Number(p.precoCusto) || 0
+      const precoVenda = Number(p.preco) || 0
+      const comprarQtd = Math.max(0, demandado - estoqueAtual)
+      const custoCompra = comprarQtd * custo
+
+      return {
+        _k: p.id,
+        produto: nome,
+        categoria: p.categoria || 'Geral',
+        demandado,
+        estoqueAtual,
+        comprarQtd,
+        custoUnit: custo,
+        custoTotal: custoCompra,
+        precoVenda,
+        status: comprarQtd > 0 ? (estoqueAtual === 0 ? 'critico' : 'comprar') : 'ok'
+      }
+    }).sort((a, b) => b.comprarQtd - a.comprarQtd || b.demandado - a.demandado)
+  }, [produtos, ordersWin])
+
   const renderRelatorios = () => {
     const rep = relatorio
     if (rep === 'vendas') {
@@ -922,6 +1208,147 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
               { key: 'liq', label: 'Líquido', num: true, render: r => formatPreco(r.liq) },
               { key: 'qtd', label: 'Qtd itens', num: true },
             ]} rows={serie} />
+          </Card>
+        </>
+      )
+    }
+    if (rep === 'itens_mes') {
+      const totalItensVendidos = serie.reduce((s, r) => s + (r.itensVendidos || r.qtd || 0), 0)
+      const mediaItensMes = serie.length ? Math.round(totalItensVendidos / serie.length) : 0
+      return (
+        <>
+          <div className="ca-kpis">
+            <Kpi icon="fa-cubes" label="Total itens vendidos" value={fmtNum(totalItensVendidos)} change={null} hint="Soma de todos os meses" />
+            <Kpi icon="fa-chart-line" label="Média mensal" value={`${fmtNum(mediaItensMes)} un/mês`} change={null} hint="Média de giro" />
+            <Kpi icon="fa-calendar-days" label="Meses computados" value={fmtNum(serie.length)} change={null} hint="Período selecionado" />
+          </div>
+          <Card title="Itens vendidos por mês" icon="fa-cubes">
+            <BarChart data={serie} getLabel={d => monthLabel(d.mes)} getValue={d => d.itensVendidos || d.qtd} color="#059669" />
+          </Card>
+          <Card title="Histórico mensal de unidades vendidas" icon="fa-table-list">
+            <TabelaPaginada per={20} cols={[
+              { key: 'mes', label: 'Mês', render: r => <strong>{monthLabel(r.mes)}</strong> },
+              { key: 'itensVendidos', label: 'Itens vendidos', num: true, render: r => <strong>{fmtNum(r.itensVendidos || r.qtd)} un</strong> },
+              { key: 'itensColocados', label: 'Itens deixados (consignados)', num: true, render: r => `${fmtNum(r.itensColocados || r.qtd)} un` },
+              { key: 'taxaConversao', label: 'Taxa de conversão', num: true, render: r => <span className="ca-margem-badge">{r.taxaConversao ? `${r.taxaConversao.toFixed(1)}%` : '-'}</span> },
+              { key: 'pedidos', label: 'Pedidos concluídos', num: true, render: r => fmtNum(r.n) },
+              { key: 'faturamento', label: 'Faturamento', num: true, render: r => formatPreco(r.bruto) },
+            ]} rows={serie} />
+          </Card>
+        </>
+      )
+    }
+    if (rep === 'conversao_giro') {
+      return (
+        <>
+          <div className="ca-kpis">
+            <Kpi icon="fa-truck-ramp-box" label="Itens deixados na praça" value={`${fmtNum(cur.totalItensColocados)} un`} change={null} hint="Consignado total" />
+            <Kpi icon="fa-box-check" label="Itens vendidos efetivos" value={`${fmtNum(cur.totalItensVendidos)} un`} change={null} hint="Pós-acerto" />
+            <Kpi icon="fa-percent" label="Taxa de conversão geral" value={`${cur.taxaConversao.toFixed(1)}%`} change={null} hint="Vendidos / deixados" />
+            <Kpi icon="fa-rotate-left" label="Itens devolvidos" value={`${fmtNum(cur.totalItensDevolvidos)} un`} change={null} hint="Recusados ou sobras" />
+          </div>
+          <Card title="Total de itens deixados x % de itens vendidos" icon="fa-percent">
+            <TabelaPaginada per={20} cols={[
+              { key: 'mes', label: 'Mês', render: r => <strong>{monthLabel(r.mes)}</strong> },
+              { key: 'itensColocados', label: 'Deixados (Praça)', num: true, render: r => `${fmtNum(r.itensColocados)} un` },
+              { key: 'itensVendidos', label: 'Vendidos', num: true, render: r => <strong style={{ color: '#059669' }}>{fmtNum(r.itensVendidos)} un</strong> },
+              { key: 'devolvidos', label: 'Devolvidos / Sobra', num: true, render: r => `${fmtNum(Math.max(0, (r.itensColocados || 0) - (r.itensVendidos || 0)))} un` },
+              { key: 'taxaConversao', label: '% Vendido (Giro)', num: true, render: r => <span className={`ca-margem-badge ${r.taxaConversao >= 50 ? 'ca-t-good' : 'ca-t-bad'}`}>{r.taxaConversao.toFixed(1)}%</span> },
+            ]} rows={serie} />
+          </Card>
+        </>
+      )
+    }
+    if (rep === 'inadimplencia_calote') {
+      return (
+        <>
+          <div className="ca-kpis">
+            <Kpi icon="fa-triangle-exclamation" label="Pessoas / Pedidos com Calote" value={fmtNum(cur.pedidosCalote)} change={null} hint="Calote 100% registrado" />
+            <Kpi icon="fa-box-open" label="Peças perdidas (Calote)" value={`${fmtNum(cur.totalItensCalote)} un`} change={null} hint={`${cur.taxaCalote.toFixed(1)}% das peças deixadas`} />
+            <Kpi icon="fa-hand-holding-dollar" label="Prejuízo real de mercadoria (Custo)" value={formatPreco(cur.caloteTotalCusto)} change={null} hint="Custo de reposição perdido" />
+            <Kpi icon="fa-file-invoice-dollar" label="Faturamento não recebido (Venda)" value={formatPreco(cur.caloteTotalVenda)} change={null} hint="Preço de venda total" />
+          </div>
+          <Card title="Relatório de Inadimplência e Calotes 100%" icon="fa-triangle-exclamation">
+            <TabelaPaginada per={15} cols={[
+              { key: 'pedido', label: 'Pedido' },
+              { key: 'cliente', label: 'Cliente' },
+              { key: 'telefone', label: 'Telefone' },
+              { key: 'cidade', label: 'Cidade' },
+              { key: 'data', label: 'Data' },
+              { key: 'pecas', label: 'Peças caloteadas', num: true, render: r => <strong style={{ color: '#dc2626' }}>{r.pecas} un</strong> },
+              { key: 'custo', label: 'Prejuízo Real (Custo)', num: true, render: r => <strong style={{ color: '#b91c1c' }}>{formatPreco(r.custo)}</strong> },
+              { key: 'venda', label: 'Venda perdida (Faturamento)', num: true, render: r => formatPreco(r.venda) },
+            ]} rows={linhasCalote} />
+          </Card>
+        </>
+      )
+    }
+    if (rep === 'atrasos') {
+      return (
+        <>
+          <div className="ca-kpis">
+            <Kpi icon="fa-clock-rotate-left" label="Total recebido em atraso" value={formatPreco(atrasosStats.totalValorAtraso)} change={null} hint="Quitações após vencimento" />
+            <Kpi icon="fa-hourglass-end" label="Média de dias de atraso" value={`${atrasosStats.mediaDias} dias`} change={null} hint="Demora média para pagar" />
+            <Kpi icon="fa-receipt" label="Pagamentos em atraso" value={fmtNum(atrasosStats.countPagosComAtraso)} change={null} hint="Títulos quitados com atraso" />
+          </div>
+          <Card title="Relação de recebimentos quitados com atraso" icon="fa-clock-rotate-left">
+            <TabelaPaginada per={15} cols={[
+              { key: 'cliente', label: 'Cliente' },
+              { key: 'valor', label: 'Valor recebido', num: true, render: r => <strong>{formatPreco(r.valor)}</strong> },
+              { key: 'dueDate', label: 'Vencimento original' },
+              { key: 'paidDate', label: 'Data do pagamento' },
+              { key: 'diasAtraso', label: 'Dias de atraso', num: true, render: r => <span style={{ color: '#dc2626', fontWeight: 700 }}>+{r.diasAtraso} dias</span> },
+              { key: 'metodo', label: 'Forma' },
+            ]} rows={atrasosStats.linhasAtraso} />
+          </Card>
+        </>
+      )
+    }
+    if (rep === 'motivos_recusa') {
+      const counts = motivosDevolucaoStats.counts
+      const totalDev = Object.values(counts).reduce((s, c) => s + c.qty, 0)
+      return (
+        <>
+          <div className="ca-kpis">
+            <Kpi icon="fa-boxes-stacked" label="Total peças devolvidas" value={`${fmtNum(totalDev)} un`} change={null} hint="Devoluções registradas" />
+            <Kpi icon="fa-clipboard-question" label="Teria sido encomenda" value={`${fmtNum(counts.nao_encomendado?.qty || 0)} un`} change={null} hint={formatPreco(counts.nao_encomendado?.valor || 0)} />
+            <Kpi icon="fa-arrows-split-up-and-left" label="Mau planejamento THSM" value={`${fmtNum(counts.mau_planejamento?.qty || 0)} un`} change={null} hint={formatPreco(counts.mau_planejamento?.valor || 0)} />
+            <Kpi icon="fa-triangle-exclamation" label="Avaria / Defeito" value={`${fmtNum(counts.avaria?.qty || 0)} un`} change={null} hint={formatPreco(counts.avaria?.valor || 0)} />
+          </div>
+          <Card title="Motivos de devolução por produto" icon="fa-clipboard-question">
+            <TabelaPaginada per={15} cols={[
+              { key: 'nome', label: 'Produto' },
+              { key: 'nao_encomendado', label: 'Teria sido encomenda', num: true, render: r => r.nao_encomendado > 0 ? <strong style={{ color: '#d97706' }}>{r.nao_encomendado} un</strong> : '-' },
+              { key: 'mau_planejamento', label: 'Mau planejamento THSM', num: true, render: r => r.mau_planejamento > 0 ? <strong style={{ color: '#dc2626' }}>{r.mau_planejamento} un</strong> : '-' },
+              { key: 'avaria', label: 'Avaria / Defeito', num: true, render: r => r.avaria > 0 ? `${r.avaria} un` : '-' },
+              { key: 'total', label: 'Total devolvido', num: true, render: r => <strong>{r.total} un</strong> },
+            ]} rows={motivosDevolucaoStats.porProduto} />
+          </Card>
+        </>
+      )
+    }
+    if (rep === 'compras_sugestao') {
+      const totalComprarQtd = comprasSugestao.reduce((s, c) => s + c.comprarQtd, 0)
+      const custoTotalCompras = comprasSugestao.reduce((s, c) => s + c.custoTotal, 0)
+      const itensComprarCount = comprasSugestao.filter(c => c.comprarQtd > 0).length
+      return (
+        <>
+          <div className="ca-kpis">
+            <Kpi icon="fa-cart-shopping" label="Peças a comprar" value={`${fmtNum(totalComprarQtd)} un`} change={null} hint="Necessidade imediata" />
+            <Kpi icon="fa-sack-dollar" label="Investimento estimado" value={formatPreco(custoTotalCompras)} change={null} hint="Custo total de reposição" />
+            <Kpi icon="fa-boxes-stacked" label="Produtos com reposição" value={fmtNum(itensComprarCount)} change={null} hint="Com estoque insuficiente" />
+          </div>
+          <Card title="Relatório e Sugestão de Compras (Demanda Real x Estoque)" icon="fa-cart-flatbed">
+            <TabelaPaginada per={20} cols={[
+              { key: 'produto', label: 'Produto' },
+              { key: 'categoria', label: 'Categoria' },
+              { key: 'demandado', label: 'Demandado (Pedidos)', num: true, render: r => `${fmtNum(r.demandado)} un` },
+              { key: 'estoqueAtual', label: 'Estoque Atual', num: true, render: r => <strong style={{ color: r.estoqueAtual <= 0 ? '#dc2626' : '#334155' }}>{fmtNum(r.estoqueAtual)} un</strong> },
+              { key: 'comprarQtd', label: 'Sugestão de Compra', num: true, render: r => r.comprarQtd > 0 ? <strong style={{ color: '#b91c1c', background: '#fee2e2', padding: '2px 8px', borderRadius: '4px' }}>+{r.comprarQtd} un</strong> : <span style={{ color: '#059669', fontSize: '0.8rem' }}>Suficiente</span> },
+              { key: 'custoUnit', label: 'Custo Unitário', num: true, render: r => r.custoUnit > 0 ? formatPreco(r.custoUnit) : <span style={{ color: '#94a3b8' }}>-</span> },
+              { key: 'custoTotal', label: 'Custo Total Compra', num: true, render: r => r.custoTotal > 0 ? <strong>{formatPreco(r.custoTotal)}</strong> : '-' },
+              { key: 'status', label: 'Situação', render: r => r.status === 'critico' ? <span className="ca-status ca-status-cancelado">Esgotado</span> : r.status === 'comprar' ? <span className="ca-status ca-status-acerto">Comprar</span> : <span className="ca-status ca-status-entregue">Estoque OK</span> },
+            ]} rows={comprasSugestao} />
           </Card>
         </>
       )
