@@ -100,18 +100,79 @@ function Paginacao({ total, per, page, onPage }) {
   )
 }
 
-function TabelaPaginada({ cols, rows, per = 12, startPage = 1 }) {
+function TabelaPaginada({ cols, rows, per = 12, startPage = 1, defaultSortKey = null, defaultSortDir = 'desc' }) {
   const [page, setPage] = useState(startPage)
-  const total = rows.length
+  const [sortKey, setSortKey] = useState(defaultSortKey)
+  const [sortDir, setSortDir] = useState(defaultSortDir)
+
+  const handleHeaderClick = (colKey) => {
+    if (!colKey) return
+    if (sortKey === colKey) {
+      setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(colKey)
+      setSortDir('desc')
+    }
+    setPage(1)
+  }
+
+  const sortedRows = useMemo(() => {
+    if (!sortKey) return rows
+    const colDef = cols.find(c => c.key === sortKey)
+    return [...rows].sort((a, b) => {
+      let valA = a[sortKey]
+      let valB = b[sortKey]
+      if (valA == null && valB == null) return 0
+      if (valA == null) return 1
+      if (valB == null) return -1
+
+      if (typeof valA === 'number' || typeof valB === 'number' || colDef?.num) {
+        const numA = Number(valA) || 0
+        const numB = Number(valB) || 0
+        return sortDir === 'asc' ? numA - numB : numB - numA
+      }
+
+      const strA = String(valA).toLowerCase()
+      const strB = String(valB).toLowerCase()
+      return sortDir === 'asc' ? strA.localeCompare(strB, 'pt-BR') : strB.localeCompare(strA, 'pt-BR')
+    })
+  }, [rows, sortKey, sortDir, cols])
+
+  const total = sortedRows.length
   const pages = Math.max(1, Math.ceil(total / per))
   const cur = Math.min(page, pages)
-  const slice = rows.slice((cur - 1) * per, cur * per)
+  const slice = sortedRows.slice((cur - 1) * per, cur * per)
   return (
     <div>
       <div className="ca-tbl-wrap">
         <table className="ca-tbl">
           <thead>
-            <tr>{cols.map((c, i) => <th key={i} className={c.num ? 'ca-th-num' : ''}>{c.label}</th>)}</tr>
+            <tr>
+              {cols.map((c, i) => {
+                const isSorted = sortKey === c.key
+                return (
+                  <th
+                    key={i}
+                    className={`${c.num ? 'ca-th-num' : ''} ca-th-sortable`}
+                    onClick={() => handleHeaderClick(c.key)}
+                    style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                    title={`Ordenar por ${c.label} (${isSorted ? (sortDir === 'asc' ? 'Crescente' : 'Decrescente') : 'Clique para ordenar'})`}
+                  >
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', justifyContent: c.num ? 'flex-end' : 'flex-start', width: '100%' }}>
+                      <span>{c.label}</span>
+                      <i
+                        className={`fa-solid ${isSorted ? (sortDir === 'asc' ? 'fa-arrow-up-short-wide' : 'fa-arrow-down-wide-short') : 'fa-sort'}`}
+                        style={{
+                          fontSize: '0.72rem',
+                          opacity: isSorted ? 1 : 0.35,
+                          color: isSorted ? 'var(--accent, #6366f1)' : 'inherit'
+                        }}
+                      />
+                    </div>
+                  </th>
+                )
+              })}
+            </tr>
           </thead>
           <tbody>
             {slice.map((row, ri) => (
@@ -260,11 +321,38 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
     return o.status === st
   }
 
+  const normDespesas = useMemo(() => {
+    return (despesas || []).map(d => {
+      if (!d) return null
+      const numVal = Number(d.value !== undefined && d.value !== null && d.value !== '' ? d.value : (d.valor !== undefined && d.valor !== null && d.valor !== '' ? d.valor : (d.data?.valor || d.data?.value || 0))) || 0
+      const cleanVal = Math.round(numVal * 100) / 100
+      const dateStr = d.dueDate || d.paidDate || d.date || d.data?.dueDate || d.data?.paidDate || d.data?.date || (d.createdAt ? new Date(d.createdAt).toISOString().slice(0, 10) : '')
+      const tipoStr = d.tipo || d.categoria || d.data?.categoria || d.data?.tipo || 'Outros'
+      const descStr = d.descricao || d.estabelecimento || d.data?.descricao || '-'
+      const statusStr = d.status || (d.paidDate ? 'pago' : 'pendente')
+      const pmStr = d.paymentMethod || d.formaPagamento || d.data?.formaPagamento || 'pix'
+      return {
+        ...d,
+        value: cleanVal,
+        valor: cleanVal,
+        dueDate: dateStr,
+        paidDate: d.paidDate || (statusStr === 'pago' ? dateStr : null),
+        date: dateStr,
+        tipo: tipoStr,
+        categoria: d.categoria || tipoStr,
+        descricao: descStr,
+        status: statusStr,
+        paymentMethod: pmStr,
+        formaPagamento: d.formaPagamento || pmStr
+      }
+    }).filter(Boolean)
+  }, [despesas])
+
   const ordersWin = useMemo(() => orders.filter(o => matchStatus(o, statusFilter) && fit(o.date || '', win)), [orders, win, statusFilter])
   const ordersPrev = useMemo(() => orders.filter(o => matchStatus(o, statusFilter) && fit(o.date || '', prevWin)), [orders, prevWin, statusFilter])
   const finWin = useMemo(() => financial.filter(f => f.status !== 'cancelado' && fit(f.dueDate || '', win)), [financial, win])
   const finPrev = useMemo(() => financial.filter(f => f.status !== 'cancelado' && fit(f.dueDate || '', prevWin)), [financial, prevWin])
-  const despWin = useMemo(() => despesas.filter(d => fit(d.dueDate || '', win)), [despesas, win])
+  const despWin = useMemo(() => normDespesas.filter(d => fit(d.dueDate || d.paidDate || d.date || '', win)), [normDespesas, win])
 
   const prodCostMap = useMemo(() => {
     const map = new Map()
@@ -631,10 +719,10 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
       map[k].receitas += f.value || 0
     })
     despWin.forEach(d => {
-      const k = (d.dueDate || '').slice(0, 7)
+      const k = (d.dueDate || d.paidDate || d.date || '').slice(0, 7)
       if (!k) return
       if (!map[k]) map[k] = { mes: k, receitas: 0, gastos: 0 }
-      map[k].gastos += d.value || 0
+      map[k].gastos += Number(d.value) || 0
     })
     return Object.values(map).sort((a, b) => a.mes.localeCompare(b.mes)).map(m => ({ ...m, resultado: m.receitas - m.gastos }))
   }, [finWin, despWin])
@@ -818,44 +906,31 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         </Card>
       </div>
       <Card title="Últimos pedidos" icon="fa-list">
-        <div className="ca-tbl-wrap">
-          <table className="ca-tbl">
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Cliente</th>
-                <th className="ca-th-num">Itens</th>
-                <th className="ca-th-num">Mercadoria Colocada</th>
-                <th className="ca-th-num">Faturado Real</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...ordersWin].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 15).map((o, i) => {
-                const isConcluido = o.status === 'concluido' || o.isFinalizado === true || o.status === 'acerto'
-                const fatReal = isConcluido ? (Number(o.totalAcerto ?? o.totalPago ?? o.total) || 0) : null
-                const colocado = Number(o.totalOriginal || o.totalConsignado || o.total) || 0
-                return (
-                  <tr key={i}>
-                    <td>{formatDate(o.date)}</td>
-                    <td>{o.customer?.nome || '-'}</td>
-                    <td className="ca-td-num">{fmtNum((o.items || []).reduce((s, x) => s + (Number(x.qty) || 0), 0))}</td>
-                    <td className="ca-td-num">{formatPreco(colocado)}</td>
-                    <td className="ca-td-num">
-                      {fatReal !== null ? (
-                        <strong style={{ color: '#059669' }}>{formatPreco(fatReal)}</strong>
-                      ) : (
-                        <span style={{ color: '#94a3b8' }}>-</span>
-                      )}
-                    </td>
-                    <td><span className={`ca-status ca-status-${o.status || 'pendente'}`}>{reqStatus(o)}</span></td>
-                  </tr>
-                )
-              })}
-              {ordersWin.length === 0 && <tr><td colSpan="6" className="ca-empty-cell">Nenhum pedido no período/status selecionado.</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        <TabelaPaginada
+          per={15}
+          cols={[
+            { key: 'date', label: 'Data', render: o => formatDate(o.date) },
+            { key: 'clienteNome', label: 'Cliente', render: o => o.customer?.nome || '-' },
+            { key: 'totalPecas', label: 'Itens', num: true, render: o => fmtNum(o.totalPecas) },
+            { key: 'colocado', label: 'Mercadoria Colocada', num: true, render: o => formatPreco(o.colocado) },
+            { key: 'fatReal', label: 'Faturado Real', num: true, render: o => o.fatReal !== -1 ? <strong style={{ color: '#059669' }}>{formatPreco(o.fatReal)}</strong> : <span style={{ color: '#94a3b8' }}>-</span> },
+            { key: 'status', label: 'Status', render: o => <span className={`ca-status ca-status-${o.status || 'pendente'}`}>{reqStatus(o)}</span> }
+          ]}
+          rows={ordersWin.map((o, idx) => {
+            const isConcluido = o.status === 'concluido' || o.isFinalizado === true || o.status === 'acerto'
+            const fatReal = isConcluido ? (Number(o.totalAcerto ?? o.totalPago ?? o.total) || 0) : null
+            const colocado = Number(o.totalOriginal || o.totalConsignado || o.total) || 0
+            const totalPecas = (o.items || []).reduce((s, x) => s + (Number(x.qty) || 0), 0)
+            return {
+              _k: o.id || idx,
+              ...o,
+              clienteNome: o.customer?.nome || '',
+              totalPecas,
+              colocado,
+              fatReal: fatReal !== null ? fatReal : -1
+            }
+          })}
+        />
       </Card>
     </>
   )
@@ -1153,12 +1228,13 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
   const despPorTipo = useMemo(() => {
     const map = {}
     despWin.forEach(d => {
-      const t = d.tipo || 'Outros'
+      const t = d.tipo || d.categoria || 'Outros'
       if (!map[t]) map[t] = { _k: t, tipo: t, pago: 0, pendente: 0, total: 0, qty: 0 }
-      map[t].total += d.value || 0
+      const v = Number(d.value) || 0
+      map[t].total += v
       map[t].qty += 1
-      if (d.status === 'pago') map[t].pago += d.value || 0
-      else map[t].pendente += d.value || 0
+      if (d.status === 'pago') map[t].pago += v
+      else map[t].pendente += v
     })
     return Object.values(map).sort((a, b) => b.total - a.total)
   }, [despWin])
@@ -1847,8 +1923,8 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
             ]} rows={despPorTipo} />
           </Card>
           <Card title="Lançamentos de despesas" icon="fa-list">
-            <TabelaPaginada per={15} cols={[
-              { key: 'd', label: 'Data', num: false, render: r => r.dueDate ? formatDate(r.dueDate) : '-' },
+            <TabelaPaginada per={15} defaultSortKey="dueDate" defaultSortDir="desc" cols={[
+              { key: 'dueDate', label: 'Data', num: false, render: r => (r.dueDate || r.paidDate || r.date) ? formatDate(r.dueDate || r.paidDate || r.date) : '-' },
               { key: 'tipo', label: 'Tipo' },
               { key: 'descricao', label: 'Descrição', render: r => r.descricao || '-' },
               { key: 'value', label: 'Valor', num: true, render: r => formatPreco(r.value) },

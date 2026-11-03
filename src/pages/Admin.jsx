@@ -644,6 +644,31 @@ Em caso de dúvidas, entre em contato conosco.
   return templates[newStatus] || `📋 *Atualização do Pedido ${id}* 📋\n━━━━━━━━━━━━━━━━━━\nStatus: ${newStatus}\n🔗 ${link}`
 }
 
+export const normalizeDespesa = (d) => {
+  if (!d) return null
+  const numVal = Number(d.value !== undefined && d.value !== null && d.value !== '' ? d.value : (d.valor !== undefined && d.valor !== null && d.valor !== '' ? d.valor : (d.data?.valor || d.data?.value || 0))) || 0
+  const cleanVal = Math.round(numVal * 100) / 100
+  const dateStr = d.dueDate || d.paidDate || d.date || d.data?.dueDate || d.data?.paidDate || d.data?.date || (d.createdAt ? new Date(d.createdAt).toISOString().slice(0, 10) : hoje())
+  const tipoStr = d.tipo || d.categoria || d.data?.categoria || d.data?.tipo || 'Outros'
+  const descStr = d.descricao || d.estabelecimento || d.data?.descricao || '-'
+  const statusStr = d.status || (d.paidDate ? 'pago' : 'pendente')
+  const pmStr = d.paymentMethod || d.formaPagamento || d.data?.formaPagamento || 'pix'
+  return {
+    ...d,
+    value: cleanVal,
+    valor: cleanVal,
+    dueDate: dateStr,
+    paidDate: d.paidDate || (statusStr === 'pago' ? dateStr : null),
+    date: dateStr,
+    tipo: tipoStr,
+    categoria: d.categoria || tipoStr,
+    descricao: descStr,
+    status: statusStr,
+    paymentMethod: pmStr,
+    formaPagamento: d.formaPagamento || pmStr
+  }
+}
+
 function sendStatusWebhook(order, newStatus, extra = {}) {
   try {
     if (order?.notificarWhatsApp === false) {
@@ -998,6 +1023,19 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [despPeriodMonth, setDespPeriodMonth] = useState(hoje().slice(0, 7))
   const [despRangeStart, setDespRangeStart] = useState('')
   const [despRangeEnd, setDespRangeEnd] = useState('')
+  const [despSort, setDespSort] = useState({ key: 'dueDate', direction: 'desc' })
+
+  const handleDespSort = (key) => {
+    setDespSort(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }))
+  }
+
+  const renderDespSortIcon = (key) => {
+    if (despSort.key !== key) return <i className="fa-solid fa-sort" style={{ opacity: 0.3, marginLeft: '5px' }}></i>
+    return <i className={`fa-solid fa-sort-${despSort.direction === 'asc' ? 'up' : 'down'}`} style={{ marginLeft: '5px', color: 'var(--accent, #6366f1)' }}></i>
+  }
   const [showDespesaModal, setShowDespesaModal] = useState(false)
   const [editingDespesa, setEditingDespesa] = useState(null)
   const [quitarFinTarget, setQuitarFinTarget] = useState(null)
@@ -4053,6 +4091,9 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         } else if (finSort.key === 'qty' || finSort.key === 'value' || finSort.key === 'custo') {
           valA = Number(valA || 0)
           valB = Number(valB || 0)
+        } else if (finSort.key === 'dias') {
+          valA = diffDays(hoje(), a.dueDate)
+          valB = diffDays(hoje(), b.dueDate)
         }
         if (valA < valB) return finSort.direction === 'asc' ? -1 : 1
         if (valA > valB) return finSort.direction === 'asc' ? 1 : -1
@@ -4069,17 +4110,42 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     return { pendente, pago, atrasado }
   }, [financial])
 
+  const allDespesasNormalized = useMemo(() => (despesas || []).map(normalizeDespesa).filter(Boolean), [despesas])
+
   const filteredDespesas = useMemo(() => {
-    let result = despesas
+    let result = allDespesasNormalized
     if (despesaFilter !== 'todas') result = result.filter(d => d.status === despesaFilter)
     result = result.filter(d => inPeriod(d.dueDate, despPeriod, despPeriodMonth, despRangeStart, despRangeEnd))
+    if (despSort.key) {
+      result = [...result].sort((a, b) => {
+        let valA = a[despSort.key]
+        let valB = b[despSort.key]
+        if (valA == null && valB == null) return 0
+        if (valA == null) return 1
+        if (valB == null) return -1
+        if (despSort.key === 'dueDate' || despSort.key === 'paidDate') {
+          valA = new Date(valA || '1970-01-01').getTime()
+          valB = new Date(valB || '1970-01-01').getTime()
+        } else if (despSort.key === 'value' || despSort.key === 'valor') {
+          valA = Number(valA || 0)
+          valB = Number(valB || 0)
+        } else {
+          valA = String(valA).toLowerCase()
+          valB = String(valB).toLowerCase()
+          return despSort.direction === 'asc' ? valA.localeCompare(valB, 'pt-BR') : valB.localeCompare(valA, 'pt-BR')
+        }
+        if (valA < valB) return despSort.direction === 'asc' ? -1 : 1
+        if (valA > valB) return despSort.direction === 'asc' ? 1 : -1
+        return 0
+      })
+    }
     return result
-  }, [despesas, despesaFilter, despPeriod, despPeriodMonth, despRangeStart, despRangeEnd])
+  }, [allDespesasNormalized, despesaFilter, despPeriod, despPeriodMonth, despRangeStart, despRangeEnd, despSort])
 
-  const despesasPendentes = useMemo(() => despesas.filter(d => d.status === 'pendente').reduce((s, d) => s + d.value, 0), [despesas])
+  const despesasPendentes = useMemo(() => allDespesasNormalized.filter(d => d.status === 'pendente').reduce((s, d) => s + (Number(d.value) || 0), 0), [allDespesasNormalized])
 
   const finTotalFiltered = useMemo(() => filteredFin.reduce((s, f) => s + f.value, 0), [filteredFin])
-  const despesasTotalFiltered = useMemo(() => filteredDespesas.reduce((s, d) => s + d.value, 0), [filteredDespesas])
+  const despesasTotalFiltered = useMemo(() => filteredDespesas.reduce((s, d) => s + (Number(d.value) || 0), 0), [filteredDespesas])
 
   const quitarFin = (id) => {
     const target = financial.find(f => f.id === id)
@@ -6534,7 +6600,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
             <CentralAnalise
               orders={orders}
               financial={financial}
-              despesas={despesas}
+              despesas={allDespesasNormalized}
               produtos={produtosAtuais}
               usuarios={usuarios}
               onBack={() => setTab('dashboard')}
@@ -7498,7 +7564,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                             <th onClick={() => handleFinSort('value')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Valor {renderSortIcon('value')}</th>
                             <th onClick={() => handleFinSort('custo')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Custo {renderSortIcon('custo')}</th>
                             <th onClick={() => handleFinSort('dueDate')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Vencimento {renderSortIcon('dueDate')}</th>
-                            <th>Dias</th>
+                            <th onClick={() => handleFinSort('dias')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Dias {renderSortIcon('dias')}</th>
                             <th onClick={() => handleFinSort('status')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Status {renderSortIcon('status')}</th>
                             <th onClick={() => handleFinSort('paymentMethod')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Forma {renderSortIcon('paymentMethod')}</th>
                             <th>Pagamento</th>
@@ -7612,13 +7678,13 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                     <table className="admin-table">
                       <thead>
                         <tr>
-                          <th>Tipo</th>
-                          <th>Descrição</th>
-                          <th>Valor</th>
-                          <th>Vencimento</th>
-                          <th>Forma</th>
-                          <th>Status</th>
-                          <th>Pagamento</th>
+                          <th onClick={() => handleDespSort('tipo')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Tipo {renderDespSortIcon('tipo')}</th>
+                          <th onClick={() => handleDespSort('descricao')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Descrição {renderDespSortIcon('descricao')}</th>
+                          <th onClick={() => handleDespSort('value')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Valor {renderDespSortIcon('value')}</th>
+                          <th onClick={() => handleDespSort('dueDate')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Vencimento {renderDespSortIcon('dueDate')}</th>
+                          <th onClick={() => handleDespSort('paymentMethod')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Forma {renderDespSortIcon('paymentMethod')}</th>
+                          <th onClick={() => handleDespSort('status')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Status {renderDespSortIcon('status')}</th>
+                          <th onClick={() => handleDespSort('paidDate')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>Pagamento {renderDespSortIcon('paidDate')}</th>
                           <th>Ações</th>
                         </tr>
                       </thead>
@@ -7675,7 +7741,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
             )}
 
             {finTab === 'relatorios' && (
-              <RelatoriosPanel orders={orders} financial={financial} despesas={despesas} produtos={produtosAtuais} usuarios={usuarios} rotas={rotas} />
+              <RelatoriosPanel orders={orders} financial={financial} despesas={allDespesasNormalized} produtos={produtosAtuais} usuarios={usuarios} rotas={rotas} />
             )}
           </div>
         )}
@@ -9403,6 +9469,48 @@ function RepTotals({ items }) {
 function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rotas }) {
   const produtosAtuais = produtos || []
   const [rep, setRep] = useState('dashboard')
+  const [repDespSort, setRepDespSort] = useState({ key: 'dueDate', direction: 'desc' })
+  const [repCaloteSort, setRepCaloteSort] = useState({ key: 'caloteTotalCusto', direction: 'desc' })
+  const [repAtrasoSort, setRepAtrasoSort] = useState({ key: 'diasAtraso', direction: 'desc' })
+
+  const renderRepSortTh = (label, key, currentSort, setSort, alignRight = false) => {
+    const isSorted = currentSort?.key === key
+    const dir = currentSort?.direction || 'desc'
+    return (
+      <th
+        onClick={() => setSort(prev => ({ key, direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc' }))}
+        style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap', textAlign: alignRight ? 'right' : 'left' }}
+        title={`Clique para ordenar por ${label} (${isSorted ? (dir === 'asc' ? 'Crescente' : 'Decrescente') : 'Clique para ordenar'})`}
+      >
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', justifyContent: alignRight ? 'flex-end' : 'flex-start' }}>
+          <span>{label}</span>
+          <i
+            className={`fa-solid ${isSorted ? (dir === 'asc' ? 'fa-arrow-up-short-wide' : 'fa-arrow-down-wide-short') : 'fa-sort'}`}
+            style={{ fontSize: '0.72rem', opacity: isSorted ? 1 : 0.35, color: isSorted ? 'var(--accent, #6366f1)' : 'inherit' }}
+          />
+        </div>
+      </th>
+    )
+  }
+
+  const sortGenericList = (list, sortConfig) => {
+    if (!sortConfig?.key) return list
+    return [...list].sort((a, b) => {
+      let valA = a[sortConfig.key]
+      let valB = b[sortConfig.key]
+      if (valA == null && valB == null) return 0
+      if (valA == null) return 1
+      if (valB == null) return -1
+      if (typeof valA === 'number' || typeof valB === 'number') {
+        const numA = Number(valA) || 0
+        const numB = Number(valB) || 0
+        return sortConfig.direction === 'asc' ? numA - numB : numB - numA
+      }
+      const strA = String(valA).toLowerCase()
+      const strB = String(valB).toLowerCase()
+      return sortConfig.direction === 'asc' ? strA.localeCompare(strB, 'pt-BR') : strB.localeCompare(strA, 'pt-BR')
+    })
+  }
   const [period, setPeriod] = useState('all')
   const [month, setMonth] = useState(hoje().slice(0, 7))
   const [rangeStart, setRangeStart] = useState('')
@@ -9994,18 +10102,35 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
           </div>
 
           <table className="admin-table">
-            <thead><tr><th>Pedido</th><th>Cliente</th><th>Telefone</th><th>Cidade</th><th>Data</th><th>Peças Caloteadas</th><th>Prejuízo Real (Custo)</th><th>Venda Não Recebida</th></tr></thead>
+            <thead>
+              <tr>
+                {renderRepSortTh('Pedido', 'id', repCaloteSort, setRepCaloteSort)}
+                {renderRepSortTh('Cliente', 'clienteNome', repCaloteSort, setRepCaloteSort)}
+                <th>Telefone</th>
+                <th>Cidade</th>
+                {renderRepSortTh('Data', 'date', repCaloteSort, setRepCaloteSort)}
+                {renderRepSortTh('Peças Caloteadas', 'calotePecas', repCaloteSort, setRepCaloteSort, true)}
+                {renderRepSortTh('Prejuízo Real (Custo)', 'caloteTotalCusto', repCaloteSort, setRepCaloteSort, true)}
+                {renderRepSortTh('Venda Não Recebida', 'caloteTotalVenda', repCaloteSort, setRepCaloteSort, true)}
+              </tr>
+            </thead>
             <tbody>
-              {calotesList.map(o => (
+              {sortGenericList(calotesList.map(o => ({
+                ...o,
+                clienteNome: o.customer?.nome || '',
+                calotePecas: o.calotePecas || (o.items || []).reduce((s, i) => s + (Number(i.qty) || 0), 0),
+                caloteTotalCusto: o.caloteTotalCusto || 0,
+                caloteTotalVenda: o.caloteTotalVenda || o.total || 0
+              })), repCaloteSort).map(o => (
                 <tr key={o.id}>
                   <td className="td-prod-name">#{String(o.id).slice(-6)}</td>
                   <td>{o.customer?.nome || '-'}</td>
                   <td>{o.customer?.telefone || '-'}</td>
                   <td>{o.customer?.endereco?.cidade || '-'}</td>
                   <td>{formatDate(o.date)}</td>
-                  <td><strong style={{ color: '#dc2626' }}>{o.calotePecas || (o.items || []).reduce((s, i) => s + (Number(i.qty) || 0), 0)} un</strong></td>
-                  <td className="td-price" style={{ color: '#b91c1c' }}>{formatPreco(o.caloteTotalCusto || 0)}</td>
-                  <td className="td-price">{formatPreco(o.caloteTotalVenda || o.total || 0)}</td>
+                  <td style={{ textAlign: 'right' }}><strong style={{ color: '#dc2626' }}>{o.calotePecas} un</strong></td>
+                  <td className="td-price" style={{ color: '#b91c1c', textAlign: 'right' }}>{formatPreco(o.caloteTotalCusto)}</td>
+                  <td className="td-price" style={{ textAlign: 'right' }}>{formatPreco(o.caloteTotalVenda)}</td>
                 </tr>
               ))}
               {calotesList.length === 0 && <tr><td colSpan="8" className="td-empty">Nenhum calote registrado no período selecionado!</td></tr>}
@@ -10048,15 +10173,24 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
 
           <h4 style={{ fontSize: '0.9rem', margin: '1rem 0 0.5rem 0' }}>Recebimentos quitados após o vencimento</h4>
           <table className="admin-table">
-            <thead><tr><th>Cliente</th><th>Valor Recebido</th><th>Vencimento Original</th><th>Data do Pagamento</th><th>Atraso</th><th>Forma</th></tr></thead>
+            <thead>
+              <tr>
+                {renderRepSortTh('Cliente', 'customerName', repAtrasoSort, setRepAtrasoSort)}
+                {renderRepSortTh('Valor Recebido', 'value', repAtrasoSort, setRepAtrasoSort, true)}
+                {renderRepSortTh('Vencimento Original', 'dueDate', repAtrasoSort, setRepAtrasoSort)}
+                {renderRepSortTh('Data do Pagamento', 'paidDate', repAtrasoSort, setRepAtrasoSort)}
+                {renderRepSortTh('Atraso', 'diasAtraso', repAtrasoSort, setRepAtrasoSort, true)}
+                {renderRepSortTh('Forma', 'paymentMethod', repAtrasoSort, setRepAtrasoSort)}
+              </tr>
+            </thead>
             <tbody>
-              {pagosAtraso.map((f, i) => (
+              {sortGenericList(pagosAtraso, repAtrasoSort).map((f, i) => (
                 <tr key={f.id || i}>
                   <td className="td-prod-name">{f.customerName || '-'}</td>
-                  <td className="td-price" style={{ color: '#059669' }}><strong>{formatPreco(f.value)}</strong></td>
+                  <td className="td-price" style={{ color: '#059669', textAlign: 'right' }}><strong>{formatPreco(f.value)}</strong></td>
                   <td>{formatDate(f.dueDate)}</td>
                   <td>{formatDate(f.paidDate)}</td>
-                  <td><strong style={{ color: '#dc2626' }}>+{f.diasAtraso} dias</strong></td>
+                  <td style={{ textAlign: 'right' }}><strong style={{ color: '#dc2626' }}>+{f.diasAtraso} dias</strong></td>
                   <td>{f.paymentMethod || '-'}</td>
                 </tr>
               ))}
@@ -10771,9 +10905,18 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
             </RepCard>
           </div>
           <table className="admin-table" style={{ marginTop: '0.75rem' }}>
-            <thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Pagamento</th><th>Valor</th><th>Status</th></tr></thead>
+            <thead>
+              <tr>
+                {renderRepSortTh('Data', 'dueDate', repDespSort, setRepDespSort)}
+                {renderRepSortTh('Tipo', 'tipo', repDespSort, setRepDespSort)}
+                {renderRepSortTh('Descrição', 'descricao', repDespSort, setRepDespSort)}
+                {renderRepSortTh('Pagamento', 'paymentMethod', repDespSort, setRepDespSort)}
+                {renderRepSortTh('Valor', 'value', repDespSort, setRepDespSort, true)}
+                {renderRepSortTh('Status', 'status', repDespSort, setRepDespSort)}
+              </tr>
+            </thead>
             <tbody>
-              {[...despIn].sort((a, b) => (b.dueDate || '').localeCompare(a.dueDate || '')).map(d => {
+              {sortGenericList(despIn, repDespSort).map(d => {
                 const pm = formatPagamento(d.paymentMethod)
                 return (
                   <tr key={d.id}>
@@ -10781,7 +10924,7 @@ function RelatoriosPanel({ orders, financial, despesas, produtos, usuarios, rota
                     <td><span className="despesa-tipo">{d.tipo}</span></td>
                     <td>{d.descricao || '-'}</td>
                     <td>{pm ? <span className={`pag-badge pag-badge-${d.paymentMethod}`}>{pm.label}</span> : '-'}</td>
-                    <td className="td-price" style={{ color: 'var(--danger)' }}>{formatPreco(d.value)}</td>
+                    <td className="td-price" style={{ color: 'var(--danger)', textAlign: 'right' }}>{formatPreco(d.value)}</td>
                     <td><span className={`rep-badge ${d.status === 'pago' ? 'status-ok-badge' : 'status-pend-badge'}`}>{d.status === 'pago' ? 'Pago' : 'Pendente'}</span></td>
                   </tr>
                 )

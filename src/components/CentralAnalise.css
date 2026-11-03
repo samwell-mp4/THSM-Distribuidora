@@ -452,6 +452,15 @@
   top: 0;
   white-space: nowrap;
 }
+.ca-tbl thead th.ca-th-sortable {
+  cursor: pointer !important;
+  user-select: none;
+  transition: all 150ms ease;
+}
+.ca-tbl thead th.ca-th-sortable:hover {
+  background: #ebebf4;
+  color: #1e1b4b;
+}
 .ca-tbl tbody td {
   padding: 9px 12px;
   border-bottom: 1px solid #f1f1f4;

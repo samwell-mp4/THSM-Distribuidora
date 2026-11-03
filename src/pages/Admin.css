@@ -613,6 +613,21 @@ html, body {
   user-select: none;
 }
 
+.admin-table th[style*="cursor: pointer"],
+.admin-table th[style*="cursor:pointer"],
+.admin-table th.th-sortable {
+  cursor: pointer !important;
+  user-select: none;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.admin-table th[style*="cursor: pointer"]:hover,
+.admin-table th[style*="cursor:pointer"]:hover,
+.admin-table th.th-sortable:hover {
+  background: #F1F5F9 !important;
+  color: var(--accent, #6366f1) !important;
+}
+
 .admin-table th:hover {
   color: var(--accent);
 }

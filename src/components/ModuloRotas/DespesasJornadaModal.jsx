@@ -48,18 +48,26 @@ export default function DespesasJornadaModal({
       id: Date.now(),
       jornadaId: jornada?.id || null,
       categoria, // combustivel, pedagio, alimentacao, estacionamento, manutencao, outros
+      tipo: categoria === 'combustivel' ? 'Combustível' : categoria === 'pedagio' ? 'Pedágio' : categoria === 'alimentacao' ? 'Alimentação' : categoria === 'estacionamento' ? 'Estacionamento' : categoria === 'manutencao' ? 'Manutenção' : 'Outros',
       valor: Math.round(val * 100) / 100,
+      value: Math.round(val * 100) / 100,
       formaPagamento, // dinheiro_caixa, pix, cartao_empresa, outro
-      descricao: descricao.trim(),
+      paymentMethod: formaPagamento === 'dinheiro_caixa' ? 'dinheiro' : formaPagamento === 'cartao_empresa' ? 'cartao' : formaPagamento,
+      descricao: descricao.trim() || `Despesa de rota (${categoria})`,
       estabelecimento: descricao.trim(),
       comprovanteUrl: comprovanteUrl || '',
       status: 'pago',
+      dueDate: localISOTime,
       paidDate: localISOTime,
+      date: localISOTime,
       createdAt: Date.now(),
       data: {
         categoria,
+        tipo: categoria,
         valor: Math.round(val * 100) / 100,
+        value: Math.round(val * 100) / 100,
         formaPagamento,
+        paymentMethod: formaPagamento,
         descricao: descricao.trim(),
         jornadaId: jornada?.id || null,
         origem: 'central_rotas'
