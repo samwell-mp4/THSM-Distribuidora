@@ -675,6 +675,11 @@ function sendStatusWebhook(order, newStatus, extra = {}) {
       console.log(`[WhatsApp] Disparo abortado: comanda #${order?.id} está com notificarWhatsApp desativado.`)
       return
     }
+    // NUNCA disparar mensagem de WhatsApp para pedidos em Calote
+    if (newStatus === 'calote' || order?.isCalote || order?.status === 'calote' || extra?.isCalote || extra?.motivo === 'calote_100') {
+      console.log(`[WhatsApp] Disparo abortado: comanda #${order?.id} é calote (nenhuma mensagem enviada ao cliente).`)
+      return
+    }
     if (order?.status === 'pre-pedido' && newStatus === 'pendente') return
     const whatsappMessage = buildStatusWhatsApp(order, newStatus, extra)
     const returnedItems = extra.returnedItems || order.returnedItems || []
@@ -2410,14 +2415,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       })
 
       showToast(`⚠️ Pedido #${String(orderId).slice(-6)} registrado como CALOTE! Prejuízo de ${formatPreco(caloteTotalCusto)} (${calotePecas} peças perdidas${returnedItemsCalote.length > 0 ? `, ${returnedItemsCalote.reduce((s, r) => s + r.qty, 0)} devolvidas` : ''}).`, 'warning')
-      sendStatusWebhook(updatedOrder, 'calote', {
-        isCalote: true,
-        calotePecas,
-        caloteTotalCusto,
-        caloteTotalVenda,
-        motivo: 'calote_100'
-      })
 
+      // Calote total/integral NÃO dispara mensagem de WhatsApp para o cliente
       setShowDeliveryModal(null)
       setDeliveryIsCalote(false)
       setDeliveryCaloteQuantities({})
@@ -8075,11 +8074,17 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
               <button className="admin-modal-close" onClick={() => setShowDeliveryModal(null)}><i className="fa-solid fa-xmark"></i></button>
             </div>
             <div className="admin-modal-body">
-              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '0.5rem 0.75rem', marginBottom: '0.75rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem', flexWrap: 'wrap', gap: '0.4rem' }}>
-                  <p style={{ fontSize: '0.78rem', color: '#1e40af', margin: 0 }}>
-                    <i className="fa-solid fa-info-circle"></i> Notificação de <strong>{deliveryModalMode === 'finalizar' ? 'Pedido Finalizado' : 'Acerto'}</strong> no WhatsApp:
-                  </p>
+              {deliveryIsCalote ? (
+                <div style={{ background: '#fef2f2', border: '1px solid #fecdd3', borderRadius: '8px', padding: '0.55rem 0.75rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#991b1b', fontSize: '0.78rem' }}>
+                  <i className="fa-solid fa-bell-slash" style={{ fontSize: '1.05rem', color: '#dc2626' }}></i>
+                  <span><strong>Nenhuma mensagem será enviada ao cliente no WhatsApp</strong> ao registrar calote.</span>
+                </div>
+              ) : (
+                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '0.5rem 0.75rem', marginBottom: '0.75rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+                    <p style={{ fontSize: '0.78rem', color: '#1e40af', margin: 0 }}>
+                      <i className="fa-solid fa-info-circle"></i> Notificação de <strong>{deliveryModalMode === 'finalizar' ? 'Pedido Finalizado' : 'Acerto'}</strong> no WhatsApp:
+                    </p>
                   <label
                     className={`action-zap-switch ${showDeliveryModal.notificarWhatsApp !== false ? 'zap-on' : 'zap-off'}`}
                     title={showDeliveryModal.notificarWhatsApp !== false ? 'Disparo no WhatsApp ATIVO' : 'Disparo no WhatsApp DESATIVADO'}
@@ -8107,6 +8112,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                   </button>
                 </div>
               </div>
+              )}
               {/* BANNER E BOTÃO DE CALOTE 100% / PERDA TOTAL */}
               <div style={{
                 background: deliveryIsCalote ? '#fef2f2' : '#f8fafc',
