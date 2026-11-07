@@ -296,6 +296,7 @@ export default function CloneOrderModal({ originalOrder, usuarios = [], produtos
                 { id: 'em-rota', label: 'Em Rota' },
                 { id: 'entregue', label: 'Entregue' },
                 { id: 'acerto', label: 'Acerto' },
+                { id: 'calote_parcial', label: 'Calote Parcial' },
                 { id: 'concluido', label: 'Concluído' }
               ].map(s => (
                 <button
@@ -697,3 +698,4 @@ export default function CloneOrderModal({ originalOrder, usuarios = [], produtos
     </div>
   )
 }
+

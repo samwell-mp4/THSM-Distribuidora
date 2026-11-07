@@ -47,6 +47,15 @@ const PERIODOS = [
 
 const PAL = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f97316']
 
+
+function calcMedian(arr) {
+  if (!arr || arr.length === 0) return 0
+  const sorted = [...arr].map(Number).filter(n => !isNaN(n)).sort((a, b) => a - b)
+  if (sorted.length === 0) return 0
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+}
+
 const normStr = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 
 const STATUS_LABELS = {
@@ -57,13 +66,17 @@ const STATUS_LABELS = {
   'em-rota': 'Em Rota',
   'acerto': 'Acerto',
   'entregue': 'Entregue',
+  'calote_parcial': 'Calote Parcial',
+  'parcial': 'Calote Parcial',
   'concluido': 'Concluído',
+  'calote': 'Calote 100%',
   'cancelado': 'Cancelado',
 }
 
 const STATUS_OPTIONS = [
   { id: 'todos', label: 'Todos os Status (exceto cancelados)' },
-  { id: 'concluido', label: 'Concluído / Acertado' },
+  { id: 'concluido', label: 'Concluído / Pago' },
+  { id: 'calote_parcial', label: 'Calote Parcial (Saldo Aberto)' },
   { id: 'calote', label: 'Inadimplência / Calote 100%' },
   { id: 'em-rota', label: 'Em Rota' },
   { id: 'acerto', label: 'Em Acerto' },
@@ -206,6 +219,70 @@ const SUBPAGES = [
   { id: 'relatorios', label: 'Relatórios', icon: 'fa-table-list' },
 ]
 
+
+function WaterfallChart({ data }) {
+  if (!data || data.length === 0) return <div className="ca-empty">Sem dados</div>
+  return (
+    <div className="ca-waterfall-container">
+      {data.map((item, i) => (
+        <div key={i} className={`ca-waterfall-card ${item.tipo}`}>
+          <div>
+            <div className="ca-waterfall-step-num">Etapa {item.step}</div>
+            <div className="ca-waterfall-title">{item.label}</div>
+          </div>
+          <div>
+            <div className="ca-waterfall-val" style={{ color: item.color }}>
+              {formatPreco(item.valor)}
+            </div>
+            <div className="ca-waterfall-desc">{item.desc}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function MultiBarChart({ data, getLabel, series }) {
+  if (!data || data.length === 0) return <div className="ca-empty">Sem dados</div>
+  const sData = [...data].reverse()
+  const allVals = sData.flatMap(d => series.map(s => Math.max(0, s.getValue(d) || 0)))
+  const max = Math.max(1, ...allVals)
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: '14px', justifyContent: 'flex-end', marginBottom: '10px', fontSize: '11.5px', fontWeight: 600 }}>
+        {series.map(s => (
+          <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: s.color }}></span>
+            <span style={{ color: '#475569' }}>{s.label}</span>
+          </div>
+        ))}
+      </div>
+      <div className="ca-bars" style={{ height: '210px' }}>
+        {sData.map((d, i) => (
+          <div key={i} className="ca-bar-col">
+            <div className="ca-multi-bar-group">
+              {series.map(s => {
+                const v = Math.max(0, s.getValue(d) || 0)
+                const h = Math.max(2, (v / max) * 150)
+                return (
+                  <div
+                    key={s.key}
+                    className="ca-multi-bar"
+                    style={{ height: `${h}px`, background: s.color }}
+                    title={`${getLabel(d)} - ${s.label}: ${formatPreco(v)}`}
+                  />
+                )
+              })}
+            </div>
+            <span className="ca-bar-label">{getLabel(d)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function BarChart({ data, getLabel, getValue, color = '#4f46e5', fmt = fmtK }) {
   const sData = useMemo(() => [...data].reverse(), [data])
   const max = Math.max(1, ...sData.map(d => Math.max(0, getValue(d))))
@@ -283,6 +360,24 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
   const [cstEnd, setCstEnd] = useState(today())
   const [statusFilter, setStatusFilter] = useState('todos')
   const [relatorio, setRelatorio] = useState('vendas')
+  const [excluirTestes, setExcluirTestes] = useState(true)
+  const [caloteVisao, setCaloteVisao] = useState('custo') // 'custo' | 'venda'
+
+  const isTestOrder = (o) => {
+    if (!o) return false
+    if (o.isTest === true || o.is_test === true || o.pedido_teste === true) return true
+    const nome = (o.customer?.nome || o.customer_name || '').toLowerCase()
+    if (nome.includes('teste') || nome === 'test') return true
+    const obs = (o.obs || o.observacao || '').toLowerCase()
+    if (obs.includes('pedido de teste')) return true
+    return false
+  }
+
+  const baseOrders = useMemo(() => {
+    let list = orders || []
+    if (excluirTestes) list = list.filter(o => !isTestOrder(o))
+    return list
+  }, [orders, excluirTestes])
 
   const win = useMemo(() => {
     const t = today()
@@ -316,7 +411,8 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
 
   const matchStatus = (o, st) => {
     if (!st || st === 'todos') return o.status !== 'cancelado'
-    if (st === 'concluido') return (o.status === 'concluido' || o.isFinalizado === true || o.status === 'acerto') && !o.isCalote && o.status !== 'calote' && o.motivoEncerramento !== 'calote_100'
+    if (st === 'concluido') return (o.status === 'concluido' || (o.isFinalizado === true && !o.isCalote && o.status !== 'calote' && o.status !== 'calote_parcial' && o.status !== 'parcial')) && !o.isCalote && o.status !== 'calote' && o.status !== 'calote_parcial' && o.status !== 'parcial' && o.motivoEncerramento !== 'calote_100'
+    if (st === 'calote_parcial' || st === 'parcial') return o.status === 'calote_parcial' || o.status === 'parcial' || (o.isFinalizado && Number(o.valorEmAberto) > 0 && Number(o.totalPago) > 0)
     if (st === 'calote') return !!(o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
     return o.status === st
   }
@@ -348,8 +444,8 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
     }).filter(Boolean)
   }, [despesas])
 
-  const ordersWin = useMemo(() => orders.filter(o => matchStatus(o, statusFilter) && fit(o.date || '', win)), [orders, win, statusFilter])
-  const ordersPrev = useMemo(() => orders.filter(o => matchStatus(o, statusFilter) && fit(o.date || '', prevWin)), [orders, prevWin, statusFilter])
+  const ordersWin = useMemo(() => baseOrders.filter(o => matchStatus(o, statusFilter) && fit(o.date || '', win)), [baseOrders, win, statusFilter])
+  const ordersPrev = useMemo(() => baseOrders.filter(o => matchStatus(o, statusFilter) && fit(o.date || '', prevWin)), [baseOrders, prevWin, statusFilter])
   const finWin = useMemo(() => financial.filter(f => f.status !== 'cancelado' && fit(f.dueDate || '', win)), [financial, win])
   const finPrev = useMemo(() => financial.filter(f => f.status !== 'cancelado' && fit(f.dueDate || '', prevWin)), [financial, prevWin])
   const despWin = useMemo(() => normDespesas.filter(d => fit(d.dueDate || d.paidDate || d.date || '', win)), [normDespesas, win])
@@ -397,112 +493,226 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
 
   const agg = (list) => {
     let desc = 0, n = 0
-    let mercadoriaColocada = 0
-    let faturamentoConcluido = 0
-    let descConcluido = 0
-    let pedidosConcluidos = 0
+    let pedidosPagos = 0
+    let pedidosParciais = 0
     let pedidosCalote = 0
+    let pedidosZerados = 0
+    let pedidosDevolucaoTotal = 0
+    let pedidosBrinde = 0
+
     let totalItensColocados = 0
     let totalItensVendidos = 0
     let totalItensDevolvidos = 0
     let totalItensCalote = 0
-    let caloteTotalCusto = 0
-    let caloteTotalVenda = 0
-    let custoConcluido = 0
+
+    let valorItensTabela = 0
+    let descontosConcedidos = 0
+
+    let vendasRealizadas = 0 // total a cobrar das finalizadas
+    let receitaRecebida = 0  // soma de totalPago dos pagos e dos parciais
+    let saldoEmAberto = 0    // soma de valorEmAberto dos parciais
+    let vendaNaoRecebida = 0 // preço de venda dos calotes 100%
+
+    let cmvVendidos = 0
+    let prejuizoCaloteCusto = 0
+
+    const valoresPagosArray = []
+    const valoresCalotesArray = []
+    const valoresGeraisArray = []
 
     list.forEach(o => {
       n += 1
-      const isConcluido = o.status === 'concluido' || o.isFinalizado === true || o.status === 'acerto'
       const isCalote = !!(o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
-      const vOriginal = Number(o.totalOriginal || o.totalConsignado || o.total) || 0
-      mercadoriaColocada += vOriginal
+      const isParcial = (o.status === 'calote_parcial' || o.status === 'parcial') || (!isCalote && o.isFinalizado && Number(o.valorEmAberto) > 0 && Number(o.totalPago) > 0)
+      const isConcluido = (o.status === 'concluido' || (o.isFinalizado && !isCalote && !isParcial)) && !isCalote
 
+      const rawItems = o.items || o.data?.items || []
+      const baseItems = o.originalItems || o.data?.originalItems || rawItems
       let itensPedido = 0
-        ; (o.items || []).forEach(i => {
-          itensPedido += Number(i.qty) || 0
-        })
+      let valorTabelaPedido = 0
+
+      baseItems.forEach(i => {
+        const q = Number(i.qty) || 0
+        const p = Number(i.preco) || 0
+        itensPedido += q
+        valorTabelaPedido += p * q
+      })
       totalItensColocados += itensPedido
+      valorItensTabela += Math.round(valorTabelaPedido * 100) / 100
+
+      const d = Number(o.desconto) || 0
+      descontosConcedidos += d
+      desc += d
 
       if (isCalote) {
         pedidosCalote += 1
         const pecas = Number(o.calotePecas) || itensPedido
-        const cCusto = Number(o.caloteTotalCusto) || (o.items || []).reduce((s, i) => s + getItemCost(i) * (Number(i.qty) || 0), 0)
-        const cVenda = Number(o.caloteTotalVenda) || vOriginal
+        const cCusto = Number(o.caloteTotalCusto) || baseItems.reduce((s, i) => s + getItemCost(i) * (Number(i.qty) || 0), 0)
+        const cVenda = Number(o.caloteTotalVenda) || Number(o.totalOriginal || o.total) || valorTabelaPedido
         totalItensCalote += pecas
-        caloteTotalCusto += cCusto
-        caloteTotalVenda += cVenda
+        prejuizoCaloteCusto += cCusto
+        vendaNaoRecebida += cVenda
         const devPecasCalote = (o.returnedItems || []).reduce((s, r) => s + (Number(r.returnedQty || r.qty) || 0), 0)
         totalItensDevolvidos += devPecasCalote
-      } else if (isConcluido) {
-        pedidosConcluidos += 1
-        const fat = Number(o.totalAcerto ?? o.totalPago ?? o.total) || 0
-        faturamentoConcluido += fat
-        const d = Number(o.desconto) || 0
-        descConcluido += d
-        desc += d
+
+        if (cVenda > 0) {
+          valoresCalotesArray.push(cVenda)
+          valoresGeraisArray.push(cVenda)
+        }
+      } else if (isParcial) {
+        pedidosParciais += 1
+        const totalFinal = Number(o.totalAcerto ?? o.total ?? 0)
+        const pago = Number(o.totalPago ?? 0)
+        const aberto = Number(o.valorEmAberto ?? Math.max(0, totalFinal - pago))
+
+        vendasRealizadas += totalFinal
+        receitaRecebida += pago
+        saldoEmAberto += aberto
 
         const retMap = {}
-          ; (o.returnedItems || []).forEach(r => {
-            if (!r) return
-            const k = r.id != null ? String(r.id) : (r.nome || '')
-            retMap[k] = (retMap[k] || 0) + (Number(r.returnedQty || r.qty) || 0)
-          })
+        ;(o.returnedItems || []).forEach(r => {
+          if (!r) return
+          const k = r.id != null ? String(r.id) : (r.nome || '')
+          retMap[k] = (retMap[k] || 0) + (Number(r.returnedQty || r.qty) || 0)
+        })
 
-          ; (o.items || []).forEach(i => {
-            const k = i.id != null ? String(i.id) : (i.nome || '')
-            const totalQ = Number(i.qty) || 0
-            const retQ = retMap[k] || 0
-            const soldQ = Math.max(0, totalQ - retQ)
-            totalItensVendidos += soldQ
-            totalItensDevolvidos += retQ
-            custoConcluido += getItemCost(i) * soldQ
-          })
-      } else {
-        desc += Number(o.desconto) || 0
+        baseItems.forEach(i => {
+          const k = i.id != null ? String(i.id) : (i.nome || '')
+          const totalQ = Number(i.qty) || 0
+          const retQ = retMap[k] || 0
+          const keptQ = Math.max(0, totalQ - retQ)
+          totalItensVendidos += keptQ
+          totalItensDevolvidos += retQ
+          cmvVendidos += getItemCost(i) * keptQ
+        })
+
+        if (totalFinal > 0) {
+          valoresGeraisArray.push(totalFinal)
+        }
+      } else if (isConcluido) {
+        const totalFinal = Number(o.totalAcerto ?? o.totalPago ?? o.total ?? 0)
+        const pago = Number(o.totalPago ?? totalFinal)
+
+        if (totalFinal <= 0 && (!o.items || o.items.length === 0 || totalFinal === 0)) {
+          pedidosZerados += 1
+          if (o.motivoZerado === 'brinde' || o.isBrinde) {
+            pedidosBrinde += 1
+          } else {
+            pedidosDevolucaoTotal += 1
+          }
+        } else {
+          pedidosPagos += 1
+          vendasRealizadas += totalFinal
+          receitaRecebida += pago
+          if (pago > 0) {
+            valoresPagosArray.push(pago)
+            valoresGeraisArray.push(pago)
+          }
+        }
+
+        const retMap = {}
+        ;(o.returnedItems || []).forEach(r => {
+          if (!r) return
+          const k = r.id != null ? String(r.id) : (r.nome || '')
+          retMap[k] = (retMap[k] || 0) + (Number(r.returnedQty || r.qty) || 0)
+        })
+
+        baseItems.forEach(i => {
+          const k = i.id != null ? String(i.id) : (i.nome || '')
+          const totalQ = Number(i.qty) || 0
+          const retQ = retMap[k] || 0
+          const keptQ = Math.max(0, totalQ - retQ)
+          totalItensVendidos += keptQ
+          totalItensDevolvidos += retQ
+          cmvVendidos += getItemCost(i) * keptQ
+        })
       }
     })
 
-    const faturamentoConcluidoLiq = Math.max(0, faturamentoConcluido - descConcluido)
+    const lucroBruto = Math.round((receitaRecebida - cmvVendidos) * 100) / 100
+    const margemBruta = receitaRecebida > 0 ? (lucroBruto / receitaRecebida) * 100 : 0
+    const lucroReal = Math.round((lucroBruto - prejuizoCaloteCusto) * 100) / 100
+    const margemReal = receitaRecebida > 0 ? (lucroReal / receitaRecebida) * 100 : 0
+
+    const totalPedidosComValor = pedidosPagos + pedidosParciais + pedidosCalote
+    const pctPedidosCalote = totalPedidosComValor > 0 ? ((pedidosCalote + pedidosParciais) / totalPedidosComValor) * 100 : 0
+    const pctPedidosCaloteTotal = (pedidosPagos + pedidosCalote) > 0 ? (pedidosCalote / (pedidosPagos + pedidosCalote)) * 100 : 0
+
+    const totalValorEnviado = receitaRecebida + vendaNaoRecebida + saldoEmAberto
+    const pctValorCaloteVenda = (receitaRecebida + vendaNaoRecebida) > 0 ? (vendaNaoRecebida / (receitaRecebida + vendaNaoRecebida)) * 100 : 0
+
+    const ticketMedioPagos = pedidosPagos > 0 ? receitaRecebida / pedidosPagos : 0
+    const medianaPagos = calcMedian(valoresPagosArray)
+
+    const ticketMedioCalotes = pedidosCalote > 0 ? vendaNaoRecebida / pedidosCalote : 0
+    const medianaCalotes = calcMedian(valoresCalotesArray)
+
+    const ticketMedioGeral = valoresGeraisArray.length > 0 ? valoresGeraisArray.reduce((a, b) => a + b, 0) / valoresGeraisArray.length : 0
+    const medianaGeral = calcMedian(valoresGeraisArray)
+
     const taxaConversao = totalItensColocados > 0 ? (totalItensVendidos / totalItensColocados) * 100 : 0
     const taxaCalote = totalItensColocados > 0 ? (totalItensCalote / totalItensColocados) * 100 : 0
-    const taxaCaloteVenda = mercadoriaColocada > 0 ? (caloteTotalVenda / mercadoriaColocada) * 100 : 0
     const mediaPecasPorCalote = pedidosCalote > 0 ? Math.round(totalItensCalote / pedidosCalote) : 0
-    const mediaCustoPorCalote = pedidosCalote > 0 ? Math.round((caloteTotalCusto / pedidosCalote) * 100) / 100 : 0
-    const mediaVendaPorCalote = pedidosCalote > 0 ? Math.round((caloteTotalVenda / pedidosCalote) * 100) / 100 : 0
-    const lucroConcluido = faturamentoConcluidoLiq - custoConcluido
-    const margemConcluida = faturamentoConcluido ? (lucroConcluido / faturamentoConcluido) * 100 : 0
+    const mediaCustoPorCalote = pedidosCalote > 0 ? Math.round((prejuizoCaloteCusto / pedidosCalote) * 100) / 100 : 0
+    const mediaVendaPorCalote = pedidosCalote > 0 ? Math.round((vendaNaoRecebida / pedidosCalote) * 100) / 100 : 0
 
     return {
-      bruto: faturamentoConcluido,
-      liq: faturamentoConcluidoLiq,
-      desc,
-      descConcluido,
-      custo: custoConcluido,
-      qty: totalItensVendidos,
       n,
-      ticket: pedidosConcluidos ? faturamentoConcluido / pedidosConcluidos : 0,
-      lucro: lucroConcluido,
-      margem: margemConcluida,
-      mercadoriaColocada,
-      faturamentoConcluido,
-      faturamentoConcluidoLiq,
-      pedidosConcluidos,
+      pedidosPagos,
+      pedidosParciais,
       pedidosCalote,
+      pedidosZerados,
+      pedidosDevolucaoTotal,
+      pedidosBrinde,
       totalItensColocados,
       totalItensVendidos,
       totalItensDevolvidos,
       totalItensCalote,
-      caloteTotalCusto,
-      caloteTotalVenda,
+      valorItensTabela,
+      descontosConcedidos,
+      vendasRealizadas,
+      receitaRecebida,
+      saldoEmAberto,
+      vendaNaoRecebida,
+      cmvVendidos,
+      lucroBruto,
+      margemBruta,
+      prejuizoCaloteCusto,
+      lucroReal,
+      margemReal,
+      pctPedidosCalote,
+      pctPedidosCaloteTotal,
+      pctValorCaloteVenda,
+      ticketMedioPagos,
+      medianaPagos,
+      ticketMedioCalotes,
+      medianaCalotes,
+      ticketMedioGeral,
+      medianaGeral,
       taxaConversao,
       taxaCalote,
-      taxaCaloteVenda,
       mediaPecasPorCalote,
       mediaCustoPorCalote,
       mediaVendaPorCalote,
-      custoConcluido,
-      lucroConcluido,
-      margemConcluida
+      // Fallbacks para compatibilidade com outros sub-relatórios
+      faturamentoConcluido: receitaRecebida,
+      faturamentoConcluidoLiq: receitaRecebida,
+      lucroConcluido: lucroReal,
+      margemConcluida: margemReal,
+      mercadoriaColocada: valorItensTabela,
+      caloteTotalCusto: prejuizoCaloteCusto,
+      caloteTotalVenda: vendaNaoRecebida,
+      pedidosConcluidos: pedidosPagos,
+      custoConcluido: cmvVendidos,
+      ticket: ticketMedioPagos,
+      lucro: lucroReal,
+      margem: margemReal,
+      bruto: vendasRealizadas,
+      liq: receitaRecebida,
+      desc: descontosConcedidos,
+      descConcluido: descontosConcedidos,
+      custo: cmvVendidos,
+      qty: totalItensVendidos
     }
   }
 
@@ -518,7 +728,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
   const serie = useMemo(() => {
     const map = {}
     ordersWin.forEach(o => {
-      const k = (o.date || '').slice(0, 7)
+      const k = (o.date || o.createdAt ? new Date(o.date || o.createdAt).toISOString().slice(0, 7) : '').slice(0, 7)
       if (!k) return
       if (!map[k]) map[k] = {
         mes: k,
@@ -536,73 +746,175 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         caloteCusto: 0,
         caloteVenda: 0,
         pedidosCalote: 0,
+        pedidosParciais: 0,
+        pedidosPagos: 0,
         faturamentoConcluido: 0,
         mercadoriaColocada: 0,
+        receitaRecebida: 0,
+        saldoAberto: 0,
+        vendaNaoRecebida: 0,
+        cmvVendidos: 0
       }
-      const isConcluido = o.status === 'concluido' || o.isFinalizado === true || o.status === 'acerto'
-      const isCalote = !!(o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
-      const vOriginal = Number(o.totalOriginal || o.totalConsignado || o.total) || 0
-      map[k].mercadoriaColocada += vOriginal
 
+      const isCalote = !!(o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
+      const isParcial = (o.status === 'calote_parcial' || o.status === 'parcial') || (!isCalote && o.isFinalizado && Number(o.valorEmAberto) > 0 && Number(o.totalPago) > 0)
+      const isConcluido = (o.status === 'concluido' || (o.isFinalizado && !isCalote && !isParcial)) && !isCalote
+
+      const baseItems = o.originalItems || o.items || o.data?.items || []
       let itensPedido = 0
-        ; (o.items || []).forEach(i => {
-          itensPedido += Number(i.qty) || 0
-        })
-      map[k].itensColocados += itensPedido
+      let valorTabelaPedido = 0
+      baseItems.forEach(i => {
+        const q = Number(i.qty) || 0
+        itensPedido += q
+        valorTabelaPedido += (Number(i.preco) || 0) * q
+      })
+
       map[k].n += 1
+      map[k].itensColocados += itensPedido
+      map[k].mercadoriaColocada += valorTabelaPedido
+      map[k].desc += Number(o.desconto) || 0
 
       if (isCalote) {
         map[k].pedidosCalote += 1
         const pecas = Number(o.calotePecas) || itensPedido
-        const cCusto = Number(o.caloteTotalCusto) || (o.items || []).reduce((s, i) => s + getItemCost(i) * (Number(i.qty) || 0), 0)
-        const cVenda = Number(o.caloteTotalVenda) || vOriginal
+        const cCusto = Number(o.caloteTotalCusto) || baseItems.reduce((s, i) => s + getItemCost(i) * (Number(i.qty) || 0), 0)
+        const cVenda = Number(o.caloteTotalVenda) || valorTabelaPedido
         map[k].calotePecas += pecas
         map[k].caloteCusto += cCusto
         map[k].caloteVenda += cVenda
+        map[k].vendaNaoRecebida += cVenda
+      } else if (isParcial) {
+        map[k].pedidosParciais += 1
+        const totalFinal = Number(o.totalAcerto ?? o.total ?? 0)
+        const pago = Number(o.totalPago ?? 0)
+        const aberto = Number(o.valorEmAberto ?? Math.max(0, totalFinal - pago))
+        map[k].receitaRecebida += pago
+        map[k].faturamentoConcluido += totalFinal
+        map[k].saldoAberto += aberto
+
+        baseItems.forEach(i => {
+          map[k].itensVendidos += Number(i.qty) || 0
+          map[k].cmvVendidos += getItemCost(i) * (Number(i.qty) || 0)
+        })
       } else if (isConcluido) {
-        map[k].nConcluidos += 1
-        const fat = Number(o.totalAcerto ?? o.totalPago ?? o.total) || 0
-        map[k].faturamentoConcluido += fat
-        map[k].bruto += fat
-        map[k].desc += Number(o.desconto) || 0
-        map[k].frete += o.frete || 0
+        const totalFinal = Number(o.totalAcerto ?? o.totalPago ?? o.total ?? 0)
+        const pago = Number(o.totalPago ?? totalFinal)
+        if (totalFinal > 0) {
+          map[k].pedidosPagos += 1
+          map[k].nConcluidos += 1
+          map[k].receitaRecebida += pago
+          map[k].faturamentoConcluido += totalFinal
 
-        const retMap = {}
-          ; (o.returnedItems || []).forEach(r => {
-            if (!r) return
-            const key = r.id != null ? String(r.id) : (r.nome || '')
-            retMap[key] = (retMap[key] || 0) + (Number(r.returnedQty || r.qty) || 0)
+          baseItems.forEach(i => {
+            map[k].itensVendidos += Number(i.qty) || 0
+            map[k].cmvVendidos += getItemCost(i) * (Number(i.qty) || 0)
           })
-
-          ; (o.items || []).forEach(i => {
-            const key = i.id != null ? String(i.id) : (i.nome || '')
-            const totalQ = Number(i.qty) || 0
-            const retQ = retMap[key] || 0
-            const soldQ = Math.max(0, totalQ - retQ)
-            map[k].itensVendidos += soldQ
-            map[k].qtd += soldQ
-            map[k].custo += getItemCost(i) * soldQ
-          })
-      } else {
-        map[k].desc += o.desconto || 0
-        map[k].frete += o.frete || 0
+        }
       }
     })
+
     return Object.values(map).sort((a, b) => a.mes.localeCompare(b.mes)).map(m => {
-      const liq = Math.max(0, m.faturamentoConcluido - m.desc)
+      const liq = m.receitaRecebida
+      const totalPedidosVal = m.pedidosPagos + m.pedidosParciais + m.pedidosCalote
+      const pctPedidosCalote = totalPedidosVal > 0 ? ((m.pedidosCalote + m.pedidosParciais) / totalPedidosVal) * 100 : 0
+      const totalValor = m.receitaRecebida + m.vendaNaoRecebida + m.saldoAberto
+      const pctValorCalote = totalValor > 0 ? ((m.vendaNaoRecebida + m.saldoAberto) / totalValor) * 100 : 0
+      const lucroBruto = m.receitaRecebida - m.cmvVendidos
+      const lucroReal = lucroBruto - m.caloteCusto
       return {
         ...m,
         liq,
-        lucro: liq - m.custo,
-        margem: m.faturamentoConcluido ? ((liq - m.custo) / m.faturamentoConcluido) * 100 : 0,
+        lucroBruto,
+        lucroReal,
+        lucro: lucroReal,
+        margem: m.receitaRecebida > 0 ? (lucroReal / m.receitaRecebida) * 100 : 0,
+        pctPedidosCalote,
+        pctValorCalote,
         taxaConversao: m.itensColocados > 0 ? (m.itensVendidos / m.itensColocados) * 100 : 0,
         taxaCalotePecas: m.itensColocados > 0 ? (m.calotePecas / m.itensColocados) * 100 : 0,
         taxaCaloteVenda: m.mercadoriaColocada > 0 ? (m.caloteVenda / m.mercadoriaColocada) * 100 : 0,
         mediaPecasPorCalote: m.pedidosCalote > 0 ? Math.round(m.calotePecas / m.pedidosCalote) : 0,
-        ticket: m.nConcluidos > 0 ? m.faturamentoConcluido / m.nConcluidos : 0
+        ticket: m.pedidosPagos > 0 ? m.receitaRecebida / m.pedidosPagos : 0
       }
     })
   }, [ordersWin, prodCostMap, getItemCost])
+
+  const cidadesStats = useMemo(() => {
+    const map = {}
+    ordersWin.forEach(o => {
+      const cidade = (o.customer?.endereco?.cidade || o.endereco?.cidade || 'Sem cidade definida').trim()
+      if (!map[cidade]) map[cidade] = { cidade, totalPedidos: 0, calotes: 0, parciais: 0, pagos: 0, totalVenda: 0, valorCalote: 0, prejuizoCusto: 0, receitaRecebida: 0 }
+      map[cidade].totalPedidos += 1
+      const isCalote = !!(o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
+      const isParcial = o.status === 'calote_parcial' || o.status === 'parcial' || (o.isFinalizado && Number(o.valorEmAberto) > 0 && Number(o.totalPago) > 0)
+      const vOriginal = Number(o.totalOriginal || o.totalConsignado || o.total) || 0
+      map[cidade].totalVenda += vOriginal
+
+      if (isCalote) {
+        map[cidade].calotes += 1
+        map[cidade].valorCalote += Number(o.caloteTotalVenda) || vOriginal
+        map[cidade].prejuizoCusto += Number(o.caloteTotalCusto) || 0
+      } else if (isParcial) {
+        map[cidade].parciais += 1
+        map[cidade].receitaRecebida += Number(o.totalPago) || 0
+        map[cidade].valorCalote += Number(o.valorEmAberto) || 0
+      } else {
+        map[cidade].pagos += 1
+        map[cidade].receitaRecebida += Number(o.totalPago ?? o.totalAcerto ?? o.total ?? 0)
+      }
+    })
+
+    const list = Object.values(map).map(c => ({
+      ...c,
+      pctCalotePedidos: c.totalPedidos > 0 ? ((c.calotes + c.parciais) / c.totalPedidos) * 100 : 0,
+      pctCaloteTotal: c.totalPedidos > 0 ? (c.calotes / c.totalPedidos) * 100 : 0,
+      pctCaloteValor: c.totalVenda > 0 ? (c.valorCalote / c.totalVenda) * 100 : 0
+    }))
+
+    const significante = list.filter(c => c.totalPedidos >= 10).sort((a, b) => b.pctCalotePedidos - a.pctCalotePedidos)
+    const pequenaAmostra = list.filter(c => c.totalPedidos < 10).sort((a, b) => b.totalPedidos - a.totalPedidos)
+    return { significante, pequenaAmostra, todas: list.sort((a, b) => b.totalPedidos - a.totalPedidos) }
+  }, [ordersWin])
+
+  const rotasStats = useMemo(() => {
+    const map = {}
+    ordersWin.forEach(o => {
+      let rNome = o.rota || o.route || (usuarios?.find(u => u.telefone === o.customer?.telefone)?.rota) || 'Sem rota'
+      if (!map[rNome]) map[rNome] = { rota: rNome, totalPedidos: 0, calotes: 0, parciais: 0, totalVenda: 0, valorCalote: 0, prejuizoCusto: 0, receitaRecebida: 0 }
+      map[rNome].totalPedidos += 1
+      const isCalote = !!(o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
+      const isParcial = o.status === 'calote_parcial' || o.status === 'parcial' || (o.isFinalizado && Number(o.valorEmAberto) > 0 && Number(o.totalPago) > 0)
+      const vOriginal = Number(o.totalOriginal || o.totalConsignado || o.total) || 0
+      map[rNome].totalVenda += vOriginal
+
+      if (isCalote) {
+        map[rNome].calotes += 1
+        map[rNome].valorCalote += Number(o.caloteTotalVenda) || vOriginal
+        map[rNome].prejuizoCusto += Number(o.caloteTotalCusto) || 0
+      } else if (isParcial) {
+        map[rNome].parciais += 1
+        map[rNome].receitaRecebida += Number(o.totalPago) || 0
+        map[rNome].valorCalote += Number(o.valorEmAberto) || 0
+      } else {
+        map[rNome].receitaRecebida += Number(o.totalPago ?? o.totalAcerto ?? o.total ?? 0)
+      }
+    })
+
+    return Object.values(map).map(r => ({
+      ...r,
+      pctCalotePedidos: r.totalPedidos > 0 ? ((r.calotes + r.parciais) / r.totalPedidos) * 100 : 0
+    })).sort((a, b) => b.pctCalotePedidos - a.pctCalotePedidos)
+  }, [ordersWin, usuarios])
+
+  const waterfallData = useMemo(() => {
+    return [
+      { step: 1, label: 'Receita Líquida Recebida', valor: cur.receitaRecebida, tipo: 'entrada', color: '#10b981', desc: 'Total recebido das vendas pagas e parciais' },
+      { step: 2, label: '(-) CMV (Custo Produtos)', valor: cur.cmvVendidos, tipo: 'saida', color: '#f97316', desc: 'Custo de compra das mercadorias vendidas' },
+      { step: 3, label: '(=) Lucro Bruto', valor: cur.lucroBruto, tipo: 'subtotal', color: '#3b82f6', desc: 'Receita recebida menos o custo das mercadorias' },
+      { step: 4, label: '(-) Prejuízo com Calote', valor: cur.prejuizoCaloteCusto, tipo: 'saida', color: '#ef4444', desc: 'Custo real das mercadorias perdidas em calote' },
+      { step: 5, label: '(=) Lucro Real THSM', valor: cur.lucroReal, tipo: 'total', color: cur.lucroReal >= 0 ? '#059669' : '#dc2626', desc: 'Resultado financeiro líquido real após calotes' }
+    ]
+  }, [cur])
 
   const prodRank = useMemo(() => {
     const map = {}
@@ -797,44 +1109,304 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
 
   const renderGeral = () => (
     <>
-      <div className="ca-kpis">
-        <Kpi
-          icon="fa-sack-dollar"
-          label="Faturamento Real (Concluído)"
-          value={formatPreco(cur.faturamentoConcluido)}
-          change={delta(cur.faturamentoConcluido, prev.faturamentoConcluido)}
-          hint={`${cur.pedidosConcluidos} pedido(s) concluído(s)`}
-        />
-        <Kpi
-          icon="fa-truck-ramp-box"
-          label="Mercadoria Colocada (Praça)"
-          value={formatPreco(cur.mercadoriaColocada)}
-          change={delta(cur.mercadoriaColocada, prev.mercadoriaColocada)}
-          hint={`${fmtNum(cur.totalItensColocados)} peças distribuídas`}
-        />
-        <Kpi
-          icon="fa-chart-pie"
-          label="Conversão / Giro"
-          value={`${cur.taxaConversao.toFixed(1)}%`}
-          change={delta(cur.taxaConversao, prev.taxaConversao)}
-          hint={`${fmtNum(cur.totalItensVendidos)} de ${fmtNum(cur.totalItensColocados)} peças vendidas`}
-        />
-        <Kpi
-          icon="fa-arrow-trend-up"
-          label="Margem Média Real"
-          value={`${cur.margemConcluida.toFixed(1)}%`}
-          change={delta(cur.lucroConcluido, prev.lucroConcluido)}
-          hint={`Lucro: ${formatPreco(cur.lucroConcluido)}`}
-        />
+      {/* 5 BLOCOS DO RESUMO GERAL THSM (CONFORME RELATORIOS.MD) */}
+      <div className="ca-thsm-blocks-wrapper">
+        {/* BLOCO 1: VOLUME */}
+        <div className="ca-thsm-block">
+          <div className="ca-thsm-block-header">
+            <h3><i className="fa-solid fa-boxes-stacked" style={{ color: '#4f46e5' }}></i> 1. Volume de Pedidos & Mercadorias</h3>
+            <span style={{ fontSize: '11px', color: '#64748b' }}>Base de pedidos do período</span>
+          </div>
+          <div className="ca-thsm-block-grid">
+            <div className="ca-thsm-metric-card highlight">
+              <span className="ca-thsm-metric-label">Pedidos Pagos (Concluídos)</span>
+              <span className="ca-thsm-metric-value" style={{ color: '#15803d' }}>{cur.pedidosPagos}</span>
+              <span className="ca-thsm-metric-sub">Comandas com valor recebido</span>
+            </div>
+            <div className="ca-thsm-metric-card warning">
+              <span className="ca-thsm-metric-label">Calote Parcial (Saldo Aberto)</span>
+              <span className="ca-thsm-metric-value" style={{ color: '#b45309' }}>{cur.pedidosParciais}</span>
+              <span className="ca-thsm-metric-sub">Pagamento parcial registrado</span>
+            </div>
+            <div className="ca-thsm-metric-card danger">
+              <span className="ca-thsm-metric-label">Calotes Totais (100%)</span>
+              <span className="ca-thsm-metric-value" style={{ color: '#dc2626' }}>{cur.pedidosCalote}</span>
+              <span className="ca-thsm-metric-sub">Inadimplência integral de comanda</span>
+            </div>
+            <div className="ca-thsm-metric-card">
+              <span className="ca-thsm-metric-label">Pedidos Zerados (R$ 0)</span>
+              <span className="ca-thsm-metric-value">{cur.pedidosZerados}</span>
+              <span className="ca-thsm-metric-sub">{cur.pedidosDevolucaoTotal} devolução total &middot; {cur.pedidosBrinde} brinde</span>
+            </div>
+            <div className="ca-thsm-metric-card">
+              <span className="ca-thsm-metric-label">Total de Peças Enviadas</span>
+              <span className="ca-thsm-metric-value">{fmtNum(cur.totalItensColocados)} un</span>
+              <span className="ca-thsm-metric-sub">{fmtNum(cur.totalItensVendidos)} vendidas &middot; {fmtNum(cur.totalItensDevolvidos)} devolvidas &middot; {fmtNum(cur.totalItensCalote)} calote</span>
+            </div>
+          </div>
+        </div>
+
+        {/* BLOCO 2: FATURAMENTO */}
+        <div className="ca-thsm-block">
+          <div className="ca-thsm-block-header">
+            <h3><i className="fa-solid fa-file-invoice-dollar" style={{ color: '#0ea5e9' }}></i> 2. Faturamento, Recebimento & Dívida</h3>
+            <span style={{ fontSize: '11px', color: '#64748b' }}>Entradas de caixa vs Valores em aberto</span>
+          </div>
+          <div className="ca-thsm-block-grid">
+            <div className="ca-thsm-metric-card">
+              <span className="ca-thsm-metric-label">Valor dos Itens (Preço de Tabela)</span>
+              <span className="ca-thsm-metric-value">{formatPreco(cur.valorItensTabela)}</span>
+              <span className="ca-thsm-metric-sub">Preço de tabela integral das peças colocadas</span>
+            </div>
+            <div className="ca-thsm-metric-card">
+              <span className="ca-thsm-metric-label">Descontos Concedidos</span>
+              <span className="ca-thsm-metric-value" style={{ color: '#b91c1c' }}>-{formatPreco(cur.descontosConcedidos)}</span>
+              <span className="ca-thsm-metric-sub">Revendedoras, cupons e ajustes manuais</span>
+            </div>
+            <div className="ca-thsm-metric-card highlight">
+              <span className="ca-thsm-metric-label">Receita Líquida Recebida</span>
+              <span className="ca-thsm-metric-value" style={{ color: '#15803d' }}>{formatPreco(cur.receitaRecebida)}</span>
+              <span className="ca-thsm-metric-sub">Total que entrou de verdade no caixa</span>
+            </div>
+            <div className="ca-thsm-metric-card warning">
+              <span className="ca-thsm-metric-label">Saldo em Aberto (Calote Parcial)</span>
+              <span className="ca-thsm-metric-value" style={{ color: '#b45309' }}>{formatPreco(cur.saldoEmAberto)}</span>
+              <span className="ca-thsm-metric-sub">Saldo devido das comandas parciais</span>
+            </div>
+            <div className="ca-thsm-metric-card danger">
+              <span className="ca-thsm-metric-label">Venda Não Recebida (Calote 100%)</span>
+              <span className="ca-thsm-metric-value" style={{ color: '#dc2626' }}>{formatPreco(cur.vendaNaoRecebida)}</span>
+              <span className="ca-thsm-metric-sub">Informativo a preço de venda da mercadoria perdida</span>
+            </div>
+          </div>
+        </div>
+
+        {/* BLOCO 3: CUSTO E LUCRO REAL */}
+        <div className="ca-thsm-block">
+          <div className="ca-thsm-block-header">
+            <h3><i className="fa-solid fa-calculator" style={{ color: '#10b981' }}></i> 3. Custo das Mercadorias & Lucro Real THSM</h3>
+            <span style={{ fontSize: '11px', color: '#15803d', fontWeight: 600 }}>Cálculo rigoroso: Lucro Bruto abater prejuízo calote a custo</span>
+          </div>
+          <div className="ca-thsm-block-grid">
+            <div className="ca-thsm-metric-card">
+              <span className="ca-thsm-metric-label">CMV (Custo Mercadorias Vendidas)</span>
+              <span className="ca-thsm-metric-value" style={{ color: '#ea580c' }}>{formatPreco(cur.cmvVendidos)}</span>
+              <span className="ca-thsm-metric-sub">Custo de fábrica das peças vendidas</span>
+            </div>
+            <div className="ca-thsm-metric-card">
+              <span className="ca-thsm-metric-label">Lucro Bruto (Receita − CMV)</span>
+              <span className="ca-thsm-metric-value" style={{ color: '#2563eb' }}>{formatPreco(cur.lucroBruto)}</span>
+              <span className="ca-thsm-metric-sub">Margem bruta: {cur.margemBruta.toFixed(1)}%</span>
+            </div>
+            <div className="ca-thsm-metric-card danger">
+              <span className="ca-thsm-metric-label">Prejuízo com Calote (CUSTO)</span>
+              <span className="ca-thsm-metric-value" style={{ color: '#dc2626' }}>-{formatPreco(cur.prejuizoCaloteCusto)}</span>
+              <span className="ca-thsm-metric-sub">Custo real de compra das peças caloteadas</span>
+            </div>
+            <div className="ca-thsm-metric-card highlight" style={{ border: '2px solid #10b981' }}>
+              <span className="ca-thsm-metric-label" style={{ color: '#047857', fontWeight: 700 }}>★ Lucro Real THSM</span>
+              <span className="ca-thsm-metric-value" style={{ color: cur.lucroReal >= 0 ? '#047857' : '#dc2626', fontSize: '22px' }}>
+                {formatPreco(cur.lucroReal)}
+              </span>
+              <span className="ca-thsm-metric-sub">Margem Real Líquida: <strong>{cur.margemReal.toFixed(1)}%</strong></span>
+            </div>
+          </div>
+        </div>
+
+        {/* BLOCO 4: TAXAS DE CALOTE */}
+        <div className="ca-thsm-block">
+          <div className="ca-thsm-block-header">
+            <h3><i className="fa-solid fa-triangle-exclamation" style={{ color: '#ef4444' }}></i> 4. Taxas de Inadimplência & Risco</h3>
+            <span style={{ fontSize: '11px', color: '#64748b' }}>Percentuais em pedidos e valor</span>
+          </div>
+          <div className="ca-thsm-block-grid">
+            <div className="ca-thsm-metric-card danger">
+              <span className="ca-thsm-metric-label">% Pedidos com Calote (Total + Parcial)</span>
+              <span className="ca-thsm-metric-value" style={{ color: '#dc2626' }}>{cur.pctPedidosCalote.toFixed(1)}%</span>
+              <span className="ca-thsm-metric-sub">{cur.pedidosCalote + cur.pedidosParciais} de {cur.pedidosPagos + cur.pedidosParciais + cur.pedidosCalote} comandas com valor</span>
+            </div>
+            <div className="ca-thsm-metric-card danger">
+              <span className="ca-thsm-metric-label">% do Valor Enviado em Calote</span>
+              <span className="ca-thsm-metric-value" style={{ color: '#dc2626' }}>{cur.pctValorCaloteVenda.toFixed(1)}%</span>
+              <span className="ca-thsm-metric-sub">Calote 100% sobre recebidos + calotes</span>
+            </div>
+            <div className="ca-thsm-metric-card">
+              <span className="ca-thsm-metric-label">Média de Peças por Calote</span>
+              <span className="ca-thsm-metric-value">{cur.mediaPecasPorCalote} un</span>
+              <span className="ca-thsm-metric-sub">Prejuízo médio em custo: {formatPreco(cur.mediaCustoPorCalote)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* BLOCO 5: TICKETS MÉDIOS */}
+        <div className="ca-thsm-block">
+          <div className="ca-thsm-block-header">
+            <h3><i className="fa-solid fa-ticket" style={{ color: '#8b5cf6' }}></i> 5. Tickets Médios & Medianas</h3>
+            <span style={{ fontSize: '11px', color: '#64748b' }}>Distribuição de valores por comanda</span>
+          </div>
+          <div className="ca-thsm-block-grid">
+            <div className="ca-thsm-metric-card highlight">
+              <span className="ca-thsm-metric-label">Ticket Médio dos Pagos</span>
+              <span className="ca-thsm-metric-value" style={{ color: '#15803d' }}>{formatPreco(cur.ticketMedioPagos)}</span>
+              <span className="ca-thsm-metric-sub">Mediana: <strong>{formatPreco(cur.medianaPagos)}</strong></span>
+            </div>
+            <div className="ca-thsm-metric-card danger">
+              <span className="ca-thsm-metric-label">Ticket Médio dos Calotes (Venda)</span>
+              <span className="ca-thsm-metric-value" style={{ color: '#dc2626' }}>{formatPreco(cur.ticketMedioCalotes)}</span>
+              <span className="ca-thsm-metric-sub">Mediana: <strong>{formatPreco(cur.medianaCalotes)}</strong></span>
+            </div>
+            <div className="ca-thsm-metric-card">
+              <span className="ca-thsm-metric-label">Ticket Médio Geral</span>
+              <span className="ca-thsm-metric-value">{formatPreco(cur.ticketMedioGeral)}</span>
+              <span className="ca-thsm-metric-sub">Mediana: <strong>{formatPreco(cur.medianaGeral)}</strong></span>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* OS 5 GRÁFICOS SOLICITADOS NA SEÇÃO 6 DO MD */}
+      <div style={{ marginBottom: '18px' }}>
+        <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#1e293b', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <i className="fa-solid fa-chart-simple" style={{ color: '#6366f1' }}></i> Gráficos Estratégicos & Análise de Lucro
+        </h3>
+
+        {/* 6.5 DO FATURAMENTO AO LUCRO REAL (CASCATA WATERFALL) */}
+        <Card title="6.5 Cascata: Do Faturamento ao Lucro Real (Caminho do Dinheiro)" icon="fa-water">
+          <WaterfallChart data={waterfallData} />
+        </Card>
+      </div>
+
       <div className="ca-grid">
-        <Card title="Faturamento por mês (Vendas Concluídas)" icon="fa-chart-column">
-          <BarChart data={serie} getLabel={d => monthLabel(d.mes)} getValue={d => d.faturamentoConcluido} color="#4f46e5" />
+        {/* 6.1 RECEBIDO X CALOTE POR MÊS */}
+        <Card
+          title="6.1 Recebido x Calote por Mês (R$)"
+          icon="fa-chart-column"
+          headerRight={
+            <div style={{ display: 'flex', gap: '6px', fontSize: '11px' }}>
+              <button
+                type="button"
+                className={`ca-page-num ${caloteVisao === 'custo' ? 'ca-page-on' : ''}`}
+                onClick={() => setCaloteVisao('custo')}
+                style={{ padding: '2px 8px' }}
+              >
+                Visão Custo
+              </button>
+              <button
+                type="button"
+                className={`ca-page-num ${caloteVisao === 'venda' ? 'ca-page-on' : ''}`}
+                onClick={() => setCaloteVisao('venda')}
+                style={{ padding: '2px 8px' }}
+              >
+                Visão Venda
+              </button>
+            </div>
+          }
+        >
+          <MultiBarChart
+            data={serie}
+            getLabel={d => monthLabel(d.mes)}
+            series={[
+              { key: 'rec', label: 'Receita Recebida', color: '#10b981', getValue: d => d.receitaRecebida },
+              { key: 'parc', label: 'Saldo Aberto', color: '#f59e0b', getValue: d => d.saldoAberto },
+              { key: 'cal', label: caloteVisao === 'custo' ? 'Prejuízo Calote (Custo)' : 'Venda Perdida (Tabela)', color: '#ef4444', getValue: d => caloteVisao === 'custo' ? d.caloteCusto : d.vendaNaoRecebida }
+            ]}
+          />
         </Card>
-        <Card title="Mercadoria Colocada por mês (Praça)" icon="fa-truck-ramp-box">
-          <BarChart data={serie} getLabel={d => monthLabel(d.mes)} getValue={d => d.mercadoriaColocada} color="#0ea5e9" />
+
+        {/* 6.2 PERCENTUAL DE CALOTE POR MÊS */}
+        <Card title="6.2 Percentual de Calote por Mês (%)" icon="fa-percent">
+          <div style={{ display: 'flex', gap: '14px', justifyContent: 'flex-end', marginBottom: '10px', fontSize: '11.5px', fontWeight: 600 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: '#8b5cf6' }}></span>
+              <span style={{ color: '#475569' }}>% Pedidos Inadimplentes</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: '#ef4444' }}></span>
+              <span style={{ color: '#475569' }}>% Valor Financeiro Perdido</span>
+            </div>
+          </div>
+          <div className="ca-bars" style={{ height: '210px' }}>
+            {[...serie].reverse().map((d, i) => (
+              <div key={i} className="ca-bar-col">
+                <div className="ca-multi-bar-group">
+                  <div
+                    className="ca-multi-bar"
+                    style={{ height: `${Math.max(2, (d.pctPedidosCalote / 50) * 150)}px`, background: '#8b5cf6' }}
+                    title={`${monthLabel(d.mes)}: ${d.pctPedidosCalote.toFixed(1)}% dos pedidos viraram calote`}
+                  />
+                  <div
+                    className="ca-multi-bar"
+                    style={{ height: `${Math.max(2, (d.pctValorCalote / 50) * 150)}px`, background: '#ef4444' }}
+                    title={`${monthLabel(d.mes)}: ${d.pctValorCalote.toFixed(1)}% do valor enviado virou calote`}
+                  />
+                </div>
+                <span className="ca-bar-val" style={{ fontSize: '9.5px' }}>{d.pctPedidosCalote.toFixed(0)}%</span>
+                <span className="ca-bar-label">{monthLabel(d.mes)}</span>
+              </div>
+            ))}
+          </div>
         </Card>
       </div>
+
+      <div className="ca-grid">
+        {/* 6.3 PERCENTUAL DE CALOTE POR CIDADE */}
+        <Card title="6.3 Percentual de Calote por Cidade (Cidades com &ge; 10 pedidos)" icon="fa-city">
+          <div className="ca-hbar">
+            {cidadesStats.significante.slice(0, 10).map((c, i) => {
+              const maxPct = Math.max(1, ...cidadesStats.significante.map(x => x.pctCalotePedidos))
+              return (
+                <div key={i} className="ca-hbar-row">
+                  <div className="ca-hbar-head">
+                    <span className="ca-hbar-name"><strong>{c.cidade}</strong> ({c.totalPedidos} pedidos &middot; {c.calotes} calotes)</span>
+                    <span className="ca-hbar-val" style={{ color: '#dc2626', fontWeight: 700 }}>{c.pctCalotePedidos.toFixed(1)}%</span>
+                  </div>
+                  <div className="ca-hbar-track">
+                    <div className="ca-hbar-fill" style={{ width: `${(c.pctCalotePedidos / maxPct) * 100}%`, background: '#ef4444' }}></div>
+                  </div>
+                </div>
+              )
+            })}
+            {cidadesStats.significante.length === 0 && <div className="ca-empty">Nenhuma cidade atingiu 10 pedidos para análise estatística.</div>}
+          </div>
+
+          {cidadesStats.pequenaAmostra.length > 0 && (
+            <div style={{ marginTop: '16px', borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
+                Amostras reduzidas (&lt; 10 pedidos):
+              </span>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
+                {cidadesStats.pequenaAmostra.slice(0, 8).map((c, idx) => (
+                  <span key={idx} style={{ fontSize: '11px', padding: '3px 8px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '4px' }}>
+                    {c.cidade}: <strong>{c.calotes}/{c.totalPedidos}</strong> ({c.pctCalotePedidos.toFixed(0)}%)
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* 6.4 PERCENTUAL DE CALOTE POR ROTA */}
+        <Card title="6.4 Percentual de Calote por Rota com Volume" icon="fa-route">
+          <div className="ca-hbar">
+            {rotasStats.slice(0, 10).map((r, i) => {
+              const maxPct = Math.max(1, ...rotasStats.map(x => x.pctCalotePedidos))
+              return (
+                <div key={i} className="ca-hbar-row">
+                  <div className="ca-hbar-head">
+                    <span className="ca-hbar-name"><strong>{r.rota}</strong> &middot; {r.totalPedidos} pedidos no período</span>
+                    <span className="ca-hbar-val" style={{ color: '#dc2626', fontWeight: 700 }}>{r.pctCalotePedidos.toFixed(1)}%</span>
+                  </div>
+                  <div className="ca-hbar-track">
+                    <div className="ca-hbar-fill" style={{ width: `${(r.pctCalotePedidos / maxPct) * 100}%`, background: '#f59e0b' }}></div>
+                  </div>
+                </div>
+              )
+            })}
+            {rotasStats.length === 0 && <div className="ca-empty">Sem dados de rotas no período.</div>}
+          </div>
+        </Card>
+      </div>
+
       <div className="ca-grid">
         <Card title="Formas de pagamento" icon="fa-wallet">
           <Donut data={pagMetodo} center="Previsto" />
@@ -842,10 +1414,11 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         <Card title="Despesas do período" icon="fa-money-bill-wave">
           <div className="ca-desp">
             <span className="ca-desp-val">{formatPreco(despTotal)}</span>
-            <span className="ca-desp-pct">{cur.faturamentoConcluido ? `equivalem a ${((despTotal / cur.faturamentoConcluido) * 100).toFixed(1)}% do faturamento real` : 'sem faturamento concluído no período'}</span>
+            <span className="ca-desp-pct">{cur.receitaRecebida ? `equivalem a ${((despTotal / cur.receitaRecebida) * 100).toFixed(1)}% da receita recebida` : 'sem receita recebida no período'}</span>
           </div>
         </Card>
       </div>
+
       <div className="ca-grid">
         <Card title="Insights automáticos" icon="fa-lightbulb">
           <div className="ca-insights">
@@ -1140,6 +1713,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
   }
 
   const RELATORIOS = [
+    { id: 'relatorio_thsm', label: 'Relatório Oficial THSM (Lucro Real & Calotes)', icon: 'fa-shield-halved' },
     { id: 'vendas', label: 'Relação detalhada das vendas', icon: 'fa-file-invoice-dollar' },
     { id: 'produtos_vendidos', label: 'Produtos vendidos', icon: 'fa-box-open' },
     { id: 'vendas_mes', label: 'Vendas por período', icon: 'fa-chart-column' },
@@ -1491,6 +2065,91 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
   }, [produtos, ordersWin])
 
   const renderRelatorios = () => {
+    if (relatorio === 'relatorio_thsm') {
+      return (
+        <Card title="Relatório Oficial THSM: Calotes, Custo dos Produtos e Lucro Real" icon="fa-shield-halved">
+          <div className="ca-formula-banner success" style={{ marginBottom: '14px' }}>
+            <h4><i className="fa-solid fa-check-circle"></i> Regra de Ouro Financeira THSM</h4>
+            <p>
+              <strong>Receita Recebida</strong> (−) <strong>CMV</strong> (=) <strong>Lucro Bruto</strong> (−) <strong>Prejuízo Calote (a Custo)</strong> (=) <strong>LUCRO REAL</strong>.
+              <br />
+              <em>* Pedidos de teste são completamente isolados. Comandas em Calote Parcial têm apenas o valor pago contabilizado na receita e o saldo devedor apontado em aberto.</em>
+            </p>
+          </div>
+
+          <table className="admin-table" style={{ marginBottom: '16px' }}>
+            <thead>
+              <tr>
+                <th>Indicador Financeiro</th>
+                <th>Fórmula de Cálculo</th>
+                <th style={{ textAlign: 'right' }}>Valor Apurado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>Pedidos pagos</strong></td><td>Status Concluído (Pago) com valor &gt; 0</td><td style={{ textAlign: 'right', fontWeight: 700, color: '#15803d' }}>{cur.pedidosPagos}</td></tr>
+              <tr><td><strong>Pedidos calote parcial</strong></td><td>Status Calote Parcial (com saldo em aberto)</td><td style={{ textAlign: 'right', fontWeight: 700, color: '#b45309' }}>{cur.pedidosParciais}</td></tr>
+              <tr><td><strong>Pedidos calote total</strong></td><td>Status Calote 100%</td><td style={{ textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>{cur.pedidosCalote}</td></tr>
+              <tr><td><strong>Pedidos zerados</strong></td><td>Devolução total ({cur.pedidosDevolucaoTotal}) ou Brinde ({cur.pedidosBrinde})</td><td style={{ textAlign: 'right' }}>{cur.pedidosZerados}</td></tr>
+              <tr><td><strong>Itens enviados</strong></td><td>Soma total das quantidades distribuídas</td><td style={{ textAlign: 'right', fontWeight: 700 }}>{fmtNum(cur.totalItensColocados)} un</td></tr>
+              <tr><td><strong>Valor dos itens (preço de tabela)</strong></td><td>Soma de valor_itens a preço cheio</td><td style={{ textAlign: 'right' }}>{formatPreco(cur.valorItensTabela)}</td></tr>
+              <tr><td><strong>Descontos concedidos</strong></td><td>Soma dos descontos em R$</td><td style={{ textAlign: 'right', color: '#b91c1c' }}>-{formatPreco(cur.descontosConcedidos)}</td></tr>
+              <tr style={{ background: '#f0fdf4' }}><td><strong>Receita líquida recebida</strong></td><td>Soma do total pago dos concluídos + parciais</td><td style={{ textAlign: 'right', fontWeight: 800, color: '#15803d', fontSize: '15px' }}>{formatPreco(cur.receitaRecebida)}</td></tr>
+              <tr><td><strong>Saldo em aberto (Calote Parcial)</strong></td><td>Soma dos saldos pendentes devidos</td><td style={{ textAlign: 'right', fontWeight: 700, color: '#b45309' }}>{formatPreco(cur.saldoEmAberto)}</td></tr>
+              <tr><td><strong>Venda não recebida (Calote 100%)</strong></td><td>Soma de valor_itens dos calotes totais (informativo)</td><td style={{ textAlign: 'right', color: '#dc2626' }}>{formatPreco(cur.vendaNaoRecebida)}</td></tr>
+              <tr><td><strong>Custo das mercadorias vendidas (CMV)</strong></td><td>Soma do custo_total_pedido dos pagos e parciais</td><td style={{ textAlign: 'right', color: '#ea580c' }}>{formatPreco(cur.cmvVendidos)}</td></tr>
+              <tr><td><strong>Lucro bruto</strong></td><td>Receita recebida − CMV</td><td style={{ textAlign: 'right', fontWeight: 700, color: '#2563eb' }}>{formatPreco(cur.lucroBruto)} ({cur.margemBruta.toFixed(1)}%)</td></tr>
+              <tr style={{ background: '#fef2f2' }}><td><strong>Prejuízo com calote (CUSTO)</strong></td><td>Custo real de compra das mercadorias caloteadas</td><td style={{ textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>-{formatPreco(cur.prejuizoCaloteCusto)}</td></tr>
+              <tr style={{ background: '#ecfdf5', borderTop: '2px solid #10b981' }}><td><strong>LUCRO REAL THSM</strong></td><td><strong>Lucro bruto − Prejuízo com calote</strong></td><td style={{ textAlign: 'right', fontWeight: 900, color: '#047857', fontSize: '16px' }}>{formatPreco(cur.lucroReal)} ({cur.margemReal.toFixed(1)}%)</td></tr>
+              <tr><td><strong>% de pedidos que viraram calote</strong></td><td>(Calotes + Parciais) ÷ Pedidos com valor</td><td style={{ textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>{cur.pctPedidosCalote.toFixed(1)}%</td></tr>
+              <tr><td><strong>% do valor enviado em calote (venda)</strong></td><td>Venda não recebida ÷ (Recebida + Não recebida)</td><td style={{ textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>{cur.pctValorCaloteVenda.toFixed(1)}%</td></tr>
+              <tr><td><strong>Ticket médio dos pagos</strong></td><td>Receita recebida ÷ Pedidos pagos</td><td style={{ textAlign: 'right' }}>{formatPreco(cur.ticketMedioPagos)} <span style={{ fontSize: '11px', color: '#64748b' }}>(mediana {formatPreco(cur.medianaPagos)})</span></td></tr>
+              <tr><td><strong>Ticket médio dos calotes</strong></td><td>Venda não recebida ÷ Calotes</td><td style={{ textAlign: 'right' }}>{formatPreco(cur.ticketMedioCalotes)} <span style={{ fontSize: '11px', color: '#64748b' }}>(mediana {formatPreco(cur.medianaCalotes)})</span></td></tr>
+              <tr><td><strong>Ticket médio geral</strong></td><td>Todos os pedidos com valor</td><td style={{ textAlign: 'right' }}>{formatPreco(cur.ticketMedioGeral)} <span style={{ fontSize: '11px', color: '#64748b' }}>(mediana {formatPreco(cur.medianaGeral)})</span></td></tr>
+            </tbody>
+          </table>
+
+          <h4 style={{ fontSize: '13px', margin: '18px 0 8px 0', color: '#1e293b' }}>
+            <i className="fa-solid fa-list-check"></i> Comandas do Período ({ordersWin.length} pedidos)
+          </h4>
+          <TabelaPaginada
+            cols={[
+              { key: 'pedido', label: 'Pedido' },
+              { key: 'cliente', label: 'Cliente' },
+              { key: 'data', label: 'Data' },
+              { key: 'status', label: 'Status', render: r => <span className={`status-tag status-${r.statusRaw}`}>{STATUS_LABELS[r.statusRaw] || r.statusRaw}</span> },
+              { key: 'valorTabela', label: 'Valor Tabela', num: true, render: r => formatPreco(r.valorTabela) },
+              { key: 'desconto', label: 'Desconto', num: true, render: r => r.desconto > 0 ? `-${formatPreco(r.desconto)}` : '-' },
+              { key: 'totalCobrado', label: 'Total Cobrado', num: true, render: r => formatPreco(r.totalCobrado) },
+              { key: 'totalPago', label: 'Pago (Recebido)', num: true, render: r => <strong style={{ color: '#059669' }}>{formatPreco(r.totalPago)}</strong> },
+              { key: 'saldoAberto', label: 'Saldo Aberto', num: true, render: r => r.saldoAberto > 0 ? <strong style={{ color: '#dc2626' }}>{formatPreco(r.saldoAberto)}</strong> : '-' },
+              { key: 'custo', label: 'Custo Real', num: true, render: r => formatPreco(r.custo) },
+            ]}
+            rows={ordersWin.map(o => {
+              const isCalote = !!(o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
+              const baseItems = o.originalItems || o.items || []
+              const valorTabela = baseItems.reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0)
+              const totalCobrado = Number(o.totalAcerto ?? o.total ?? valorTabela)
+              const totalPago = isCalote ? 0 : Number(o.totalPago ?? (o.status === 'concluido' ? totalCobrado : 0))
+              const saldoAberto = isCalote ? 0 : Number(o.valorEmAberto ?? Math.max(0, totalCobrado - totalPago))
+              const custo = isCalote ? (Number(o.caloteTotalCusto) || baseItems.reduce((s, i) => s + getItemCost(i) * (Number(i.qty) || 0), 0)) : (Number(o.custo_total_pedido) || baseItems.reduce((s, i) => s + getItemCost(i) * (Number(i.qty) || 0), 0))
+              return {
+                _k: o.id,
+                pedido: `#${String(o.id).slice(-6)}`,
+                cliente: o.customer?.nome || '-',
+                data: formatDate(o.date),
+                statusRaw: o.status,
+                valorTabela,
+                desconto: Number(o.desconto) || 0,
+                totalCobrado,
+                totalPago,
+                saldoAberto,
+                custo
+              }
+            })}
+          />
+        </Card>
+      )
+    }
     const rep = relatorio
     if (rep === 'vendas') {
       return (
@@ -2047,6 +2706,16 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         <button className="ca-back ca-btn-print" onClick={() => window.print()} title="Imprimir Relatório de Análise" style={{ background: '#0284c7', color: '#fff' }}>
           <i className="fa-solid fa-print"></i> Imprimir / PDF
         </button>
+        <button
+          type="button"
+          className={`ca-test-toggle ${excluirTestes ? 'on' : 'off'}`}
+          onClick={() => setExcluirTestes(v => !v)}
+          title="Alternar exclusão de pedidos de teste das métricas"
+        >
+          <i className={`fa-solid ${excluirTestes ? 'fa-filter' : 'fa-flask'}`}></i>
+          <span>{excluirTestes ? 'Sem Testes' : 'Com Testes'}</span>
+        </button>
+
         <div className="ca-status-filter-wrap" title="Filtrar pedidos por status">
           <i className="fa-solid fa-filter" style={{ color: '#64748b', fontSize: '11px' }}></i>
           <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>Status:</span>

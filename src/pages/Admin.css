@@ -789,6 +789,14 @@ html, body {
   font-weight: 700;
 }
 
+.status-calote_parcial,
+.status-parcial {
+  background: #FEF3C7;
+  color: #B45309;
+  border: 1px solid #FCD34D;
+  font-weight: 700;
+}
+
 .status-cancelado {
   background: #FEE2E2;
   color: #B91C1C;

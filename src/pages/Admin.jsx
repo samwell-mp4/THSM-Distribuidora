@@ -53,6 +53,8 @@ const STATUS_LABELS = {
   'em-rota': 'Em Rota',
   'entregue': 'Entregue',
   'acerto': 'Acerto',
+  'calote_parcial': 'Calote Parcial',
+  'parcial': 'Calote Parcial',
   'concluido': 'Concluído',
   'calote': 'Calote 100%',
   'cancelado': 'Cancelado'
@@ -893,7 +895,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
   const isFinalizada = useCallback((o) => {
     if (!o) return false
-    return o.status === 'concluido' || o.status === 'calote' || o.isFinalizado === true || o.isCalote === true
+    return o.status === 'concluido' || o.status === 'calote' || o.status === 'calote_parcial' || o.status === 'parcial' || o.isFinalizado === true || o.isCalote === true
   }, [])
 
   const revertToEntregue = async (orderId) => {
@@ -2556,7 +2558,33 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     const valorEmAberto = Math.max(0, Math.round((totalCobrar - totalPago) * 100) / 100)
 
     const now = Date.now()
-    const newStatus = finalize ? 'concluido' : 'acerto'
+    let newStatus = 'acerto'
+    if (finalize) {
+      if (totalCobrar === 0 || totalPago >= totalCobrar) {
+        newStatus = 'concluido'
+      } else if (totalPago > 0) {
+        newStatus = 'calote_parcial'
+      } else {
+        newStatus = 'calote_parcial'
+      }
+    }
+
+    // Histórico de pagamentos registrado na finalização
+    const existingHistory = Array.isArray(order.paymentHistory) ? order.paymentHistory : []
+    let updatedHistory = existingHistory
+    if (totalPago > 0 && existingHistory.length === 0) {
+      updatedHistory = [{
+        id: Date.now(),
+        data: deliveryDataInicio || hoje(),
+        valor: totalPago,
+        metodo: deliveryPayment || 'pix',
+        splits: isSplit ? deliverySplits : null,
+        nota: finalize ? (newStatus === 'calote_parcial' ? 'Pagamento parcial registrado no acerto' : 'Pagamento integral no acerto') : 'Pagamento parcial'
+      }]
+    }
+
+    const custo_total_pedido = Math.round(remainingItems.reduce((s, i) => s + (Number(i.preco_custo || getItemCost(i, produtosAtuais)) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
+    const valor_itens = Math.round(baseItems.reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
 
     const updatedOrder = {
       ...order,
@@ -2583,8 +2611,17 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       desconto,
       descontoPercent: deliveryDiscountType === 'percent' ? discountNum : (order.descontoPercent || null),
       totalPago,
+      total_pago: totalPago,
       valorEmAberto,
+      saldo_em_aberto: valorEmAberto,
+      total_a_cobrar: totalCobrar,
+      valor_itens,
+      total_liquido: totalCobrar,
+      custo_total_pedido,
+      custo_total: custo_total_pedido,
+      paymentHistory: updatedHistory,
       status: newStatus,
+      status_pagamento: newStatus === 'concluido' ? 'pago' : (newStatus === 'calote_parcial' ? 'calote_parcial' : 'em_aberto'),
       isFinalizado: finalize,
       returnedItems,
       totalReembolso,
@@ -2614,24 +2651,62 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       const aprazoItems = remainingItems.filter(i => i.tipo === 'aprazo')
       const dueDate = deliveryDataVenc || order.dataVencimento || hoje()
 
-      const newFinancial = aprazoItems.map(i => {
-        const existing = existingRecords.find(f => String(f.id) === String(orderId + '-' + i.id))
-        const itemVal = Math.round((Number(i.preco) || 0) * (Number(i.qty) || 0) * 100) / 100
-        const unitCusto = getItemCost(i, produtosAtuais)
-        return {
-          id: orderId + '-' + i.id,
+      let newFinancial = []
+      if (newStatus === 'calote_parcial' && valorEmAberto > 0) {
+        newFinancial = [{
+          id: orderId + '-parcial',
           orderId,
           customerName: order.customer?.nome || '',
-          itemName: i.nome,
-          qty: i.qty,
-          value: itemVal,
-          precoCusto: Math.round((unitCusto || 0) * (Number(i.qty) || 0) * 100) / 100,
-          dueDate: existing?.dueDate || dueDate,
-          paidDate: finalize ? hoje() : (existing?.paidDate || null),
-          status: finalize ? 'pago' : (existing?.status || 'pendente'),
-          paymentMethod: deliveryPayment
+          itemName: `Saldo Devedor / Calote Parcial #${String(orderId).slice(-6)}`,
+          qty: 1,
+          value: valorEmAberto,
+          precoCusto: 0,
+          dueDate: deliveryDataVenc || order.dataVencimento || hoje(),
+          paidDate: null,
+          status: 'pendente',
+          paymentMethod: deliveryPayment || 'pendente'
+        }]
+      } else if (newStatus === 'concluido') {
+        newFinancial = existingRecords.map(f => ({
+          ...f,
+          status: 'pago',
+          paidDate: f.paidDate || hoje()
+        }))
+        if (newFinancial.length === 0 && totalPago > 0) {
+          newFinancial = [{
+            id: orderId + '-acerto',
+            orderId,
+            customerName: order.customer?.nome || '',
+            itemName: `Acerto do Pedido #${String(orderId).slice(-6)}`,
+            qty: 1,
+            value: totalPago,
+            precoCusto: custo_total_pedido,
+            dueDate: deliveryDataVenc || order.dataVencimento || hoje(),
+            paidDate: hoje(),
+            status: 'pago',
+            paymentMethod: deliveryPayment || 'pix'
+          }]
         }
-      })
+      } else {
+        newFinancial = aprazoItems.map(i => {
+          const existing = existingRecords.find(f => String(f.id) === String(orderId + '-' + i.id))
+          const itemVal = Math.round((Number(i.preco) || 0) * (Number(i.qty) || 0) * 100) / 100
+          const unitCusto = getItemCost(i, produtosAtuais)
+          return {
+            id: orderId + '-' + i.id,
+            orderId,
+            customerName: order.customer?.nome || '',
+            itemName: i.nome,
+            qty: i.qty,
+            value: itemVal,
+            precoCusto: Math.round((unitCusto || 0) * (Number(i.qty) || 0) * 100) / 100,
+            dueDate: existing?.dueDate || dueDate,
+            paidDate: null,
+            status: 'pendente',
+            paymentMethod: ''
+          }
+        })
+      }
 
       const combined = [...otherRecords, ...newFinancial]
       LS.set(STORAGE_FINANCIAL, combined)
@@ -2658,10 +2733,15 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     }
 
     if (finalize) {
-      showToast(`Pedido #${orderId} finalizado com sucesso! WhatsApp enviado ao cliente.`)
-      sendStatusWebhook(updatedOrder, 'concluido', webhookExtra)
+      if (newStatus === 'calote_parcial') {
+        showToast(`⚠️ Pedido #${String(orderId).slice(-6)} finalizado como CALOTE PARCIAL! Pago: ${formatPreco(totalPago)} | Saldo em aberto: ${formatPreco(valorEmAberto)}.`, 'warning')
+        sendStatusWebhook(updatedOrder, 'calote_parcial', webhookExtra)
+      } else {
+        showToast(`Pedido #${String(orderId).slice(-6)} finalizado com sucesso! (Total pago: ${formatPreco(totalPago)})`, 'success')
+        sendStatusWebhook(updatedOrder, 'concluido', webhookExtra)
+      }
     } else {
-      showToast(`Pedido #${orderId} atualizado na etapa de Acertos! WhatsApp enviado ao cliente.`)
+      showToast(`Pedido #${String(orderId).slice(-6)} atualizado na etapa de Acertos! WhatsApp enviado ao cliente.`, 'info')
       sendStatusWebhook(updatedOrder, 'acerto', webhookExtra)
     }
 
@@ -2675,6 +2755,111 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     setDeliveryDataVenc('')
     setIdentityPreview('')
     setAddressPreview('')
+  }
+
+  const handleRegisterOrderPayment = async (orderId, paymentData) => {
+    try {
+      const order = orders.find(o => String(o.id) === String(orderId))
+      if (!order) return
+
+      const numVal = Math.round(Number(paymentData.valor || 0) * 100) / 100
+      if (numVal <= 0) {
+        showToast('Informe um valor de pagamento válido maior que zero', 'error')
+        return
+      }
+
+      const totalCobrar = Number(order.totalAcerto || order.total || 0)
+      const currentPaid = Number(order.totalPago || 0)
+      const newTotalPago = Math.round((currentPaid + numVal) * 100) / 100
+      const newSaldo = Math.max(0, Math.round((totalCobrar - newTotalPago) * 100) / 100)
+
+      const paymentEntry = {
+        id: Date.now(),
+        data: paymentData.data || hoje(),
+        valor: numVal,
+        metodo: paymentData.metodo || 'pix',
+        nota: paymentData.nota || 'Pagamento posterior avulso'
+      }
+
+      const updatedHistory = [...(Array.isArray(order.paymentHistory) ? order.paymentHistory : []), paymentEntry]
+      const isQuitado = newSaldo <= 0
+      const newStatus = isQuitado ? 'concluido' : 'calote_parcial'
+      const now = Date.now()
+
+      const updatedOrder = {
+        ...order,
+        totalPago: newTotalPago,
+        total_pago: newTotalPago,
+        valorEmAberto: newSaldo,
+        saldo_em_aberto: newSaldo,
+        status: newStatus,
+        status_pagamento: isQuitado ? 'pago' : 'calote_parcial',
+        isFinalizado: true,
+        finalizadoAt: isQuitado ? (order.finalizadoAt || now) : order.finalizadoAt,
+        paymentHistory: updatedHistory,
+        lastModified: now,
+        updatedAt: now
+      }
+
+      setOrders(prev => {
+        const next = prev.map(o => String(o.id) === String(orderId) ? updatedOrder : o)
+        LS.set(STORAGE_ORDERS, next)
+        return next
+      })
+      await upsertOrder(updatedOrder)
+
+      setFinancial(prev => {
+        const next = prev.map(f => {
+          if (String(f.orderId) === String(orderId)) {
+            if (isQuitado) {
+              return { ...f, status: 'pago', paidDate: paymentData.data || hoje() }
+            } else {
+              return { ...f, value: newSaldo }
+            }
+          }
+          return f
+        })
+        LS.set(STORAGE_FINANCIAL, next)
+        return next
+      })
+
+      if (isQuitado) {
+        showToast(`✅ Comanda #${String(orderId).slice(-6)} 100% QUITADA! Recebimento de ${formatPreco(numVal)} registrado e status atualizado para Concluído.`, 'success')
+      } else {
+        showToast(`💰 Pagamento de ${formatPreco(numVal)} registrado com sucesso! Saldo restante: ${formatPreco(newSaldo)}.`, 'success')
+      }
+
+      setShowOrderDetail(updatedOrder)
+    } catch (err) {
+      console.error('Erro ao registrar pagamento:', err)
+      showToast('Erro ao registrar pagamento na comanda', 'error')
+    }
+  }
+
+  const handleToggleTestOrder = async (orderId, isTest) => {
+    try {
+      const order = orders.find(o => String(o.id) === String(orderId))
+      if (!order) return
+      const now = Date.now()
+      const updated = {
+        ...order,
+        isTest,
+        is_test: isTest,
+        pedido_teste: isTest,
+        lastModified: now,
+        updatedAt: now
+      }
+      setOrders(prev => {
+        const next = prev.map(o => String(o.id) === String(orderId) ? updated : o)
+        LS.set(STORAGE_ORDERS, next)
+        return next
+      })
+      await upsertOrder(updated)
+      showToast(`Pedido #${String(orderId).slice(-6)} ${isTest ? 'marcado como Pedido de Teste' : 'desmarcado como teste'}.`, 'info')
+      setShowOrderDetail(updated)
+    } catch (err) {
+      console.error('Erro ao alterar flag de teste:', err)
+    }
   }
 
   const deleteOrder = (id) => {
@@ -3048,7 +3233,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
   const filteredOrders = useMemo(() => {
     let result = orders
-    if (orderFilter === 'concluidos') result = result.filter(o => (o.status === 'concluido' || isFinalizada(o)) && !o.isCalote && o.status !== 'calote' && o.motivoEncerramento !== 'calote_100')
+    if (orderFilter === 'concluidos') result = result.filter(o => (o.status === 'concluido' || isFinalizada(o)) && !o.isCalote && o.status !== 'calote' && o.status !== 'calote_parcial' && o.status !== 'parcial' && o.motivoEncerramento !== 'calote_100')
+    else if (orderFilter === 'calote_parcial') result = result.filter(o => o.status === 'calote_parcial' || o.status === 'parcial' || (o.isFinalizado && Number(o.valorEmAberto) > 0 && Number(o.totalPago) > 0))
     else if (orderFilter === 'calote') result = result.filter(o => o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
     else if (orderFilter === 'entregue') result = result.filter(o => o.status === 'entregue' && !isFinalizada(o))
     else if (orderFilter === 'acerto') result = result.filter(o => o.status === 'acerto' && !isFinalizada(o))
@@ -4762,7 +4948,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 { id: 'em-rota', label: 'Em Rota', count: orders.filter(o => o.status === 'em-rota').length },
                 { id: 'entregue', label: 'Entregues', count: orders.filter(o => o.status === 'entregue' && !isFinalizada(o)).length },
                 { id: 'acerto', label: 'Acertos', count: orders.filter(o => o.status === 'acerto' && !isFinalizada(o)).length },
-                { id: 'concluidos', label: 'Concluídos', count: orders.filter(o => (o.status === 'concluido' || isFinalizada(o)) && !o.isCalote && o.status !== 'calote' && o.motivoEncerramento !== 'calote_100').length },
+                { id: 'calote_parcial', label: 'Calote Parcial', count: orders.filter(o => o.status === 'calote_parcial' || o.status === 'parcial' || (o.isFinalizado && Number(o.valorEmAberto) > 0 && Number(o.totalPago) > 0)).length },
+                { id: 'concluidos', label: 'Concluídos', count: orders.filter(o => (o.status === 'concluido' || isFinalizada(o)) && !o.isCalote && o.status !== 'calote' && o.status !== 'calote_parcial' && o.status !== 'parcial' && o.motivoEncerramento !== 'calote_100').length },
                 { id: 'calote', label: 'Calotes 100%', count: orders.filter(o => o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100').length },
                 { id: 'cancelado', label: 'Cancelados', count: orders.filter(o => o.status === 'cancelado').length },
               ].map(t => (
@@ -7988,6 +8175,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           onOpenDelivery={(order, mode = 'acerto', isCalote = false) => { openAcertoModal({ ...(orders.find(o => String(o.id) === String(showOrderDetail.id)) || showOrderDetail), ...showOrderDetail, ...order }, mode, isCalote); setShowOrderDetail(null) }}
           onToggleWhatsAppNotify={toggleOrderWhatsAppNotify}
           onCloneOrder={(o) => { setShowOrderDetail(null); handleOpenCloneModal(o) }}
+          onRegisterPayment={handleRegisterOrderPayment}
+          onToggleTestOrder={handleToggleTestOrder}
           onEditAndConfirm={(editedItems, currentStatus) => {
             const now = Date.now()
             const totalAvista = Math.round(editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
@@ -11785,7 +11974,7 @@ function getOrderRawItems(ord) {
   return []
 }
 
-function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onStatusChange, onUpdateDue, onPreApprovar, onEditAndConfirm, onEditSave, onSyncCusto, onOpenDelivery, onUpdateCustomer, onCancelOrder, onSendWhatsApp, onToggleWhatsAppNotify, onCloneOrder }) {
+function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onStatusChange, onUpdateDue, onPreApprovar, onEditAndConfirm, onEditSave, onSyncCusto, onOpenDelivery, onUpdateCustomer, onCancelOrder, onSendWhatsApp, onToggleWhatsAppNotify, onCloneOrder, onRegisterPayment, onToggleTestOrder }) {
   const [rejectedItems, setRejectedItems] = useState(new Set())
   const [editMode, setEditMode] = useState(false)
   const [editedItems, setEditedItems] = useState(() => getOrderRawItems(order).map(i => {
@@ -11815,6 +12004,12 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
     if (!usuarios || !userSearch?.trim()) return []
     return usuarios.filter(u => clientMatchesSearch(u, userSearch)).slice(0, 100)
   }, [usuarios, userSearch])
+  const [showAddPaymentModal, setShowAddPaymentModal] = useState(false)
+  const [newPaymentAmount, setNewPaymentAmount] = useState(() => order?.valorEmAberto ? String(order.valorEmAberto).replace('.', ',') : '')
+  const [newPaymentMethod, setNewPaymentMethod] = useState('pix')
+  const [newPaymentDate, setNewPaymentDate] = useState(() => hoje())
+  const [newPaymentNota, setNewPaymentNota] = useState('')
+
   const [editCustomer, setEditCustomer] = useState({
     id: order.user_id || order.customer?.id || null,
     nome: order.customer?.nome || '',
@@ -12440,9 +12635,142 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
                   </span>
                 )
               })()}
-              <span>Status: <span className={`status-tag status-${order.status}`}>{order.status}</span></span>
+              <span>Status: <span className={`status-tag status-${order.status}`}>{STATUS_LABELS[order.status] || order.status}</span></span>
+              {order.valorEmAberto > 0 && (
+                <span style={{ color: '#b45309', fontWeight: 700 }}>
+                  Saldo Devedor: <strong>{formatPreco(order.valorEmAberto)}</strong>
+                </span>
+              )}
             </div>
           </div>
+
+          {/* BANNER CALOTE PARCIAL E SALDO EM ABERTO */}
+          {(order.status === 'calote_parcial' || order.status === 'parcial' || (Number(order.valorEmAberto) > 0 && order.status !== 'cancelado' && order.status !== 'calote')) && (
+            <div className="detail-section" style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.4rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <i className="fa-solid fa-triangle-exclamation" style={{ color: '#d97706', fontSize: '1.2rem' }}></i>
+                  <div>
+                    <div style={{ fontWeight: 800, color: '#92400e', fontSize: '0.88rem' }}>
+                      Pagamento parcial — Pago: {formatPreco(order.totalPago || 0)} — Falta pagar: {formatPreco(order.valorEmAberto || Math.max(0, (order.totalAcerto || order.total || 0) - (order.totalPago || 0)))}
+                    </div>
+                    <div style={{ fontSize: '0.74rem', color: '#b45309' }}>
+                      Total cobrado da comanda: <strong>{formatPreco(order.totalAcerto || order.total || 0)}</strong>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="admin-btn"
+                  style={{ background: '#059669', color: 'white', borderColor: '#059669', fontSize: '0.76rem', padding: '0.35rem 0.65rem' }}
+                  onClick={() => {
+                    const saldo = order.valorEmAberto || Math.max(0, (order.totalAcerto || order.total || 0) - (order.totalPago || 0))
+                    setNewPaymentAmount(saldo > 0 ? String(saldo).replace('.', ',') : '')
+                    setShowAddPaymentModal(true)
+                  }}
+                >
+                  <i className="fa-solid fa-plus-circle"></i> Registrar Pagamento
+                </button>
+              </div>
+
+              {/* MODAL / FORM INLINE DE NOVO PAGAMENTO */}
+              {showAddPaymentModal && (
+                <div style={{ marginTop: '0.6rem', padding: '0.6rem 0.75rem', background: '#ffffff', borderRadius: '6px', border: '1px solid #fcd34d' }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#92400e', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span><i className="fa-solid fa-receipt"></i> Registrar Novo Pagamento</span>
+                    <button type="button" onClick={() => setShowAddPaymentModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><i className="fa-solid fa-xmark"></i></button>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    <div style={{ flex: '1 1 110px' }}>
+                      <label style={{ fontSize: '0.72rem', fontWeight: 600, color: '#475569' }}>Valor Pago (R$):</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={newPaymentAmount}
+                        onChange={e => setNewPaymentAmount(cleanDecimalInput(e.target.value))}
+                        placeholder="0,00"
+                        style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '4px', border: '1px solid #10b981', fontSize: '0.82rem', fontWeight: 700 }}
+                      />
+                    </div>
+                    <div style={{ flex: '1 1 110px' }}>
+                      <label style={{ fontSize: '0.72rem', fontWeight: 600, color: '#475569' }}>Forma:</label>
+                      <select
+                        value={newPaymentMethod}
+                        onChange={e => setNewPaymentMethod(e.target.value)}
+                        style={{ width: '100%', padding: '0.3rem 0.4rem', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.8rem' }}
+                      >
+                        <option value="pix">Pix</option>
+                        <option value="dinheiro">Dinheiro</option>
+                        <option value="debito">Cartão de Débito</option>
+                        <option value="credito">Cartão de Crédito</option>
+                      </select>
+                    </div>
+                    <div style={{ flex: '1 1 120px' }}>
+                      <label style={{ fontSize: '0.72rem', fontWeight: 600, color: '#475569' }}>Data:</label>
+                      <input
+                        type="date"
+                        value={newPaymentDate}
+                        onChange={e => setNewPaymentDate(e.target.value)}
+                        style={{ width: '100%', padding: '0.25rem 0.4rem', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.78rem' }}
+                      />
+                    </div>
+                    <div style={{ flex: '2 1 150px' }}>
+                      <label style={{ fontSize: '0.72rem', fontWeight: 600, color: '#475569' }}>Observação:</label>
+                      <input
+                        type="text"
+                        value={newPaymentNota}
+                        onChange={e => setNewPaymentNota(e.target.value)}
+                        placeholder="Ex: Pix efetuado após cobrança"
+                        style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.8rem' }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="admin-btn"
+                      style={{ background: '#059669', color: 'white', borderColor: '#059669', fontSize: '0.78rem', padding: '0.35rem 0.75rem', height: '32px' }}
+                      onClick={() => {
+                        const val = Number(String(newPaymentAmount).replace(',', '.')) || 0
+                        if (val <= 0) {
+                          alert('Informe um valor de pagamento maior que zero.')
+                          return
+                        }
+                        onRegisterPayment?.(order.id, {
+                          valor: val,
+                          metodo: newPaymentMethod,
+                          data: newPaymentDate || hoje(),
+                          nota: newPaymentNota
+                        })
+                        setShowAddPaymentModal(false)
+                        setNewPaymentAmount('')
+                        setNewPaymentNota('')
+                      }}
+                    >
+                      Confirmar Pagamento
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* HISTÓRICO DE PAGAMENTOS DA COMANDA */}
+              {Array.isArray(order.paymentHistory) && order.paymentHistory.length > 0 && (
+                <div style={{ marginTop: '0.55rem' }}>
+                  <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#92400e', display: 'block', marginBottom: '0.25rem' }}>
+                    <i className="fa-solid fa-clock-rotate-left"></i> Histórico de Pagamentos ({order.paymentHistory.length}):
+                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    {order.paymentHistory.map((ph, idx) => (
+                      <div key={ph.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.76rem', padding: '0.25rem 0.5rem', background: '#ffffff', borderRadius: '4px', border: '1px solid #fef3c7' }}>
+                        <span>
+                          <strong>{formatDate(ph.data)}</strong> — <span style={{ textTransform: 'capitalize' }}>{ph.metodo}</span> {ph.nota && <em style={{ color: '#64748b' }}>({ph.nota})</em>}
+                        </span>
+                        <strong style={{ color: '#059669' }}>+{formatPreco(ph.valor)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {order.returnedItems?.length > 0 && (
             <div className="detail-section">
@@ -12533,6 +12861,7 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
                 <option value="em-rota">Em Rota</option>
                 <option value="entregue">Entregue</option>
                 <option value="acerto">Acerto</option>
+                <option value="calote_parcial">Calote Parcial</option>
                 <option value="concluido">Concluído</option>
                 <option value="calote">Calote 100%</option>
                 <option value="cancelado">Cancelado</option>
@@ -12556,6 +12885,32 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
               />
               <i className="fa-brands fa-whatsapp"></i>
               <span>{order.notificarWhatsApp !== false ? 'Zap ON' : 'Zap OFF'}</span>
+            </label>
+
+            <label
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                cursor: 'pointer',
+                fontSize: '0.76rem',
+                fontWeight: 600,
+                padding: '0.35rem 0.6rem',
+                borderRadius: '6px',
+                background: order.isTest ? '#fee2e2' : 'var(--admin-bg)',
+                border: `1px solid ${order.isTest ? '#fca5a5' : 'var(--admin-border)'}`,
+                color: order.isTest ? '#dc2626' : 'var(--admin-text-sec)'
+              }}
+              title={order.isTest ? 'Comanda marcada como pedido de teste (excluída dos relatórios)' : 'Marcar como pedido de teste (não entra nos relatórios)'}
+            >
+              <input
+                type="checkbox"
+                checked={!!order.isTest}
+                onChange={e => onToggleTestOrder?.(order.id, e.target.checked)}
+                style={{ cursor: 'pointer', width: '13px', height: '13px' }}
+              />
+              <i className="fa-solid fa-flask"></i>
+              <span>{order.isTest ? 'Teste (Ignorado)' : 'Marcar Teste'}</span>
             </label>
           </div>
 
