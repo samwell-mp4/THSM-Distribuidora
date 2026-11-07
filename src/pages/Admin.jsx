@@ -2718,7 +2718,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       dataInicio: deliveryDataInicio || order.dataInicio || order.date || null,
       dataVencimento: deliveryDataVenc || order.dataVencimento || null,
       identityPhoto: identityPreview || order.identityPhoto || '',
-      addressProof: addressProof || order.addressProof || '',
+      addressProof: addressPreview || order.addressProof || '',
       deliveredAt: order.deliveredAt || now,
       finalizadoAt: finalize ? now : null,
       paymentMethod: deliveryPayment || 'pix',
