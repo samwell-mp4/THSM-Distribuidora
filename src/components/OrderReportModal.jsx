@@ -15,7 +15,8 @@ const STATUS_CONFIG = {
   'acerto': { label: 'Acerto (Motoristas)', color: '#7c3aed', bg: '#f3e8ff' },
   'calote_parcial': { label: 'Calote Parcial', color: '#d97706', bg: '#fef3c7' },
   'concluido': { label: 'Concluído (Pago)', color: '#16a34a', bg: '#dcfce7' },
-  'calote': { label: 'Calote total', color: '#dc2626', bg: '#fee2e2' },
+  'calote_parcial': { label: 'Calote Parcial', color: '#d97706', bg: '#fef3c7' },
+  'calote': { label: 'Calote 100%', color: '#dc2626', bg: '#fee2e2' },
   'cancelado': { label: 'Cancelado', color: '#94a3b8', bg: '#f1f5f9' }
 };
 
@@ -215,6 +216,7 @@ export default function OrderReportModal({
   const [selectedPayment, setSelectedPayment] = useState('TODOS')
   const [devolucaoFilter, setDevolucaoFilter] = useState('todos') // 'todos', 'com_sem_dev', 'apenas_sem_dev', 'apenas_com_dev'
   const [excludeTests, setExcludeTests] = useState(true)
+  const [includePrices, setIncludePrices] = useState(true)
   const [dateType, setDateType] = useState('date') // 'date' ou 'vencimento'
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -457,26 +459,41 @@ export default function OrderReportModal({
     }
   }, [targetOrders, produtos, isFinalizada])
 
-  // Presets de status
+  // Presets de status (com Calotes 100%, Calote Parcial e Inadimplência)
   const applyStatusPreset = (preset) => {
     switch (preset) {
       case 'todos':
         setSelectedStatuses(Object.keys(STATUS_CONFIG))
         break
-      case 'pendentes':
-        setSelectedStatuses(['pre-pedido', 'pendente'])
+      case 'pendentes_a_concluidos':
+        setSelectedStatuses(['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'acerto', 'entregue', 'concluido'])
+        break
+      case 'calotes':
+        setSelectedStatuses(['calote'])
+        break
+      case 'calote_parcial':
+        setSelectedStatuses(['calote_parcial'])
+        break
+      case 'inadimplencia':
+        setSelectedStatuses(['calote', 'calote_parcial'])
+        break
+      case 'concluidos':
+        setSelectedStatuses(['concluido'])
+        break
+      case 'entregues':
+        setSelectedStatuses(['entregue'])
         break
       case 'acertos':
         setSelectedStatuses(['acerto'])
         break
-      case 'concluidos':
-        setSelectedStatuses(['entregue', 'concluido'])
-        break
       case 'rota':
         setSelectedStatuses(['em-rota'])
         break
-      case 'pendentes_a_concluidos':
-        setSelectedStatuses(['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'acerto', 'entregue', 'concluido'])
+      case 'pendentes':
+        setSelectedStatuses(['pre-pedido', 'pendente'])
+        break
+      case 'cancelados':
+        setSelectedStatuses(['cancelado'])
         break
       default:
         break
@@ -643,8 +660,9 @@ export default function OrderReportModal({
         currentY += cardH + 3
       }
 
-      // 4. Tabela de Pedidos
-      const tableHeaders = [
+      // 4. Tabela de Pedidos (Com ou Sem Valores)
+      const showVal = includePrices !== false
+      const tableHeaders = showVal ? [
         '# / Data',
         'Cliente / Tel',
         'Status',
@@ -652,8 +670,16 @@ export default function OrderReportModal({
         'Rota',
         'Qtd',
         'Produtos / Itens',
-        'S/ Dev',
-        'Total Bruto'
+        'Preço Tabela',
+        'Total Líquido'
+      ] : [
+        '# / Data',
+        'Cliente / Tel',
+        'Status',
+        'Endereço Completo / Destino',
+        'Rota',
+        'Qtd',
+        'Produtos / Itens Descritos'
       ]
 
       const tableBody = []
@@ -681,18 +707,31 @@ export default function OrderReportModal({
           }).join(' • ')
         }
 
-        // Linha do pedido
-        tableBody.push([
-          numDataStr,
-          clienteStr,
-          statusLabel,
-          enderecoCompleto,
-          rotaStr,
-          qtdStr,
-          prodsInline,
-          formatCurrency(dev.totalSemDev),
-          formatCurrency(dev.totalBruto)
-        ])
+        // Linha do pedido (com ou sem valores)
+        const fin = getOrderFinancialDetails(o)
+        if (showVal) {
+          tableBody.push([
+            numDataStr,
+            clienteStr,
+            statusLabel,
+            enderecoCompleto,
+            rotaStr,
+            qtdStr,
+            prodsInline,
+            formatCurrency(fin.valorItens),
+            resStatus === 'calote' ? `Calote: ${formatCurrency(o.caloteTotalVenda || fin.valorItens)}` : formatCurrency(fin.totalLiquido)
+          ])
+        } else {
+          tableBody.push([
+            numDataStr,
+            clienteStr,
+            statusLabel,
+            enderecoCompleto,
+            rotaStr,
+            qtdStr,
+            prodsInline
+          ])
+        }
 
         // Se density === 'detailed', adiciona sublinha detalhada
         if (density === 'detailed' && includeItemsDetail && o.items && o.items.length > 0) {
@@ -709,17 +748,25 @@ export default function OrderReportModal({
         }
       })
 
-      // Linha de Totalizador
-      const footRow = [
+      // Linha de Totalizador (com ou sem valores)
+      const footRow = showVal ? [
         'TOTAL GERAL',
         `${reportStats.totalPedidos} pedido(s)`,
         '',
         '',
         '',
         `${reportStats.totalItens} un`,
-        `Sem Dev: ${reportStats.totalQtdSemDev} un (${formatCurrency(reportStats.totalValorSemDev)})`,
-        formatCurrency(reportStats.totalValorSemDev),
+        `Sem Dev: ${reportStats.totalQtdSemDev} un`,
+        formatCurrency(reportStats.valorItensTotal),
         formatCurrency(reportStats.faturamentoTotal)
+      ] : [
+        'TOTAL GERAL',
+        `${reportStats.totalPedidos} pedido(s)`,
+        '',
+        '',
+        '',
+        `${reportStats.totalItens} un`,
+        `Sem Dev: ${reportStats.totalQtdSemDev} un`
       ]
 
       const colStyles = orientation === 'landscape' ? {
@@ -893,7 +940,176 @@ export default function OrderReportModal({
       XLSX.utils.book_append_sheet(wb, wsMain, 'Pedidos (Tabela Plana)')
 
       // ==========================================
-      // ABA 2: ITENS DOS PEDIDOS (TABELA PLANA DETALHADA)
+      // ABA 2: RELATÓRIO DEDICADO DE CALOTES (100% E PARCIAL)
+      // ==========================================
+      const caloteOrders = targetOrders.filter(o => {
+        const resSt = getResolvedStatus(o)
+        const fin = getOrderFinancialDetails(o)
+        return resSt === 'calote' || resSt === 'calote_parcial' || Number(fin.saldoEmAberto) > 0 || o.isCalote
+      })
+
+      const caloteHeaders = [
+        'id_pedido',
+        'data_pedido',
+        'cliente',
+        'telefone',
+        'tipo_calote',
+        'cidade',
+        'rota',
+        'endereco_completo',
+        'quantidade_itens',
+        'valor_itens_tabela',
+        'desconto',
+        'total_a_cobrar',
+        'total_pago',
+        'saldo_devedor_aberto',
+        'prejuizo_custo_estimado',
+        'venda_nao_recebida',
+        'resumo_itens'
+      ]
+
+      const caloteRows = caloteOrders.map(o => {
+        const fin = getOrderFinancialDetails(o)
+        const dev = getOrderDevolucaoStats(o, produtos)
+        const resSt = getResolvedStatus(o)
+        const tipoCalote = resSt === 'calote' ? 'Calote 100%' : (resSt === 'calote_parcial' ? 'Calote Parcial' : 'Saldo Aberto')
+        const dateStr = formatDateBR(o.date || o.createdAt)
+        const resumoItens = (o.items || []).map(i => `${i.qty || 1}x ${i.nome}`).join(' • ') || '-'
+        const prejuizoCusto = Number(o.caloteTotalCusto || (o.items || []).reduce((acc, i) => acc + (Number(getItemCost(i, produtos)) * (Number(i.caloteQty || i.qty) || 0)), 0)) || 0
+
+        return [
+          o.id,
+          dateStr,
+          o.customer?.nome || '-',
+          o.customer?.telefone || '-',
+          tipoCalote,
+          o.customer?.endereco?.cidade || '-',
+          o.customer?.endereco?.rota || '-',
+          formatFullAddress(o.customer?.endereco),
+          dev.qtdTotal,
+          fin.valorItens,
+          fin.desconto,
+          fin.totalLiquido,
+          fin.totalPago,
+          fin.saldoEmAberto,
+          prejuizoCusto > 0 ? prejuizoCusto : 'Pendente de custo',
+          Number(o.caloteTotalVenda || fin.valorItens),
+          resumoItens
+        ]
+      })
+
+      if (caloteRows.length > 0) {
+        const wsCalote = XLSX.utils.aoa_to_sheet([caloteHeaders, ...caloteRows])
+        wsCalote['!cols'] = [
+          { wch: 14 }, { wch: 14 }, { wch: 28 }, { wch: 16 }, { wch: 18 },
+          { wch: 18 }, { wch: 14 }, { wch: 45 }, { wch: 16 }, { wch: 18 },
+          { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 20 }, { wch: 22 },
+          { wch: 20 }, { wch: 50 }
+        ]
+        XLSX.utils.book_append_sheet(wb, wsCalote, 'Calotes (100% e Parcial)')
+      }
+
+      // ==========================================
+      // ABA 3: MERCADORIA NA PRAÇA & ACERTOS EM ABERTO
+      // ==========================================
+      const pracaOrders = targetOrders.filter(o => {
+        const resSt = getResolvedStatus(o)
+        return resSt === 'entregue' || resSt === 'acerto'
+      })
+
+      if (pracaOrders.length > 0) {
+        const pracaHeaders = [
+          'id_pedido',
+          'data_pedido',
+          'cliente',
+          'telefone',
+          'status',
+          'cidade',
+          'rota',
+          'endereco_completo',
+          'quantidade_pecas',
+          'valor_consignado_tabela',
+          'data_vencimento',
+          'resumo_itens'
+        ]
+        const pracaRows = pracaOrders.map(o => {
+          const resSt = getResolvedStatus(o)
+          const fin = getOrderFinancialDetails(o)
+          const dev = getOrderDevolucaoStats(o, produtos)
+          return [
+            o.id,
+            formatDateBR(o.date || o.createdAt),
+            o.customer?.nome || '-',
+            o.customer?.telefone || '-',
+            resSt === 'entregue' ? 'Entregue (Praça)' : 'Acerto (Motoristas)',
+            o.customer?.endereco?.cidade || '-',
+            o.customer?.endereco?.rota || '-',
+            formatFullAddress(o.customer?.endereco),
+            dev.qtdTotal,
+            fin.valorItens,
+            formatDateBR(o.dataVencimento || o.vencimento),
+            (o.items || []).map(i => `${i.qty || 1}x ${i.nome}`).join(' • ') || '-'
+          ]
+        })
+        const wsPraca = XLSX.utils.aoa_to_sheet([pracaHeaders, ...pracaRows])
+        wsPraca['!cols'] = [
+          { wch: 14 }, { wch: 14 }, { wch: 28 }, { wch: 16 }, { wch: 20 },
+          { wch: 18 }, { wch: 14 }, { wch: 45 }, { wch: 16 }, { wch: 22 },
+          { wch: 16 }, { wch: 50 }
+        ]
+        XLSX.utils.book_append_sheet(wb, wsPraca, 'Mercadoria na Praça (Aberto)')
+      }
+
+      // ==========================================
+      // ABA 4: VENDAS CONCLUÍDAS (PAGAS)
+      // ==========================================
+      const pagasOrders = targetOrders.filter(o => getResolvedStatus(o) === 'concluido')
+      if (pagasOrders.length > 0) {
+        const pagasHeaders = [
+          'id_pedido',
+          'data_pedido',
+          'cliente',
+          'telefone',
+          'cidade',
+          'rota',
+          'quantidade_itens',
+          'valor_itens_tabela',
+          'desconto',
+          'motivo_desconto',
+          'receita_liquida_paga',
+          'forma_pagamento',
+          'motivo_zerado'
+        ]
+        const pagasRows = pagasOrders.map(o => {
+          const fin = getOrderFinancialDetails(o)
+          const dev = getOrderDevolucaoStats(o, produtos)
+          return [
+            o.id,
+            formatDateBR(o.date || o.createdAt),
+            o.customer?.nome || '-',
+            o.customer?.telefone || '-',
+            o.customer?.endereco?.cidade || '-',
+            o.customer?.endereco?.rota || '-',
+            dev.qtdTotal,
+            fin.valorItens,
+            fin.desconto,
+            fin.motivoDesconto,
+            fin.totalLiquido,
+            o.paymentMethod || o.pagamento || 'pix',
+            fin.motivoZerado
+          ]
+        })
+        const wsPagas = XLSX.utils.aoa_to_sheet([pagasHeaders, ...pagasRows])
+        wsPagas['!cols'] = [
+          { wch: 14 }, { wch: 14 }, { wch: 28 }, { wch: 16 }, { wch: 18 },
+          { wch: 14 }, { wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 26 },
+          { wch: 20 }, { wch: 18 }, { wch: 18 }
+        ]
+        XLSX.utils.book_append_sheet(wb, wsPagas, 'Vendas Pagas (Concluídos)')
+      }
+
+      // ==========================================
+      // ABA 5: ITENS DOS PEDIDOS (TABELA PLANA DETALHADA)
       // ==========================================
       const itensHeaders = [
         'id_pedido',
@@ -1009,7 +1225,7 @@ export default function OrderReportModal({
   }
 
   // ==========================================
-  // IMPRESSÃO / SALVAR PDF NATIVO VIA BROWSER ULTRA-COMPACTO
+  // IMPRESSÃO / SALVAR PDF NATIVO VIA BROWSER ULTRA-COMPACTO (COM OU SEM VALORES)
   // ==========================================
   const handlePrintView = () => {
     if (targetOrders.length === 0) {
@@ -1019,11 +1235,13 @@ export default function OrderReportModal({
 
     const printWin = window.open('', '_blank', 'width=1200,height=800')
     if (!printWin) {
-      showToast('Por favor, permita pop-ups para abrir a visualização de impressão.', 'warning')
+      showToast('Pop-up bloqueado pelo navegador. Autorize pop-ups para imprimir.', 'error')
       return
     }
 
     const nowStr = new Date().toLocaleString('pt-BR')
+    const showVal = includePrices !== false
+
     const statusDesc = selectedStatuses.length === Object.keys(STATUS_CONFIG).length
       ? 'Todos os Status'
       : selectedStatuses.map(s => STATUS_CONFIG[s]?.label || s).join(', ')
@@ -1033,20 +1251,19 @@ export default function OrderReportModal({
       <html lang="pt-BR">
       <head>
         <meta charset="UTF-8">
-        <title>Relatório de Pedidos - THSM Distribuidora</title>
+        <title>THSM Distribuidora — Relatório de Pedidos ${!showVal ? '(Romaneio Sem Valores)' : ''}</title>
         <style>
-          * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-          @page { size: landscape; margin: 6mm 8mm; }
-          body { padding: 12px; color: #0f172a; background: #fff; }
-          .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 6px; border-bottom: 2px solid #0f172a; margin-bottom: 6px; }
-          .header h1 { font-size: 15px; font-weight: 800; color: #0f172a; }
-          .header p { font-size: 9px; color: #64748b; margin-top: 1px; }
-          .meta-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 5px 8px; font-size: 8.5px; margin-bottom: 8px; color: #334155; line-height: 1.3; }
-          .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 8px; }
-          .kpi-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 4px 6px; border-left: 3px solid #0284c7; }
-          .kpi-box .val { font-size: 11px; font-weight: 800; color: #0f172a; }
-          .kpi-box .lbl { font-size: 7.5px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-top: 1px; }
-          table { width: 100%; border-collapse: collapse; font-size: 8px; margin-bottom: 8px; }
+          @page { size: landscape; margin: 6mm; }
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 8px; color: #0f172a; margin: 0; padding: 4px; line-height: 1.2; }
+          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 4px; margin-bottom: 6px; }
+          .header h1 { font-size: 13px; font-weight: 800; margin: 0; color: #0f172a; letter-spacing: 0.5px; }
+          .header p { font-size: 7.5px; color: #64748b; margin: 1px 0 0 0; }
+          .meta-box { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; padding: 3px 6px; margin-bottom: 6px; font-size: 7.5px; }
+          .kpi-row { display: flex; gap: 4px; margin-bottom: 6px; }
+          .kpi-box { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-left: 3px solid #0284c7; padding: 3px 5px; border-radius: 3px; }
+          .kpi-box .val { font-size: 9px; font-weight: 800; color: #0f172a; }
+          .kpi-box .lbl { font-size: 6.5px; text-transform: uppercase; color: #64748b; font-weight: 700; margin-top: 1px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 7.5px; }
           tr { page-break-inside: avoid; }
           th { background: #0f172a; color: #fff; padding: 4px 5px; text-align: left; font-weight: 700; font-size: 8px; white-space: nowrap; }
           td { padding: 3px 5px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; font-size: 7.8px; line-height: 1.25; }
@@ -1067,15 +1284,15 @@ export default function OrderReportModal({
         <div class="header">
           <div>
             <h1>THSM DISTRIBUIDORA</h1>
-            <p>RELATÓRIO GERENCIAL DE PEDIDOS COM ENDEREÇO E PRODUTOS</p>
+            <p>${showVal ? 'RELATÓRIO GERENCIAL DE PEDIDOS COM ENDEREÇO, PRODUTOS E VALORES FINANCEIROS' : 'ROMANEIO LOGÍSTICO DE ENTREGA E CONFERÊNCIA (SEM EXIBIÇÃO DE VALORES)'}</p>
           </div>
           <div style="text-align: right; font-size: 8.5px; color: #334155;">
-            <p><strong>Emissão:</strong> ${nowStr}   |   <strong>Total:</strong> ${reportStats.totalPedidos} pedidos</p>
+            <p><strong>Emissão:</strong> ${nowStr}   |   <strong>Total:</strong> ${reportStats.totalPedidos} pedidos ${!showVal ? '• <span style="color:#dc2626;font-weight:700;">SEM VALORES</span>' : ''}</p>
           </div>
         </div>
 
         <div class="meta-box">
-          <strong>Filtros aplicados:</strong> Status: ${statusDesc} | Cidade: ${selectedCity} | Rota: ${selectedRoute} | ${startDate ? `De ${formatDateBR(startDate)}` : ''} ${endDate ? `até ${formatDateBR(endDate)}` : ''}
+          <strong>Filtros:</strong> Status: ${statusDesc} | Cidade: ${selectedCity} | Rota: ${selectedRoute} | ${startDate ? `De ${formatDateBR(startDate)}` : ''} ${endDate ? `até ${formatDateBR(endDate)}` : ''} ${excludeTests ? '• (Sem pedidos de teste)' : ''}
         </div>
 
         <div class="kpi-row">
@@ -1083,22 +1300,41 @@ export default function OrderReportModal({
             <div class="val">${reportStats.totalPedidos}</div>
             <div class="lbl">Total Pedidos</div>
           </div>
-          <div class="kpi-box" style="border-left-color: #10b981;">
-            <div class="val">${formatCurrency(reportStats.faturamentoTotal)}</div>
-            <div class="lbl">Total Bruto</div>
-          </div>
-          <div class="kpi-box" style="border-left-color: #dc2626;">
-            <div class="val">${formatCurrency(reportStats.totalValorSemDev)}</div>
-            <div class="lbl">Sem Devolução</div>
-          </div>
-          <div class="kpi-box" style="border-left-color: #4f46e5;">
-            <div class="val">${formatCurrency(reportStats.totalValorComDev)}</div>
-            <div class="lbl">Com Devolução</div>
-          </div>
           <div class="kpi-box" style="border-left-color: #f59e0b;">
             <div class="val">${reportStats.totalItens} un</div>
-            <div class="lbl">Total de Itens</div>
+            <div class="lbl">Total Peças/Itens</div>
           </div>
+          <div class="kpi-box" style="border-left-color: #dc2626;">
+            <div class="val">${reportStats.totalQtdSemDev} un</div>
+            <div class="lbl">Itens Sem Devolução</div>
+          </div>
+          ${showVal ? `
+            <div class="kpi-box" style="border-left-color: #10b981;">
+              <div class="val">${formatCurrency(reportStats.faturamentoTotal)}</div>
+              <div class="lbl">Receita Líquida (Pagos)</div>
+            </div>
+            <div class="kpi-box" style="border-left-color: #6366f1;">
+              <div class="val">${formatCurrency(reportStats.descontosTotal)}</div>
+              <div class="lbl">Descontos Concedidos</div>
+            </div>
+            <div class="kpi-box" style="border-left-color: #0284c7;">
+              <div class="val">${formatCurrency(reportStats.ticketMedio)}</div>
+              <div class="lbl">Ticket Médio (Pagos c/ valor)</div>
+            </div>
+            <div class="kpi-box" style="border-left-color: #dc2626;">
+              <div class="val">${formatCurrency(reportStats.vendaNaoRecebida)}</div>
+              <div class="lbl">Calotes (${reportStats.calotesCount} pedidos)</div>
+            </div>
+          ` : `
+            <div class="kpi-box" style="border-left-color: #10b981;">
+              <div class="val">${reportStats.pagosComValorCount + reportStats.pagosZeradosCount}</div>
+              <div class="lbl">Pedidos Pagos / Concluídos</div>
+            </div>
+            <div class="kpi-box" style="border-left-color: #dc2626;">
+              <div class="val">${reportStats.calotesCount}</div>
+              <div class="lbl">Pedidos em Calote</div>
+            </div>
+          `}
         </div>
 
         <table>
@@ -1110,9 +1346,12 @@ export default function OrderReportModal({
               <th>Endereço Completo / Destino</th>
               <th>Rota</th>
               <th class="td-center">Qtd</th>
-              <th>Produtos / Itens</th>
-              <th class="td-right">S/ Dev</th>
-              <th class="td-right">Total Bruto</th>
+              <th>Produtos / Itens Descritos</th>
+              ${showVal ? `
+                <th class="td-right">Preço Tabela</th>
+                <th class="td-right">Desconto</th>
+                <th class="td-right">Total Líquido</th>
+              ` : ''}
             </tr>
           </thead>
           <tbody>
@@ -1120,6 +1359,7 @@ export default function OrderReportModal({
               const resStatus = getResolvedStatus(o)
               const cfg = STATUS_CONFIG[resStatus] || { label: resStatus, color: '#333', bg: '#eee' }
               const dev = getOrderDevolucaoStats(o, produtos)
+              const fin = getOrderFinancialDetails(o)
               const enderecoStr = formatFullAddress(o.customer?.endereco)
               const prodsInline = (o.items || []).map(i => {
                 const isSem = checkItemSemDevolucao(i, produtos)
@@ -1135,17 +1375,25 @@ export default function OrderReportModal({
                   <td><strong>${o.customer?.endereco?.rota || '-'}</strong></td>
                   <td class="td-center">${dev.qtdTotal} un</td>
                   <td>${prodsInline}</td>
-                  <td class="td-right" style="color:#dc2626;font-weight:600;">${formatCurrency(dev.totalSemDev)}</td>
-                  <td class="td-right" style="font-weight:700;color:#059669;">${formatCurrency(dev.totalBruto)}</td>
+                  ${showVal ? `
+                    <td class="td-right" style="color:#475569;font-weight:600;">${formatCurrency(fin.valorItens)}</td>
+                    <td class="td-right" style="color:#d97706;font-weight:600;">${fin.desconto > 0 ? `-${formatCurrency(fin.desconto)}` : '-'}</td>
+                    <td class="td-right" style="font-weight:700;color:${resStatus === 'calote' ? '#dc2626' : '#059669'};">
+                      ${resStatus === 'calote' ? `Calote: ${formatCurrency(o.caloteTotalVenda || fin.valorItens)}` : formatCurrency(fin.totalLiquido)}
+                    </td>
+                  ` : ''}
                 </tr>
               `
             }).join('')}
             <tr class="footer-total">
               <td colspan="5">TOTAL GERAL (${reportStats.totalPedidos} pedidos)</td>
               <td class="td-center">${reportStats.totalItens} un</td>
-              <td>Sem Dev: ${reportStats.totalQtdSemDev} un (${formatCurrency(reportStats.totalValorSemDev)})</td>
-              <td class="td-right">${formatCurrency(reportStats.totalValorSemDev)}</td>
-              <td class="td-right">${formatCurrency(reportStats.faturamentoTotal)}</td>
+              <td>Sem Dev: ${reportStats.totalQtdSemDev} un ${showVal ? `(${formatCurrency(reportStats.totalValorSemDev)})` : ''}</td>
+              ${showVal ? `
+                <td class="td-right">${formatCurrency(reportStats.valorItensTotal)}</td>
+                <td class="td-right">-${formatCurrency(reportStats.descontosTotal)}</td>
+                <td class="td-right">${formatCurrency(reportStats.faturamentoTotal)}</td>
+              ` : ''}
             </tr>
           </tbody>
         </table>
@@ -1252,7 +1500,7 @@ export default function OrderReportModal({
                 <span className="report-filter-label" style={{ display: 'block', marginBottom: '0.4rem' }}>
                   Filtrar por Status dos Pedidos:
                 </span>
-                <div className="report-status-presets">
+                <div className="report-status-presets" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
                   <button
                     type="button"
                     className={`report-preset-chip ${selectedStatuses.length === Object.keys(STATUS_CONFIG).length ? 'active' : ''}`}
@@ -1270,21 +1518,60 @@ export default function OrderReportModal({
                   </button>
                   <button
                     type="button"
-                    className="report-preset-chip"
+                    className={`report-preset-chip ${selectedStatuses.length === 1 && selectedStatuses[0] === 'calote' ? 'active' : ''}`}
+                    style={{ borderColor: '#dc2626', color: '#b91c1c', fontWeight: 700 }}
+                    onClick={() => applyStatusPreset('calotes')}
+                    title="Filtrar apenas calotes integrais (100% de perda)"
+                  >
+                    <i className="fa-solid fa-triangle-exclamation" style={{ color: '#dc2626', marginRight: '4px' }}></i>
+                    Apenas Calotes 100%
+                  </button>
+                  <button
+                    type="button"
+                    className={`report-preset-chip ${selectedStatuses.length === 1 && selectedStatuses[0] === 'calote_parcial' ? 'active' : ''}`}
+                    style={{ borderColor: '#d97706', color: '#b45309', fontWeight: 700 }}
+                    onClick={() => applyStatusPreset('calote_parcial')}
+                    title="Filtrar pedidos com pagamento parcial e saldo em aberto"
+                  >
+                    <i className="fa-solid fa-clock-rotate-left" style={{ color: '#d97706', marginRight: '4px' }}></i>
+                    Apenas Calote Parcial
+                  </button>
+                  <button
+                    type="button"
+                    className={`report-preset-chip ${selectedStatuses.length === 2 && selectedStatuses.includes('calote') && selectedStatuses.includes('calote_parcial') ? 'active' : ''}`}
+                    style={{ borderColor: '#991b1b', color: '#991b1b', fontWeight: 800, background: '#fef2f2' }}
+                    onClick={() => applyStatusPreset('inadimplencia')}
+                    title="Filtrar todos os calotes (100% integral e Parciais com saldo em aberto)"
+                  >
+                    <i className="fa-solid fa-shield-halved" style={{ color: '#dc2626', marginRight: '4px' }}></i>
+                    Todos os Calotes (100% + Parcial)
+                  </button>
+                  <button
+                    type="button"
+                    className={`report-preset-chip ${selectedStatuses.length === 1 && selectedStatuses[0] === 'entregue' ? 'active' : ''}`}
+                    onClick={() => applyStatusPreset('entregues')}
+                    title="Mercadoria colocada na praça / consignada em aberto"
+                  >
+                    Apenas Entregues (Praça)
+                  </button>
+                  <button
+                    type="button"
+                    className={`report-preset-chip ${selectedStatuses.length === 1 && selectedStatuses[0] === 'acerto' ? 'active' : ''}`}
                     onClick={() => applyStatusPreset('acertos')}
                   >
                     Apenas Acertos
                   </button>
                   <button
                     type="button"
-                    className="report-preset-chip"
-                    onClick={() => applyStatusPreset('pendentes')}
+                    className={`report-preset-chip ${selectedStatuses.length === 1 && selectedStatuses[0] === 'concluido' ? 'active' : ''}`}
+                    onClick={() => applyStatusPreset('concluidos')}
+                    style={{ borderColor: '#16a34a', color: '#15803d' }}
                   >
-                    Apenas Pendentes
+                    Apenas Concluídos (Pagos)
                   </button>
                   <button
                     type="button"
-                    className="report-preset-chip"
+                    className={`report-preset-chip ${selectedStatuses.length === 1 && selectedStatuses[0] === 'em-rota' ? 'active' : ''}`}
                     onClick={() => applyStatusPreset('rota')}
                   >
                     Apenas Em Rota
@@ -1292,9 +1579,9 @@ export default function OrderReportModal({
                   <button
                     type="button"
                     className="report-preset-chip"
-                    onClick={() => applyStatusPreset('concluidos')}
+                    onClick={() => applyStatusPreset('pendentes')}
                   >
-                    Apenas Concluídos
+                    Apenas Pendentes
                   </button>
                 </div>
 
@@ -1689,8 +1976,17 @@ export default function OrderReportModal({
 
         {/* FOOTER COM BOTÕES */}
         <div className="order-report-footer">
-          <div className="order-report-footer-left">
-            <span><strong>{reportStats.totalPedidos}</strong> pedidos • <strong>{formatCurrency(reportStats.faturamentoTotal)}</strong> (S/ Dev: {formatCurrency(reportStats.totalValorSemDev)})</span>
+          <div className="order-report-footer-left" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
+            <span><strong>{reportStats.totalPedidos}</strong> pedidos {includePrices && <>• <strong>{formatCurrency(reportStats.faturamentoTotal)}</strong> (S/ Dev: {formatCurrency(reportStats.totalValorSemDev)})</>}</span>
+            <label className="report-checkbox-label" style={{ fontWeight: 700, fontSize: '0.78rem', color: includePrices ? '#059669' : '#dc2626', background: includePrices ? '#f0fdf4' : '#fef2f2', padding: '0.25rem 0.6rem', borderRadius: '6px', border: `1px solid ${includePrices ? '#bbf7d0' : '#fecdd3'}`, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', userSelect: 'none' }} title="Clique para alternar entre relatório com valores ou romaneio de entrega sem valores (ocultar R$)">
+              <input
+                type="checkbox"
+                checked={includePrices}
+                onChange={e => setIncludePrices(e.target.checked)}
+              />
+              <i className={`fa-solid ${includePrices ? 'fa-dollar-sign' : 'fa-eye-slash'}`}></i>
+              <span>{includePrices ? 'Com Valores (R$)' : 'Sem Valores (Romaneio)'}</span>
+            </label>
           </div>
 
           <div className="order-report-footer-actions">

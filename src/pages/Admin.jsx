@@ -5122,67 +5122,6 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
               )}
             </div>
 
-            {(orderFilter === 'concluidos' || orderFilter === 'calote' || orderFilter === 'calote_parcial') && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', marginBottom: '1rem', background: 'var(--card-bg)', border: '1px solid var(--admin-border)', borderRadius: '12px', padding: '1rem' }}>
-                <div>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Concluídos Pagos</p>
-                  <p style={{ fontSize: '1.35rem', fontWeight: 800, marginTop: '0.25rem', color: 'var(--success)' }}>
-                    {concluidosStats.pedidosPagosCount} <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--admin-text-sec)' }}>({concluidosStats.pedidosPagosComValor} c/ valor • {concluidosStats.pedidosZeradosCount} zerados)</span>
-                  </p>
-                </div>
-                <div>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Calotes Totais (100%)</p>
-                  <p style={{ fontSize: '1.35rem', fontWeight: 800, marginTop: '0.25rem', color: 'var(--danger)' }}>
-                    {concluidosStats.calotesCount} <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--admin-text-sec)' }}>({formatPreco(concluidosStats.vendaNaoRecebida)})</span>
-                  </p>
-                </div>
-                <div>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Faturamento Líquido (Pagos)</p>
-                  <p style={{ fontSize: '1.35rem', fontWeight: 800, marginTop: '0.25rem', color: 'var(--accent)' }}>
-                    {formatPreco(concluidosStats.faturamentoTotal)}
-                  </p>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--admin-text-sec)' }}>Ticket médio: {formatPreco(concluidosStats.ticketMedio)}</span>
-                </div>
-                <div>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Lucro Real THSM</p>
-                  {concluidosStats.lucroReal !== null ? (
-                    <p style={{ fontSize: '1.35rem', fontWeight: 800, marginTop: '0.25rem', color: '#16a34a' }}>
-                      {formatPreco(concluidosStats.lucroReal)}
-                    </p>
-                  ) : (
-                    <div>
-                      <p style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: '0.25rem', color: '#94a3b8' }}>
-                        Indisponível
-                      </p>
-                      <span style={{ fontSize: '0.7rem', color: '#d97706', fontWeight: 600 }}>⚠️ Pendente de custo unitário</span>
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Mais Vendido (Quantidade)</p>
-                  <p style={{ fontSize: '0.95rem', fontWeight: 800, marginTop: '0.25rem', color: '#0f172a' }}>
-                    {concluidosStats.topQtdNome} ({concluidosStats.topQtdVal} un)
-                  </p>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--admin-text-sec)' }}>{concluidosStats.topQtdPagosVal} un nos pagos • {Math.max(0, concluidosStats.topQtdVal - concluidosStats.topQtdPagosVal)} em calotes</span>
-                </div>
-                <div>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Mais Vendido (Faturamento R$)</p>
-                  {concluidosStats.topValorItems.length > 0 ? (
-                    <div>
-                      <p style={{ fontSize: '0.92rem', fontWeight: 800, marginTop: '0.25rem', color: '#0284c7' }}>
-                        1º {concluidosStats.topValorItems[0].nome} ({formatPreco(concluidosStats.topValorItems[0].val)})
-                      </p>
-                      <span style={{ fontSize: '0.72rem', color: 'var(--admin-text-sec)' }}>
-                        {concluidosStats.topValorItems[1] ? `2º ${concluidosStats.topValorItems[1].nome} (${formatPreco(concluidosStats.topValorItems[1].val)})` : ''}
-                      </span>
-                    </div>
-                  ) : (
-                    <p style={{ fontSize: '0.95rem', fontWeight: 800, marginTop: '0.25rem' }}>—</p>
-                  )}
-                </div>
-              </div>
-            )}
-
             <div className="admin-tabs">
               {[
                 { id: 'todos', label: 'Todos', count: orders.length },
