@@ -9,7 +9,7 @@ import {
 } from '../lib/supabase'
 import { compressImageDataUrl, capPhotoSize } from '../lib/image'
 import { idbGet, idbSet } from '../lib/idb'
-import { searchMatches, normalizeSearch, clientMatchesSearch, phonesMatch, cleanDigits } from '../lib/search'
+import { searchMatches, normalizeSearch, clientMatchesSearch, phonesMatch, cleanDigits, isCityOrGeneric } from '../lib/search'
 
 const STORAGE_PRODUCTS = 'thsm_admin_produtos'
 const STORAGE_ORDERS = 'thsm_admin_orders'
@@ -1125,6 +1125,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [orderDueStart, setOrderDueStart] = useState('')
   const [orderDueEnd, setOrderDueEnd] = useState('')
   const [orderCityFilter, setOrderCityFilter] = useState('TODAS')
+  const [orderRouteFilter, setOrderRouteFilter] = useState('TODAS')
   const [orderRoutesSelected, setOrderRoutesSelected] = useState(() => new Set())
   const [showOrderRouteFilter, setShowOrderRouteFilter] = useState(false)
   const [mobileOrdersFilterOpen, setMobileOrdersFilterOpen] = useState(false)
@@ -1135,7 +1136,13 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const ORDER_PAGE_SIZE = 50
   const [semDevReport, setSemDevReport] = useState(null)
   const [semDevGroups, setSemDevGroups] = useState({})
-  const [rotas, setRotas] = useState(() => LS.get('thsm_rotas_contatos', []))
+  const [rotas, setRotas] = useState(() => {
+    const raw = LS.get('thsm_rotas_contatos', [])
+    return Array.isArray(raw) ? raw.map(r => ({
+      ...r,
+      rota: (r.rota && !isCityOrGeneric(r.rota)) ? r.rota.trim() : ''
+    })) : []
+  })
   const [rotasLoading, setRotasLoading] = useState(false)
   const [importingRotas, setImportingRotas] = useState(false)
   const [rotasError, setRotasError] = useState(null)
@@ -1310,7 +1317,11 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
             const key = c.remoteJid || c.telefone || c.pushName
             if (key && !seen.has(key)) {
               seen.add(key)
-              allContacts.push(c)
+              const cleanRota = (c.rota && !isCityOrGeneric(c.rota)) ? c.rota.trim() : ''
+              allContacts.push({
+                ...c,
+                rota: cleanRota
+              })
             }
           })
         }
@@ -1326,7 +1337,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           const jid = `${rawDigits}@s.whatsapp.net`
           if (seen.has(jid) || seen.has(rawDigits)) return
           const cid = u.endereco?.cidade || u.cidade || ''
-          const rotaNome = u.endereco?.rota || u.rota || cid || 'Geral'
+          const userRota = u.endereco?.rota || u.rota || ''
+          const rotaNome = (userRota && !isCityOrGeneric(userRota)) ? userRota.trim() : ''
           seen.add(jid)
           seen.add(rawDigits)
           allContacts.push({
@@ -1350,7 +1362,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           const jid = `${rawDigits}@s.whatsapp.net`
           if (seen.has(jid) || seen.has(rawDigits)) return
           const cid = o.customer?.endereco?.cidade || o.endereco?.cidade || ''
-          const rotaNome = o.customer?.endereco?.rota || cid || 'Geral'
+          const orderRota = o.customer?.endereco?.rota || o.endereco?.rota || ''
+          const rotaNome = (orderRota && !isCityOrGeneric(orderRota)) ? orderRota.trim() : ''
           seen.add(jid)
           seen.add(rawDigits)
           allContacts.push({
@@ -1368,7 +1381,12 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       // 4. Fallback cache local
       if (allContacts.length === 0) {
         const cached = LS.get('thsm_rotas_contatos', [])
-        if (cached.length > 0) allContacts = cached
+        if (cached.length > 0) {
+          allContacts = cached.map(r => ({
+            ...r,
+            rota: (r.rota && !isCityOrGeneric(r.rota)) ? r.rota.trim() : ''
+          }))
+        }
       }
 
       setRotas(allContacts)
@@ -3088,37 +3106,74 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       .sort((a, b) => getOrderTime(b) - getOrderTime(a))
   }, [orders, selectedUserDetail])
 
+  const createNewRouteTag = useCallback((nomeSugerido = '') => {
+    const nome = window.prompt('Digite o nome da nova rota (etiqueta):', nomeSugerido)
+    if (!nome || !nome.trim()) return null
+    const trimmed = nome.trim()
+    if (isCityOrGeneric(trimmed, cidadesOrders)) {
+      alert(`"${trimmed}" é o nome de uma cidade. Por favor, utilize um nome de etiqueta de rota (ex: Rota 1, Rota Centro, Rota Terça, etc.).`)
+      return null
+    }
+    setCustomRotas(prev => {
+      if (prev.some(cr => cr.rota && cr.rota.trim().toLowerCase() === trimmed.toLowerCase())) {
+        return prev
+      }
+      const next = [...prev, { id: 'cr-' + Date.now(), rota: trimmed, cidades: [] }]
+      LS.set(STORAGE_CUSTOM_ROTAS, next)
+      return next
+    })
+    showToast(`Rota "${trimmed}" criada com sucesso!`)
+    return trimmed
+  }, [cidadesOrders, showToast])
+
   const listaTodasRotas = useMemo(() => {
     const set = new Set()
-    rotas.forEach(r => { if (r.rota) set.add(r.rota.trim()) })
-    customRotas.forEach(cr => { if (cr.rota) set.add(cr.rota.trim()) })
-    orders.forEach(o => {
-      const r = o.customer?.endereco?.rota
-      if (r) set.add(r.trim())
+    // 1. Rotas criadas explicitamente pelo usuário
+    customRotas.forEach(cr => {
+      if (cr.rota && cr.rota.trim()) set.add(cr.rota.trim())
     })
+    // 2. Rotas do WhatsApp
+    rotas.forEach(r => {
+      if (r.rota && !isCityOrGeneric(r.rota, cidadesOrders)) set.add(r.rota.trim())
+    })
+    // 3. Rotas atribuídas a pedidos
+    orders.forEach(o => {
+      const r = o.customer?.endereco?.rota || o.endereco?.rota
+      if (r && !isCityOrGeneric(r, cidadesOrders)) set.add(r.trim())
+    })
+    // 4. Rotas atribuídas a usuários
     usuarios.forEach(u => {
-      const r = u.endereco?.rota
-      if (r) set.add(r.trim())
+      const r = u.endereco?.rota || u.rota
+      if (r && !isCityOrGeneric(r, cidadesOrders)) set.add(r.trim())
+    })
+    // 5. Edições de rotas
+    rotaEdits.forEach(e => {
+      if (e.rota && !isCityOrGeneric(e.rota, cidadesOrders)) set.add(e.rota.trim())
     })
     return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR'))
-  }, [rotas, customRotas, orders, usuarios])
+  }, [rotas, customRotas, orders, usuarios, rotaEdits, cidadesOrders])
 
   const rotaDeTelefone = useMemo(() => {
     const map = {}
     if (Array.isArray(rotas)) {
       rotas.forEach(r => {
         const phone = normalizePhone((r.remoteJid || '').replace(/@.*/, ''))
-        if (phone) map[phone] = r.rota || 'Sem rota'
+        if (phone) {
+          const clean = (r.rota && !isCityOrGeneric(r.rota, cidadesOrders)) ? r.rota.trim() : 'Sem rota'
+          map[phone] = clean
+        }
       })
     }
     if (Array.isArray(usuarios)) {
       usuarios.forEach(u => {
         const phone = normalizePhone(u.telefone)
-        if (phone && u.endereco?.rota) map[phone] = u.endereco.rota
+        if (phone && u.endereco?.rota && !isCityOrGeneric(u.endereco.rota, cidadesOrders)) {
+          map[phone] = u.endereco.rota.trim()
+        }
       })
     }
     return map
-  }, [rotas, usuarios])
+  }, [rotas, usuarios, cidadesOrders])
 
   const { userMapByPhone, userMapById } = useMemo(() => {
     const byPhone = new Map()
@@ -3159,11 +3214,13 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
   const rotaDeOrder = useCallback((o) => {
     if (!o) return 'Sem rota'
-    if (o.customer?.endereco?.rota) return o.customer.endereco.rota
-    if (o.endereco?.rota) return o.endereco.rota
+    const directRota = o.customer?.endereco?.rota || o.endereco?.rota
+    if (directRota && !isCityOrGeneric(directRota, cidadesOrders)) return directRota.trim()
     const phone = normalizePhone(o.customer?.telefone || o.telefone)
-    return phone ? (rotaDeTelefone[phone] || 'Sem rota') : 'Sem rota'
-  }, [rotaDeTelefone])
+    const phoneRota = phone ? rotaDeTelefone[phone] : ''
+    if (phoneRota && !isCityOrGeneric(phoneRota, cidadesOrders)) return phoneRota.trim()
+    return 'Sem rota'
+  }, [rotaDeTelefone, cidadesOrders])
 
   const getOrderDue = useCallback((o) => o.dataVencimento || financial.find(f => f.orderId === o.id)?.dueDate || '', [financial])
 
@@ -3265,7 +3322,16 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     if (orderDueStart) result = result.filter(o => ((getOrderDue(o) || '').split('T')[0]) >= orderDueStart)
     if (orderDueEnd) result = result.filter(o => ((getOrderDue(o) || '').split('T')[0]) <= orderDueEnd)
     if (orderCityFilter !== 'TODAS') result = result.filter(o => (o.customer?.endereco?.cidade || o.endereco?.cidade) === orderCityFilter)
-    if (orderRoutesSelected.size > 0) {
+    if (orderRouteFilter !== 'TODAS') {
+      if (orderRouteFilter === 'Sem rota') {
+        result = result.filter(o => {
+          const r = rotaDeOrder(o)
+          return !r || r === 'Sem rota'
+        })
+      } else {
+        result = result.filter(o => rotaDeOrder(o) === orderRouteFilter)
+      }
+    } else if (orderRoutesSelected.size > 0) {
       result = result.filter(o => orderRoutesSelected.has(rotaDeOrder(o)))
     }
     result = [...result].sort((a, b) => {
@@ -3283,7 +3349,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       }
     })
     return result
-  }, [orders, orderFilter, selectedUserEmail, orderSearch, orderMatchesQuery, orderSort, orderDateStart, orderDateEnd, orderDueStart, orderDueEnd, orderCityFilter, orderRoutesSelected, rotaDeTelefone, financial, listaTodasRotas, getOrderCustomerName, getOrderCustomerPhone, rotaDeOrder, getOrderDue])
+  }, [orders, orderFilter, selectedUserEmail, orderSearch, orderMatchesQuery, orderSort, orderDateStart, orderDateEnd, orderDueStart, orderDueEnd, orderCityFilter, orderRouteFilter, orderRoutesSelected, rotaDeTelefone, financial, listaTodasRotas, getOrderCustomerName, getOrderCustomerPhone, rotaDeOrder, getOrderDue])
 
   const crossTabSearchMatchesCount = useMemo(() => {
     if (!orderSearch || !orderSearch.trim()) return 0
@@ -3296,6 +3362,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     (orderDueStart ? 1 : 0) +
     (orderDueEnd ? 1 : 0) +
     (orderCityFilter !== 'TODAS' ? 1 : 0) +
+    (orderRouteFilter !== 'TODAS' ? 1 : 0) +
     (orderRoutesSelected.size > 0 ? 1 : 0)
 
   const paginatedOrders = useMemo(() => {
@@ -3305,7 +3372,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
   const totalOrderPages = useMemo(() => Math.ceil(filteredOrders.length / ORDER_PAGE_SIZE), [filteredOrders])
 
-  useEffect(() => { setOrderPage(1) }, [orderSearch, orderFilter, orderDateStart, orderDateEnd, orderDueStart, orderDueEnd, orderCityFilter, selectedUserEmail])
+  useEffect(() => { setOrderPage(1) }, [orderSearch, orderFilter, orderDateStart, orderDateEnd, orderDueStart, orderDueEnd, orderCityFilter, orderRouteFilter, selectedUserEmail])
 
   const toggleSort = (field) => {
     setOrderSort(prev => prev.field === field ? { field, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { field, dir: 'asc' })
@@ -3822,7 +3889,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const rotasAgrupadas = useMemo(() => {
     const groups = {}
     rotas.forEach(r => {
-      const rotaKey = r.rota || 'Sem rota'
+      const rotaKey = (r.rota && !isCityOrGeneric(r.rota, cidadesOrders)) ? r.rota.trim() : 'Sem rota'
       if (!groups[rotaKey]) groups[rotaKey] = { rota: rotaKey, cidades: {}, total: 0 }
       const cidadeKey = r.cidade || 'Sem cidade'
       if (!groups[rotaKey].cidades[cidadeKey]) groups[rotaKey].cidades[cidadeKey] = { cidade: cidadeKey, contatos: [] }
@@ -3832,10 +3899,10 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     customRotas.forEach(cr => {
       const rotaKey = cr.rota
       if (!groups[rotaKey]) groups[rotaKey] = { rota: rotaKey, cidades: {}, total: 0, _custom: true }
-      cr.cidades.forEach(c => {
+      (cr.cidades || []).forEach(c => {
         const cidadeKey = c.cidade || 'Sem cidade'
         if (!groups[rotaKey].cidades[cidadeKey]) groups[rotaKey].cidades[cidadeKey] = { cidade: cidadeKey, contatos: [] }
-        c.contatos.forEach(ct => {
+        (c.contatos || []).forEach(ct => {
           groups[rotaKey].cidades[cidadeKey].contatos.push(ct)
           groups[rotaKey].total++
         })
@@ -3893,7 +3960,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       ...g,
       cidades: Object.values(g.cidades).sort((a, b) => a.cidade.localeCompare(b.cidade, 'pt-BR'))
     }))
-  }, [rotas, customRotas, rotaEdits])
+  }, [rotas, customRotas, rotaEdits, cidadesOrders])
 
   // Consolidar todos os clientes da base (usuarios + pedidos históricos + contatos das rotas)
   // Deduplicação inteligente que preserva clientes distintos mesmo se compartilharem telefone
@@ -4601,9 +4668,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   }, [rotas])
 
   const rotasUnicas = useMemo(() => {
-    const rotasList = [...new Set([...rotas.map(r => r.rota), ...customRotas.map(cr => cr.rota), ...rotaEdits.map(e => e.acao === 'adicionar' ? e.rota : null)].filter(Boolean))]
-    return ['TODAS', ...rotasList.sort((a, b) => a.localeCompare(b, 'pt-BR'))]
-  }, [rotas, customRotas, rotaEdits])
+    return ['TODAS', ...listaTodasRotas]
+  }, [listaTodasRotas])
 
   const clientPhones = useMemo(() => {
     const set = new Set()
@@ -5198,39 +5264,43 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                   {cidadesOrders.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-              <div className="admin-filter-item" style={{ position: 'relative' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowOrderRouteFilter(v => !v)}
-                  className={`admin-route-filter-btn ${orderRoutesSelected.size > 0 ? 'active' : ''}`}
-                >
-                  <i className="fa-solid fa-route"></i>
-                  <span>{orderRoutesSelected.size > 0 ? `${orderRoutesSelected.size} rota(s)` : 'Rotas'}</span>
-                  <i className="fa-solid fa-chevron-down" style={{ fontSize: '0.6rem' }}></i>
-                </button>
-                {showOrderRouteFilter && (
-                  <div className="admin-route-filter-dropdown">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--admin-text-sec)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Filtrar por rota</span>
-                      <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: '0.72rem', fontWeight: 600 }} onClick={() => setOrderRoutesSelected(new Set())}>Limpar</button>
-                    </div>
-                    {[...rotasUnicas.filter(r => r !== 'TODAS'), 'Sem rota'].map(r => {
-                      const checked = orderRoutesSelected.has(r)
-                      return (
-                        <label key={r} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.3rem 0.4rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }}>
-                          <input type="checkbox" checked={checked}
-                            onChange={() => setOrderRoutesSelected(prev => {
-                              const next = new Set(prev)
-                              if (next.has(r)) next.delete(r); else next.add(r)
-                              return next
-                            })}
-                            style={{ cursor: 'pointer', width: '14px', height: '14px' }} />
-                          <span>{r}</span>
-                        </label>
-                      )
-                    })}
-                  </div>
-                )}
+              <div className="admin-filter-item">
+                <span className="admin-filter-label">Rota:</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <select
+                    value={orderRouteFilter}
+                    onChange={e => {
+                      const val = e.target.value
+                      if (val === '__NEW_ROTA__') {
+                        const newR = createNewRouteTag()
+                        if (newR) setOrderRouteFilter(newR)
+                      } else {
+                        setOrderRouteFilter(val)
+                      }
+                    }}
+                    className="admin-filter-select"
+                    style={{ minWidth: '135px' }}
+                  >
+                    <option value="TODAS">Todas as Rotas</option>
+                    <option value="Sem rota">Sem Rota</option>
+                    {listaTodasRotas.map(r => (
+                      <option key={r} value={r}>🏷️ {r}</option>
+                    ))}
+                    <option value="__NEW_ROTA__">➕ Nova Rota (Etiqueta)...</option>
+                  </select>
+                  <button
+                    type="button"
+                    className="admin-btn admin-btn-sec"
+                    style={{ padding: '0.3rem 0.55rem', fontSize: '0.75rem', height: '100%' }}
+                    title="Criar nova etiqueta de rota"
+                    onClick={() => {
+                      const newR = createNewRouteTag()
+                      if (newR) setOrderRouteFilter(newR)
+                    }}
+                  >
+                    <i className="fa-solid fa-plus"></i>
+                  </button>
+                </div>
               </div>
               {activeAdvancedFiltersCount > 0 && (
                 <button
@@ -5243,6 +5313,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                     setOrderDueStart('')
                     setOrderDueEnd('')
                     setOrderCityFilter('TODAS')
+                    setOrderRouteFilter('TODAS')
                     setOrderRoutesSelected(new Set())
                   }}
                 >
@@ -5345,11 +5416,9 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                           onChange={e => {
                             const val = e.target.value
                             if (val === '__NEW__') {
-                              const custom = prompt('Nome da nova rota:')
-                              if (custom && custom.trim()) {
-                                const trimmed = custom.trim()
-                                setCustomRotas(prev => [...prev, { id: 'cr-' + Date.now(), rota: trimmed }])
-                                updateOrderRota(o.id, trimmed)
+                              const custom = createNewRouteTag()
+                              if (custom) {
+                                updateOrderRota(o.id, custom)
                               }
                             } else {
                               updateOrderRota(o.id, val)
@@ -5369,9 +5438,9 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                         >
                           <option value="">Sem Rota</option>
                           {listaTodasRotas.map(r => (
-                            <option key={r} value={r}>{r}</option>
+                            <option key={r} value={r}>🏷️ {r}</option>
                           ))}
-                          <option value="__NEW__">+ Nova Rota...</option>
+                          <option value="__NEW__">➕ Nova Rota...</option>
                         </select>
                       </td>
                       <td>{formatDate(o.date)}</td>
@@ -5531,11 +5600,9 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                           onChange={ev => {
                             const val = ev.target.value
                             if (val === '__NEW__') {
-                              const custom = prompt('Nome da nova rota:')
-                              if (custom && custom.trim()) {
-                                const trimmed = custom.trim()
-                                setCustomRotas(prev => [...prev, { id: 'cr-' + Date.now(), rota: trimmed }])
-                                updateOrderRota(o.id, trimmed)
+                              const custom = createNewRouteTag()
+                              if (custom) {
+                                updateOrderRota(o.id, custom)
                               }
                             } else {
                               updateOrderRota(o.id, val)
@@ -5545,9 +5612,9 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                         >
                           <option value="">Sem Rota</option>
                           {listaTodasRotas.map(r => (
-                            <option key={r} value={r}>{r}</option>
+                            <option key={r} value={r}>🏷️ {r}</option>
                           ))}
-                          <option value="__NEW__">+ Nova Rota...</option>
+                          <option value="__NEW__">➕ Nova Rota...</option>
                         </select>
                       </div>
                       <div className="aoc-due-col">
@@ -8503,6 +8570,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
             updateProduct(prodId, { preco_custo: custo === null ? null : Number(custo) })
           }}
           onUpdateCustomer={(id, customerData) => updateOrderCustomer(id, customerData)}
+          listaTodasRotas={listaTodasRotas}
+          onCreateNewRoute={createNewRouteTag}
           onCancelOrder={(id) => cancelOrder(id)}
           onSendWhatsApp={(o) => sendWhatsApp(o)}
         />
@@ -9399,16 +9468,21 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
               )}
               <div className="modal-actions">
                 <button className="admin-btn admin-btn-sec" onClick={() => setShowNewRota(false)}>Cancelar</button>
-                <button className="admin-btn admin-btn-primary" disabled={!newRotaName.trim() || newRotaSelected.length === 0} onClick={() => {
+                <button className="admin-btn admin-btn-primary" disabled={!newRotaName.trim()} onClick={() => {
+                  const trimmed = newRotaName.trim()
+                  if (isCityOrGeneric(trimmed, cidadesOrders)) {
+                    alert(`"${trimmed}" é o nome de uma cidade. Por favor, crie uma rota (ex: Rota 1, Rota Centro, Rota Terça, etc.).`)
+                    return
+                  }
                   const grouped = {}
                   newRotaSelected.forEach(s => {
                     const cid = s.cidade || 'Sem cidade'
                     if (!grouped[cid]) grouped[cid] = { cidade: cid, contatos: [] }
                     grouped[cid].contatos.push(s)
                   })
-                  const novaRota = { rota: newRotaName.trim(), cidades: Object.values(grouped) }
+                  const novaRota = { id: 'cr-' + Date.now(), rota: trimmed, cidades: newRotaSelected.length > 0 ? Object.values(grouped) : [] }
                   setCustomRotas(prev => [...prev, novaRota])
-                  showToast(`Rota "${newRotaName.trim()}" criada com ${newRotaSelected.length} contato(s)`)
+                  showToast(newRotaSelected.length > 0 ? `Rota "${trimmed}" criada com ${newRotaSelected.length} contato(s)` : `Rota "${trimmed}" criada com sucesso!`)
                   setShowNewRota(false)
                   setNewRotaName('')
                   setNewRotaSearch('')
@@ -12178,7 +12252,7 @@ function getOrderRawItems(ord) {
   return []
 }
 
-function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onStatusChange, onUpdateDue, onPreApprovar, onEditAndConfirm, onEditSave, onSyncCusto, onOpenDelivery, onUpdateCustomer, onCancelOrder, onSendWhatsApp, onToggleWhatsAppNotify, onCloneOrder, onRegisterPayment, onToggleTestOrder }) {
+function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onStatusChange, onUpdateDue, onPreApprovar, onEditAndConfirm, onEditSave, onSyncCusto, onOpenDelivery, onUpdateCustomer, onCancelOrder, onSendWhatsApp, onToggleWhatsAppNotify, onCloneOrder, onRegisterPayment, onToggleTestOrder, listaTodasRotas = [], onCreateNewRoute }) {
   const [rejectedItems, setRejectedItems] = useState(new Set())
   const [editMode, setEditMode] = useState(false)
   const [editedItems, setEditedItems] = useState(() => getOrderRawItems(order).map(i => {
@@ -12680,6 +12754,41 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
                 <div><strong style={{ fontSize: '0.78rem' }}>Complemento:</strong>
                   <input type="text" value={editCustomer.endereco.complemento || ''} onChange={e => setEditCustomer(p => ({ ...p, endereco: { ...p.endereco, complemento: e.target.value } }))} style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem', marginTop: '0.2rem' }} />
                 </div>
+                <div><strong style={{ fontSize: '0.78rem' }}>Rota (Etiqueta):</strong>
+                  <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.2rem' }}>
+                    <select
+                      value={editCustomer.endereco?.rota || ''}
+                      onChange={e => {
+                        const val = e.target.value
+                        if (val === '__NEW__') {
+                          const newR = onCreateNewRoute ? onCreateNewRoute() : prompt('Nome da nova rota:')
+                          if (newR) setEditCustomer(p => ({ ...p, endereco: { ...p.endereco, rota: newR } }))
+                        } else {
+                          setEditCustomer(p => ({ ...p, endereco: { ...p.endereco, rota: val } }))
+                        }
+                      }}
+                      style={{ flex: 1, padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.85rem' }}
+                    >
+                      <option value="">Sem Rota</option>
+                      {listaTodasRotas.map(r => (
+                        <option key={r} value={r}>🏷️ {r}</option>
+                      ))}
+                      <option value="__NEW__">➕ Nova Rota...</option>
+                    </select>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn-sec"
+                      style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }}
+                      title="Criar nova rota"
+                      onClick={() => {
+                        const newR = onCreateNewRoute ? onCreateNewRoute() : prompt('Nome da nova rota:')
+                        if (newR) setEditCustomer(p => ({ ...p, endereco: { ...p.endereco, rota: newR } }))
+                      }}
+                    >
+                      <i className="fa-solid fa-plus"></i>
+                    </button>
+                  </div>
+                </div>
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.3rem' }}>
                   <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem' }} onClick={() => { setCustomerEdit(false); setEditCustomer({ nome: order.customer?.nome || '', email: order.customer?.email || '', telefone: order.customer?.telefone || '', endereco: { ...(order.customer?.endereco || {}) } }) }}>Cancelar</button>
                   <button className="admin-btn" style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem', background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} onClick={() => { onUpdateCustomer?.(order.id, editCustomer); setCustomerEdit(false) }}><i className="fa-solid fa-check"></i> Salvar Cliente</button>
@@ -12692,6 +12801,7 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
                 <p><strong>Telefone:</strong> {order.customer?.telefone || '-'}</p>
                 {order.customer?.cpf && <p><strong>CPF:</strong> {order.customer.cpf}</p>}
                 <p><strong>Endereço:</strong> {order.customer?.endereco ? [order.customer.endereco.rua, order.customer.endereco.numero, order.customer.endereco.bairro, order.customer.endereco.cidade, order.customer.endereco.estado].filter(Boolean).join(', ') || '-' : '-'}</p>
+                <p><strong>Rota (Etiqueta):</strong> <span className="status-tag" style={{ background: order.customer?.endereco?.rota ? '#eff6ff' : '#f1f5f9', color: order.customer?.endereco?.rota ? '#1d4ed8' : '#64748b', fontWeight: 600 }}>{order.customer?.endereco?.rota ? `🏷️ ${order.customer.endereco.rota}` : 'Sem rota'}</span></p>
                 {order.customer?.endereco?.cep && <p><strong>CEP:</strong> {order.customer.endereco.cep}</p>}
                 {order.customer?.endereco?.complemento && <p><strong>Complemento:</strong> {order.customer.endereco.complemento}</p>}
               </>

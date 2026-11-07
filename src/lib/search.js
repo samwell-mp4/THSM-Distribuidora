@@ -150,3 +150,33 @@ export function clientMatchesSearch(client, query) {
   return false
 }
 
+export const KNOWN_MG_CITIES = new Set([
+  'belo horizonte', 'betim', 'contagem', 'ibirite', 'sabara',
+  'santa luzia', 'ribeirao das neves', 'sete lagoas', 'nova lima',
+  'vespasiano', 'lagoa santa', 'igarape', 'sarzedo', 'mario campos',
+  'esmeraldas', 'mateus leme', 'juatuba', 'brumadinho', 'pedro leopoldo', 'confins',
+  'sao joaquim de bicas', 'raposos', 'rio acima', 'caete',
+  'itaguara', 'itatiaiuco', 'itatiaiuçu', 'florestal', 'bonfim', 'crucilandia',
+  'divinopolis', 'juiz de fora', 'uberlandia', 'montes claros',
+  'governador valadares', 'ipatinga', 'pocos de caldas', 'varginha',
+  'patos de minas', 'pouso alegre', 'araguari', 'passos', 'uberaba', 'itauna',
+  'para de minas', 'ouro preto', 'mariana', 'congonhas', 'conselheiro lafaiete',
+  'barbacena', 'sao joao del rei', 'curvelo', 'diamantina', 'joao monlevade',
+  'timoteo', 'coronel fabriciano', 'geral', 'sem cidade', 'sem rota',
+  'personalizado', 'todas', 'todas as cidades', 'sem rota'
+])
+
+export function isCityOrGeneric(name, extraCities = []) {
+  if (!name || typeof name !== 'string') return true
+  const clean = normalizeSearch(name)
+  if (!clean || clean === 'geral' || clean === 'sem rota' || clean === 'sem cidade' || clean === 'todas' || clean === 'personalizado') return true
+  if (KNOWN_MG_CITIES.has(clean)) return true
+  if (Array.isArray(extraCities)) {
+    for (const ec of extraCities) {
+      if (ec && normalizeSearch(ec) === clean) return true
+    }
+  }
+  return false
+}
+
+

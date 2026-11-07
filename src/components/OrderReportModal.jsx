@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
-import { clientMatchesSearch } from '../lib/search'
+import { clientMatchesSearch, isCityOrGeneric } from '../lib/search'
 import './OrderReportModal.css'
 
 const STATUS_CONFIG = {
@@ -288,13 +288,13 @@ export default function OrderReportModal({
 
   const rotasUnicas = useMemo(() => {
     const set = new Set()
-    rotas.forEach(r => { if (r.rota) set.add(r.rota.trim()) })
+    rotas.forEach(r => { if (r.rota && !isCityOrGeneric(r.rota, cidadesUnicas)) set.add(r.rota.trim()) })
     orders.forEach(o => {
       const r = o.customer?.endereco?.rota
-      if (r) set.add(r.trim())
+      if (r && !isCityOrGeneric(r, cidadesUnicas)) set.add(r.trim())
     })
     return ['TODAS', ...Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))]
-  }, [rotas, orders])
+  }, [rotas, orders, cidadesUnicas])
 
   // Normalização de status
   // Normalização de status
