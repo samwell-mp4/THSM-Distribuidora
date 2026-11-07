@@ -9431,7 +9431,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
             </div>
             <div className="admin-modal-body">
               <p style={{ margin: '0 0 0.75rem', fontSize: '0.82rem', color: 'var(--admin-text-sec)' }}>
-                Rota: <strong>{(rotaContactModal.rota)}</strong>
+                Rota: <strong>{rotaContactModal.rota}</strong>
               </p>
               <div className="form-group">
                 <label>Nome</label>
