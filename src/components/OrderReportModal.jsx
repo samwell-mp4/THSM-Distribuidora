@@ -11,10 +11,89 @@ const STATUS_CONFIG = {
   'confirmado': { label: 'Confirmado', color: '#2563eb', bg: '#dbeafe' },
   'em-andamento': { label: 'Em Andamento', color: '#4f46e5', bg: '#e0e7ff' },
   'em-rota': { label: 'Em Rota', color: '#0284c7', bg: '#e0f2fe' },
-  'acerto': { label: 'Acerto', color: '#7c3aed', bg: '#f3e8ff' },
-  'entregue': { label: 'Entregue', color: '#059669', bg: '#d1fae5' },
-  'concluido': { label: 'Concluído', color: '#16a34a', bg: '#dcfce7' },
-  'cancelado': { label: 'Cancelado', color: '#dc2626', bg: '#fee2e2' }
+  'entregue': { label: 'Entregue (Praça)', color: '#059669', bg: '#d1fae5' },
+  'acerto': { label: 'Acerto (Motoristas)', color: '#7c3aed', bg: '#f3e8ff' },
+  'calote_parcial': { label: 'Calote Parcial', color: '#d97706', bg: '#fef3c7' },
+  'concluido': { label: 'Concluído (Pago)', color: '#16a34a', bg: '#dcfce7' },
+  'calote': { label: 'Calote total', color: '#dc2626', bg: '#fee2e2' },
+  'cancelado': { label: 'Cancelado', color: '#94a3b8', bg: '#f1f5f9' }
+};
+
+// Helper financeiro oficial THSM por comanda
+export function getOrderFinancialDetails(o) {
+  const isTest = Boolean(o?.isTest || o?.is_test || (o?.customer?.nome && o.customer.nome.toLowerCase().includes('teste')));
+
+  // Preço de tabela dos itens
+  let valorItens = 0;
+  if (o?.valor_itens !== undefined && Number(o.valor_itens) > 0) {
+    valorItens = Number(o.valor_itens);
+  } else {
+    const items = o?.originalItems || o?.items || [];
+    valorItens = items.reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0);
+  }
+  valorItens = Math.round(valorItens * 100) / 100;
+
+  // Desconto concedido
+  let desconto = 0;
+  if (o?.desconto !== undefined && Number(o.desconto) >= 0) {
+    desconto = Number(o.desconto);
+  } else if (o?.descontoPercent) {
+    desconto = Math.round(((Number(o.descontoPercent) / 100) * valorItens) * 100) / 100;
+  }
+  desconto = Math.round(desconto * 100) / 100;
+
+  // Total líquido (valor_itens - desconto)
+  let totalLiquido = 0;
+  if (o?.total_liquido !== undefined && Number(o.total_liquido) >= 0) {
+    totalLiquido = Number(o.total_liquido);
+  } else if (valorItens > 0) {
+    totalLiquido = Math.max(0, Math.round((valorItens - desconto) * 100) / 100);
+  } else {
+    totalLiquido = Number(o?.totalAcerto || o?.total || o?.totalPago || 0);
+  }
+  totalLiquido = Math.round(totalLiquido * 100) / 100;
+
+  // Motivo do desconto
+  let motivoDesconto = o?.motivo_desconto || '';
+  if (!motivoDesconto) {
+    if (desconto > 0) {
+      if (Number(o?.descontoPercent) === 30 || Math.round((desconto / (valorItens || 1)) * 100) === 30) {
+        motivoDesconto = 'Desconto revendedora (30%)';
+      } else if (o?.cupom) {
+        motivoDesconto = `Cupom (${o.cupom})`;
+      } else if (o?.descontoPercent) {
+        motivoDesconto = `Desconto percentual (${o.descontoPercent}%)`;
+      } else {
+        motivoDesconto = 'Ajuste manual (R$)';
+      }
+    } else {
+      motivoDesconto = 'Sem desconto';
+    }
+  }
+
+  // Motivo de pedido zerado
+  let motivoZerado = o?.motivo_zerado || '';
+  if (!motivoZerado && totalLiquido === 0) {
+    if (o?.isBrinde || (o?.customer?.nome && o.customer.nome.toLowerCase().includes('brinde')) || (o?.observacoes && o.observacoes.toLowerCase().includes('brinde'))) {
+      motivoZerado = 'Brinde';
+    } else {
+      motivoZerado = 'Devolução total';
+    }
+  }
+
+  const totalPago = Number(o?.total_pago !== undefined ? o.total_pago : (o?.totalPago || (o?.status === 'concluido' ? totalLiquido : 0)));
+  const saldoEmAberto = Number(o?.saldo_em_aberto !== undefined ? o.saldo_em_aberto : (o?.valorEmAberto || Math.max(0, totalLiquido - totalPago)));
+
+  return {
+    isTest,
+    valorItens,
+    desconto,
+    totalLiquido,
+    motivoDesconto,
+    motivoZerado: totalLiquido === 0 ? (motivoZerado || 'Devolução total') : '-',
+    totalPago: Math.round(totalPago * 100) / 100,
+    saldoEmAberto: Math.round(saldoEmAberto * 100) / 100
+  };
 }
 
 function formatCurrency(val) {
@@ -39,6 +118,14 @@ const isNoDevName = (nome) => {
 }
 
 // Verifica se um item é sem devolução
+export function getItemCost(item, produtos = []) {
+  if (item?.preco_custo != null && Number(item.preco_custo) > 0) return Number(item.preco_custo)
+  if (item?.custo_unitario_pedido != null && Number(item.custo_unitario_pedido) > 0) return Number(item.custo_unitario_pedido)
+  const norm = (v) => (v || '').toString().toLowerCase().replace(/[^a-z0-9]/g, '')
+  const p = produtos.find(prod => prod && (prod.id === item?.id || String(prod.id) === String(item?.id) || norm(prod.nome) === norm(item?.nome)))
+  return Number(p?.preco_custo || p?.custo || p?.cost || 0)
+}
+
 export function checkItemSemDevolucao(item, produtos = []) {
   if (item?.semDevolucao === true || item?.semDevolucao === 1) return true
   const p = produtos.find(prod => prod.id === item?.id || String(prod.id) === String(item?.id) || norm(prod.nome) === norm(item?.nome))
@@ -127,6 +214,7 @@ export default function OrderReportModal({
   const [selectedRoute, setSelectedRoute] = useState('TODAS')
   const [selectedPayment, setSelectedPayment] = useState('TODOS')
   const [devolucaoFilter, setDevolucaoFilter] = useState('todos') // 'todos', 'com_sem_dev', 'apenas_sem_dev', 'apenas_com_dev'
+  const [excludeTests, setExcludeTests] = useState(true)
   const [dateType, setDateType] = useState('date') // 'date' ou 'vencimento'
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -160,7 +248,9 @@ export default function OrderReportModal({
   // Normalização de status
   // Normalização de status
   const getResolvedStatus = (o) => {
-    if (o.status === 'concluido' || isFinalizada(o)) return 'concluido'
+    if (o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100') return 'calote'
+    if (o.status === 'calote_parcial' || o.status === 'parcial' || (Boolean(o.isFinalizado) && Number(o.valorEmAberto) > 0 && Number(o.totalPago) > 0)) return 'calote_parcial'
+    if (o.status === 'concluido' || (isFinalizada(o) && !o.isCalote && o.status !== 'calote')) return 'concluido'
     if (o.status === 'acerto') return 'acerto'
     if (o.status === 'entregue') return 'entregue'
     return o.status || 'pendente'
@@ -225,6 +315,11 @@ export default function OrderReportModal({
       })
     }
 
+    // Filtro de pedidos de teste
+    if (excludeTests) {
+      list = list.filter(o => !o?.isTest && !o?.is_test && !(o?.customer?.nome && o.customer.nome.toLowerCase().includes('teste')))
+    }
+
     // Filtro adicional de Devolução
     if (devolucaoFilter !== 'todos') {
       list = list.filter(o => {
@@ -256,18 +351,26 @@ export default function OrderReportModal({
     dateType,
     startDate,
     endDate,
+    excludeTests,
     isFinalizada
   ])
 
-  // Resumo estatístico geral
+  // Resumo estatístico geral (fórmulas oficiais THSM)
   const reportStats = useMemo(() => {
     const totalPedidos = targetOrders.length
     let faturamentoTotal = 0
+    let valorItensTotal = 0
+    let descontosTotal = 0
     let totalItens = 0
     let totalQtdSemDev = 0
     let totalQtdComDev = 0
     let totalValorSemDev = 0
     let totalValorComDev = 0
+    let vendaNaoRecebida = 0
+    let calotePrejuizoCusto = 0
+    let pagosComValorCount = 0
+    let pagosZeradosCount = 0
+    let calotesCount = 0
 
     const statusMap = {}
     Object.keys(STATUS_CONFIG).forEach(s => {
@@ -278,24 +381,47 @@ export default function OrderReportModal({
 
     targetOrders.forEach(o => {
       const dev = getOrderDevolucaoStats(o, produtos)
-      faturamentoTotal += dev.totalBruto
+      const fin = getOrderFinancialDetails(o)
+      const st = getResolvedStatus(o)
+
       totalItens += dev.qtdTotal
       totalQtdSemDev += dev.qtdSemDev
       totalQtdComDev += dev.qtdComDev
       totalValorSemDev += dev.totalSemDev
       totalValorComDev += dev.totalComDev
 
-      const st = getResolvedStatus(o)
       if (!statusMap[st]) statusMap[st] = { count: 0, total: 0 }
       statusMap[st].count += 1
-      statusMap[st].total += dev.totalBruto
+
+      if (st === 'concluido') {
+        // Pedido pago oficial
+        faturamentoTotal += fin.totalLiquido
+        valorItensTotal += fin.valorItens
+        descontosTotal += fin.desconto
+        statusMap[st].total += fin.totalLiquido
+        if (fin.totalLiquido > 0) {
+          pagosComValorCount += 1
+        } else {
+          pagosZeradosCount += 1
+        }
+      } else if (st === 'calote') {
+        // Calote 100%
+        const caloteVenda = Number(o.caloteTotalVenda || fin.valorItens || o.totalOriginal || o.total || 0)
+        vendaNaoRecebida += caloteVenda
+        statusMap[st].total += caloteVenda
+        calotesCount += 1
+        calotePrejuizoCusto += Number(o.caloteTotalCusto || 0)
+      } else {
+        statusMap[st].total += fin.totalLiquido
+      }
 
       const p = o.pagamento || 'outro'
-      if (pagMap[p] !== undefined) pagMap[p] += dev.totalBruto
-      else pagMap.outro += dev.totalBruto
+      if (pagMap[p] !== undefined) pagMap[p] += fin.totalLiquido
+      else pagMap.outro += fin.totalLiquido
     })
 
-    const ticketMedio = totalPedidos > 0 ? faturamentoTotal / totalPedidos : 0
+    // Ticket médio oficial dos pedidos pagos com valor (R$ 260,51 para os 221 pedidos)
+    const ticketMedio = pagosComValorCount > 0 ? (faturamentoTotal / pagosComValorCount) : 0
 
     const porStatus = Object.entries(statusMap)
       .filter(([_, data]) => data.count > 0)
@@ -312,8 +438,15 @@ export default function OrderReportModal({
 
     return {
       totalPedidos,
-      faturamentoTotal,
-      ticketMedio,
+      faturamentoTotal: Math.round(faturamentoTotal * 100) / 100,
+      valorItensTotal: Math.round(valorItensTotal * 100) / 100,
+      descontosTotal: Math.round(descontosTotal * 100) / 100,
+      ticketMedio: Math.round(ticketMedio * 100) / 100,
+      pagosComValorCount,
+      pagosZeradosCount,
+      calotesCount,
+      vendaNaoRecebida: Math.round(vendaNaoRecebida * 100) / 100,
+      calotePrejuizoCusto: Math.round(calotePrejuizoCusto * 100) / 100,
       totalItens,
       totalQtdSemDev,
       totalQtdComDev,
@@ -663,7 +796,7 @@ export default function OrderReportModal({
   }
 
   // ==========================================
-  // EXPORTAÇÃO EXCEL PROFISSIONAL (.xlsx) IDÊNTICA À FOTO DO USUÁRIO
+  // EXPORTAÇÃO EXCEL PROFISSIONAL (.xlsx) EM TABELA PLANA (PADRÃO OFICIAL THSM)
   // ==========================================
   const handleExportExcel = () => {
     if (targetOrders.length === 0) {
@@ -676,126 +809,185 @@ export default function OrderReportModal({
       const nowStr = new Date().toLocaleString('pt-BR')
 
       // ==========================================
-      // ABA 1: RELATÓRIO DE PEDIDOS (FORMATO EXATO DA FOTO DO USUÁRIO)
+      // ABA 1: RELATÓRIO DE PEDIDOS (TABELA PLANA - 1 LINHA POR PEDIDO)
       // ==========================================
       const excelHeaders = [
-        'data do pedido',
+        'id_pedido',
+        'data_pedido',
         'cliente',
-        'status',
         'telefone',
-        'endereço completo / cidade',
+        'status',
+        'pedido_teste',
+        'cidade',
         'rota',
-        'quantidade itens',
-        'quantidade itens sem devolução',
-        'quantidade de itens com devolução',
-        'total sem devolução',
-        'total com devolução',
-        'total bruto'
+        'endereco_completo',
+        'quantidade_itens',
+        'valor_itens',
+        'desconto',
+        'motivo_desconto',
+        'total_liquido',
+        'total_pago',
+        'saldo_em_aberto',
+        'motivo_zerado',
+        'resumo_itens'
       ]
 
       const mainSheetData = [excelHeaders]
 
       targetOrders.forEach(o => {
+        const fin = getOrderFinancialDetails(o)
         const dev = getOrderDevolucaoStats(o, produtos)
-        const dateStr = formatDateBR(o.date)
+        const dateStr = formatDateBR(o.date || o.createdAt)
         const resStatus = getResolvedStatus(o)
         const statusLabel = STATUS_CONFIG[resStatus]?.label || resStatus
         const enderecoCompleto = formatFullAddress(o.customer?.endereco)
         const rotaStr = o.customer?.endereco?.rota || '-'
+        const cidadeStr = o.customer?.endereco?.cidade || '-'
 
-        // Linha Principal do Pedido
+        const resumoItens = (o.items || []).map(i => `${i.qty || 1}x ${i.nome}`).join(' • ') || '-'
+
+        // Linha plana do Pedido (sem linhas em branco intermediárias para garantir compatibilidade com Tabelas Dinâmicas)
         mainSheetData.push([
+          o.id,
           dateStr,
           o.customer?.nome || '-',
-          statusLabel,
           o.customer?.telefone || '-',
-          enderecoCompleto,
+          statusLabel,
+          fin.isTest ? 'Sim' : 'Não',
+          cidadeStr,
           rotaStr,
+          enderecoCompleto,
           dev.qtdTotal,
-          dev.qtdSemDev,
-          dev.qtdComDev,
-          dev.totalSemDev,
-          dev.totalComDev,
-          dev.totalBruto
+          fin.valorItens,
+          fin.desconto,
+          fin.motivoDesconto,
+          fin.totalLiquido,
+          fin.totalPago,
+          fin.saldoEmAberto,
+          fin.motivoZerado,
+          resumoItens
         ])
-
-        // Linhas dos Produtos (como na foto: Qtd Nome | Preço | Tipo)
-        if (o.items && o.items.length > 0) {
-          o.items.forEach(item => {
-            const isSem = checkItemSemDevolucao(item, produtos)
-            const subtotal = Number(item.preco || 0) * Number(item.qty || 1)
-            mainSheetData.push([
-              '',
-              '',
-              `${item.qty || 1} ${item.nome}`,
-              subtotal,
-              isSem ? 'SEM DEVOLUÇÃO' : 'COM DEVOLUÇÃO',
-              '',
-              '',
-              '',
-              '',
-              '',
-              '',
-              ''
-            ])
-          })
-        }
-
-        // Linha em branco separadora entre pedidos
-        mainSheetData.push([])
       })
-
-      // Linha final de TOTAL GERAL
-      mainSheetData.push([
-        'TOTAL GERAL',
-        `${reportStats.totalPedidos} pedido(s)`,
-        '',
-        '',
-        '',
-        '',
-        reportStats.totalItens,
-        reportStats.totalQtdSemDev,
-        reportStats.totalQtdComDev,
-        reportStats.totalValorSemDev,
-        reportStats.totalValorComDev,
-        reportStats.faturamentoTotal
-      ])
 
       const wsMain = XLSX.utils.aoa_to_sheet(mainSheetData)
       wsMain['!cols'] = [
-        { wch: 14 }, // data do pedido
+        { wch: 14 }, // id_pedido
+        { wch: 14 }, // data_pedido
         { wch: 28 }, // cliente
-        { wch: 28 }, // status / produto
-        { wch: 16 }, // telefone / subtotal
-        { wch: 45 }, // endereço completo / cidade
+        { wch: 16 }, // telefone
+        { wch: 18 }, // status
+        { wch: 14 }, // pedido_teste
+        { wch: 18 }, // cidade
         { wch: 14 }, // rota
-        { wch: 18 }, // quantidade itens
-        { wch: 28 }, // quantidade itens sem devolução
-        { wch: 30 }, // quantidade de itens com devolução
-        { wch: 20 }, // total sem devolução
-        { wch: 20 }, // total com devolução
-        { wch: 18 }  // total bruto
+        { wch: 45 }, // endereco_completo
+        { wch: 16 }, // quantidade_itens
+        { wch: 18 }, // valor_itens
+        { wch: 16 }, // desconto
+        { wch: 28 }, // motivo_desconto
+        { wch: 18 }, // total_liquido
+        { wch: 16 }, // total_pago
+        { wch: 16 }, // saldo_em_aberto
+        { wch: 18 }, // motivo_zerado
+        { wch: 50 }  // resumo_itens
       ]
-      XLSX.utils.book_append_sheet(wb, wsMain, 'Relatório de Pedidos')
+      XLSX.utils.book_append_sheet(wb, wsMain, 'Pedidos (Tabela Plana)')
 
       // ==========================================
-      // ABA 2: RESUMO EXECUTIVO (KPIS GERAIS)
+      // ABA 2: ITENS DOS PEDIDOS (TABELA PLANA DETALHADA)
+      // ==========================================
+      const itensHeaders = [
+        'id_pedido',
+        'data_pedido',
+        'cliente',
+        'status_pedido',
+        'pedido_teste',
+        'cidade',
+        'rota',
+        'produto',
+        'quantidade',
+        'preco_unitario',
+        'subtotal',
+        'custo_unitario',
+        'custo_total',
+        'quantidade_devolvida',
+        'tipo_devolucao'
+      ]
+
+      const itensRows = []
+      targetOrders.forEach(o => {
+        const isTest = Boolean(o?.isTest || o?.is_test || (o?.customer?.nome && o.customer.nome.toLowerCase().includes('teste')))
+        const resStatus = getResolvedStatus(o)
+        const statusLabel = STATUS_CONFIG[resStatus]?.label || resStatus
+        const dateStr = formatDateBR(o.date || o.createdAt)
+
+        ;(o.items || []).forEach(item => {
+          const isSem = checkItemSemDevolucao(item, produtos)
+          const qty = Number(item.qty) || 1
+          const preco = Number(item.preco) || 0
+          const subtotal = Math.round(preco * qty * 100) / 100
+          const custoUnit = Number(item.preco_custo || item.custo_unitario_pedido || getItemCost(item, produtos)) || 0
+          const custoTotal = Math.round(custoUnit * qty * 100) / 100
+          const retQty = Number(item.returnedQty || item.caloteDevolvidoQty || 0)
+
+          itensRows.push([
+            o.id,
+            dateStr,
+            o.customer?.nome || '-',
+            statusLabel,
+            isTest ? 'Sim' : 'Não',
+            o.customer?.endereco?.cidade || '-',
+            o.customer?.endereco?.rota || '-',
+            item.nome || '-',
+            qty,
+            preco,
+            subtotal,
+            custoUnit > 0 ? custoUnit : 'Indisponível',
+            custoTotal > 0 ? custoTotal : 'Indisponível',
+            retQty,
+            isSem ? 'SEM DEVOLUÇÃO' : 'COM DEVOLUÇÃO'
+          ])
+        })
+      })
+
+      if (itensRows.length > 0) {
+        const wsItens = XLSX.utils.aoa_to_sheet([itensHeaders, ...itensRows])
+        wsItens['!cols'] = [
+          { wch: 14 }, { wch: 12 }, { wch: 26 }, { wch: 18 }, { wch: 14 },
+          { wch: 16 }, { wch: 14 }, { wch: 32 }, { wch: 12 }, { wch: 18 },
+          { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 20 }
+        ]
+        XLSX.utils.book_append_sheet(wb, wsItens, 'Itens (Tabela Plana)')
+      }
+
+      // ==========================================
+      // ABA 3: RESUMO EXECUTIVO (MÉTRICAS OFICIAIS THSM)
       // ==========================================
       const resumoData = [
         ['THSM DISTRIBUIDORA - RESUMO EXECUTIVO DE PEDIDOS'],
         [`Gerado em: ${nowStr}`],
+        [`Pedidos de teste: ${excludeTests ? 'Excluídos' : 'Incluídos'}`],
         [],
-        ['INDICADORES GERAIS'],
-        ['Total de Pedidos', reportStats.totalPedidos],
-        ['Total Bruto Faturado (R$)', reportStats.faturamentoTotal],
-        ['Total SEM Devolução (R$)', reportStats.totalValorSemDev],
-        ['Total COM Devolução (R$)', reportStats.totalValorComDev],
-        ['Ticket Médio (R$)', reportStats.ticketMedio],
-        ['Total de Itens Vendidos', reportStats.totalItens],
-        ['Qtd Itens SEM Devolução', reportStats.totalQtdSemDev],
-        ['Qtd Itens COM Devolução', reportStats.totalQtdComDev],
+        ['1. VOLUME DE PEDIDOS'],
+        ['Total de Pedidos no Escopo', reportStats.totalPedidos],
+        ['Pedidos Concluídos Pagos', reportStats.pagosComValorCount + reportStats.pagosZeradosCount],
+        ['  - Pagos com Valor (> R$ 0,00)', reportStats.pagosComValorCount],
+        ['  - Pagos Zerados (Devolução total / Brinde)', reportStats.pagosZeradosCount],
+        ['Pedidos em Calote Total (100%)', reportStats.calotesCount],
+        ['Total de Peças / Itens', reportStats.totalItens],
+        ['Qtd Peças SEM Devolução', reportStats.totalQtdSemDev],
+        ['Qtd Peças COM Devolução', reportStats.totalQtdComDev],
         [],
-        ['DISTRIBUIÇÃO POR STATUS'],
+        ['2. FATURAMENTO E RECEBIMENTOS'],
+        ['Valor dos Itens dos Pagos (Preço de Tabela)', reportStats.valorItensTotal],
+        ['Descontos Concedidos nos Pagos', reportStats.descontosTotal],
+        ['Receita Líquida Recebida (Faturamento Real)', reportStats.faturamentoTotal],
+        ['Venda Não Recebida (Calotes a Preço de Venda)', reportStats.vendaNaoRecebida],
+        ['Ticket Médio dos Pagos com Valor', reportStats.ticketMedio],
+        [],
+        ['3. CUSTO E LUCRO REAL'],
+        ['Prejuízo Calote a Preço de Custo', reportStats.calotePrejuizoCusto > 0 ? reportStats.calotePrejuizoCusto : 'Pendente de custo unitário'],
+        [],
+        ['4. DISTRIBUIÇÃO POR STATUS'],
         ['Status', 'Qtd Pedidos', 'Valor Total (R$)', '% Participação']
       ]
 
@@ -804,70 +996,12 @@ export default function OrderReportModal({
       })
 
       const wsResumo = XLSX.utils.aoa_to_sheet(resumoData)
-      wsResumo['!cols'] = [{ wch: 35 }, { wch: 24 }, { wch: 22 }, { wch: 18 }]
-      XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo Geral')
+      wsResumo['!cols'] = [{ wch: 42 }, { wch: 26 }, { wch: 22 }, { wch: 18 }]
+      XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo Geral (THSM)')
 
-      // ==========================================
-      // ABA 3: ITENS DETALHADOS (TABELA PLANA)
-      // ==========================================
-      const itensHeaders = [
-        'ID Pedido',
-        'Data Pedido',
-        'Cliente',
-        'Telefone',
-        'Endereço Completo',
-        'Cidade',
-        'Rota',
-        'Produto',
-        'Quantidade',
-        'Preço Unitário (R$)',
-        'Subtotal (R$)',
-        'Sem Devolução'
-      ]
-
-      const itensRows = []
-      targetOrders.forEach(o => {
-        (o.items || []).forEach(item => {
-          const isSem = checkItemSemDevolucao(item, produtos)
-          itensRows.push([
-            o.id,
-            o.date ? formatDateBR(o.date) : '-',
-            o.customer?.nome || '-',
-            o.customer?.telefone || '-',
-            formatFullAddress(o.customer?.endereco),
-            o.customer?.endereco?.cidade || '-',
-            o.customer?.endereco?.rota || '-',
-            item.nome || '-',
-            Number(item.qty) || 1,
-            Number(item.preco) || 0,
-            (Number(item.preco) || 0) * (Number(item.qty) || 1),
-            isSem ? 'Sim' : 'Não'
-          ])
-        })
-      })
-
-      if (itensRows.length > 0) {
-        const wsItens = XLSX.utils.aoa_to_sheet([itensHeaders, ...itensRows])
-        wsItens['!cols'] = [
-          { wch: 14 },
-          { wch: 12 },
-          { wch: 26 },
-          { wch: 16 },
-          { wch: 45 },
-          { wch: 16 },
-          { wch: 14 },
-          { wch: 32 },
-          { wch: 12 },
-          { wch: 16 },
-          { wch: 16 },
-          { wch: 16 }
-        ]
-        XLSX.utils.book_append_sheet(wb, wsItens, 'Itens Detalhados')
-      }
-
-      const fileName = `Relatorio_Pedidos_THSM_${new Date().toISOString().split('T')[0]}.xlsx`
+      const fileName = `relatorio_thsm_${new Date().toISOString().split('T')[0]}.xlsx`
       XLSX.writeFile(wb, fileName)
-      showToast('Planilha Excel (.xlsx) exportada com sucesso no formato padrão!', 'success')
+      showToast('Planilha Excel (.xlsx) exportada com sucesso em formato de tabela plana!', 'success')
     } catch (err) {
       console.error('Erro ao exportar Excel:', err)
       showToast('Erro ao exportar para Excel. Verifique o console.', 'error')
@@ -1325,7 +1459,7 @@ export default function OrderReportModal({
             </div>
           )}
 
-          {/* CARDS DE RESUMO (KPIS COM SEM DEVOLUÇÃO E COM DEVOLUÇÃO) */}
+          {/* CARDS DE RESUMO (KPIS OFICIAIS THSM) */}
           <div className="report-kpi-grid">
             <div className="report-kpi-card" style={{ borderLeft: '4px solid #0284c7' }}>
               <div className="report-kpi-icon" style={{ background: '#e0f2fe', color: '#0284c7' }}>
@@ -1333,7 +1467,7 @@ export default function OrderReportModal({
               </div>
               <div>
                 <div className="report-kpi-val">{reportStats.totalPedidos}</div>
-                <div className="report-kpi-label">Pedidos Filtrados</div>
+                <div className="report-kpi-label">Pedidos no Escopo</div>
               </div>
             </div>
 
@@ -1345,41 +1479,43 @@ export default function OrderReportModal({
                 <div className="report-kpi-val" style={{ color: '#059669' }}>
                   {formatCurrency(reportStats.faturamentoTotal)}
                 </div>
-                <div className="report-kpi-label">Total Bruto</div>
+                <div className="report-kpi-label">Faturamento Líquido (Pagos)</div>
+              </div>
+            </div>
+
+            <div className="report-kpi-card" style={{ borderLeft: '4px solid #6366f1' }}>
+              <div className="report-kpi-icon" style={{ background: '#e0e7ff', color: '#4f46e5' }}>
+                <i className="fa-solid fa-receipt"></i>
+              </div>
+              <div>
+                <div className="report-kpi-val" style={{ color: '#4f46e5' }}>
+                  {formatCurrency(reportStats.descontosTotal)}
+                </div>
+                <div className="report-kpi-label">Descontos Concedidos</div>
+              </div>
+            </div>
+
+            <div className="report-kpi-card" style={{ borderLeft: '4px solid #0284c7' }}>
+              <div className="report-kpi-icon" style={{ background: '#e0f2fe', color: '#0284c7' }}>
+                <i className="fa-solid fa-arrow-trend-up"></i>
+              </div>
+              <div>
+                <div className="report-kpi-val" style={{ color: '#0369a1' }}>
+                  {formatCurrency(reportStats.ticketMedio)}
+                </div>
+                <div className="report-kpi-label">Ticket Médio ({reportStats.pagosComValorCount} pagos c/ valor)</div>
               </div>
             </div>
 
             <div className="report-kpi-card" style={{ borderLeft: '4px solid #dc2626' }}>
               <div className="report-kpi-icon" style={{ background: '#fee2e2', color: '#dc2626' }}>
-                <i className="fa-solid fa-ban"></i>
+                <i className="fa-solid fa-triangle-exclamation"></i>
               </div>
               <div>
                 <div className="report-kpi-val" style={{ color: '#dc2626' }}>
-                  {formatCurrency(reportStats.totalValorSemDev)}
+                  {formatCurrency(reportStats.vendaNaoRecebida)}
                 </div>
-                <div className="report-kpi-label">Total Sem Devolução</div>
-              </div>
-            </div>
-
-            <div className="report-kpi-card" style={{ borderLeft: '4px solid #4f46e5' }}>
-              <div className="report-kpi-icon" style={{ background: '#e0e7ff', color: '#4f46e5' }}>
-                <i className="fa-solid fa-rotate-left"></i>
-              </div>
-              <div>
-                <div className="report-kpi-val" style={{ color: '#4f46e5' }}>
-                  {formatCurrency(reportStats.totalValorComDev)}
-                </div>
-                <div className="report-kpi-label">Total Com Devolução</div>
-              </div>
-            </div>
-
-            <div className="report-kpi-card" style={{ borderLeft: '4px solid #f59e0b' }}>
-              <div className="report-kpi-icon" style={{ background: '#fef3c7', color: '#d97706' }}>
-                <i className="fa-solid fa-boxes-stacked"></i>
-              </div>
-              <div>
-                <div className="report-kpi-val">{reportStats.totalItens} un</div>
-                <div className="report-kpi-label">Itens ({reportStats.totalQtdSemDev} s/ dev)</div>
+                <div className="report-kpi-label">Calotes ({reportStats.calotesCount} pedidos)</div>
               </div>
             </div>
           </div>
@@ -1487,9 +1623,9 @@ export default function OrderReportModal({
                       <th>Endereço Completo</th>
                       <th>Rota</th>
                       <th>Qtd</th>
-                      <th>Produtos</th>
-                      <th style={{ textAlign: 'right' }}>Sem Dev.</th>
-                      <th style={{ textAlign: 'right' }}>Total Bruto</th>
+                      <th style={{ textAlign: 'right' }}>Preço Tabela</th>
+                      <th style={{ textAlign: 'right' }}>Desconto</th>
+                      <th style={{ textAlign: 'right' }}>Total Líquido</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1515,10 +1651,17 @@ export default function OrderReportModal({
                           <td style={{ maxWidth: '240px', fontSize: '0.72rem', color: '#334155' }}>{endStr}</td>
                           <td><strong>{o.customer?.endereco?.rota || '-'}</strong></td>
                           <td>{dev.qtdTotal} un</td>
-                          <td style={{ maxWidth: '280px', fontSize: '0.72rem', color: '#475569' }}>{prodsInline}</td>
-                          <td style={{ textAlign: 'right', color: '#dc2626', fontWeight: 600 }}>{formatCurrency(dev.totalSemDev)}</td>
-                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#059669' }}>
-                            {formatCurrency(dev.totalBruto)}
+                          <td style={{ textAlign: 'right', color: '#475569', fontWeight: 600 }}>
+                            {formatCurrency(getOrderFinancialDetails(o).valorItens)}
+                          </td>
+                          <td style={{ textAlign: 'right', color: '#d97706', fontWeight: 600 }} title={getOrderFinancialDetails(o).motivoDesconto}>
+                            {getOrderFinancialDetails(o).desconto > 0 ? `- ${formatCurrency(getOrderFinancialDetails(o).desconto)}` : '-'}
+                          </td>
+                          <td style={{ textAlign: 'right', fontWeight: 800, color: st === 'calote' ? '#dc2626' : '#059669' }}>
+                            {st === 'calote' ? `Calote: ${formatCurrency(o.caloteTotalVenda || getOrderFinancialDetails(o).valorItens)}` : formatCurrency(getOrderFinancialDetails(o).totalLiquido)}
+                            {getOrderFinancialDetails(o).totalLiquido === 0 && (
+                              <div style={{ fontSize: '0.65rem', color: '#64748b' }}>({getOrderFinancialDetails(o).motivoZerado})</div>
+                            )}
                           </td>
                         </tr>
                       )
