@@ -135,7 +135,9 @@ function getItemCost(item, produtosList = []) {
 function getOrderBaseItems(order, produtosList = []) {
   if (!order) return []
   let rawItems = []
-  if (Array.isArray(order.items) && order.items.length > 0) {
+  if (Array.isArray(order.originalItems) && order.originalItems.length > 0) {
+    rawItems = order.originalItems.map(i => ({ ...i }))
+  } else if (Array.isArray(order.items) && order.items.length > 0) {
     const map = new Map()
     order.items.forEach(i => {
       const key = String(i.id != null ? i.id : i.nome)
@@ -152,8 +154,6 @@ function getOrderBaseItems(order, produtosList = []) {
       }
     })
     rawItems = Array.from(map.values())
-  } else if (Array.isArray(order.originalItems) && order.originalItems.length > 0) {
-    rawItems = order.originalItems.map(i => ({ ...i }))
   } else if (Array.isArray(order.itens) && order.itens.length > 0) {
     rawItems = order.itens.map(i => ({ ...i }))
   }
@@ -1003,6 +1003,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [editingProd, setEditingProd] = useState(null)
   const [prodViewMode, setProdViewMode] = useState('visual')
   const [prodCart, setProdCart] = useState({})
+  const [prodCartOrder, setProdCartOrder] = useState([])
   const [prodCartOpen, setProdCartOpen] = useState(false)
   const [prodImageErrors, setProdImageErrors] = useState({})
   const [showAddOrder, setShowAddOrder] = useState(false)
@@ -1857,13 +1858,20 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       ? order.items
       : ((Array.isArray(order.originalItems) && order.originalItems.length > 0) ? order.originalItems : (order.itens || []))
 
+    const isNowCalote = status === 'calote'
+    const isNowCaloteParcial = status === 'calote_parcial'
     let updated = {
       ...order,
       items: activeItems,
       itens: activeItems,
       originalItems: (Array.isArray(order.originalItems) && order.originalItems.length > 0) ? order.originalItems : activeItems,
       status,
-      isFinalizado: status === 'concluido' ? true : (status === 'entregue' || status === 'acerto' ? false : order.isFinalizado),
+      isCalote: isNowCalote,
+      motivoEncerramento: isNowCalote ? 'calote_100' : (isNowCaloteParcial ? 'calote_parcial' : null),
+      calotePecas: isNowCalote ? (order.calotePecas || 0) : 0,
+      caloteTotalCusto: isNowCalote ? (order.caloteTotalCusto || 0) : 0,
+      caloteTotalVenda: isNowCalote ? (order.caloteTotalVenda || 0) : 0,
+      isFinalizado: (status === 'concluido' || isNowCalote || isNowCaloteParcial) ? true : (['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'entregue', 'acerto'].includes(status) ? false : order.isFinalizado),
       dataVencimento: finalDue,
       deliveredAt: status === 'entregue' ? (order.deliveredAt || now) : order.deliveredAt,
       lastModified: now,
@@ -2351,7 +2359,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       setIdentityPreview(o.identityPhoto || '')
       setAddressPreview(o.addressProof || '')
 
-      const pm = o.paymentMethod || 'pix'
+      const pm = (o.paymentMethod && o.paymentMethod !== 'calote') ? o.paymentMethod : 'pix'
       setDeliveryPayment(pm)
       setDeliverySplits(o.paymentSplits || { pix: '', dinheiro: '', cartao: '' })
 
@@ -2380,6 +2388,46 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     } catch (err) {
       console.error('Erro ao abrir modal de acerto:', err)
       showToast('Erro ao abrir dados de acerto', 'error')
+    }
+  }
+
+  const revertToEmRota = (orderId) => {
+    const order = orders.find(o => String(o.id) === String(orderId))
+    if (!order) return
+    if (!confirm(`Deseja voltar o pedido #${orderId} para Em Rota?`)) return
+    updateOrderStatus(orderId, 'em-rota')
+    showToast(`Pedido #${orderId} voltou para Em Rota!`)
+  }
+
+  const revertToPendente = (orderId) => {
+    const order = orders.find(o => String(o.id) === String(orderId))
+    if (!order) return
+    if (!confirm(`Deseja voltar o pedido #${orderId} para Pendente?`)) return
+    updateOrderStatus(orderId, 'pendente')
+    showToast(`Pedido #${orderId} voltou para Pendente!`)
+  }
+
+  const advanceOrderStep = (o) => {
+    if (!o) return
+    if (o.status === 'pre-pedido') {
+      updateOrderStatus(o.id, 'pendente')
+      showToast(`Pedido #${o.id} avançou para Pendente!`)
+    } else if (o.status === 'pendente') {
+      if (o.dataVencimento) {
+        updateOrderStatus(o.id, 'em-rota')
+        showToast(`Pedido #${o.id} avançou para Em Rota!`)
+      } else {
+        setShowRotaDue(o)
+        setRotaDueDate(o.dataVencimento || '')
+      }
+    } else if (o.status === 'em-rota') {
+      updateOrderStatus(o.id, 'entregue')
+      showToast(`Pedido #${o.id} avançou para Entregue!`)
+    } else if (o.status === 'entregue') {
+      updateOrderStatus(o.id, 'acerto')
+      showToast(`Pedido #${o.id} avançou para Acerto!`)
+    } else if (o.status === 'acerto') {
+      openAcertoModal(o, 'finalizar')
     }
   }
 
@@ -2616,17 +2664,20 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         const unitCusto = cRaw !== '' ? (Math.round((Number(cRaw) || 0) * 100) / 100) : getItemCost(i, produtosAtuais)
         return {
           ...i,
+          caloteQty: 0,
           preco: unitPreco,
           preco_custo: unitCusto > 0 ? unitCusto : null
         }
       }),
       items: remainingItems.map(i => ({
         ...i,
+        caloteQty: 0,
         custo_unitario_pedido: i.preco_custo || getItemCost(i, produtosAtuais) || null,
         custo_total_item: (i.preco_custo || getItemCost(i, produtosAtuais) || 0) * (Number(i.qty) || 0) || null
       })),
       itens: remainingItems.map(i => ({
         ...i,
+        caloteQty: 0,
         custo_unitario_pedido: i.preco_custo || getItemCost(i, produtosAtuais) || null,
         custo_total_item: (i.preco_custo || getItemCost(i, produtosAtuais) || 0) * (Number(i.qty) || 0) || null
       })),
@@ -2657,15 +2708,20 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       status: newStatus,
       status_pagamento: newStatus === 'concluido' ? 'pago' : (newStatus === 'calote_parcial' ? 'calote_parcial' : 'em_aberto'),
       isFinalizado: finalize,
+      isCalote: false,
+      motivoEncerramento: finalize ? (newStatus === 'calote_parcial' ? 'calote_parcial' : (newStatus === 'concluido' ? (totalCobrar === 0 ? (deliveryMotivoZerado || 'devolucao_total') : 'concluido') : null)) : null,
+      calotePecas: 0,
+      caloteTotalCusto: 0,
+      caloteTotalVenda: 0,
       returnedItems,
       totalReembolso,
       dataInicio: deliveryDataInicio || order.dataInicio || order.date || null,
       dataVencimento: deliveryDataVenc || order.dataVencimento || null,
       identityPhoto: identityPreview || order.identityPhoto || '',
-      addressProof: addressPreview || order.addressProof || '',
+      addressProof: addressProof || order.addressProof || '',
       deliveredAt: order.deliveredAt || now,
-      finalizadoAt: finalize ? now : (order.finalizadoAt || null),
-      paymentMethod: deliveryPayment,
+      finalizadoAt: finalize ? now : null,
+      paymentMethod: deliveryPayment || 'pix',
       paymentSplits: isSplit ? deliverySplits : (deliveryPayment ? { [deliveryPayment]: totalPago } : null),
       lastModified: now,
       updatedAt: now
@@ -2681,33 +2737,43 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     // Sync financial records
     setFinancial(prev => {
       const otherRecords = prev.filter(f => String(f.orderId) !== String(orderId))
-      const existingRecords = prev.filter(f => String(f.orderId) === String(orderId))
-      const aprazoItems = remainingItems.filter(i => i.tipo === 'aprazo')
       const dueDate = deliveryDataVenc || order.dataVencimento || hoje()
 
       let newFinancial = []
-      if (newStatus === 'calote_parcial' && valorEmAberto > 0) {
-        newFinancial = [{
-          id: orderId + '-parcial',
-          orderId,
-          customerName: order.customer?.nome || '',
-          itemName: `Saldo Devedor / Calote Parcial #${String(orderId).slice(-6)}`,
-          qty: 1,
-          value: valorEmAberto,
-          precoCusto: 0,
-          dueDate: deliveryDataVenc || order.dataVencimento || hoje(),
-          paidDate: null,
-          status: 'pendente',
-          paymentMethod: deliveryPayment || 'pendente'
-        }]
+      if (newStatus === 'calote_parcial') {
+        if (valorEmAberto > 0) {
+          newFinancial.push({
+            id: orderId + '-parcial',
+            orderId,
+            customerName: order.customer?.nome || '',
+            itemName: `Saldo Devedor / Calote Parcial #${String(orderId).slice(-6)}`,
+            qty: 1,
+            value: valorEmAberto,
+            precoCusto: 0,
+            dueDate: dueDate,
+            paidDate: null,
+            status: 'pendente',
+            paymentMethod: deliveryPayment || 'pendente'
+          })
+        }
+        if (totalPago > 0) {
+          newFinancial.push({
+            id: orderId + '-pago',
+            orderId,
+            customerName: order.customer?.nome || '',
+            itemName: `Pagamento Parcial #${String(orderId).slice(-6)}`,
+            qty: 1,
+            value: totalPago,
+            precoCusto: custo_total_pedido,
+            dueDate: dueDate,
+            paidDate: deliveryDataInicio || order.date || hoje(),
+            status: 'pago',
+            paymentMethod: deliveryPayment || 'pix'
+          })
+        }
       } else if (newStatus === 'concluido') {
-        newFinancial = existingRecords.map(f => ({
-          ...f,
-          status: 'pago',
-          paidDate: f.paidDate || hoje()
-        }))
-        if (newFinancial.length === 0 && totalPago > 0) {
-          newFinancial = [{
+        if (totalPago > 0) {
+          newFinancial.push({
             id: orderId + '-acerto',
             orderId,
             customerName: order.customer?.nome || '',
@@ -2715,31 +2781,44 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
             qty: 1,
             value: totalPago,
             precoCusto: custo_total_pedido,
-            dueDate: deliveryDataVenc || order.dataVencimento || hoje(),
+            dueDate: dueDate,
             paidDate: hoje(),
             status: 'pago',
             paymentMethod: deliveryPayment || 'pix'
-          }]
+          })
         }
       } else {
-        newFinancial = aprazoItems.map(i => {
-          const existing = existingRecords.find(f => String(f.id) === String(orderId + '-' + i.id))
-          const itemVal = Math.round((Number(i.preco) || 0) * (Number(i.qty) || 0) * 100) / 100
-          const unitCusto = getItemCost(i, produtosAtuais)
-          return {
-            id: orderId + '-' + i.id,
+        // newStatus === 'acerto' (em aberto)
+        if (valorEmAberto > 0) {
+          newFinancial.push({
+            id: orderId + '-acerto-aberto',
             orderId,
             customerName: order.customer?.nome || '',
-            itemName: i.nome,
-            qty: i.qty,
-            value: itemVal,
-            precoCusto: Math.round((unitCusto || 0) * (Number(i.qty) || 0) * 100) / 100,
-            dueDate: existing?.dueDate || dueDate,
+            itemName: `Acerto em Aberto #${String(orderId).slice(-6)}`,
+            qty: 1,
+            value: valorEmAberto,
+            precoCusto: custo_total_pedido,
+            dueDate: dueDate,
             paidDate: null,
             status: 'pendente',
-            paymentMethod: ''
-          }
-        })
+            paymentMethod: deliveryPayment || 'pendente'
+          })
+        }
+        if (totalPago > 0) {
+          newFinancial.push({
+            id: orderId + '-acerto-pago',
+            orderId,
+            customerName: order.customer?.nome || '',
+            itemName: `Pagamento Parcial (Acerto) #${String(orderId).slice(-6)}`,
+            qty: 1,
+            value: totalPago,
+            precoCusto: 0,
+            dueDate: dueDate,
+            paidDate: deliveryDataInicio || order.date || hoje(),
+            status: 'pago',
+            paymentMethod: deliveryPayment || 'pix'
+          })
+        }
       }
 
       const combined = [...otherRecords, ...newFinancial]
@@ -2828,6 +2907,11 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         saldo_em_aberto: newSaldo,
         status: newStatus,
         status_pagamento: isQuitado ? 'pago' : 'calote_parcial',
+        isCalote: false,
+        motivoEncerramento: isQuitado ? null : 'calote_parcial',
+        calotePecas: 0,
+        caloteTotalCusto: 0,
+        caloteTotalVenda: 0,
         isFinalizado: true,
         finalizadoAt: isQuitado ? (order.finalizadoAt || now) : order.finalizadoAt,
         paymentHistory: updatedHistory,
@@ -3307,8 +3391,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const filteredOrders = useMemo(() => {
     let result = orders
     if (orderFilter === 'concluidos') result = result.filter(o => (o.status === 'concluido' || isFinalizada(o)) && !o.isCalote && o.status !== 'calote' && o.status !== 'calote_parcial' && o.status !== 'parcial' && o.motivoEncerramento !== 'calote_100')
-    else if (orderFilter === 'calote_parcial') result = result.filter(o => o.status === 'calote_parcial' || o.status === 'parcial' || (o.isFinalizado && Number(o.valorEmAberto) > 0 && Number(o.totalPago) > 0))
-    else if (orderFilter === 'calote') result = result.filter(o => o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
+    else if (orderFilter === 'calote_parcial') result = result.filter(o => !o.isCalote && o.motivoEncerramento !== 'calote_100' && (o.status === 'calote_parcial' || o.status === 'parcial' || (o.isFinalizado && Number(o.valorEmAberto) > 0)))
+    else if (orderFilter === 'calote') result = result.filter(o => o.status !== 'calote_parcial' && o.status !== 'parcial' && (o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100'))
     else if (orderFilter === 'entregue') result = result.filter(o => o.status === 'entregue' && !isFinalizada(o))
     else if (orderFilter === 'acerto') result = result.filter(o => o.status === 'acerto' && !isFinalizada(o))
     else if (orderFilter === 'outros') result = result.filter(o => !['pre-pedido', 'pendente', 'em-rota', 'entregue', 'acerto', 'concluido', 'calote', 'calote_parcial', 'parcial', 'cancelado'].includes(o.status) && !isFinalizada(o) && !o.isCalote)
@@ -3341,11 +3425,15 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         case 'telefone': va = getOrderCustomerPhone(a) || ''; vb = getOrderCustomerPhone(b) || ''; return orderSort.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
         case 'regiao': va = a.customer?.endereco?.cidade || ''; vb = b.customer?.endereco?.cidade || ''; return orderSort.dir === 'asc' ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR')
         case 'rota': va = rotaDeOrder(a) || ''; vb = rotaDeOrder(b) || ''; return orderSort.dir === 'asc' ? va.localeCompare(vb, 'pt-BR') : vb.localeCompare(va, 'pt-BR')
-        case 'data': return orderSort.dir === 'asc' ? (a.date || '').localeCompare(b.date || '') : (b.date || '').localeCompare(a.date || '')
+        case 'data': {
+          const comp = orderSort.dir === 'asc' ? (a.date || '').localeCompare(b.date || '') : (b.date || '').localeCompare(a.date || '')
+          if (comp !== 0) return comp
+          return (getOrderTime(b) - getOrderTime(a)) || (Number(b.id) - Number(a.id))
+        }
         case 'vencimento': return orderSort.dir === 'asc' ? (a.dataVencimento || '').localeCompare(b.dataVencimento || '') : (b.dataVencimento || '').localeCompare(a.dataVencimento || '')
         case 'itens': va = a.items?.reduce((s, i) => s + (Number(i.qty) || 0), 0) || 0; vb = b.items?.reduce((s, i) => s + (Number(i.qty) || 0), 0) || 0; return orderSort.dir === 'asc' ? va - vb : vb - va
         case 'total': return orderSort.dir === 'asc' ? (a.total || 0) - (b.total || 0) : (b.total || 0) - (a.total || 0)
-        default: return getOrderTime(b) - getOrderTime(a)
+        default: return (getOrderTime(b) - getOrderTime(a)) || (Number(b.id) - Number(a.id))
       }
     })
     return result
@@ -4411,6 +4499,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
   const addToProdCart = (p) => {
     const pPrice = Number(p.preco) > 0 ? Number(p.preco) : (productPriceMap?.get(String(p.id)) || productPriceMap?.get(String(p.nome || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')) || 0)
+    setProdCartOrder(prev => prev.includes(String(p.id)) ? prev : [...prev, String(p.id)])
     setProdCart(prev => {
       const existing = prev[p.id]
       if (existing) return { ...prev, [p.id]: { ...existing, qty: existing.qty + 1 } }
@@ -4424,17 +4513,25 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       if (!existing) return prev
       if (existing.qty <= 1) {
         const { [id]: _, ...rest } = prev
+        setProdCartOrder(orderPrev => orderPrev.filter(k => String(k) !== String(id)))
         return rest
       }
       return { ...prev, [id]: { ...existing, qty: existing.qty - 1 } }
     })
   }
 
-  const prodCartItems = useMemo(() => Object.values(prodCart).filter(i => i.qty > 0), [prodCart])
+  const prodCartItems = useMemo(() => {
+    const ordered = prodCartOrder.map(id => prodCart[id]).filter(Boolean)
+    const remaining = Object.values(prodCart).filter(i => i && !prodCartOrder.includes(String(i.id)))
+    return [...ordered, ...remaining].filter(i => i.qty > 0)
+  }, [prodCartOrder, prodCart])
   const prodCartCount = useMemo(() => prodCartItems.reduce((s, i) => s + i.qty, 0), [prodCartItems])
   const prodCartTotal = useMemo(() => prodCartItems.reduce((s, i) => s + i.preco * i.qty, 0), [prodCartItems])
 
-  const clearProdCart = () => setProdCart({})
+  const clearProdCart = () => {
+    setProdCart({})
+    setProdCartOrder([])
+  }
 
   const createOrderFromCart = () => {
     if (prodCartItems.length === 0) { showToast('Carrinho vazio', 'error'); return }
@@ -5196,9 +5293,9 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 { id: 'em-rota', label: 'Em Rota', count: orders.filter(o => o.status === 'em-rota').length },
                 { id: 'entregue', label: 'Entregues', count: orders.filter(o => o.status === 'entregue' && !isFinalizada(o)).length },
                 { id: 'acerto', label: 'Acertos', count: orders.filter(o => o.status === 'acerto' && !isFinalizada(o)).length },
-                { id: 'calote_parcial', label: 'Calote Parcial', count: orders.filter(o => o.status === 'calote_parcial' || o.status === 'parcial' || (o.isFinalizado && Number(o.valorEmAberto) > 0 && Number(o.totalPago) > 0)).length },
+                { id: 'calote_parcial', label: 'Calote Parcial', count: orders.filter(o => !o.isCalote && o.motivoEncerramento !== 'calote_100' && (o.status === 'calote_parcial' || o.status === 'parcial' || (o.isFinalizado && Number(o.valorEmAberto) > 0))).length },
                 { id: 'concluidos', label: 'Concluídos', count: orders.filter(o => (o.status === 'concluido' || isFinalizada(o)) && !o.isCalote && o.status !== 'calote' && o.status !== 'calote_parcial' && o.status !== 'parcial' && o.motivoEncerramento !== 'calote_100').length },
-                { id: 'calote', label: 'Calotes 100%', count: orders.filter(o => o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100').length },
+                { id: 'calote', label: 'Calotes 100%', count: orders.filter(o => o.status !== 'calote_parcial' && o.status !== 'parcial' && (o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')).length },
                 { id: 'cancelado', label: 'Cancelados', count: orders.filter(o => o.status === 'cancelado').length },
                 ...(outrosOrders.length > 0 ? [{ id: 'outros', label: 'Outros / Em Análise', count: outrosOrders.length }] : [])
               ].map(t => (
@@ -5477,40 +5574,40 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                           <button className="action-btn action-green" title="Enviar WhatsApp manualmente agora" onClick={() => sendWhatsApp(o)}><i className="fa-brands fa-whatsapp"></i></button>
                           <button className="action-btn" title="Ver detalhes" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-eye"></i></button>
                           {o.status === 'pre-pedido' && <button className="action-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }} title="Revisar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-clipboard-check"></i></button>}
-                          {o.status === 'pre-pedido' && <button className="action-btn action-confirm" title="Confirmar (Próxima etapa)" onClick={() => updateOrderStatus(o.id, 'pendente')}><i className="fa-solid fa-check"></i></button>}
+                          {o.status === 'pre-pedido' && <button className="action-btn action-confirm" title="Avançar para Pendente (Confirmar)" onClick={() => advanceOrderStep(o)}><i className="fa-solid fa-arrow-right"></i></button>}
                           {o.status === 'pre-pedido' && <button className="action-btn action-deliver" title="Enviar direto para Em Rota" onClick={() => { setShowRotaDue(o); setRotaDueDate(o.dataVencimento || '') }}><i className="fa-solid fa-truck"></i></button>}
                           {o.status === 'pendente' && <button className="action-btn action-confirm" title="Editar" onClick={() => setShowOrderDetail(o)}><i className="fa-solid fa-pen"></i></button>}
-                          {o.status === 'pendente' && <button className="action-btn action-deliver" title="Em Rota (Próxima etapa)" onClick={() => { setShowRotaDue(o); setRotaDueDate(o.dataVencimento || '') }}><i className="fa-solid fa-truck"></i></button>}
+                          {o.status === 'pendente' && <button className="action-btn action-deliver" title="Avançar para Em Rota (Próxima etapa)" onClick={() => advanceOrderStep(o)}><i className="fa-solid fa-arrow-right"></i></button>}
                           {o.status === 'em-rota' && (
-                            <button className="action-btn action-confirm" title="Concluir (Próxima etapa)" onClick={() => updateOrderStatus(o.id, 'entregue')}><i className="fa-solid fa-check-double"></i></button>
-                          )}
-                          {o.status === 'entregue' && !isFinalizada(o) && (
-                            <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Em Rota" onClick={() => updateOrderStatus(o.id, 'em-rota')}><i className="fa-solid fa-undo"></i></button>
+                            <>
+                              <button className="action-btn action-confirm" style={{ background: '#10b981', color: 'white', borderColor: '#10b981' }} title="Avançar para Entregue (Próxima etapa)" onClick={() => advanceOrderStep(o)}><i className="fa-solid fa-arrow-right"></i></button>
+                              <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Pendente" onClick={() => revertToPendente(o.id)}><i className="fa-solid fa-undo"></i></button>
+                            </>
                           )}
                           {o.status === 'entregue' && !isFinalizada(o) && (
                             <>
-                              <button className="action-btn action-confirm" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} title="Fazer Acerto" onClick={() => openAcertoModal(o, 'acerto')}><i className="fa-solid fa-handshake"></i></button>
+                              <button className="action-btn action-confirm" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} title="Avançar para Acerto (Próxima etapa)" onClick={() => advanceOrderStep(o)}><i className="fa-solid fa-arrow-right"></i></button>
+                              <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Em Rota" onClick={() => revertToEmRota(o.id)}><i className="fa-solid fa-undo"></i></button>
+                              <button className="action-btn" style={{ color: '#6366f1', borderColor: '#6366f1' }} title="Fazer Acerto / Devolução" onClick={() => openAcertoModal(o, 'acerto')}><i className="fa-solid fa-handshake"></i></button>
                               <button className="action-btn" style={{ color: '#dc2626', borderColor: '#dc2626' }} title="Registrar Calote 100%" onClick={() => openAcertoModal(o, 'acerto', true)}><i className="fa-solid fa-triangle-exclamation"></i></button>
                             </>
                           )}
                           {o.status === 'acerto' && !isFinalizada(o) && (
-                            <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Entregues" onClick={() => revertToEntregue(o.id)}><i className="fa-solid fa-undo"></i></button>
-                          )}
-                          {o.status === 'acerto' && !isFinalizada(o) && (
-                            <button className="action-btn" style={{ color: '#3b82f6', borderColor: '#3b82f6' }} title="Editar Acerto" onClick={() => openAcertoModal(o, 'acerto')}><i className="fa-solid fa-pen-to-square"></i></button>
-                          )}
-                          {o.status === 'acerto' && !isFinalizada(o) && (
-                            <button className="action-btn action-confirm" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} title="Finalizar Pedido" onClick={() => openAcertoModal(o, 'finalizar')}><i className="fa-solid fa-check-double"></i></button>
-                          )}
-                          {o.status === 'acerto' && !isFinalizada(o) && (
-                            <button className="action-btn" style={{ color: '#dc2626', borderColor: '#dc2626' }} title="Registrar Calote 100%" onClick={() => openAcertoModal(o, 'acerto', true)}><i className="fa-solid fa-triangle-exclamation"></i></button>
+                            <>
+                              <button className="action-btn action-confirm" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} title="Avançar / Finalizar Pedido" onClick={() => advanceOrderStep(o)}><i className="fa-solid fa-arrow-right"></i></button>
+                              <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Entregues" onClick={() => revertToEntregue(o.id)}><i className="fa-solid fa-undo"></i></button>
+                              <button className="action-btn" style={{ color: '#3b82f6', borderColor: '#3b82f6' }} title="Editar Acerto" onClick={() => openAcertoModal(o, 'acerto')}><i className="fa-solid fa-pen-to-square"></i></button>
+                              <button className="action-btn" style={{ color: '#dc2626', borderColor: '#dc2626' }} title="Registrar Calote 100%" onClick={() => openAcertoModal(o, 'acerto', true)}><i className="fa-solid fa-triangle-exclamation"></i></button>
+                            </>
                           )}
                           {(o.status === 'concluido' || o.status === 'calote' || isFinalizada(o)) && (
                             <button className="action-btn" style={{ color: '#f59e0b', borderColor: '#f59e0b' }} title="Voltar para Acertos" onClick={() => revertOrderFinalization(o.id)}><i className="fa-solid fa-undo"></i></button>
                           )}
-                          {(o.status === 'calote' || o.isCalote) && (
+                          {(o.status === 'calote' || o.isCalote) ? (
                             <button className="action-btn" style={{ color: '#dc2626', borderColor: '#dc2626' }} title="Ver Detalhes do Calote" onClick={() => openAcertoModal(o, 'acerto')}><i className="fa-solid fa-eye"></i></button>
-                          )}
+                          ) : (isFinalizada(o) || o.status === 'concluido' || o.status === 'calote_parcial') ? (
+                            <button className="action-btn" style={{ color: o.status === 'calote_parcial' ? '#d97706' : '#10b981', borderColor: o.status === 'calote_parcial' ? '#d97706' : '#10b981' }} title="Ver / Editar Acerto" onClick={() => openAcertoModal(o, 'acerto')}><i className="fa-solid fa-eye"></i></button>
+                          ) : null}
                           {(() => {
                             const e = o.customer?.endereco || {}
                             const parts = [e.rua, e.numero, e.bairro, e.cidade, e.estado, e.cep].filter(Boolean)
@@ -5710,16 +5807,16 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                           <button
                             type="button"
                             className="aoc-btn aoc-btn-success"
-                            title="Confirmar Entrega"
-                            onClick={(ev) => { ev.stopPropagation(); updateOrderStatus(o.id, 'entregue') }}
+                            title="Confirmar Entrega (Avançar etapa)"
+                            onClick={(ev) => { ev.stopPropagation(); advanceOrderStep(o) }}
                           >
-                            <i className="fa-solid fa-check-double"></i> Entregue
+                            <i className="fa-solid fa-arrow-right"></i> Entregue
                           </button>
                           <button
                             type="button"
                             className="aoc-btn aoc-btn-revert"
                             title="Voltar para Pendente"
-                            onClick={(ev) => { ev.stopPropagation(); updateOrderStatus(o.id, 'pendente') }}
+                            onClick={(ev) => { ev.stopPropagation(); revertToPendente(o.id) }}
                           >
                             <i className="fa-solid fa-undo"></i> Voltar
                           </button>
@@ -5728,6 +5825,15 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
                       {o.status === 'entregue' && !isFinalizada(o) && (
                         <>
+                          <button
+                            type="button"
+                            className="aoc-btn aoc-btn-primary"
+                            style={{ background: '#4f46e5', color: 'white', borderColor: '#4f46e5' }}
+                            title="Avançar para Acerto (Próxima etapa)"
+                            onClick={(ev) => { ev.stopPropagation(); advanceOrderStep(o) }}
+                          >
+                            <i className="fa-solid fa-arrow-right"></i> Avançar Acerto
+                          </button>
                           <button
                             type="button"
                             className="aoc-btn aoc-btn-acerto"
@@ -5757,7 +5863,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                             type="button"
                             className="aoc-btn aoc-btn-revert"
                             title="Voltar para Em Rota"
-                            onClick={(ev) => { ev.stopPropagation(); updateOrderStatus(o.id, 'em-rota') }}
+                            onClick={(ev) => { ev.stopPropagation(); revertToEmRota(o.id) }}
                           >
                             <i className="fa-solid fa-undo"></i> Voltar Rota
                           </button>
@@ -9255,31 +9361,16 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                   </button>
                 ) : (
                   <>
-                    {deliveryModalMode === 'acerto' && (
-                      <>
-                        <button className="admin-btn" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }}
-                          onClick={() => salvarAcerto(showDeliveryModal.id, false)}>
-                          <i className="fa-solid fa-handshake"></i> Salvar e Mover para Acertos
-                        </button>
-                        <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }}
-                          onClick={() => salvarAcerto(showDeliveryModal.id, true)}>
-                          <i className="fa-solid fa-check-double"></i> Finalizar Pedido Agora
-                        </button>
-                      </>
-                    )}
-
-                    {deliveryModalMode === 'finalizar' && (
-                      <>
-                        <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }}
-                          onClick={() => salvarAcerto(showDeliveryModal.id, false)}>
-                          <i className="fa-solid fa-floppy-disk"></i> Salvar Alterações
-                        </button>
-                        <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }}
-                          onClick={() => salvarAcerto(showDeliveryModal.id, true)}>
-                          <i className="fa-solid fa-check-double"></i> Finalizar Pedido
-                        </button>
-                      </>
-                    )}
+                    <button className="admin-btn" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1', fontWeight: 600 }}
+                      onClick={() => salvarAcerto(showDeliveryModal.id, false)}
+                      title="Salvar alterações e manter comanda em aberto na etapa de Acertos">
+                      <i className="fa-solid fa-handshake"></i> Salvar e Mover para Acertos
+                    </button>
+                    <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)', fontWeight: 700 }}
+                      onClick={() => salvarAcerto(showDeliveryModal.id, true)}
+                      title="Finalizar acerto: se houver saldo em aberto vai para Calote Parcial, se quitado vai para Concluídos">
+                      <i className="fa-solid fa-check-double"></i> Finalizar Pedido Agora
+                    </button>
                   </>
                 )}
               </div>
@@ -11619,6 +11710,12 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
     }
     return {}
   })
+  const [cartOrder, setCartOrder] = useState(() => {
+    if (initialCart && Object.keys(initialCart).length > 0) {
+      return Object.keys(initialCart)
+    }
+    return []
+  })
   const [search, setSearch] = useState('')
   const [prodPage, setProdPage] = useState(1)
 
@@ -11748,11 +11845,17 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
   const totalPages = Math.ceil(filteredProds.length / 10)
   useEffect(() => { setProdPage(1) }, [search])
 
-  const cartItems = useMemo(() => Object.values(cart).filter(i => i.qty > 0), [cart])
+  const cartItems = useMemo(() => {
+    const ordered = cartOrder.map(id => cart[id]).filter(Boolean)
+    const remaining = Object.values(cart).filter(i => i && !cartOrder.includes(String(i.id)))
+    return [...ordered, ...remaining].filter(i => i.qty > 0)
+  }, [cartOrder, cart])
   const cartTotal = useMemo(() => cartItems.reduce((s, i) => s + (parseDecimalToNumber(i.preco)) * (Number(i.qty) || 0), 0), [cartItems])
 
   const addItem = (p) => {
     const resolvedPreco = getInitialPrice(p)
+    const pIdStr = String(p.id)
+    setCartOrder(prev => prev.includes(pIdStr) ? prev : [...prev, pIdStr])
     setCart(prev => {
       const existing = prev[p.id]
       const currentPrice = existing?.preco !== '' && existing?.preco != null && parseDecimalToNumber(existing.preco) > 0 
@@ -11779,6 +11882,7 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
     setCart(prev => {
       if (!prev[id] || prev[id].qty <= 1) {
         const { [id]: _, ...rest } = prev
+        setCartOrder(orderPrev => orderPrev.filter(k => String(k) !== String(id)))
         return rest
       }
       return { ...prev, [id]: { ...prev[id], qty: prev[id].qty - 1 } }
@@ -11820,8 +11924,9 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
       rota: selectedUser?.rota || (selectedUser?.endereco && selectedUser.endereco.rota) || '',
       dataPedido,
       pagamento: pagamento === 'misto' ? 'misto' : (pagamento === 'aprazo' ? 'aprazo' : 'avista'),
-      items: cartItems.map(i => ({
+      items: cartItems.map((i, idx) => ({
         ...i,
+        order_index: idx + 1,
         preco: parseDecimalToNumber(i.preco),
         preco_custo: i.preco_custo != null && i.preco_custo !== '' ? parseDecimalToNumber(i.preco_custo) : null,
         tipo: pagamento === 'aprazo' ? 'aprazo' : (pagamento === 'avista' ? 'avista' : i.tipo)
@@ -13258,7 +13363,10 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
               </button>
             {order.status === 'entregue' && (
               <>
-                <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => onStatusChange('em-rota')}>
+                <button className="admin-btn" style={{ background: '#4f46e5', color: 'white', borderColor: '#4f46e5' }} onClick={() => onStatusChange('acerto')}>
+                  <i className="fa-solid fa-arrow-right"></i> Avançar para Acerto
+                </button>
+                <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => { if (confirm('Deseja voltar este pedido para Em Rota?')) onStatusChange('em-rota') }}>
                   <i className="fa-solid fa-undo"></i> Voltar para Em Rota
                 </button>
                 <button className="admin-btn" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} onClick={() => handleOpenDelivery('acerto')}>
@@ -13271,7 +13379,7 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
             )}
             {order.status === 'acerto' && (
               <>
-                <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => onStatusChange('entregue')}>
+                <button className="admin-btn" style={{ background: '#f59e0b', color: 'white', borderColor: '#f59e0b' }} onClick={() => { if (confirm('Deseja voltar este pedido para Entregues?')) onStatusChange('entregue') }}>
                   <i className="fa-solid fa-undo"></i> Voltar para Entregues
                 </button>
                 <button className="admin-btn" style={{ background: '#6366f1', color: 'white', borderColor: '#6366f1' }} onClick={() => handleOpenDelivery('acerto')}>

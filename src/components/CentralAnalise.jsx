@@ -449,7 +449,28 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
   const ordersPrev = useMemo(() => baseOrders.filter(o => matchStatus(o, statusFilter) && fit(getOrderPaymentDate(o), prevWin)), [baseOrders, prevWin, statusFilter])
   const finWin = useMemo(() => financial.filter(f => f.status !== 'cancelado' && fit(f.paidDate || f.dueDate || f.date || '', win)), [financial, win])
   const finPrev = useMemo(() => financial.filter(f => f.status !== 'cancelado' && fit(f.paidDate || f.dueDate || f.date || '', prevWin)), [financial, prevWin])
-  const despWin = useMemo(() => normDespesas.filter(d => fit(d.paidDate || d.dueDate || d.date || '', win)), [normDespesas, win])
+
+  const matchDespesaStatus = useCallback((d, st) => {
+    if (!d || d.status === 'cancelado') return false
+    if (!st || st === 'todos') return true
+    if (st === 'concluido') return d.status === 'pago'
+    if (st === 'pendente') return d.status === 'pendente'
+    return false
+  }, [])
+
+  const getDespesaDate = useCallback((d) => {
+    if (!d) return ''
+    if (d.status === 'pago') return d.paidDate || d.dueDate || d.date || ''
+    return d.dueDate || d.date || d.paidDate || ''
+  }, [])
+
+  const despWin = useMemo(() => {
+    return normDespesas.filter(d => matchDespesaStatus(d, statusFilter) && fit(getDespesaDate(d), win))
+  }, [normDespesas, statusFilter, win, matchDespesaStatus, getDespesaDate])
+
+  const despPrev = useMemo(() => {
+    return normDespesas.filter(d => matchDespesaStatus(d, statusFilter) && fit(getDespesaDate(d), prevWin))
+  }, [normDespesas, statusFilter, prevWin, matchDespesaStatus, getDespesaDate])
 
   const prodCostMap = useMemo(() => {
     const map = new Map()
@@ -720,6 +741,15 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
   const cur = useMemo(() => agg(ordersWin), [ordersWin, prodCostMap, getItemCost])
   const prev = useMemo(() => agg(ordersPrev), [ordersPrev, prodCostMap, getItemCost])
 
+  const despTotal = useMemo(() => Number(despWin.reduce((s, d) => s + (d.value || 0), 0)), [despWin])
+  const despPagas = useMemo(() => Number(normDespesas.filter(d => d.status === 'pago' && fit(getDespesaDate(d), win)).reduce((s, d) => s + (d.value || 0), 0)), [normDespesas, win, getDespesaDate])
+  const despPendentes = useMemo(() => Number(normDespesas.filter(d => d.status === 'pendente' && fit(getDespesaDate(d), win)).reduce((s, d) => s + (d.value || 0), 0)), [normDespesas, win, getDespesaDate])
+  const despPrevTotal = useMemo(() => Number(despPrev.reduce((s, d) => s + (d.value || 0), 0)), [despPrev])
+
+  const lucroRealAposDespesas = useMemo(() => Math.round((cur.lucroReal - despTotal) * 100) / 100, [cur.lucroReal, despTotal])
+  const margemRealAposDespesas = useMemo(() => cur.receitaRecebida > 0 ? (lucroRealAposDespesas / cur.receitaRecebida) * 100 : 0, [lucroRealAposDespesas, cur.receitaRecebida])
+  const lucroRealAposDespesasPrev = useMemo(() => Math.round((prev.lucroReal - despPrevTotal) * 100) / 100, [prev.lucroReal, despPrevTotal])
+
   const delta = (c, p) => {
     if (!p) return null
     if (c === p) return 0
@@ -914,9 +944,11 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
       { step: 2, label: '(-) CMV (Custo Produtos)', valor: cur.cmvVendidos, tipo: 'saida', color: '#f97316', desc: 'Custo de compra das mercadorias vendidas' },
       { step: 3, label: '(=) Lucro Bruto', valor: cur.lucroBruto, tipo: 'subtotal', color: '#3b82f6', desc: 'Receita recebida menos o custo das mercadorias' },
       { step: 4, label: '(-) Prejuízo com Calote', valor: cur.prejuizoCaloteCusto, tipo: 'saida', color: '#ef4444', desc: 'Custo real das mercadorias perdidas em calote' },
-      { step: 5, label: '(=) Lucro Real THSM', valor: cur.lucroReal, tipo: 'total', color: cur.lucroReal >= 0 ? '#059669' : '#dc2626', desc: 'Resultado financeiro líquido real após calotes' }
+      { step: 5, label: '(=) Lucro Real THSM', valor: cur.lucroReal, tipo: 'subtotal', color: cur.lucroReal >= 0 ? '#059669' : '#dc2626', desc: 'Resultado financeiro das vendas após calotes' },
+      { step: 6, label: '(-) Despesas do Período', valor: despTotal, tipo: 'saida', color: '#dc2626', desc: 'Despesas financeiras/operacionais no período' },
+      { step: 7, label: '(=) Lucro Real − Despesas', valor: lucroRealAposDespesas, tipo: 'total', color: lucroRealAposDespesas >= 0 ? '#0284c7' : '#dc2626', desc: 'Balanço financeiro definitivo da distribuidora' }
     ]
-  }, [cur])
+  }, [cur, despTotal, lucroRealAposDespesas])
 
   const prodRank = useMemo(() => {
     const map = {}
@@ -1004,8 +1036,6 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
     const labels = { pix: 'Pix', dinheiro: 'Dinheiro', cartao: 'Cartão', 'pix+dinheiro': 'Pix + Dinheiro', 'pix+cartao': 'Pix + Cartão', 'cartao+dinheiro': 'Cartão + Dinheiro' }
     return Object.values(map).map(m => ({ ...m, label: labels[m.label] || m.label })).sort((a, b) => b.value - a.value)
   }, [finWin])
-
-  const despTotal = useMemo(() => Number(despWin.reduce((s, d) => s + (d.value || 0), 0)), [despWin])
 
   const finPrevTotal = useMemo(() => finPrev.reduce((s, f) => s + (f.value || 0), 0), [finPrev])
 
@@ -1211,6 +1241,22 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
                 {formatPreco(cur.lucroReal)}
               </span>
               <span className="ca-thsm-metric-sub">Margem Real Líquida: <strong>{cur.margemReal.toFixed(1)}%</strong></span>
+            </div>
+            <div className="ca-thsm-metric-card danger" style={{ border: '1px solid #fecaca', background: '#fff5f5' }}>
+              <span className="ca-thsm-metric-label" style={{ color: '#b91c1c', fontWeight: 600 }}>Despesas (Financeiro)</span>
+              <span className="ca-thsm-metric-value" style={{ color: '#dc2626', fontSize: '20px' }}>-{formatPreco(despTotal)}</span>
+              <span className="ca-thsm-metric-sub" style={{ color: '#64748b' }}>
+                {statusFilter === 'concluido' ? 'Despesas pagas no período' : statusFilter === 'pendente' ? 'Despesas a pagar no período' : `${formatPreco(despPagas)} pagas · ${formatPreco(despPendentes)} a pagar`}
+              </span>
+            </div>
+            <div className="ca-thsm-metric-card highlight" style={{ border: '2px solid #0284c7', background: '#f0f9ff' }}>
+              <span className="ca-thsm-metric-label" style={{ color: '#0369a1', fontWeight: 800 }}>★ Lucro Real − Despesas</span>
+              <span className="ca-thsm-metric-value" style={{ color: lucroRealAposDespesas >= 0 ? '#0369a1' : '#dc2626', fontSize: '22px', fontWeight: 900 }}>
+                {formatPreco(lucroRealAposDespesas)}
+              </span>
+              <span className="ca-thsm-metric-sub" style={{ color: '#0284c7' }}>
+                Margem Final: <strong>{margemRealAposDespesas.toFixed(1)}%</strong> &middot; Balanço após despesas
+              </span>
             </div>
           </div>
         </div>
@@ -2074,9 +2120,9 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
           <div className="ca-formula-banner success" style={{ marginBottom: '14px' }}>
             <h4><i className="fa-solid fa-check-circle"></i> Regra de Ouro Financeira THSM</h4>
             <p>
-              <strong>Receita Recebida</strong> (−) <strong>CMV</strong> (=) <strong>Lucro Bruto</strong> (−) <strong>Prejuízo Calote (a Custo)</strong> (=) <strong>LUCRO REAL</strong>.
+              <strong>Receita Recebida</strong> (−) <strong>CMV</strong> (=) <strong>Lucro Bruto</strong> (−) <strong>Prejuízo Calote (a Custo)</strong> (=) <strong>LUCRO REAL</strong> (−) <strong>Despesas Operacionais</strong> (=) <strong>BALANÇO FINAL</strong>.
               <br />
-              <em>* Pedidos de teste são completamente isolados. Comandas em Calote Parcial têm apenas o valor pago contabilizado na receita e o saldo devedor apontado em aberto.</em>
+              <em>* Pedidos de teste são completamente isolados. Comandas em Calote Parcial têm apenas o valor pago contabilizado na receita e o saldo devedor apontado em aberto. Despesas refletem os lançamentos do financeiro filtrados por data e status.</em>
             </p>
           </div>
 
@@ -2103,6 +2149,8 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
               <tr><td><strong>Lucro bruto</strong></td><td>Receita recebida − CMV</td><td style={{ textAlign: 'right', fontWeight: 700, color: '#2563eb' }}>{formatPreco(cur.lucroBruto)} ({cur.margemBruta.toFixed(1)}%)</td></tr>
               <tr style={{ background: '#fef2f2' }}><td><strong>Prejuízo com calote (CUSTO)</strong></td><td>Custo real de compra das mercadorias caloteadas</td><td style={{ textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>-{formatPreco(cur.prejuizoCaloteCusto)}</td></tr>
               <tr style={{ background: '#ecfdf5', borderTop: '2px solid #10b981' }}><td><strong>LUCRO REAL THSM</strong></td><td><strong>Lucro bruto − Prejuízo com calote</strong></td><td style={{ textAlign: 'right', fontWeight: 900, color: '#047857', fontSize: '16px' }}>{formatPreco(cur.lucroReal)} ({cur.margemReal.toFixed(1)}%)</td></tr>
+              <tr style={{ background: '#fef2f2' }}><td><strong>Despesas do período (Financeiro)</strong></td><td>Despesas operacionais e financeiras no período</td><td style={{ textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>-{formatPreco(despTotal)}</td></tr>
+              <tr style={{ background: '#f0f9ff', borderTop: '2px solid #0284c7' }}><td><strong>LUCRO REAL − DESPESAS</strong></td><td><strong>Lucro Real THSM − Despesas (Balanço Final)</strong></td><td style={{ textAlign: 'right', fontWeight: 900, color: lucroRealAposDespesas >= 0 ? '#0284c7' : '#dc2626', fontSize: '16px' }}>{formatPreco(lucroRealAposDespesas)} ({margemRealAposDespesas.toFixed(1)}%)</td></tr>
               <tr><td><strong>% de pedidos que viraram calote</strong></td><td>(Calotes + Parciais) ÷ Pedidos com valor</td><td style={{ textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>{cur.pctPedidosCalote.toFixed(1)}%</td></tr>
               <tr><td><strong>% do valor enviado em calote (venda)</strong></td><td>Venda não recebida ÷ (Recebida + Não recebida)</td><td style={{ textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>{cur.pctValorCaloteVenda.toFixed(1)}%</td></tr>
               <tr><td><strong>Ticket médio dos pagos</strong></td><td>Receita recebida ÷ Pedidos pagos</td><td style={{ textAlign: 'right' }}>{formatPreco(cur.ticketMedioPagos)} <span style={{ fontSize: '11px', color: '#64748b' }}>(mediana {formatPreco(cur.medianaPagos)})</span></td></tr>
