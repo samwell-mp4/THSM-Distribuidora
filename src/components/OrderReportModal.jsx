@@ -394,24 +394,48 @@ export default function OrderReportModal({
     }
 
     // Filtro adicional de Devolução (Sem / Com Devolução)
-    if (devolucaoFilter !== 'todos') {
-      list = list.filter(o => {
-        const devStats = getOrderDevolucaoStats(o, produtos)
-        // Pedidos com Sem Devolução: se tem pelo menos 1 item sem devolução, NUNCA remove (mesmo que seja misto com itens normais)
-        if (devolucaoFilter === 'sem_dev' || devolucaoFilter === 'com_sem_dev' || devolucaoFilter === 'apenas_sem_dev') {
-          return devStats.hasSemDev
+    if (devolucaoFilter === 'sem_dev' || devolucaoFilter === 'com_sem_dev' || devolucaoFilter === 'apenas_sem_dev') {
+      // Contém itens sem devolução: mostra todos os pedidos com pelo menos 1 item sem devolução, e mostra SÓ o item sem devolução
+      list = list.map(o => {
+        const rawItems = o.items || []
+        const semDevItems = rawItems.filter(i => checkItemSemDevolucao(i, produtos))
+        if (semDevItems.length === 0) return null
+
+        const subtotalSemDev = Math.round(semDevItems.reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 1), 0) * 100) / 100
+        return {
+          ...o,
+          _rawItems: rawItems,
+          items: semDevItems,
+          valor_itens: subtotalSemDev,
+          total: subtotalSemDev,
+          total_liquido: subtotalSemDev,
+          totalAcerto: subtotalSemDev,
+          totalPago: o.status === 'concluido' ? subtotalSemDev : (Number(o.totalPago) > subtotalSemDev ? subtotalSemDev : Number(o.totalPago || 0)),
+          isFilteredByDev: true,
+          filteredDevType: 'sem_dev'
         }
-        if (devolucaoFilter === 'apenas_mistos') {
-          return devStats.hasSemDev && devStats.hasComDev
+      }).filter(Boolean)
+    } else if (devolucaoFilter === 'com_dev' || devolucaoFilter === 'apenas_com_dev') {
+      // Contém item com devolução: mostra todos os pedidos com pelo menos 1 item com devolução, e mostra SÓ o item com devolução
+      list = list.map(o => {
+        const rawItems = o.items || []
+        const comDevItems = rawItems.filter(i => !checkItemSemDevolucao(i, produtos))
+        if (comDevItems.length === 0) return null
+
+        const subtotalComDev = Math.round(comDevItems.reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 1), 0) * 100) / 100
+        return {
+          ...o,
+          _rawItems: rawItems,
+          items: comDevItems,
+          valor_itens: subtotalComDev,
+          total: subtotalComDev,
+          total_liquido: subtotalComDev,
+          totalAcerto: subtotalComDev,
+          totalPago: o.status === 'concluido' ? subtotalComDev : (Number(o.totalPago) > subtotalComDev ? subtotalComDev : Number(o.totalPago || 0)),
+          isFilteredByDev: true,
+          filteredDevType: 'com_dev'
         }
-        if (devolucaoFilter === 'exclusivo_100_sem_dev') {
-          return devStats.hasSemDev && devStats.qtdComDev === 0
-        }
-        if (devolucaoFilter === 'apenas_com_dev') {
-          return !devStats.hasSemDev
-        }
-        return true
-      })
+      }).filter(Boolean)
     }
 
     return [...list].sort((a, b) => {
@@ -696,7 +720,11 @@ export default function OrderReportModal({
         ? `${startDate ? formatDateBR(startDate) : 'Início'} até ${endDate ? formatDateBR(endDate) : 'Hoje'}`
         : 'Todo o Período'
 
-      const devDesc = devolucaoFilter === 'todos' ? 'Todos os produtos' : devolucaoFilter === 'com_sem_dev' ? 'Com itens SEM devolução' : devolucaoFilter === 'apenas_sem_dev' ? 'Apenas SEM devolução' : 'Apenas COM devolução'
+      const devDesc = devolucaoFilter === 'todos'
+        ? 'Todos os pedidos (com e sem devolução)'
+        : (devolucaoFilter === 'sem_dev' || devolucaoFilter === 'com_sem_dev' || devolucaoFilter === 'apenas_sem_dev')
+          ? 'Contém itens SEM devolução (mostrando só itens s/ dev)'
+          : 'Contém item COM devolução (mostrando só itens c/ dev)'
       const scopeDesc = scope === 'todos' ? 'Todos os Pedidos' : scope === 'selecionados' ? 'Selecionados' : scope === 'tela' ? 'Filtros da Tela' : 'Personalizado'
 
       const filterLine = `Escopo: ${scopeDesc} | Status: ${statusDesc} | Devolução: ${devDesc} | Período: ${dateDesc} | Cidade: ${selectedCity} | Rota: ${selectedRoute}`
@@ -1328,6 +1356,12 @@ export default function OrderReportModal({
       ? 'Todos os Status'
       : selectedStatuses.map(s => STATUS_CONFIG[s]?.label || s).join(', ')
 
+    const devDesc = devolucaoFilter === 'todos'
+      ? 'Todos os pedidos (com e sem devolução)'
+      : (devolucaoFilter === 'sem_dev' || devolucaoFilter === 'com_sem_dev' || devolucaoFilter === 'apenas_sem_dev')
+        ? 'Contém itens SEM devolução (mostrando só itens s/ dev)'
+        : 'Contém item COM devolução (mostrando só itens c/ dev)'
+
     const htmlContent = `
       <!DOCTYPE html>
       <html lang="pt-BR">
@@ -1374,7 +1408,7 @@ export default function OrderReportModal({
         </div>
 
         <div class="meta-box">
-          <strong>Filtros:</strong> Status: ${statusDesc} | Cidade: ${selectedCity} | Rota: ${selectedRoute} | ${startDate ? `De ${formatDateBR(startDate)}` : ''} ${endDate ? `até ${formatDateBR(endDate)}` : ''} ${excludeTests ? '• (Sem pedidos de teste)' : ''}
+          <strong>Filtros:</strong> Status: ${statusDesc} | Devolução: ${devDesc} | Cidade: ${selectedCity} | Rota: ${selectedRoute} | ${startDate ? `De ${formatDateBR(startDate)}` : ''} ${endDate ? `até ${formatDateBR(endDate)}` : ''} ${excludeTests ? '• (Sem pedidos de teste)' : ''}
         </div>
 
         <div class="kpi-row">
@@ -1705,11 +1739,9 @@ export default function OrderReportModal({
                     onChange={e => setDevolucaoFilter(e.target.value)}
                     style={{ borderColor: devolucaoFilter !== 'todos' ? '#dc2626' : undefined, fontWeight: devolucaoFilter !== 'todos' ? 700 : 400 }}
                   >
-                    <option value="todos">Todos os Pedidos (Mistos e Normais)</option>
-                    <option value="sem_dev">Sem Devolução (Inclui Mistos e 100% S/Dev)</option>
-                    <option value="apenas_mistos">Apenas Pedidos Mistos (Com e Sem Devolução)</option>
-                    <option value="exclusivo_100_sem_dev">Exclusivamente 100% SEM Devolução (Sem itens normais)</option>
-                    <option value="apenas_com_dev">Apenas 100% COM Devolução (Normais)</option>
+                    <option value="todos">Todos os pedidos (com e sem devolução)</option>
+                    <option value="sem_dev">Contém itens sem devolução (mostra só itens sem devolução)</option>
+                    <option value="com_dev">Contém item com devolução (mostra só itens com devolução)</option>
                   </select>
                 </div>
 
