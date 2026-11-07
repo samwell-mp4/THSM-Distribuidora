@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
-import { searchMatches, clientMatchesSearch } from '../lib/search'
+import { clientMatchesSearch } from '../lib/search'
 import './OrderReportModal.css'
 
 const STATUS_CONFIG = {
@@ -13,7 +13,6 @@ const STATUS_CONFIG = {
   'em-rota': { label: 'Em Rota', color: '#0284c7', bg: '#e0f2fe' },
   'entregue': { label: 'Entregue (Praça)', color: '#059669', bg: '#d1fae5' },
   'acerto': { label: 'Acerto (Motoristas)', color: '#7c3aed', bg: '#f3e8ff' },
-  'calote_parcial': { label: 'Calote Parcial', color: '#d97706', bg: '#fef3c7' },
   'concluido': { label: 'Concluído (Pago)', color: '#16a34a', bg: '#dcfce7' },
   'calote_parcial': { label: 'Calote Parcial', color: '#d97706', bg: '#fef3c7' },
   'calote': { label: 'Calote 100%', color: '#dc2626', bg: '#fee2e2' },
@@ -114,7 +113,6 @@ function formatDateBR(dateStr) {
 
 const norm = (v) => (v || '').toString().toLowerCase().replace(/[^a-z0-9]/g, '')
 const isNoDevName = (nome) => {
-  const n = norm(nome).replace(/sem/, ' devol')
   return norm(nome).includes('semdevolu') || norm(nome).includes('sem-devolu') || norm(nome).includes('sem devolu') || norm(nome).includes('s/devolu')
 }
 
@@ -188,6 +186,59 @@ export function getOrderDevolucaoStats(order, produtos = []) {
   }
 }
 
+// Obtém a data efetiva de pagamento/quitação do pedido (para métricas e relatórios financeiros)
+export function getOrderPaymentDate(o) {
+  if (!o) return ''
+  // 1. Histórico de pagamentos (data do último pagamento registrado)
+  if (Array.isArray(o.paymentHistory) && o.paymentHistory.length > 0) {
+    for (let idx = o.paymentHistory.length - 1; idx >= 0; idx--) {
+      const ph = o.paymentHistory[idx]
+      if (ph && ph.data) {
+        const raw = String(ph.data).trim()
+        const d = raw.includes('T') ? raw.split('T')[0] : raw.split(' ')[0]
+        if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
+      }
+    }
+  }
+  // 2. finalizadoAt (timestamp numérico em ms ou ISO string)
+  if (o.finalizadoAt) {
+    try {
+      const d = typeof o.finalizadoAt === 'number'
+        ? new Date(o.finalizadoAt).toISOString().split('T')[0]
+        : String(o.finalizadoAt).split('T')[0].split(' ')[0]
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
+    } catch {}
+  }
+  // 3. finalizada_em
+  if (o.finalizada_em) {
+    const d = String(o.finalizada_em).split('T')[0].split(' ')[0]
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
+  }
+  // 4. paidDate ou paidAt ou dataPagamento
+  const pd = o.paidDate || o.paidAt || o.dataPagamento || o.payment?.paidDate
+  if (pd) {
+    const d = String(pd).split('T')[0].split(' ')[0]
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
+  }
+  // 5. deliveredAt para comandas concluídas ou calote
+  if (o.deliveredAt && (o.status === 'concluido' || o.status === 'calote' || o.status === 'calote_parcial')) {
+    try {
+      const d = typeof o.deliveredAt === 'number'
+        ? new Date(o.deliveredAt).toISOString().split('T')[0]
+        : String(o.deliveredAt).split('T')[0].split(' ')[0]
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
+    } catch {}
+  }
+  // 6. dataAcerto
+  if (o.dataAcerto) {
+    const d = String(o.dataAcerto).split('T')[0].split(' ')[0]
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
+  }
+  // 7. Fallback: data de emissão / criação do pedido
+  const raw = o.date || o.createdAt || o.dataInicio || o.created_at || ''
+  return raw ? String(raw).split('T')[0].split(' ')[0] : ''
+}
+
 export default function OrderReportModal({
   isOpen,
   onClose,
@@ -200,8 +251,6 @@ export default function OrderReportModal({
   isFinalizada = () => false,
   showToast = () => {}
 }) {
-  if (!isOpen) return null
-
   // Escopo de dados: 'todos', 'tela', 'selecionados', 'custom'
   const hasSelected = selectedOrderIds && selectedOrderIds.size > 0
   const [scope, setScope] = useState(hasSelected ? 'selecionados' : 'todos')
@@ -217,7 +266,7 @@ export default function OrderReportModal({
   const [devolucaoFilter, setDevolucaoFilter] = useState('todos') // 'todos', 'com_sem_dev', 'apenas_sem_dev', 'apenas_com_dev'
   const [excludeTests, setExcludeTests] = useState(true)
   const [includePrices, setIncludePrices] = useState(true)
-  const [dateType, setDateType] = useState('date') // 'date' ou 'vencimento'
+  const [dateType, setDateType] = useState('pagamento') // 'pagamento', 'date' ou 'vencimento'
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
 
@@ -299,16 +348,38 @@ export default function OrderReportModal({
           if (r.toLowerCase() !== selectedRoute.toLowerCase()) return false
         }
 
-        // 5. Forma de Pagamento
+        // 5. Forma de Pagamento (modalidade ou meio de pagamento)
         if (selectedPayment !== 'TODOS') {
-          const pag = o.pagamento || ''
-          if (pag !== selectedPayment) return false
+          const pagModality = (o.pagamento || '').toLowerCase()
+          const pMethod = (o.paymentMethod || o.payment?.method || '').toLowerCase()
+          const splits = o.paymentSplits || {}
+          
+          if (selectedPayment === 'avista') {
+            if (pagModality !== 'avista') return false
+          } else if (selectedPayment === 'aprazo') {
+            if (pagModality !== 'aprazo') return false
+          } else if (selectedPayment === 'misto') {
+            if (pagModality !== 'misto') return false
+          } else if (selectedPayment === 'pix') {
+            const hasPix = pMethod === 'pix' || Number(splits.pix) > 0
+            if (!hasPix) return false
+          } else if (selectedPayment === 'dinheiro') {
+            const hasDin = pMethod === 'dinheiro' || Number(splits.dinheiro) > 0
+            if (!hasDin) return false
+          } else if (selectedPayment === 'cartao') {
+            const hasCard = pMethod.includes('cartao') || Number(splits.cartao) > 0 || Number(splits.cartao_credito) > 0 || Number(splits.cartao_debito) > 0
+            if (!hasCard) return false
+          } else {
+            if (pagModality !== selectedPayment && pMethod !== selectedPayment) return false
+          }
         }
 
         // 6. Datas (ignora hora e ISO para nunca cortar a data final)
-        const rawDate = dateType === 'vencimento'
-          ? (o.dataVencimento || o.vencimento || '')
-          : (o.date || o.createdAt || o.dataInicio || o.created_at || '')
+        const rawDate = dateType === 'pagamento'
+          ? getOrderPaymentDate(o)
+          : dateType === 'vencimento'
+            ? (o.dataVencimento || o.vencimento || '')
+            : (o.date || o.createdAt || o.dataInicio || o.created_at || '')
         const orderDateOnly = rawDate ? String(rawDate).split('T')[0].split(' ')[0] : ''
         if (startDate && orderDateOnly && orderDateOnly < startDate) return false
         if (endDate && orderDateOnly && orderDateOnly > endDate) return false
@@ -322,20 +393,31 @@ export default function OrderReportModal({
       list = list.filter(o => !o?.isTest && !o?.is_test && !(o?.customer?.nome && o.customer.nome.toLowerCase().includes('teste')))
     }
 
-    // Filtro adicional de Devolução
+    // Filtro adicional de Devolução (Sem / Com Devolução)
     if (devolucaoFilter !== 'todos') {
       list = list.filter(o => {
         const devStats = getOrderDevolucaoStats(o, produtos)
-        if (devolucaoFilter === 'com_sem_dev') return devStats.hasSemDev
-        if (devolucaoFilter === 'apenas_sem_dev') return devStats.hasSemDev && devStats.qtdComDev === 0
-        if (devolucaoFilter === 'apenas_com_dev') return !devStats.hasSemDev
+        // Pedidos com Sem Devolução: se tem pelo menos 1 item sem devolução, NUNCA remove (mesmo que seja misto com itens normais)
+        if (devolucaoFilter === 'sem_dev' || devolucaoFilter === 'com_sem_dev' || devolucaoFilter === 'apenas_sem_dev') {
+          return devStats.hasSemDev
+        }
+        if (devolucaoFilter === 'apenas_mistos') {
+          return devStats.hasSemDev && devStats.hasComDev
+        }
+        if (devolucaoFilter === 'exclusivo_100_sem_dev') {
+          return devStats.hasSemDev && devStats.qtdComDev === 0
+        }
+        if (devolucaoFilter === 'apenas_com_dev') {
+          return !devStats.hasSemDev
+        }
         return true
       })
     }
 
     return [...list].sort((a, b) => {
-      const ta = new Date(a.date || a.createdAt || a.created_at || 0).getTime()
-      const tb = new Date(b.date || b.createdAt || b.created_at || 0).getTime()
+      const getD = (x) => dateType === 'pagamento' ? getOrderPaymentDate(x) : (x.date || x.createdAt || x.created_at || '')
+      const ta = new Date(getD(a) || 0).getTime()
+      const tb = new Date(getD(b) || 0).getTime()
       return tb - ta
     })
   }, [
@@ -1418,6 +1500,8 @@ export default function OrderReportModal({
     printWin.document.close()
   }
 
+  if (!isOpen) return null
+
   return (
     <div className="order-report-overlay">
       <div className="order-report-modal" onClick={e => e.stopPropagation()}>
@@ -1622,9 +1706,10 @@ export default function OrderReportModal({
                     style={{ borderColor: devolucaoFilter !== 'todos' ? '#dc2626' : undefined, fontWeight: devolucaoFilter !== 'todos' ? 700 : 400 }}
                   >
                     <option value="todos">Todos os Pedidos (Mistos e Normais)</option>
-                    <option value="com_sem_dev">Contém Itens SEM Devolução</option>
-                    <option value="apenas_sem_dev">Apenas 100% SEM Devolução</option>
-                    <option value="apenas_com_dev">Apenas COM Devolução (Normais)</option>
+                    <option value="sem_dev">Sem Devolução (Inclui Mistos e 100% S/Dev)</option>
+                    <option value="apenas_mistos">Apenas Pedidos Mistos (Com e Sem Devolução)</option>
+                    <option value="exclusivo_100_sem_dev">Exclusivamente 100% SEM Devolução (Sem itens normais)</option>
+                    <option value="apenas_com_dev">Apenas 100% COM Devolução (Normais)</option>
                   </select>
                 </div>
 
@@ -1698,6 +1783,9 @@ export default function OrderReportModal({
                     <option value="avista">À Vista</option>
                     <option value="aprazo">A Prazo</option>
                     <option value="misto">Misto</option>
+                    <option value="pix">PIX</option>
+                    <option value="dinheiro">Dinheiro</option>
+                    <option value="cartao">Cartão</option>
                   </select>
                 </div>
               </div>
@@ -1712,6 +1800,7 @@ export default function OrderReportModal({
                       onChange={e => setDateType(e.target.value)}
                       style={{ fontSize: '0.72rem', padding: '0.2rem 0.4rem', borderRadius: '4px', border: '1px solid #cbd5e1' }}
                     >
+                      <option value="pagamento">Data de Pagamento / Quitação</option>
                       <option value="date">Data de Emissão do Pedido</option>
                       <option value="vencimento">Data de Vencimento</option>
                     </select>

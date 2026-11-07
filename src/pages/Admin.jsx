@@ -834,7 +834,7 @@ import CloneOrderModal from '../components/CloneOrderModal'
 import MapView from '../components/MapView'
 import CentralAnalise from '../components/CentralAnalise'
 import CentralRotas from '../components/ModuloRotas/CentralRotas'
-import OrderReportModal from '../components/OrderReportModal'
+import OrderReportModal, { getOrderPaymentDate } from '../components/OrderReportModal'
 
 export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [tab, setTab] = useState(() => sessionStorage.getItem('thsm_admin_tab') || 'dashboard')
@@ -3493,7 +3493,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       if (end) return dt <= end
       return true
     }
-    const ordersIn = orders.filter(o => inRange(o.date || ''))
+    const ordersIn = orders.filter(o => inRange(getOrderPaymentDate(o)))
     const total = ordersIn.length
     const pendentes = ordersIn.filter(o => o.status === 'pendente').length
     const entregues = ordersIn.filter(o => o.status === 'entregue').length
@@ -3513,7 +3513,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       if (end) return dt <= end
       return true
     }
-    return orders.filter(o => inRange(o.date || '')).slice(0, 8)
+    return orders.filter(o => inRange(getOrderPaymentDate(o))).slice(0, 8)
   }, [orders, dashRange])
 
   // Insights operacionais e percentuais para o Dashboard NexRoute

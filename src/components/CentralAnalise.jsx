@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react'
 import './CentralAnalise.css'
+import { getOrderPaymentDate } from './OrderReportModal'
 
 function formatPreco(v) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v) || 0)
@@ -444,11 +445,11 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
     }).filter(Boolean)
   }, [despesas])
 
-  const ordersWin = useMemo(() => baseOrders.filter(o => matchStatus(o, statusFilter) && fit(o.date || '', win)), [baseOrders, win, statusFilter])
-  const ordersPrev = useMemo(() => baseOrders.filter(o => matchStatus(o, statusFilter) && fit(o.date || '', prevWin)), [baseOrders, prevWin, statusFilter])
-  const finWin = useMemo(() => financial.filter(f => f.status !== 'cancelado' && fit(f.dueDate || '', win)), [financial, win])
-  const finPrev = useMemo(() => financial.filter(f => f.status !== 'cancelado' && fit(f.dueDate || '', prevWin)), [financial, prevWin])
-  const despWin = useMemo(() => normDespesas.filter(d => fit(d.dueDate || d.paidDate || d.date || '', win)), [normDespesas, win])
+  const ordersWin = useMemo(() => baseOrders.filter(o => matchStatus(o, statusFilter) && fit(getOrderPaymentDate(o), win)), [baseOrders, win, statusFilter])
+  const ordersPrev = useMemo(() => baseOrders.filter(o => matchStatus(o, statusFilter) && fit(getOrderPaymentDate(o), prevWin)), [baseOrders, prevWin, statusFilter])
+  const finWin = useMemo(() => financial.filter(f => f.status !== 'cancelado' && fit(f.paidDate || f.dueDate || f.date || '', win)), [financial, win])
+  const finPrev = useMemo(() => financial.filter(f => f.status !== 'cancelado' && fit(f.paidDate || f.dueDate || f.date || '', prevWin)), [financial, prevWin])
+  const despWin = useMemo(() => normDespesas.filter(d => fit(d.paidDate || d.dueDate || d.date || '', win)), [normDespesas, win])
 
   const prodCostMap = useMemo(() => {
     const map = new Map()
@@ -728,7 +729,8 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
   const serie = useMemo(() => {
     const map = {}
     ordersWin.forEach(o => {
-      const k = (o.date || o.createdAt ? new Date(o.date || o.createdAt).toISOString().slice(0, 7) : '').slice(0, 7)
+      const payDt = getOrderPaymentDate(o)
+      const k = (payDt || '').slice(0, 7)
       if (!k) return
       if (!map[k]) map[k] = {
         mes: k,
@@ -1752,7 +1754,8 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         _k: o.id,
         pedido: `#${String(o.id).slice(-6)}`,
         cliente: o.customer?.nome || '-',
-        data: formatDate(o.date),
+        data: formatDate(getOrderPaymentDate(o)),
+        dataEmissao: formatDate(o.date),
         itens: qtd,
         mercadoriaColocada: vOriginal,
         fatConcluido,
@@ -1776,7 +1779,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
           qty: Number(i.qty) || 0,
           valor: (Number(i.preco) || 0) * (Number(i.qty) || 0),
           cliente: o.customer?.nome || '-',
-          data: formatDate(o.date),
+          data: formatDate(getOrderPaymentDate(o)),
           tipo: i.tipo === 'avista' ? 'À Vista' : 'A Prazo',
         })
       })
@@ -2136,7 +2139,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
                 _k: o.id,
                 pedido: `#${String(o.id).slice(-6)}`,
                 cliente: o.customer?.nome || '-',
-                data: formatDate(o.date),
+                data: formatDate(getOrderPaymentDate(o)),
                 statusRaw: o.status,
                 valorTabela,
                 desconto: Number(o.desconto) || 0,
