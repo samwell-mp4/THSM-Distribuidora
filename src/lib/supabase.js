@@ -329,7 +329,7 @@ export async function upsertUser(user) {
   }
   if (user.id) dbUser.id = user.id
 
-  const onConflict = user.id ? 'id' : 'telefone'
+  const onConflict = 'telefone'
 
   let lastError = null
   try {

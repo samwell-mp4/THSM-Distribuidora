@@ -56,9 +56,11 @@ export async function initDb() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS pedidos_deletados (
         id bigint PRIMARY KEY,
-        created_at timestamptz DEFAULT now()
+        created_at timestamptz DEFAULT now(),
+        deleted_at timestamptz DEFAULT now()
       )
     `);
+    await client.query('ALTER TABLE pedidos_deletados ADD COLUMN IF NOT EXISTS deleted_at timestamptz DEFAULT now()');
     await client.query('CREATE INDEX IF NOT EXISTS idx_pedidos_deletados_id ON pedidos_deletados(id)');
 
     // 3. FINANCEIRO
@@ -810,6 +812,39 @@ export async function executeQuery(queryDesc) {
         }
       }
 
+      if (table === 'pedidos_deletados') {
+        try {
+          await pool.query('ALTER TABLE pedidos_deletados ADD COLUMN IF NOT EXISTS deleted_at timestamptz DEFAULT now()');
+        } catch (e) {}
+      }
+
+      if (table === 'usuarios') {
+        try {
+          if (!isArray && inputValues.telefone) {
+            inputValues.telefone = cleanAndNormalizePhone(inputValues.telefone);
+            const { rows: existingRows } = await pool.query(
+              'SELECT id FROM usuarios WHERE telefone = $1',
+              [inputValues.telefone]
+            );
+            if (existingRows && existingRows.length > 0) {
+              const canonicalId = existingRows[0].id;
+              if (inputValues.id && inputValues.id !== canonicalId) {
+                // Duplicate user resolution: re-link orders and remove duplicate record
+                await pool.query('UPDATE pedidos SET user_id = $1 WHERE user_id = $2', [canonicalId, inputValues.id]);
+                await pool.query('DELETE FROM usuarios WHERE id = $1', [inputValues.id]);
+              }
+              inputValues.id = canonicalId;
+            }
+          } else if (isArray) {
+            for (const r of rows) {
+              if (r.telefone) r.telefone = cleanAndNormalizePhone(r.telefone);
+            }
+          }
+        } catch (e) {
+          console.warn('usuarios upsert pre-check warning:', e.message);
+        }
+      }
+
       // Fast-path 1: Targeted UPDATE by primary key UUID "id" if present (prevents user cross-contamination)
       if (!isArray && inputValues.id && table !== 'pedidos') {
         const updateKeys = Object.keys(inputValues).filter(k => k !== 'id' && k !== 'created_at');
@@ -831,6 +866,26 @@ export async function executeQuery(queryDesc) {
               return { data, error: null };
             }
           } catch (err) {
+            if (table === 'usuarios' && err.message?.includes('usuarios_telefone_key')) {
+              try {
+                const normTel = cleanAndNormalizePhone(inputValues.telefone);
+                const { rows: canon } = await pool.query('SELECT id FROM usuarios WHERE telefone = $1', [normTel]);
+                if (canon && canon.length > 0) {
+                  const canonId = canon[0].id;
+                  await pool.query('UPDATE pedidos SET user_id = $1 WHERE user_id = $2', [canonId, inputValues.id]);
+                  await pool.query('DELETE FROM usuarios WHERE id = $1', [inputValues.id]);
+                  updateValues[updateValues.length - 1] = canonId;
+                  const resCanon = await pool.query(updateSql, updateValues);
+                  if (resCanon.rows && resCanon.rows.length > 0) {
+                    let data = resCanon.rows[0];
+                    if (single) data = Array.isArray(data) ? data[0] : data;
+                    return { data, error: null };
+                  }
+                }
+              } catch (inner) {
+                console.error('Failed to resolve usuarios_telefone_key conflict:', inner.message);
+              }
+            }
             console.error('Targeted UPDATE by ID error in upsert:', err.message);
           }
         }
@@ -864,7 +919,7 @@ export async function executeQuery(queryDesc) {
       }
 
 
-      const conflictCol = options.onConflict || 'id';
+      const conflictCol = table === 'usuarios' ? 'telefone' : (options.onConflict || 'id');
 
       // Sort rows deterministically by conflictCol to guarantee identical row-lock acquisition order and prevent deadlocks
       if (rows.length > 1) {
