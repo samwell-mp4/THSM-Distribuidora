@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { formatPhone, normalizePhoneDigits } from '../lib/supabase'
 import { supabase } from '../lib/supabase'
 import './LandingPage.css'
 
@@ -19,12 +20,7 @@ export default function LandingPage({ onVerCatalogo }) {
   const update = (field, val) => setForm(prev => ({ ...prev, [field]: val }))
   const updateAddr = (field, val) => setEndereco(prev => ({ ...prev, [field]: val }))
 
-  const formatPhone = (v) => {
-    const nums = v.replace(/\D/g, '').slice(0, 11)
-    if (nums.length <= 2) return `(${nums}`
-    if (nums.length <= 7) return `(${nums.slice(0, 2)}) ${nums.slice(2)}`
-    return `(${nums.slice(0, 2)}) ${nums.slice(2, 7)}-${nums.slice(7)}`
-  }
+
 
   const lookupCep = async (cep) => {
     const clean = cep.replace(/\D/g, '')
@@ -53,8 +49,7 @@ export default function LandingPage({ onVerCatalogo }) {
     if (!canStep1 || !canStep2) return
     setSending(true)
     setSubmitError(null)
-    const raw = (form.telefone || '').replace(/\D/g, '')
-    const telefone = raw.length >= 11 && raw.startsWith('55') ? raw : '55' + raw
+    const telefone = normalizePhoneDigits(form.telefone || '')
     const payload = {
       nome: (form.nome || '').trim(),
       telefone,

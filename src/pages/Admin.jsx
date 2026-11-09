@@ -4,7 +4,7 @@ import {
   supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser,
   deleteOrder as supabaseDeleteOrder, deleteUserByTelefone, syncContatosToUsuarios, getAllLeads,
   upsertProducts, upsertDespesas, generateLoginToken, getAllRotaEdits, upsertRotaEdits, deleteRotaEdit as supabaseDeleteRotaEdit,
-  deleteProducts as supabaseDeleteProducts, flushPendingOrders, deleteOnlyFinancialByOrder, samePhone, normTel, normalizePhoneDigits,
+  deleteProducts as supabaseDeleteProducts, flushPendingOrders, deleteOnlyFinancialByOrder, samePhone, normTel, normalizePhoneDigits, formatPhone as formatPhoneHelper,
   formatImageUrl, reconcileOrdersUsers, saveUserViaWebhook, getRotasContatos
 } from '../lib/supabase'
 import { compressImageDataUrl, capPhotoSize } from '../lib/image'
@@ -171,9 +171,7 @@ function diffDays(a, b) {
 }
 
 function normalizePhone(v) {
-  const nums = String(v || '').replace(/\D/g, '')
-  if (!nums) return ''
-  return nums.startsWith('55') ? nums : '55' + nums
+  return normalizePhoneDigits(v)
 }
 
 const WEBHOOK_STATUS_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/novo-pedido'
@@ -685,8 +683,7 @@ function sendStatusWebhook(order, newStatus, extra = {}) {
     if (order?.status === 'pre-pedido' && newStatus === 'pendente') return
     const whatsappMessage = buildStatusWhatsApp(order, newStatus, extra)
     const returnedItems = extra.returnedItems || order.returnedItems || []
-    const rawPhone = (order.customer?.telefone || '').replace(/\D/g, '')
-    const telefone = rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone
+    const telefone = normalizePhoneDigits(order.customer?.telefone || '')
     const customer = { ...order.customer, telefone }
     const itemsList = Array.isArray(order?.items) ? order.items : (Array.isArray(order?.itens) ? order.itens : [])
     fetch(WEBHOOK_STATUS_URL, {
@@ -2087,8 +2084,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     const order = orders.find(o => String(o.id) === String(id))
     if (!order) return
 
-    const rawPhone = (customerData.telefone || order.customer?.telefone || '').replace(/\D/g, '')
-    const normPhone = rawPhone ? (rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone) : ''
+    const normPhone = normalizePhoneDigits(customerData.telefone || order.customer?.telefone || '')
 
     const cleanCpf = customerData.cpf || customerData.endereco?.cpf || order.customer?.cpf || order.customer?.endereco?.cpf || ''
     const cleanEndereco = {
@@ -2273,8 +2269,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       await upsertOrder(newOrder)
 
       if (clonedData.isNovoCliente && clonedData.customer?.telefone) {
-        const raw = (clonedData.customer.telefone || '').replace(/\D/g, '')
-        const normPhone = raw.startsWith('55') ? raw : '55' + raw
+        const normPhone = normalizePhoneDigits(clonedData.customer.telefone || '')
         const userPayload = {
           nome: clonedData.customer.nome,
           telefone: normPhone,
@@ -3179,12 +3174,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     showToast(err > 0 ? `${ok} excluído(s), ${err} falhou(aram)` : `${ok} usuário(s) excluído(s)`)
   }
 
-  const formatPhone = (v) => {
-    const nums = v.replace(/\D/g, '')
-    if (nums.length <= 2) return `(${nums}`
-    if (nums.length <= 7) return `(${nums.slice(0, 2)}) ${nums.slice(2)}`
-    return `(${nums.slice(0, 2)}) ${nums.slice(2, 7)}-${nums.slice(7)}`
-  }
+  const formatPhone = (v) => formatPhoneHelper(v)
 
   const cidadesOrders = useMemo(() => {
     const cidades = [...new Set(orders.map(o => o.customer?.endereco?.cidade).filter(Boolean))]
@@ -12128,12 +12118,11 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
   const pickUser = async (u) => {
     setSelectedUser(u)
     setNome(u.nome || '')
-    let rawTel = u.telefone || ''
-    const cleanTel = rawTel.replace(/\D/g, '')
-    if (cleanTel.startsWith('55') && cleanTel.length > 10) {
-      rawTel = cleanTel.slice(2)
-    }
-    setTelefone(rawTel)
+    let cleanTel = String(u.telefone || '').replace(/\D/g, '')
+    while (cleanTel.startsWith('5555')) cleanTel = cleanTel.slice(2)
+    while (cleanTel.startsWith('55') && cleanTel.length > 11) cleanTel = cleanTel.slice(2)
+    if (cleanTel.length === 11 && cleanTel.startsWith('55') && parseInt(cleanTel.slice(2, 4), 10) >= 11) cleanTel = cleanTel.slice(2)
+    setTelefone(cleanTel)
     setCpf(u.endereco?.cpf || u.cpf || '')
 
     const userEnd = u.endereco || {}
@@ -12330,17 +12319,8 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
     })
   }
 
-  const formatPhone = (v) => {
-    const nums = v.replace(/\D/g, '').slice(0, 11)
-    if (nums.length <= 2) return `(${nums}`
-    if (nums.length <= 7) return `(${nums.slice(0, 2)}) ${nums.slice(2)}`
-    return `(${nums.slice(0, 2)}) ${nums.slice(2, 7)}-${nums.slice(7)}`
-  }
-
-  const normalizePhone = (v) => {
-    const nums = v.replace(/\D/g, '')
-    return nums.startsWith('55') ? nums : '55' + nums
-  }
+  const formatPhone = (v) => formatPhoneHelper(v)
+  const normalizePhone = (v) => normalizePhoneDigits(v)
 
   return (
     <div className="admin-overlay">

@@ -230,7 +230,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
   const belongsToUser = (o) => o && currentUser && (
     (o.user_id != null && o.user_id === currentUser.id) ||
     (o.userId != null && o.userId === currentUser.id) ||
-    normPhone(o.customer?.telefone) === normPhone(currentUser.telefone)
+    samePhone(o.customer?.telefone, currentUser.telefone)
   )
 
   // Order tracking link (?pedido=ID): load the order directly (only da própria conta)

@@ -27,12 +27,7 @@ function parseDecimalToNumber(val) {
   return isNaN(num) ? 0 : num
 }
 
-function formatPhone(v) {
-  const nums = (v || '').replace(/\D/g, '').slice(0, 11)
-  if (nums.length <= 2) return nums ? `(${nums}` : ''
-  if (nums.length <= 7) return `(${nums.slice(0, 2)}) ${nums.slice(2)}`
-  return `(${nums.slice(0, 2)}) ${nums.slice(2, 7)}-${nums.slice(7)}`
-}
+
 
 function getOrderRawItems(ord) {
   if (!ord) return []

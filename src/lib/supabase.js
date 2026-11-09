@@ -178,16 +178,56 @@ export function normalizePhoneDigits(phone) {
   let digits = String(phone).replace(/\D/g, '')
   if (!digits) return ''
 
-  if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+  // 1. Remove repetições anômalas de 55 no início (ex: 5555...)
+  while (digits.startsWith('5555')) {
     digits = digits.slice(2)
   }
 
-  // If 10 digits (2-digit DDD + 8-digit number), insert mandatory '9' after DDD
+  // 2. Se tiver mais de 11 dígitos e começar com 55, remove o DDI 55
+  while (digits.startsWith('55') && digits.length > 11) {
+    digits = digits.slice(2)
+  }
+
+  // 3. Caso especial: se tem 11 dígitos começando com 55 e em seguida um DDD válido (11 a 99) + 9 (celular)
+  if (digits.length === 11 && digits.startsWith('55')) {
+    const nextDdd = parseInt(digits.slice(2, 4), 10)
+    if (nextDdd >= 11 && nextDdd <= 99 && digits.slice(4, 5) === '9') {
+      digits = digits.slice(2)
+    }
+  }
+
+  // 4. Se tiver 10 dígitos (DDD + 8 dígitos de celular), insere o '9' obrigatório
   if (digits.length === 10) {
     digits = digits.slice(0, 2) + '9' + digits.slice(2)
   }
 
-  return '55' + digits
+  // 5. Retorna SEMPRE com o DDI '55' único
+  return digits.startsWith('55') ? digits : '55' + digits
+}
+
+export function formatPhone(v) {
+  if (!v) return ''
+  let digits = String(v).replace(/\D/g, '')
+  if (!digits) return ''
+
+  while (digits.startsWith('5555')) {
+    digits = digits.slice(2)
+  }
+  while (digits.startsWith('55') && digits.length > 11) {
+    digits = digits.slice(2)
+  }
+  if (digits.length === 11 && digits.startsWith('55')) {
+    const nextDdd = parseInt(digits.slice(2, 4), 10)
+    if (nextDdd >= 11 && nextDdd <= 99 && digits.slice(4, 5) === '9') {
+      digits = digits.slice(2)
+    }
+  }
+
+  const nums = digits.slice(0, 11)
+  if (nums.length <= 2) return nums ? `(${nums}` : ''
+  if (nums.length <= 6) return `(${nums.slice(0, 2)}) ${nums.slice(2)}`
+  if (nums.length <= 10) return `(${nums.slice(0, 2)}) ${nums.slice(2, 6)}-${nums.slice(6)}`
+  return `(${nums.slice(0, 2)}) ${nums.slice(2, 7)}-${nums.slice(7)}`
 }
 
 export function normTel(t) {
@@ -200,21 +240,28 @@ export function samePhone(a, b) {
   const nb = normalizePhoneDigits(b)
   if (na && nb && na === nb) return true
 
-  const da = String(a).replace(/\D/g, '')
-  const db = String(b).replace(/\D/g, '')
-  if (da.length < 10 || db.length < 10) return false
+  let da = String(a).replace(/\D/g, '')
+  let db = String(b).replace(/\D/g, '')
+  while (da.startsWith('5555')) da = da.slice(2)
+  while (db.startsWith('5555')) db = db.slice(2)
+  while (da.startsWith('55') && da.length > 11) da = da.slice(2)
+  while (db.startsWith('55') && db.length > 11) db = db.slice(2)
+  if (da.length === 11 && da.startsWith('55') && parseInt(da.slice(2, 4), 10) >= 11) da = da.slice(2)
+  if (db.length === 11 && db.startsWith('55') && parseInt(db.slice(2, 4), 10) >= 11) db = db.slice(2)
 
-  let cleanA = da.replace(/^55/, '')
-  let cleanB = db.replace(/^55/, '')
-  if (cleanA.length === 10) cleanA = cleanA.slice(0, 2) + '9' + cleanA.slice(2)
-  if (cleanB.length === 10) cleanB = cleanB.slice(0, 2) + '9' + cleanB.slice(2)
-  return cleanA === cleanB && cleanA.length === 11
+  if (da.length === 10) da = da.slice(0, 2) + '9' + da.slice(2)
+  if (db.length === 10) db = db.slice(0, 2) + '9' + db.slice(2)
+
+  if (da === db && da.length >= 10) return true
+  // Se um número foi truncado anteriormente, mas coincide com o início do outro
+  if (da.length >= 9 && db.length >= 11 && db.startsWith(da)) return true
+  if (db.length >= 9 && da.length >= 11 && da.startsWith(db)) return true
+  return false
 }
 
 export async function saveUserViaWebhook(userPayload) {
   if (!userPayload || !userPayload.telefone) return null
-  const userPhone = String(userPayload.telefone).replace(/\D/g, '')
-  const normUserPhone = userPhone.startsWith('55') ? userPhone : '55' + userPhone
+  const normUserPhone = normalizePhoneDigits(userPayload.telefone)
   const payload = {
     ...userPayload,
     id: userPayload.id || null,

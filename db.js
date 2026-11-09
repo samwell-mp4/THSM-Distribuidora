@@ -328,53 +328,111 @@ export async function initDb() {
   }
 }
 
-function cleanAndNormalizePhone(phone) {
+export function cleanAndNormalizePhone(phone) {
   if (!phone) return ''
   let digits = String(phone).replace(/\D/g, '')
   if (!digits) return ''
-  if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+
+  // 1. Remove repeticoes anomalas de 55 no inicio (ex: 5555...)
+  while (digits.startsWith('5555')) {
     digits = digits.slice(2)
   }
+  // 2. Se tiver mais de 11 digitos e comecar com 55, remove o DDI 55
+  while (digits.startsWith('55') && digits.length > 11) {
+    digits = digits.slice(2)
+  }
+  // 3. Caso especial: se tem 11 digitos comecando com 55 e em seguida um DDD valido (11 a 99) + 9
+  if (digits.length === 11 && digits.startsWith('55')) {
+    const nextDdd = parseInt(digits.slice(2, 4), 10)
+    if (nextDdd >= 11 && nextDdd <= 99 && digits.slice(4, 5) === '9') {
+      digits = digits.slice(2)
+    }
+  }
+  // 4. Se tiver 10 digitos (DDD + 8 digitos de celular), insere o '9' obrigatorio
   if (digits.length === 10) {
     digits = digits.slice(0, 2) + '9' + digits.slice(2)
   }
-  return '55' + digits
+  // 5. Retorna SEMPRE com o DDI '55'
+  return digits.startsWith('55') ? digits : '55' + digits
 }
 
-async function normalizeUserPhones(client) {
+export async function normalizeUserPhones(clientOrPool = pool) {
   console.log('Normalizing and deduplicating user phone numbers...');
   try {
-    const { rows: users } = await client.query('SELECT id, telefone FROM usuarios');
+    const { rows: users } = await clientOrPool.query('SELECT id, telefone, nome, email, endereco FROM usuarios');
     const toDelete = [];
     const toUpdatePhone = [];
     const phoneToUser = new Map();
+    const cpfToUser = new Map();
+    const prefixToUser = new Map();
 
-    for (const user of users) {
-      const originalPhone = user.telefone;
+    const cleanCpf = (u) => {
+      const c = (u.endereco?.cpf || u.cpf || '').replace(/\D/g, '');
+      return c.length === 11 ? c : '';
+    };
+
+    // Prioriza usuarios validos (sem 5555 e com telefone completo de 13 digitos)
+    const sortedUsers = [...users].sort((a, b) => {
+      const aIsAnomaly = String(a.telefone || '').startsWith('5555');
+      const bIsAnomaly = String(b.telefone || '').startsWith('5555');
+      if (aIsAnomaly && !bIsAnomaly) return 1;
+      if (!aIsAnomaly && bIsAnomaly) return -1;
+      return (b.telefone || '').length - (a.telefone || '').length;
+    });
+
+    for (const user of sortedUsers) {
+      const originalPhone = String(user.telefone || '');
+      const isAnomaly5555 = originalPhone.startsWith('5555');
       const normalized = cleanAndNormalizePhone(originalPhone);
       if (!normalized) continue;
 
-      const existingUser = phoneToUser.get(normalized);
-      if (existingUser) {
-        // Move orders referencing duplicate user to the main counterpart user
-        await client.query('UPDATE pedidos SET user_id = $1 WHERE user_id = $2', [existingUser.id, user.id]);
+      const userCpf = cleanCpf(user);
+
+      // 1. Tenta correspondencia exata por telefone normalizado
+      let existingUser = phoneToUser.get(normalized);
+
+      // 2. Se o telefone era anomalo (5555...) ou truncado, tenta encontrar o usuario original
+      if (!existingUser && (isAnomaly5555 || normalized.length < 13)) {
+        if (userCpf && cpfToUser.has(userCpf)) {
+          existingUser = cpfToUser.get(userCpf);
+        } else if (normalized.length >= 11) {
+          const prefix = normalized.slice(0, 11);
+          if (prefixToUser.has(prefix)) {
+            existingUser = prefixToUser.get(prefix);
+          }
+        }
+      }
+
+      if (existingUser && existingUser.id !== user.id) {
+        // Move pedidos do usuario duplicado para o usuario principal
+        await clientOrPool.query('UPDATE pedidos SET user_id = $1 WHERE user_id = $2', [existingUser.id, user.id]);
         toDelete.push(user.id);
       } else {
         phoneToUser.set(normalized, user);
+        if (userCpf) cpfToUser.set(userCpf, user);
+        if (normalized.length === 13) {
+          prefixToUser.set(normalized.slice(0, 11), user);
+        }
         if (originalPhone !== normalized) {
           toUpdatePhone.push({ id: user.id, normalized });
         }
       }
     }
+
     if (toDelete.length > 0) {
-      await client.query('DELETE FROM usuarios WHERE id = ANY($1)', [toDelete]);
-      console.log(`Deduplication: Deleted ${toDelete.length} duplicate user records.`);
+      await clientOrPool.query('DELETE FROM usuarios WHERE id = ANY($1)', [toDelete]);
+      console.log(`Deduplication: Deleted ${toDelete.length} duplicate user records created by phone corruption.`);
     }
+
     for (const item of toUpdatePhone) {
-      await client.query('UPDATE usuarios SET telefone = $1 WHERE id = $2', [item.normalized, item.id]);
+      try {
+        await clientOrPool.query('UPDATE usuarios SET telefone = $1 WHERE id = $2', [item.normalized, item.id]);
+      } catch (e) {
+        console.warn(`Could not update phone for user ${item.id}:`, e.message);
+      }
     }
     if (toUpdatePhone.length > 0) {
-      console.log(`Normalization: Updated ${toUpdatePhone.length} user phones with 55 and 9-digit DDD format.`);
+      console.log(`Normalization: Updated ${toUpdatePhone.length} user phones with 55 and clean DDD format.`);
     }
   } catch (err) {
     console.error('Failed to normalize user phones:', err.message);
@@ -384,6 +442,7 @@ async function normalizeUserPhones(client) {
 export async function reconcileOrdersUsersDb(clientOrPool = pool) {
   console.log('Reconciling orders without user_id with users table...');
   try {
+    await normalizeUserPhones(clientOrPool);
     const { rows: ordersWithoutUser } = await clientOrPool.query(`
       SELECT id, data FROM pedidos WHERE user_id IS NULL
     `);

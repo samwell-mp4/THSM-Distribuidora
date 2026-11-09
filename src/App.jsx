@@ -658,39 +658,40 @@ function App() {
   }
 
   const autoLoginOuRegistro = async () => {
-    const rawTel = customer.telefone || currentUser?.telefone || ''
-    const telefone = normTel(rawTel)
-    if (!telefone) { showToast('Informe seu telefone', 'error'); return null }
-
-    if (currentUser && samePhone(currentUser.telefone, telefone)) {
+    // 1. Se o usuário já está logado na sessão, NUNCA duplica usuário
+    if (currentUser && currentUser.id) {
+      const rawTel = customer.telefone || currentUser.telefone || ''
+      const cleanTel = normTel(rawTel) || currentUser.telefone
       const baseEnd = parseAddress(currentUser.endereco)
       const currentEnd = parseAddress(customer.endereco)
       const mergedEnd = { ...baseEnd, ...currentEnd }
-      if (customer.nome || customer.cpf || customer.endereco) {
-        const payload = {
-          ...currentUser,
-          id: currentUser.id,
-          telefone: currentUser.telefone || telefone,
-          nome: (customer.nome || currentUser.nome || '').trim(),
-          email: (customer.email || currentUser.email || '').trim(),
-          endereco: { ...mergedEnd, cpf: (customer.cpf || currentUser.cpf || mergedEnd.cpf || '').trim() }
-        }
-        try {
-          const saved = await saveUserViaWebhook(payload)
-          if (saved) {
-            setCurrentUser(saved)
-            safeSetItem(LS_SESSAO, saved)
-            return saved
-          }
-        } catch (e) {
-          console.warn('Erro ao atualizar usuário logado:', e)
-        }
+      const payload = {
+        ...currentUser,
+        id: currentUser.id,
+        telefone: normTel(currentUser.telefone || cleanTel),
+        nome: (customer.nome || currentUser.nome || '').trim(),
+        email: (customer.email || currentUser.email || '').trim(),
+        endereco: { ...mergedEnd, cpf: (customer.cpf || currentUser.cpf || mergedEnd.cpf || '').trim() }
       }
-      return currentUser
+      try {
+        const saved = await saveUserViaWebhook(payload)
+        const userToSet = saved || payload
+        setCurrentUser(userToSet)
+        safeSetItem(LS_SESSAO, userToSet)
+        return userToSet
+      } catch (e) {
+        console.warn('Erro ao atualizar usuário logado:', e)
+        return currentUser
+      }
     }
 
+    // 2. Se não está logado, busca no banco por telefone antes de criar
+    const rawTel = customer.telefone || ''
+    const telefone = normTel(rawTel)
+    if (!telefone) { showToast('Informe seu telefone', 'error'); return null }
+
     const rawOnly = telefone.replace(/^55/, '')
-    const { data: existente } = await supabase.from('usuarios').select('*').or(`telefone.eq.${telefone},telefone.eq.${rawOnly}`).maybeSingle()
+    const { data: existente } = await supabase.from('usuarios').select('*').or(`telefone.eq.${telefone},telefone.eq.${rawOnly},telefone.eq.55${rawOnly}`).maybeSingle()
 
     if (existente) {
       const senha = existente.endereco?.senha
@@ -705,7 +706,7 @@ function App() {
 
       const payload = {
         id: existente.id,
-        telefone: existente.telefone || telefone,
+        telefone: normTel(existente.telefone || telefone),
         nome: (customer.nome || existente.nome || '').trim(),
         email: (customer.email || existente.email || '').trim(),
         endereco: { ...endereco, cpf: (customer.cpf || existente.cpf || endereco.cpf || '').trim() }
@@ -717,7 +718,7 @@ function App() {
       return userToSet
     }
 
-    // Usuário novo: se não escolheu senha, define padrão pelos dígitos do telefone/CPF para nunca travar o cliente
+    // 3. Usuário verdadeiramente novo
     const chosenSenha = (customer.senha || '').trim() ||
       (customer.cpf ? customer.cpf.replace(/\D/g, '').slice(-4) : '') ||
       telefone.slice(-4) || '123456'
@@ -858,8 +859,8 @@ function App() {
   }
 
   const sendOrderWebhook = (order) => {
-    const rawPhone = (order.customer?.telefone || '').replace(/\D/g, '')
-    const telefone = rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone
+    const rawPhone = order.customer?.telefone || ''
+    const telefone = normTel(rawPhone)
     const customer = { ...order.customer, telefone }
     const whatsappMessage = buildWhatsAppMsg(order)
 
@@ -982,9 +983,27 @@ function App() {
   }
 
   const formatPhone = (v) => {
-    const nums = v.replace(/\D/g, '').slice(0, 11)
-    if (nums.length <= 2) return `(${nums}`
-    if (nums.length <= 7) return `(${nums.slice(0, 2)}) ${nums.slice(2)}`
+    if (!v) return ''
+    let digits = String(v).replace(/\D/g, '')
+    if (!digits) return ''
+
+    while (digits.startsWith('5555')) {
+      digits = digits.slice(2)
+    }
+    while (digits.startsWith('55') && digits.length > 11) {
+      digits = digits.slice(2)
+    }
+    if (digits.length === 11 && digits.startsWith('55')) {
+      const nextDdd = parseInt(digits.slice(2, 4), 10)
+      if (nextDdd >= 11 && nextDdd <= 99 && digits.slice(4, 5) === '9') {
+        digits = digits.slice(2)
+      }
+    }
+
+    const nums = digits.slice(0, 11)
+    if (nums.length <= 2) return nums ? `(${nums}` : ''
+    if (nums.length <= 6) return `(${nums.slice(0, 2)}) ${nums.slice(2)}`
+    if (nums.length <= 10) return `(${nums.slice(0, 2)}) ${nums.slice(2, 6)}-${nums.slice(6)}`
     return `(${nums.slice(0, 2)}) ${nums.slice(2, 7)}-${nums.slice(7)}`
   }
 
