@@ -1,10 +1,10 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import Admin from './pages/Admin'
 import AddressForm from './components/AddressForm'
 import UserDashboard from './pages/UserDashboard'
 import KitPage from './pages/KitPage'
 import LandingPage from './pages/LandingPage'
-import { supabase, upsertOrder, upsertUser, saveUserViaWebhook, generateLoginToken, consumeLoginToken, flushPendingOrders, normTel, samePhone, formatImageUrl } from './lib/supabase'
+import { supabase, upsertOrder, upsertUser, saveUserViaWebhook, generateLoginToken, consumeLoginToken, flushPendingOrders, normTel, samePhone, formatImageUrl, checkPhoneExists } from './lib/supabase'
 import { searchMatches } from './lib/search'
 import './App.css'
 
@@ -38,6 +38,12 @@ function App() {
   const [showFilters, setShowFilters] = useState(false)
   const [checkout, setCheckout] = useState(null)
   const [customer, setCustomer] = useState({ nome: '', email: '', telefone: '', senha: '', cpf: '', endereco: { cep: '', estado: '', cidade: '', bairro: '', rua: '', numero: '', complemento: '' } })
+  const [phoneCheckLoading, setPhoneCheckLoading] = useState(false)
+  const [phoneRegistered, setPhoneRegistered] = useState(false)
+  const [registeredUserName, setRegisteredUserName] = useState('')
+  const [registeredUserHasSenha, setRegisteredUserHasSenha] = useState(false)
+  const [phoneChecked, setPhoneChecked] = useState(false)
+  const phoneCheckTimeoutRef = useRef(null)
   const [pagamento, setPagamento] = useState('aprazo')
   const [confirmaSemDevolucao, setConfirmaSemDevolucao] = useState(false)
   const [checkoutSubmitting, setCheckoutSubmitting] = useState(false)
@@ -455,10 +461,9 @@ function App() {
     if (!loginSenha) { showToast('Informe uma senha para sua conta', 'error'); return }
 
     if (telefone) {
-      const rawOnly = telefone.replace(/^55/, '')
-      const { data: existing } = await supabase.from('usuarios').select('*').or(`telefone.eq.${telefone},telefone.eq.${rawOnly}`).maybeSingle()
-      if (existing) {
-        showToast('Telefone já cadastrado. Faça login.', 'error')
+      const check = await checkPhoneExists(telefone)
+      if (check.exists) {
+        showToast('Este telefone já possui cadastro. Por favor, faça login com sua senha.', 'error')
         setIsRegistering(false)
         return
       }
@@ -695,10 +700,28 @@ function App() {
 
     if (existente) {
       const senha = existente.endereco?.senha
-      if (senha && customer.senha && customer.senha.trim() && customer.senha.trim() !== senha.trim()) {
-        showToast('Senha incorreta para este telefone', 'error')
-        return null
+      if (senha && senha.trim()) {
+        if (!customer.senha || !customer.senha.trim()) {
+          setPhoneRegistered(true)
+          setRegisteredUserName(existente.nome || '')
+          setRegisteredUserHasSenha(true)
+          showToast('Este telefone já está cadastrado. Informe a senha da sua conta para continuar.', 'error')
+          return null
+        }
+        if (customer.senha.trim() !== senha.trim()) {
+          setPhoneRegistered(true)
+          setRegisteredUserName(existente.nome || '')
+          setRegisteredUserHasSenha(true)
+          showToast('Senha incorreta para este telefone cadastrado. Verifique ou recupere sua senha.', 'error')
+          return null
+        }
+      } else {
+        if (customer.senha && customer.senha.trim()) {
+          if (!existente.endereco) existente.endereco = {}
+          existente.endereco.senha = customer.senha.trim()
+        }
       }
+
       const baseEnd = parseAddress(existente.endereco)
       const currentEnd = parseAddress(customer.endereco)
       const endereco = { ...baseEnd, ...currentEnd }
@@ -715,6 +738,7 @@ function App() {
       const userToSet = saved || payload
       setCurrentUser(userToSet)
       safeSetItem(LS_SESSAO, userToSet)
+      showToast(`Bem-vindo de volta, ${userToSet.nome}!`)
       return userToSet
     }
 
@@ -1518,7 +1542,33 @@ function App() {
                 </div>
                 <div className="form-group">
                   <label>Telefone / WhatsApp *</label>
-                  <input type="text" placeholder="(31) 99999-9999" value={customer.telefone} onChange={e => setCustomer({ ...customer, telefone: formatPhone(e.target.value) })} />
+                  <input
+                    type="text"
+                    placeholder="(31) 99999-9999"
+                    value={customer.telefone}
+                    onChange={e => handleCustomerPhoneChange(e.target.value)}
+                    onBlur={handleCustomerPhoneBlur}
+                  />
+                  {phoneCheckLoading && (
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.25rem 0 0' }}>
+                      <i className="fa-solid fa-spinner fa-spin"></i> Verificando telefone no sistema...
+                    </p>
+                  )}
+                  {!phoneCheckLoading && phoneRegistered && !currentUser && (
+                    <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '8px', padding: '0.6rem 0.8rem', marginTop: '0.4rem' }}>
+                      <p style={{ margin: 0, fontWeight: 600, color: '#92400e', fontSize: '0.82rem' }}>
+                        <i className="fa-solid fa-triangle-exclamation"></i> Este telefone já possui cadastro {registeredUserName ? `(${registeredUserName})` : ''}!
+                      </p>
+                      <p style={{ margin: '0.25rem 0 0', fontSize: '0.78rem', color: '#78350f' }}>
+                        Para continuar com este número, informe a senha da sua conta abaixo:
+                      </p>
+                    </div>
+                  )}
+                  {!phoneCheckLoading && phoneChecked && !phoneRegistered && customer.telefone.replace(/\D/g, '').length >= 10 && !currentUser && (
+                    <p style={{ fontSize: '0.76rem', color: '#059669', margin: '0.25rem 0 0', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <i className="fa-solid fa-circle-check"></i> Número novo disponível para cadastro.
+                    </p>
+                  )}
                 </div>
                 <div className="form-group">
                   <label>Email <small>(opcional, para identificar sua conta)</small></label>
@@ -1530,8 +1580,27 @@ function App() {
                 </div>
                 {!currentUser && (
                   <div className="form-group">
-                    <label>Senha <small>(opcional - padrão: últimos dígitos do telefone)</small></label>
-                    <input type="password" placeholder="Sua senha (opcional)" value={customer.senha} onChange={e => setCustomer({ ...customer, senha: e.target.value })} />
+                    <label>
+                      {phoneRegistered ? 'Senha da sua conta *' : 'Senha para sua conta'}
+                      <small>({phoneRegistered ? 'obrigatória pois este número já tem cadastro' : 'opcional, para acompanhar seus pedidos'})</small>
+                    </label>
+                    <input
+                      type="password"
+                      placeholder={phoneRegistered ? 'Digite a senha cadastrada da sua conta' : 'Crie sua senha (opcional)'}
+                      value={customer.senha || ''}
+                      onChange={e => setCustomer({ ...customer, senha: e.target.value })}
+                    />
+                    {phoneRegistered && (
+                      <div style={{ textAlign: 'right', marginTop: '0.25rem' }}>
+                        <button
+                          type="button"
+                          onClick={() => { setShowForgotPassword(true) }}
+                          style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '0.76rem' }}
+                        >
+                          <i className="fa-solid fa-key"></i> Esqueci minha senha
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
                 <p className="info-msg"><i className="fa-solid fa-info-circle"></i> Ao continuar, você cria ou acessa sua conta automaticamente.</p>

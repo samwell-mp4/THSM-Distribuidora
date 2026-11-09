@@ -352,6 +352,56 @@ export async function upsertUser(user) {
   return null
 }
 
+export async function checkPhoneExists(phone) {
+  if (!phone) return { exists: false, user: null }
+  const digits = String(phone).replace(/\D/g, '')
+  if (digits.length < 10) return { exists: false, user: null }
+
+  const norm = normalizePhoneDigits(phone)
+  const rawOnly = norm.replace(/^55/, '')
+
+  try {
+    const res = await fetch('/api/check-phone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone })
+    })
+    if (res.ok) {
+      const data = await res.json()
+      if (data && typeof data.exists === 'boolean') return data
+    }
+  } catch (e) {
+    console.warn('API /api/check-phone error, falling back to /api/db:', e)
+  }
+
+  try {
+    const { data } = await supabase
+      .from('usuarios')
+      .select('id, nome, email, telefone, endereco')
+      .or(`telefone.eq.${norm},telefone.eq.${rawOnly},telefone.eq.55${rawOnly}`)
+      .maybeSingle()
+
+    if (data) {
+      return {
+        exists: true,
+        user: {
+          id: data.id,
+          nome: data.nome || '',
+          email: data.email || '',
+          telefone: data.telefone,
+          hasSenha: Boolean(data.endereco?.senha && data.endereco.senha.trim()),
+          endereco: data.endereco || {},
+          cpf: data.endereco?.cpf || data.cpf || ''
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Fallback checkPhoneExists error:', err)
+  }
+
+  return { exists: false, user: null }
+}
+
 export async function findUserByPhone(telefone) {
   const { data } = await supabase.from('usuarios').select('*').eq('telefone', telefone).single()
   return data || null

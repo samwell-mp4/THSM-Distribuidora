@@ -832,6 +832,7 @@ import MapView from '../components/MapView'
 import CentralAnalise from '../components/CentralAnalise'
 import CentralRotas from '../components/ModuloRotas/CentralRotas'
 import OrderReportModal, { getOrderPaymentDate } from '../components/OrderReportModal'
+import TransferOrderModal from '../components/TransferOrderModal'
 
 export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [tab, setTab] = useState(() => sessionStorage.getItem('thsm_admin_tab') || 'dashboard')
@@ -1005,6 +1006,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [prodImageErrors, setProdImageErrors] = useState({})
   const [showAddOrder, setShowAddOrder] = useState(false)
   const [showOrderReportModal, setShowOrderReportModal] = useState(false)
+  const [showTransferOrderModal, setShowTransferOrderModal] = useState(false)
   const [preselectedUserForOrder, setPreselectedUserForOrder] = useState(null)
   const [showOrderDetail, setShowOrderDetail] = useState(null)
   const [cloningOrder, setCloningOrder] = useState(null)
@@ -5330,6 +5332,9 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 <button className="admin-btn admin-btn-relatorio" style={{ background: '#0284c7', color: 'white', borderColor: '#0284c7', fontSize: '0.8rem', padding: '0.45rem 0.85rem' }} onClick={() => setShowOrderReportModal(true)} title="Emitir Relatório de Pedidos em PDF ou Excel com filtros e resumo">
                   <i className="fa-solid fa-file-invoice-dollar"></i> <span>Relatório (PDF / Excel)</span>
                 </button>
+                <button className="admin-btn admin-btn-transferir" style={{ background: '#7c3aed', color: 'white', borderColor: '#6d28d9', fontSize: '0.8rem', padding: '0.45rem 0.85rem' }} onClick={() => setShowTransferOrderModal(true)} title="Transferir pedidos de perfis duplicados (ex: com 5555) para os clientes reais">
+                  <i className="fa-solid fa-arrow-right-arrow-left"></i> <span>Transferir Pedido</span>
+                </button>
                 <button className="admin-btn admin-btn-primary admin-btn-novo-pedido" onClick={() => setShowAddOrder(true)}>
                   <i className="fa-solid fa-plus"></i> Novo Pedido
                 </button>
@@ -6387,6 +6392,9 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
                   <button className="admin-btn" style={{ background: '#0284c7', color: 'white', borderColor: '#0284c7', fontSize: '0.74rem', padding: '0.35rem 0.55rem' }} onClick={() => setShowOrderReportModal(true)} title="Relatório">
                     <i className="fa-solid fa-file-pdf"></i>
+                  </button>
+                  <button className="admin-btn" style={{ background: '#7c3aed', color: 'white', borderColor: '#6d28d9', fontSize: '0.74rem', padding: '0.35rem 0.55rem' }} onClick={() => setShowTransferOrderModal(true)} title="Transferir pedidos selecionados para outro cliente">
+                    <i className="fa-solid fa-arrow-right-arrow-left"></i>
                   </button>
                   <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)', fontSize: '0.74rem', padding: '0.35rem 0.55rem' }} onClick={() => bulkAction('confirm')} title="Avançar próxima etapa">
                     <i className="fa-solid fa-arrow-right"></i>
@@ -8754,6 +8762,29 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         rotas={rotas}
         isFinalizada={isFinalizada}
         showToast={showToast}
+      />
+
+      {/* MODAL DE TRANSFERÊNCIA DE PEDIDOS */}
+      <TransferOrderModal
+        isOpen={showTransferOrderModal}
+        onClose={() => setShowTransferOrderModal(false)}
+        orders={orders}
+        usuarios={usuarios}
+        initialSelectedOrderIds={Array.from(selectedIds)}
+        showToast={showToast}
+        onTransferSuccess={async ({ updatedOrders, transferredCount, deletedUserId, targetUser }) => {
+          if (updatedOrders && updatedOrders.length > 0) {
+            const updatedMap = new Map(updatedOrders.map(o => [String(o.id), o]))
+            setOrders(prev => {
+              const next = prev.map(o => updatedMap.get(String(o.id)) || o)
+              LS.set(STORAGE_ORDERS, next)
+              return next
+            })
+            if (deletedUserId) {
+              setUsuarios(prev => prev.filter(u => u.id !== deletedUserId))
+            }
+          }
+        }}
       />
 
       {semDevReport && (

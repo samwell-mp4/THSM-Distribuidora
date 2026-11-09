@@ -235,17 +235,64 @@ app.post('/api/db', async (req, res) => {
   }
 })
 
+// Check if phone already exists in usuarios
+app.post('/api/check-phone', async (req, res) => {
+  try {
+    const raw = req.body?.phone || req.body?.telefone || ''
+    if (!raw) return res.json({ exists: false, user: null })
+
+    const cleanDigits = String(raw).replace(/\D/g, '')
+    if (cleanDigits.length < 10) return res.json({ exists: false, user: null })
+
+    const norm = cleanAndNormalizePhone(raw)
+    const rawOnly = norm.replace(/^55/, '')
+
+    const query = `
+      SELECT id, nome, email, telefone, endereco
+      FROM usuarios
+      WHERE telefone = \$1 
+         OR telefone = \$2 
+         OR regexp_replace(telefone, '\\D', '', 'g') = \$1
+         OR regexp_replace(telefone, '\\D', '', 'g') = \$2
+         OR telefone LIKE '%' || \$2
+      LIMIT 1
+    `
+    const { rows } = await pool.query(query, [norm, rawOnly])
+    if (rows && rows.length > 0) {
+      const u = rows[0]
+      const senhaVal = (u.endereco?.senha || '').trim()
+      return res.json({
+        exists: true,
+        user: {
+          id: u.id,
+          nome: u.nome || '',
+          email: u.email || '',
+          telefone: u.telefone,
+          hasSenha: Boolean(senhaVal),
+          cidade: u.endereco?.cidade || '',
+          bairro: u.endereco?.bairro || '',
+          rua: u.endereco?.rua || '',
+          numero: u.endereco?.numero || '',
+          cep: u.endereco?.cep || '',
+          cpf: u.endereco?.cpf || ''
+        }
+      })
+    }
+    return res.json({ exists: false, user: null })
+  } catch (err) {
+    console.error('API /api/check-phone error:', err.message)
+    res.status(500).json({ exists: false, error: err.message })
+  }
+})
+
 // Create user endpoint (WhatsApp Bot Integration)
 app.post('/api/criar-usuario', async (req, res) => {
   try {
     const body = req.body
     const dados = typeof body.dados === 'string' ? JSON.parse(body.dados) : (body.dados || {})
 
-    let rawPhone = (body.telefone || '').replace(/@s\.whatsapp\.net$/, '').replace(/\D/g, '')
-    if (!rawPhone) return res.status(400).json({ error: 'telefone é obrigatório' })
-    if (rawPhone.startsWith('55') && (rawPhone.length === 12 || rawPhone.length === 13)) rawPhone = rawPhone.slice(2)
-    if (rawPhone.length === 10) rawPhone = rawPhone.slice(0, 2) + '9' + rawPhone.slice(2)
-    const telefone = '55' + rawPhone
+    const telefone = cleanAndNormalizePhone(body.telefone || '')
+    if (!telefone) return res.status(400).json({ error: 'telefone é obrigatório' })
 
     const nome = dados.nome || body.nome || ''
 
