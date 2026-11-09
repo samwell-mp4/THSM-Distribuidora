@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react'
 import './CentralAnalise.css'
-import { getOrderPaymentDate } from '../lib/orderPaymentDate'
+import { getOrderPaymentDate, getOrderDueDate } from '../lib/orderPaymentDate'
 
 function formatPreco(v) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v) || 0)
@@ -76,6 +76,7 @@ const STATUS_LABELS = {
 
 const STATUS_OPTIONS = [
   { id: 'todos', label: 'Todos os Status (exceto cancelados)' },
+  { id: 'finalizados', label: '⚡ Apenas Finalizados (Concluídos + Parciais + Calotes)' },
   { id: 'concluido', label: 'Concluído / Pago' },
   { id: 'calote_parcial', label: 'Calote Parcial (Saldo Aberto)' },
   { id: 'calote', label: 'Inadimplência / Calote 100%' },
@@ -360,6 +361,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
   const [cstStart, setCstStart] = useState(addDays(today(), -30))
   const [cstEnd, setCstEnd] = useState(today())
   const [statusFilter, setStatusFilter] = useState('todos')
+  const [dateType, setDateType] = useState('vencimento') // 'vencimento' | 'pagamento' | 'date'
   const [relatorio, setRelatorio] = useState('vendas')
   const [excluirTestes, setExcluirTestes] = useState(true)
   const [caloteVisao, setCaloteVisao] = useState('custo') // 'custo' | 'venda'
@@ -367,8 +369,8 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
   const isTestOrder = (o) => {
     if (!o) return false
     if (o.isTest === true || o.is_test === true || o.pedido_teste === true) return true
-    const nome = (o.customer?.nome || o.customer_name || '').toLowerCase()
-    if (nome.includes('teste') || nome === 'test') return true
+    const nome = (o.customer?.nome || o.customer_name || o.cliente || o.nome || '').toLowerCase().trim()
+    if (nome.includes('teste') || nome === 'test' || nome === 'usuário' || nome === 'usuario') return true
     const obs = (o.obs || o.observacao || '').toLowerCase()
     if (obs.includes('pedido de teste')) return true
     return false
@@ -412,6 +414,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
 
   const matchStatus = (o, st) => {
     if (!st || st === 'todos') return o.status !== 'cancelado'
+    if (st === 'finalizados') return o.status === 'concluido' || o.status === 'calote_parcial' || o.status === 'parcial' || o.status === 'calote' || o.isFinalizado === true || o.isCalote === true
     if (st === 'concluido') return (o.status === 'concluido' || (o.isFinalizado === true && !o.isCalote && o.status !== 'calote' && o.status !== 'calote_parcial' && o.status !== 'parcial')) && !o.isCalote && o.status !== 'calote' && o.status !== 'calote_parcial' && o.status !== 'parcial' && o.motivoEncerramento !== 'calote_100'
     if (st === 'calote_parcial' || st === 'parcial') return o.status === 'calote_parcial' || o.status === 'parcial' || (o.isFinalizado && Number(o.valorEmAberto) > 0 && Number(o.totalPago) > 0)
     if (st === 'calote') return !!(o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
@@ -445,15 +448,26 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
     }).filter(Boolean)
   }, [despesas])
 
-  const getOrderPaymentDateSafe = useCallback((o) => {
-    const d = getOrderPaymentDate(o)
+  const getOrderDateSafe = useCallback((o) => {
+    if (dateType === 'pagamento') {
+      const d = getOrderPaymentDate(o)
+      if (d) return d
+      const raw = o.date || o.createdAt || o.dataInicio || o.created_at || ''
+      return raw ? String(raw).split('T')[0].split(' ')[0] : ''
+    }
+    if (dateType === 'date') {
+      const raw = o.date || o.createdAt || o.dataInicio || o.created_at || ''
+      return raw ? String(raw).split('T')[0].split(' ')[0] : ''
+    }
+    // Padrão: Vencimento (alinhado rigorosamente com o Relatório de Pedidos THSM)
+    const d = getOrderDueDate(o, financial)
     if (d) return d
     const raw = o.date || o.createdAt || o.dataInicio || o.created_at || ''
     return raw ? String(raw).split('T')[0].split(' ')[0] : ''
-  }, [])
+  }, [dateType, financial])
 
-  const ordersWin = useMemo(() => baseOrders.filter(o => matchStatus(o, statusFilter) && fit(getOrderPaymentDateSafe(o), win)), [baseOrders, win, statusFilter, getOrderPaymentDateSafe])
-  const ordersPrev = useMemo(() => baseOrders.filter(o => matchStatus(o, statusFilter) && fit(getOrderPaymentDateSafe(o), prevWin)), [baseOrders, prevWin, statusFilter, getOrderPaymentDateSafe])
+  const ordersWin = useMemo(() => baseOrders.filter(o => matchStatus(o, statusFilter) && fit(getOrderDateSafe(o), win)), [baseOrders, win, statusFilter, getOrderDateSafe])
+  const ordersPrev = useMemo(() => baseOrders.filter(o => matchStatus(o, statusFilter) && fit(getOrderDateSafe(o), prevWin)), [baseOrders, prevWin, statusFilter, getOrderDateSafe])
   const finWin = useMemo(() => financial.filter(f => f.status !== 'cancelado' && fit(f.paidDate || f.dueDate || f.date || '', win)), [financial, win])
   const finPrev = useMemo(() => financial.filter(f => f.status !== 'cancelado' && fit(f.paidDate || f.dueDate || f.date || '', prevWin)), [financial, prevWin])
 
@@ -528,13 +542,16 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
     let pedidosZerados = 0
     let pedidosDevolucaoTotal = 0
     let pedidosBrinde = 0
+    let pedidosEmAndamento = 0
 
     let totalItensColocados = 0
     let totalItensVendidos = 0
     let totalItensDevolvidos = 0
     let totalItensCalote = 0
 
-    let valorItensTabela = 0
+    let valorItensColocadosTabela = 0
+    let valorItensDevolvidosTabela = 0
+    let valorItensVendidosTabela = 0
     let descontosConcedidos = 0
 
     let vendasRealizadas = 0 // total a cobrar das finalizadas
@@ -556,7 +573,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
       const isConcluido = (o.status === 'concluido' || (o.isFinalizado && !isCalote && !isParcial)) && !isCalote
 
       const rawItems = o.items || o.data?.items || []
-      const baseItems = o.originalItems || o.data?.originalItems || rawItems
+      const baseItems = (Array.isArray(o.originalItems) && o.originalItems.length > 0) ? o.originalItems : (o.data?.originalItems || rawItems)
       let itensPedido = 0
       let valorTabelaPedido = 0
 
@@ -566,12 +583,41 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         itensPedido += q
         valorTabelaPedido += p * q
       })
+      valorTabelaPedido = Math.round(valorTabelaPedido * 100) / 100
       totalItensColocados += itensPedido
-      valorItensTabela += Math.round(valorTabelaPedido * 100) / 100
+      valorItensColocadosTabela += valorTabelaPedido
+
+      const retMap = {}
+      ;(o.returnedItems || []).forEach(r => {
+        if (!r) return
+        const k = r.id != null ? String(r.id) : (r.nome || '')
+        retMap[k] = (retMap[k] || 0) + (Number(r.returnedQty || r.qty) || 0)
+      })
+
+      let devPecasPedido = 0
+      let valorDevolvidoPedido = 0
+      let vendidosPecasPedido = 0
+      let valorVendidosPedido = 0
+      let cmvPedido = 0
+
+      baseItems.forEach(i => {
+        const k = i.id != null ? String(i.id) : (i.nome || '')
+        const totalQ = Number(i.qty) || 0
+        const p = Number(i.preco) || 0
+        const retQ = Math.min(totalQ, retMap[k] || 0)
+        const keptQ = Math.max(0, totalQ - retQ)
+
+        devPecasPedido += retQ
+        valorDevolvidoPedido += retQ * p
+        vendidosPecasPedido += keptQ
+        valorVendidosPedido += keptQ * p
+        cmvPedido += getItemCost(i) * keptQ
+      })
+      valorDevolvidoPedido = Math.round(valorDevolvidoPedido * 100) / 100
+      valorVendidosPedido = Math.round(valorVendidosPedido * 100) / 100
 
       const d = Number(o.desconto) || 0
-      descontosConcedidos += d
-      desc += d
+      const totalFinal = Number(o.totalAcerto ?? o.total ?? o.totalPago ?? 0)
 
       if (isCalote) {
         pedidosCalote += 1
@@ -581,60 +627,58 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         totalItensCalote += pecas
         prejuizoCaloteCusto += cCusto
         vendaNaoRecebida += cVenda
-        const devPecasCalote = (o.returnedItems || []).reduce((s, r) => s + (Number(r.returnedQty || r.qty) || 0), 0)
-        totalItensDevolvidos += devPecasCalote
 
-        // Calotes entram como vendas realizadas da mercadoria colocada e peças processadas
-        vendasRealizadas += cVenda
+        totalItensDevolvidos += devPecasPedido
+        valorItensDevolvidosTabela += valorDevolvidoPedido
         totalItensVendidos += pecas
+        valorItensVendidosTabela += cVenda
+        descontosConcedidos += d
 
+        vendasRealizadas += cVenda
         if (cVenda > 0) {
           valoresCalotesArray.push(cVenda)
           valoresGeraisArray.push(cVenda)
         }
       } else if (isParcial) {
         pedidosParciais += 1
-        const totalFinal = Number(o.totalAcerto ?? o.total ?? 0)
         const pago = Number(o.totalPago ?? 0)
         const aberto = Number(o.valorEmAberto ?? Math.max(0, totalFinal - pago))
+
+        totalItensVendidos += vendidosPecasPedido
+        totalItensDevolvidos += devPecasPedido
+        valorItensDevolvidosTabela += valorDevolvidoPedido
+        valorItensVendidosTabela += valorVendidosPedido
+        descontosConcedidos += d
+        cmvVendidos += cmvPedido
 
         vendasRealizadas += totalFinal
         receitaRecebida += pago
         saldoEmAberto += aberto
 
-        const retMap = {}
-        ;(o.returnedItems || []).forEach(r => {
-          if (!r) return
-          const k = r.id != null ? String(r.id) : (r.nome || '')
-          retMap[k] = (retMap[k] || 0) + (Number(r.returnedQty || r.qty) || 0)
-        })
-
-        baseItems.forEach(i => {
-          const k = i.id != null ? String(i.id) : (i.nome || '')
-          const totalQ = Number(i.qty) || 0
-          const retQ = retMap[k] || 0
-          const keptQ = Math.max(0, totalQ - retQ)
-          totalItensVendidos += keptQ
-          totalItensDevolvidos += retQ
-          cmvVendidos += getItemCost(i) * keptQ
-        })
-
         if (totalFinal > 0) {
           valoresGeraisArray.push(totalFinal)
         }
       } else if (isConcluido) {
-        const totalFinal = Number(o.totalAcerto ?? o.totalPago ?? o.total ?? 0)
-        const pago = Number(o.totalPago ?? totalFinal)
-
-        if (totalFinal <= 0 && (!o.items || o.items.length === 0 || totalFinal === 0)) {
+        if (totalFinal <= 0 && (vendidosPecasPedido === 0 || o.isDevolucaoTotal || o.isBrinde || o.motivoZerado || o.motivoEncerramento === 'devolucao_total')) {
           pedidosZerados += 1
           if (o.motivoZerado === 'brinde' || o.isBrinde) {
             pedidosBrinde += 1
           } else {
             pedidosDevolucaoTotal += 1
           }
+          totalItensDevolvidos += itensPedido
+          valorItensDevolvidosTabela += valorTabelaPedido
         } else {
           pedidosPagos += 1
+          const pago = Number(o.totalPago ?? totalFinal)
+
+          totalItensVendidos += vendidosPecasPedido
+          totalItensDevolvidos += devPecasPedido
+          valorItensDevolvidosTabela += valorDevolvidoPedido
+          valorItensVendidosTabela += valorVendidosPedido
+          descontosConcedidos += d
+          cmvVendidos += cmvPedido
+
           vendasRealizadas += totalFinal
           receitaRecebida += pago
           if (pago > 0) {
@@ -642,23 +686,8 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
             valoresGeraisArray.push(pago)
           }
         }
-
-        const retMap = {}
-        ;(o.returnedItems || []).forEach(r => {
-          if (!r) return
-          const k = r.id != null ? String(r.id) : (r.nome || '')
-          retMap[k] = (retMap[k] || 0) + (Number(r.returnedQty || r.qty) || 0)
-        })
-
-        baseItems.forEach(i => {
-          const k = i.id != null ? String(i.id) : (i.nome || '')
-          const totalQ = Number(i.qty) || 0
-          const retQ = retMap[k] || 0
-          const keptQ = Math.max(0, totalQ - retQ)
-          totalItensVendidos += keptQ
-          totalItensDevolvidos += retQ
-          cmvVendidos += getItemCost(i) * keptQ
-        })
+      } else {
+        pedidosEmAndamento += 1
       }
     })
 
@@ -697,11 +726,15 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
       pedidosZerados,
       pedidosDevolucaoTotal,
       pedidosBrinde,
+      pedidosEmAndamento,
       totalItensColocados,
       totalItensVendidos,
       totalItensDevolvidos,
       totalItensCalote,
-      valorItensTabela,
+      valorItensColocadosTabela,
+      valorItensDevolvidosTabela,
+      valorItensVendidosTabela,
+      valorItensTabela: valorItensVendidosTabela > 0 ? valorItensVendidosTabela : valorItensColocadosTabela,
       descontosConcedidos,
       vendasRealizadas,
       receitaRecebida,
@@ -770,7 +803,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
   const serie = useMemo(() => {
     const map = {}
     ordersWin.forEach(o => {
-      const payDt = getOrderPaymentDate(o)
+      const payDt = getOrderDateSafe(o)
       const k = (payDt || '').slice(0, 7)
       if (!k) return
       if (!map[k]) map[k] = {
@@ -1187,6 +1220,13 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
               <span className="ca-thsm-metric-value">{cur.pedidosZerados}</span>
               <span className="ca-thsm-metric-sub">{cur.pedidosDevolucaoTotal} devolução total &middot; {cur.pedidosBrinde} brinde</span>
             </div>
+            {cur.pedidosEmAndamento > 0 && statusFilter === 'todos' && (
+              <div className="ca-thsm-metric-card" style={{ borderColor: '#60a5fa' }}>
+                <span className="ca-thsm-metric-label">Em Aberto / Em Rota</span>
+                <span className="ca-thsm-metric-value" style={{ color: '#2563eb' }}>{cur.pedidosEmAndamento}</span>
+                <span className="ca-thsm-metric-sub">Comandas ainda não acertadas</span>
+              </div>
+            )}
             <div className="ca-thsm-metric-card">
               <span className="ca-thsm-metric-label">Total de Peças Enviadas</span>
               <span className="ca-thsm-metric-value">{fmtNum(cur.totalItensColocados)} un</span>
@@ -1199,18 +1239,35 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         <div className="ca-thsm-block">
           <div className="ca-thsm-block-header">
             <h3><i className="fa-solid fa-file-invoice-dollar" style={{ color: '#0ea5e9' }}></i> 2. Faturamento, Recebimento & Dívida</h3>
-            <span style={{ fontSize: '11px', color: '#64748b' }}>Entradas de caixa vs Valores em aberto</span>
+            <span style={{ fontSize: '11px', color: '#64748b' }}>Balanço financeiro transparente e auditável</span>
           </div>
           <div className="ca-thsm-block-grid">
             <div className="ca-thsm-metric-card">
-              <span className="ca-thsm-metric-label">Valor dos Itens (Preço de Tabela)</span>
-              <span className="ca-thsm-metric-value">{formatPreco(cur.valorItensTabela)}</span>
-              <span className="ca-thsm-metric-sub">Preço de tabela integral das peças colocadas</span>
+              <span className="ca-thsm-metric-label">Peças Enviadas (Preço de Tabela)</span>
+              <span className="ca-thsm-metric-value">{formatPreco(cur.valorItensColocadosTabela || cur.valorItensTabela)}</span>
+              <span className="ca-thsm-metric-sub">{fmtNum(cur.totalItensColocados)} un colocadas a preço cheio</span>
+            </div>
+            {cur.totalItensDevolvidos > 0 && (
+              <div className="ca-thsm-metric-card" style={{ borderColor: '#fde047' }}>
+                <span className="ca-thsm-metric-label">(-) Peças Devolvidas (Tabela)</span>
+                <span className="ca-thsm-metric-value" style={{ color: '#ca8a04' }}>-{formatPreco(cur.valorItensDevolvidosTabela)}</span>
+                <span className="ca-thsm-metric-sub">{fmtNum(cur.totalItensDevolvidos)} un devolvidas intactas</span>
+              </div>
+            )}
+            <div className="ca-thsm-metric-card">
+              <span className="ca-thsm-metric-label">(=) Valor dos Itens Faturados (Tabela)</span>
+              <span className="ca-thsm-metric-value" style={{ color: '#0284c7' }}>{formatPreco(cur.valorItensVendidosTabela || cur.valorItensTabela)}</span>
+              <span className="ca-thsm-metric-sub">{fmtNum(cur.totalItensVendidos)} un vendidas a preço de tabela</span>
             </div>
             <div className="ca-thsm-metric-card">
-              <span className="ca-thsm-metric-label">Descontos Concedidos</span>
+              <span className="ca-thsm-metric-label">(-) Descontos Concedidos</span>
               <span className="ca-thsm-metric-value" style={{ color: '#b91c1c' }}>-{formatPreco(cur.descontosConcedidos)}</span>
               <span className="ca-thsm-metric-sub">Revendedoras, cupons e ajustes manuais</span>
+            </div>
+            <div className="ca-thsm-metric-card" style={{ background: '#f8fafc', borderColor: '#cbd5e1' }}>
+              <span className="ca-thsm-metric-label">(=) Total Líquido Faturado</span>
+              <span className="ca-thsm-metric-value" style={{ color: '#0f172a' }}>{formatPreco(cur.vendasRealizadas || (cur.receitaRecebida + cur.saldoEmAberto))}</span>
+              <span className="ca-thsm-metric-sub">Itens faturados − Descontos</span>
             </div>
             <div className="ca-thsm-metric-card highlight">
               <span className="ca-thsm-metric-label">Receita Líquida Recebida</span>
@@ -1823,7 +1880,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         _k: o.id,
         pedido: `#${String(o.id).slice(-6)}`,
         cliente: o.customer?.nome || '-',
-        data: formatDate(getOrderPaymentDate(o)),
+        data: formatDate(getOrderDateSafe(o)),
         dataEmissao: formatDate(o.date),
         itens: qtd,
         mercadoriaColocada: vOriginal,
@@ -1848,7 +1905,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
           qty: Number(i.qty) || 0,
           valor: (Number(i.preco) || 0) * (Number(i.qty) || 0),
           cliente: o.customer?.nome || '-',
-          data: formatDate(getOrderPaymentDate(o)),
+          data: formatDate(getOrderDateSafe(o)),
           tipo: i.tipo === 'avista' ? 'À Vista' : 'A Prazo',
         })
       })
@@ -2213,7 +2270,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
                 _k: o.id,
                 pedido: `#${String(o.id).slice(-6)}`,
                 cliente: o.customer?.nome || '-',
-                data: formatDate(getOrderPaymentDate(o)),
+                data: formatDate(getOrderDateSafe(o)),
                 statusRaw: o.status,
                 valorTabela,
                 desconto: Number(o.desconto) || 0,
@@ -2776,6 +2833,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
           <h1>Central de Análises</h1>
           <span className="ca-periodo-label">
             {periodo === 'custom' ? `${formatDate(cstStart)} – ${formatDate(cstEnd)}` : curLabel}
+            {` · Data: ${dateType === 'vencimento' ? 'Vencimento (THSM)' : dateType === 'pagamento' ? 'Pagamento' : 'Emissão'}`}
             {prevWin.start && ` · anterior: ${formatDate(prevWin.start)} a ${formatDate(prevWin.end)}`}
             {statusFilter !== 'todos' && ` · Filtro: ${STATUS_OPTIONS.find(s => s.id === statusFilter)?.label || statusFilter}`}
           </span>
@@ -2792,6 +2850,20 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
           <i className={`fa-solid ${excluirTestes ? 'fa-filter' : 'fa-flask'}`}></i>
           <span>{excluirTestes ? 'Sem Testes' : 'Com Testes'}</span>
         </button>
+
+        <div className="ca-status-filter-wrap" title="Critério de data para análise dos pedidos">
+          <i className="fa-solid fa-calendar-days" style={{ color: '#64748b', fontSize: '11px' }}></i>
+          <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>Data:</span>
+          <select
+            className="ca-status-select"
+            value={dateType}
+            onChange={e => setDateType(e.target.value)}
+          >
+            <option value="vencimento">Por Vencimento (Padrão THSM)</option>
+            <option value="pagamento">Por Pagamento / Acerto</option>
+            <option value="date">Por Emissão do Pedido</option>
+          </select>
+        </div>
 
         <div className="ca-status-filter-wrap" title="Filtrar pedidos por status">
           <i className="fa-solid fa-filter" style={{ color: '#64748b', fontSize: '11px' }}></i>
