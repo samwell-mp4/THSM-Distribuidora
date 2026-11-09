@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef, Suspense, lazy } from 'react'
 import './Admin.css'
 import {
   supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser,
@@ -828,11 +828,13 @@ function sendAlertRota(tipo, contatos, orders, customText = '') {
 
 import AddressForm from '../components/AddressForm'
 import CloneOrderModal from '../components/CloneOrderModal'
-import MapView from '../components/MapView'
-import CentralAnalise from '../components/CentralAnalise'
-import CentralRotas from '../components/ModuloRotas/CentralRotas'
-import OrderReportModal, { getOrderPaymentDate } from '../components/OrderReportModal'
-import TransferOrderModal from '../components/TransferOrderModal'
+import { getOrderPaymentDate } from '../lib/orderPaymentDate'
+
+const MapView = lazy(() => import('../components/MapView'))
+const CentralAnalise = lazy(() => import('../components/CentralAnalise'))
+const CentralRotas = lazy(() => import('../components/ModuloRotas/CentralRotas'))
+const OrderReportModal = lazy(() => import('../components/OrderReportModal'))
+const TransferOrderModal = lazy(() => import('../components/TransferOrderModal'))
 
 export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [tab, setTab] = useState(() => sessionStorage.getItem('thsm_admin_tab') || 'dashboard')
@@ -1094,7 +1096,26 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [pwNew, setPwNew] = useState('')
   const [editingUser, setEditingUser] = useState(false)
   const [editUserData, setEditUserData] = useState(null)
-  const [userSearch, setUserSearch] = useState('')
+  const [userSearchInput, setUserSearchInput] = useState('')
+  const [debouncedUserSearch, setDebouncedUserSearch] = useState('')
+  const userSearchDebounceRef = useRef(null)
+  const handleUserSearchChange = useCallback((value) => {
+    setUserSearchInput(value)
+    if (userSearchDebounceRef.current) clearTimeout(userSearchDebounceRef.current)
+    if (!value) {
+      setDebouncedUserSearch('')
+      return
+    }
+    userSearchDebounceRef.current = setTimeout(() => {
+      setDebouncedUserSearch(value)
+    }, 180)
+  }, [])
+  const setUserSearch = useCallback((value) => {
+    if (userSearchDebounceRef.current) clearTimeout(userSearchDebounceRef.current)
+    setUserSearchInput(value || '')
+    setDebouncedUserSearch(value || '')
+  }, [])
+  const userSearch = userSearchInput
   const [userCityFilter, setUserCityFilter] = useState('TODAS')
   const [userOrigemFilter, setUserOrigemFilter] = useState('TODAS')
   const [userEnderecoSearch, setUserEnderecoSearch] = useState('')
@@ -1117,7 +1138,26 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [showBulkStock, setShowBulkStock] = useState(false)
   const [bulkStockValue, setBulkStockValue] = useState('')
   const [leads, setLeads] = useState([])
-  const [orderSearch, setOrderSearch] = useState('')
+  const [orderSearchInput, setOrderSearchInput] = useState('')
+  const [debouncedOrderSearch, setDebouncedOrderSearch] = useState('')
+  const searchDebounceRef = useRef(null)
+  const handleOrderSearchChange = useCallback((value) => {
+    setOrderSearchInput(value)
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    if (!value) {
+      setDebouncedOrderSearch('')
+      return
+    }
+    searchDebounceRef.current = setTimeout(() => {
+      setDebouncedOrderSearch(value)
+    }, 180)
+  }, [])
+  const setOrderSearch = useCallback((value) => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    setOrderSearchInput(value || '')
+    setDebouncedOrderSearch(value || '')
+  }, [])
+  const orderSearch = orderSearchInput
   const [orderSort, setOrderSort] = useState({ field: 'createdAt', dir: 'desc' })
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [orderDateStart, setOrderDateStart] = useState('')
@@ -3307,25 +3347,43 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
   const getOrderDue = useCallback((o) => o.dataVencimento || financial.find(f => f.orderId === o.id)?.dueDate || '', [financial])
 
-  const orderMatchesQuery = useCallback((o, searchStr) => {
-    if (!searchStr || !searchStr.trim()) return true
+  const parseOrderSearchQuery = useCallback((searchStr) => {
+    if (!searchStr || !searchStr.trim()) return null
     const term = searchStr.trim()
     const digits = term.replace(/\D/g, '')
     const termClean = term.replace(/^(pedido|ped|n[º°\.]?|num|numero|#)\s*/i, '').trim()
     const termCleanLower = termClean.toLowerCase()
+    const termLower = term.toLowerCase()
+    return { term, termLower, digits, termClean, termCleanLower }
+  }, [])
+
+  const parsedOrderSearch = useMemo(() => parseOrderSearchQuery(debouncedOrderSearch), [debouncedOrderSearch, parseOrderSearchQuery])
+
+  const orderMatchesQuery = useCallback((o, searchArg) => {
+    if (!searchArg) return true
+    const parsed = typeof searchArg === 'object' && searchArg.term !== undefined
+      ? searchArg
+      : parseOrderSearchQuery(searchArg)
+    if (!parsed) return true
+
+    const { term, termLower, digits, termCleanLower } = parsed
 
     // 1. Número / ID do Pedido (#705747, 705747, 1730123705747, etc.)
     const orderIdStr = String(o.id ?? '').trim()
     const orderShortId = orderIdStr.length > 6 ? orderIdStr.slice(-6) : orderIdStr
     const orderNumero = String(o.numero || o.orderNumber || o.numeroPedido || o.codigo || '').trim()
 
+    const orderIdLower = orderIdStr.toLowerCase()
+    const orderShortIdLower = orderShortId.toLowerCase()
+    const orderNumLower = orderNumero.toLowerCase()
+
     const matchId = (
-      (orderIdStr && orderIdStr.toLowerCase().includes(term.toLowerCase())) ||
-      (termCleanLower && orderIdStr.toLowerCase().includes(termCleanLower)) ||
-      (termCleanLower && orderShortId.toLowerCase().includes(termCleanLower)) ||
-      (orderNumero && orderNumero.toLowerCase().includes(termCleanLower)) ||
-      (orderShortId && `#${orderShortId}`.toLowerCase().includes(term.toLowerCase())) ||
-      (orderShortId && `pedido #${orderShortId}`.toLowerCase().includes(term.toLowerCase())) ||
+      (orderIdStr && orderIdLower.includes(termLower)) ||
+      (termCleanLower && orderIdLower.includes(termCleanLower)) ||
+      (termCleanLower && orderShortIdLower.includes(termCleanLower)) ||
+      (orderNumero && orderNumLower.includes(termCleanLower)) ||
+      (orderShortId && `#${orderShortIdLower}`.includes(termLower)) ||
+      (orderShortId && `pedido #${orderShortIdLower}`.includes(termLower)) ||
       (digits && digits.length >= 3 && (orderIdStr.endsWith(digits) || orderShortId.includes(digits)))
     )
     if (matchId) return true
@@ -3369,7 +3427,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     // 4. Número de Endereço direto
     if (clientNumero && String(clientNumero).trim()) {
       const numStr = String(clientNumero).trim().toLowerCase()
-      if (numStr === term.toLowerCase() || (termCleanLower && numStr === termCleanLower)) return true
+      if (numStr === termLower || (termCleanLower && numStr === termCleanLower)) return true
       if (digits && cleanDigits(clientNumero) === digits) return true
     }
 
@@ -3385,7 +3443,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     if (matchItems) return true
 
     return false
-  }, [getOrderCustomerName, getOrderCustomerPhone, rotaDeOrder])
+  }, [getOrderCustomerName, getOrderCustomerPhone, rotaDeOrder, parseOrderSearchQuery])
 
   const filteredOrders = useMemo(() => {
     let result = orders
@@ -3397,8 +3455,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     else if (orderFilter === 'outros') result = result.filter(o => !['pre-pedido', 'pendente', 'em-rota', 'entregue', 'acerto', 'concluido', 'calote', 'calote_parcial', 'parcial', 'cancelado'].includes(o.status) && !isFinalizada(o) && !o.isCalote)
     else if (orderFilter !== 'todos') result = result.filter(o => o.status === orderFilter)
     if (selectedUserEmail) result = result.filter(o => o.customer?.email === selectedUserEmail)
-    if (orderSearch && orderSearch.trim()) {
-      result = result.filter(o => orderMatchesQuery(o, orderSearch))
+    if (parsedOrderSearch) {
+      result = result.filter(o => orderMatchesQuery(o, parsedOrderSearch))
     }
     if (orderDateStart) result = result.filter(o => ((o.date || o.createdAt || '').split('T')[0]) >= orderDateStart)
     if (orderDateEnd) result = result.filter(o => ((o.date || o.createdAt || '').split('T')[0]) <= orderDateEnd)
@@ -3436,13 +3494,13 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       }
     })
     return result
-  }, [orders, orderFilter, selectedUserEmail, orderSearch, orderMatchesQuery, orderSort, orderDateStart, orderDateEnd, orderDueStart, orderDueEnd, orderCityFilter, orderRouteFilter, orderRoutesSelected, rotaDeTelefone, financial, listaTodasRotas, getOrderCustomerName, getOrderCustomerPhone, rotaDeOrder, getOrderDue])
+  }, [orders, orderFilter, selectedUserEmail, parsedOrderSearch, orderMatchesQuery, orderSort, orderDateStart, orderDateEnd, orderDueStart, orderDueEnd, orderCityFilter, orderRouteFilter, orderRoutesSelected, rotaDeTelefone, financial, listaTodasRotas, getOrderCustomerName, getOrderCustomerPhone, rotaDeOrder, getOrderDue])
 
   const crossTabSearchMatchesCount = useMemo(() => {
-    if (!orderSearch || !orderSearch.trim()) return 0
+    if (!parsedOrderSearch) return 0
     if (orderFilter === 'todos') return 0
-    return orders.filter(o => orderMatchesQuery(o, orderSearch)).length
-  }, [orders, orderSearch, orderFilter, orderMatchesQuery])
+    return orders.filter(o => orderMatchesQuery(o, parsedOrderSearch)).length
+  }, [orders, parsedOrderSearch, orderFilter, orderMatchesQuery])
 
   const activeAdvancedFiltersCount = (orderDateStart ? 1 : 0) +
     (orderDateEnd ? 1 : 0) +
@@ -3459,7 +3517,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
   const totalOrderPages = useMemo(() => Math.ceil(filteredOrders.length / ORDER_PAGE_SIZE), [filteredOrders])
 
-  useEffect(() => { setOrderPage(1) }, [orderSearch, orderFilter, orderDateStart, orderDateEnd, orderDueStart, orderDueEnd, orderCityFilter, orderRouteFilter, selectedUserEmail])
+  useEffect(() => { setOrderPage(1) }, [debouncedOrderSearch, orderFilter, orderDateStart, orderDateEnd, orderDueStart, orderDueEnd, orderCityFilter, orderRouteFilter, selectedUserEmail])
 
   const toggleSort = (field) => {
     setOrderSort(prev => prev.field === field ? { field, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { field, dir: 'asc' })
@@ -4410,7 +4468,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
   // Usuarios filter & pagination
   const filteredUsuarios = useMemo(() => {
     let result = allClientesConsolidados
-    const t = userSearch.toLowerCase().trim()
+    const t = debouncedUserSearch.toLowerCase().trim()
     const tEnd = userEnderecoSearch.toLowerCase().trim()
     if (selectedUserEmail || t || userCityFilter !== 'TODAS' || userOrigemFilter !== 'TODAS' || tEnd) {
       result = allClientesConsolidados.filter(u => {
@@ -4427,7 +4485,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           const addrStr = [e.rua, e.numero, e.bairro, e.cidade, e.estado, e.cep, e.complemento].filter(Boolean).join(' ')
           if (!searchMatches(addrStr, userEnderecoSearch)) return false
         }
-        if (userSearch && !clientMatchesSearch(u, userSearch)) return false
+        if (debouncedUserSearch && !clientMatchesSearch(u, debouncedUserSearch)) return false
         return true
       })
     }
@@ -4440,7 +4498,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         default: return (a.nome || '').localeCompare(b.nome || '', 'pt-BR')
       }
     })
-  }, [allClientesConsolidados, userSearch, userCityFilter, userOrigemFilter, userEnderecoSearch, userSort, selectedUserEmail])
+  }, [allClientesConsolidados, debouncedUserSearch, userCityFilter, userOrigemFilter, userEnderecoSearch, userSort, selectedUserEmail])
 
     const userOrderStats = useMemo(() => {
     const stats = new Map()
@@ -4473,7 +4531,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
   const totalUserPages = useMemo(() => Math.ceil(filteredUsuarios.length / USER_PAGE_SIZE), [filteredUsuarios])
 
-  useEffect(() => { setUserPage(1) }, [userSearch, userCityFilter, userOrigemFilter, userEnderecoSearch, selectedUserEmail])
+  useEffect(() => { setUserPage(1) }, [debouncedUserSearch, userCityFilter, userOrigemFilter, userEnderecoSearch, selectedUserEmail])
 
   const userCities = useMemo(() => {
     const cidades = [...new Set((allClientesConsolidados || []).map(u => u.endereco?.cidade || u.cidade).filter(Boolean))]
@@ -5462,7 +5520,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                   type="text"
                   placeholder="Buscar por nome, telefone, nº do pedido, rua, número..."
                   value={orderSearch}
-                  onChange={e => setOrderSearch(e.target.value)}
+                  onChange={e => handleOrderSearchChange(e.target.value)}
                   className="admin-orders-search-input"
                 />
                 {orderSearch && (
@@ -7337,7 +7395,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                 <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '0.85rem', alignItems: 'center', flexWrap: 'wrap' }}>
                   <div className="admin-search-prod" style={{ flex: '1', minWidth: '180px' }}>
                     <i className="fa-solid fa-search"></i>
-                    <input type="text" placeholder="Buscar por nome, telefone ou email..." value={userSearch} onChange={e => setUserSearch(e.target.value)} style={{ width: '100%' }} />
+                    <input type="text" placeholder="Buscar por nome, telefone ou email..." value={userSearch} onChange={e => handleUserSearchChange(e.target.value)} style={{ width: '100%' }} />
                   </div>
                   <select value={userCityFilter} onChange={e => setUserCityFilter(e.target.value)} style={{ padding: '0.45rem 0.7rem', borderRadius: '8px', border: '1px solid var(--admin-border)', fontSize: '0.82rem', background: 'white', cursor: 'pointer', maxWidth: '160px' }}>
                     {userCities.map(c => <option key={c} value={c}>{c === 'TODAS' ? 'Todas as cidades' : c}</option>)}
@@ -7565,41 +7623,46 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         {/* MAPA */}
         {tab === 'mapa' && (
           <div className="admin-section" style={{ height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column' }}>
-            <MapView usuarios={usuarios} orders={orders} financial={financial}
-              onMarkOnWay={(user) => {
-                const userOrders = orders.filter(o => o.customer?.telefone === user.telefone || o.user_id === user.id)
-                const toUpdate = userOrders.filter(o => !['entregue', 'cancelado'].includes(o.status))
-                if (toUpdate.length === 0) return
-                if (confirm(`Marcar ${toUpdate.length} pedido(s) de ${user.nome || user.pushName} como "Em Rota"?`)) {
-                  toUpdate.forEach(ord => {
-                    updateOrderStatus(ord.id, 'em-rota')
-                  })
-                }
-              }}
-              onViewUser={(user) => {
-                setSelectedUserDetail(user)
-                setTab('usuarios')
-              }} />
+            <Suspense fallback={<div className="admin-loading-spinner" style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}><i className="fa-solid fa-spinner fa-spin fa-2x"></i><p style={{ marginTop: '0.75rem' }}>Carregando mapa...</p></div>}>
+              <MapView usuarios={usuarios} orders={orders} financial={financial}
+                onMarkOnWay={(user) => {
+                  const userOrders = orders.filter(o => o.customer?.telefone === user.telefone || o.user_id === user.id)
+                  const toUpdate = userOrders.filter(o => !['entregue', 'cancelado'].includes(o.status))
+                  if (toUpdate.length === 0) return
+                  if (confirm(`Marcar ${toUpdate.length} pedido(s) de ${user.nome || user.pushName} como "Em Rota"?`)) {
+                    toUpdate.forEach(ord => {
+                      updateOrderStatus(ord.id, 'em-rota')
+                    })
+                  }
+                }}
+                onViewUser={(user) => {
+                  setSelectedUserDetail(user)
+                  setTab('usuarios')
+                }} />
+            </Suspense>
           </div>
         )}
 
         {/* ANÁLISES */}
         {tab === 'analises' && (
           <div className="admin-section" style={{ minHeight: '100vh' }}>
-            <CentralAnalise
-              orders={orders}
-              financial={financial}
-              despesas={allDespesasNormalized}
-              produtos={produtosAtuais}
-              usuarios={usuarios}
-              onBack={() => setTab('dashboard')}
-            />
+            <Suspense fallback={<div className="admin-loading-spinner" style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}><i className="fa-solid fa-spinner fa-spin fa-2x"></i><p style={{ marginTop: '0.75rem' }}>Carregando painel de análises...</p></div>}>
+              <CentralAnalise
+                orders={orders}
+                financial={financial}
+                despesas={allDespesasNormalized}
+                produtos={produtosAtuais}
+                usuarios={usuarios}
+                onBack={() => setTab('dashboard')}
+              />
+            </Suspense>
           </div>
         )}
 
         {/* ROTAS */}
         {tab === 'rotas' && (
-          <CentralRotas
+          <Suspense fallback={<div className="admin-loading-spinner" style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}><i className="fa-solid fa-spinner fa-spin fa-2x"></i><p style={{ marginTop: '0.75rem' }}>Carregando módulo de rotas...</p></div>}>
+            <CentralRotas
             orders={orders}
             financial={financial}
             despesas={despesas}
@@ -8310,6 +8373,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
           </div>
             )}
           />
+          </Suspense>
         )}
 
         {tab === 'financeiro' && (
@@ -8751,41 +8815,49 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       )}
 
       {/* MODAL DE RELATÓRIO DE PEDIDOS (PDF E EXCEL) */}
-      <OrderReportModal
-        isOpen={showOrderReportModal}
-        onClose={() => setShowOrderReportModal(false)}
-        orders={orders}
-        produtos={produtosAtuais}
-        filteredOrdersFromScreen={filteredOrders}
-        selectedOrderIds={selectedIds}
-        usuarios={allClientesConsolidados}
-        rotas={rotas}
-        isFinalizada={isFinalizada}
-        showToast={showToast}
-      />
+      {showOrderReportModal && (
+        <Suspense fallback={null}>
+          <OrderReportModal
+            isOpen={showOrderReportModal}
+            onClose={() => setShowOrderReportModal(false)}
+            orders={orders}
+            produtos={produtosAtuais}
+            filteredOrdersFromScreen={filteredOrders}
+            selectedOrderIds={selectedIds}
+            usuarios={allClientesConsolidados}
+            rotas={rotas}
+            isFinalizada={isFinalizada}
+            showToast={showToast}
+          />
+        </Suspense>
+      )}
 
       {/* MODAL DE TRANSFERÊNCIA DE PEDIDOS */}
-      <TransferOrderModal
-        isOpen={showTransferOrderModal}
-        onClose={() => setShowTransferOrderModal(false)}
-        orders={orders}
-        usuarios={usuarios}
-        initialSelectedOrderIds={Array.from(selectedIds)}
-        showToast={showToast}
-        onTransferSuccess={async ({ updatedOrders, transferredCount, deletedUserId, targetUser }) => {
-          if (updatedOrders && updatedOrders.length > 0) {
-            const updatedMap = new Map(updatedOrders.map(o => [String(o.id), o]))
-            setOrders(prev => {
-              const next = prev.map(o => updatedMap.get(String(o.id)) || o)
-              LS.set(STORAGE_ORDERS, next)
-              return next
-            })
-            if (deletedUserId) {
-              setUsuarios(prev => prev.filter(u => u.id !== deletedUserId))
-            }
-          }
-        }}
-      />
+      {showTransferOrderModal && (
+        <Suspense fallback={null}>
+          <TransferOrderModal
+            isOpen={showTransferOrderModal}
+            onClose={() => setShowTransferOrderModal(false)}
+            orders={orders}
+            usuarios={usuarios}
+            initialSelectedOrderIds={Array.from(selectedIds)}
+            showToast={showToast}
+            onTransferSuccess={async ({ updatedOrders, transferredCount, deletedUserId, targetUser }) => {
+              if (updatedOrders && updatedOrders.length > 0) {
+                const updatedMap = new Map(updatedOrders.map(o => [String(o.id), o]))
+                setOrders(prev => {
+                  const next = prev.map(o => updatedMap.get(String(o.id)) || o)
+                  LS.set(STORAGE_ORDERS, next)
+                  return next
+                })
+                if (deletedUserId) {
+                  setUsuarios(prev => prev.filter(u => u.id !== deletedUserId))
+                }
+              }
+            }}
+          />
+        </Suspense>
+      )}
 
       {semDevReport && (
         <div className="admin-overlay semdev-overlay">

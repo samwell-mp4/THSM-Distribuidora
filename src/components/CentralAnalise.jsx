@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react'
 import './CentralAnalise.css'
-import { getOrderPaymentDate } from './OrderReportModal'
+import { getOrderPaymentDate } from '../lib/orderPaymentDate'
 
 function formatPreco(v) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v) || 0)

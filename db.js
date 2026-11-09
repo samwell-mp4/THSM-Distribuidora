@@ -35,6 +35,8 @@ export async function initDb() {
         created_at timestamptz DEFAULT now()
       )
     `);
+    await client.query('CREATE INDEX IF NOT EXISTS idx_usuarios_telefone ON usuarios(telefone)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_usuarios_created_at ON usuarios(created_at DESC)');
 
     // 2. PEDIDOS
     await client.query(`

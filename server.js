@@ -23,17 +23,20 @@ app.use((req, res, next) => {
     if (body && (typeof body === 'string' || Buffer.isBuffer(body))) {
       const buffer = Buffer.isBuffer(body) ? body : Buffer.from(body, 'utf8')
       if (buffer.length > 1024) {
-        try {
-          const compressed = zlib.gzipSync(buffer, { level: 6 })
+        zlib.gzip(buffer, { level: 6 }, (err, compressed) => {
+          if (err || !compressed) {
+            console.warn('Gzip compression fallback:', err?.message)
+            return originalSend(body)
+          }
+          if (res.headersSent) return
           res.setHeader('Content-Encoding', 'gzip')
           res.setHeader('Content-Length', compressed.length)
           if (!res.getHeader('Content-Type')) {
             res.setHeader('Content-Type', 'application/json; charset=utf-8')
           }
           return originalSend(compressed)
-        } catch (e) {
-          console.warn('Gzip compression fallback:', e.message)
-        }
+        })
+        return res
       }
     }
     return originalSend(body)

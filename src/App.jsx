@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
-import Admin from './pages/Admin'
+import { useState, useMemo, useEffect, useCallback, useRef, Suspense, lazy } from 'react'
 import AddressForm from './components/AddressForm'
-import UserDashboard from './pages/UserDashboard'
-import KitPage from './pages/KitPage'
-import LandingPage from './pages/LandingPage'
+
+const Admin = lazy(() => import('./pages/Admin'))
+const UserDashboard = lazy(() => import('./pages/UserDashboard'))
+const KitPage = lazy(() => import('./pages/KitPage'))
+const LandingPage = lazy(() => import('./pages/LandingPage'))
 import { supabase, upsertOrder, upsertUser, saveUserViaWebhook, generateLoginToken, consumeLoginToken, flushPendingOrders, normTel, samePhone, formatImageUrl, checkPhoneExists } from './lib/supabase'
 import { searchMatches } from './lib/search'
 import './App.css'
@@ -1033,7 +1034,11 @@ function App() {
 
   // Landing page
   if (route === 'landing') {
-    return <LandingPage onVerCatalogo={() => navigate('/')} />
+    return (
+      <Suspense fallback={<div className="loading-container" style={{ padding: '3rem', textAlign: 'center' }}><i className="fa-solid fa-spinner fa-spin fa-2x"></i></div>}>
+        <LandingPage onVerCatalogo={() => navigate('/')} />
+      </Suspense>
+    )
   }
 
   // Kit view
@@ -1041,20 +1046,35 @@ function App() {
     const kitId = window.location.hash.replace(/^#\/kit\//, '').split('/')[0] || ''
     const allKits = (() => { try { return JSON.parse(localStorage.getItem('thsm_kits') || '[]') } catch { return [] } })()
     const kit = allKits.find(k => k.id === kitId)
-    return <KitPage kit={kit} produtos={produtosMerged} onVoltar={() => navigate('/')} />
+    return (
+      <Suspense fallback={<div className="loading-container" style={{ padding: '3rem', textAlign: 'center' }}><i className="fa-solid fa-spinner fa-spin fa-2x"></i></div>}>
+        <KitPage kit={kit} produtos={produtosMerged} onVoltar={() => navigate('/')} />
+      </Suspense>
+    )
   }
 
   // Admin & UserDash views
-  if (route === 'admin' && adminAuth?.loggedIn) return <Admin produtos={produtosMerged} refreshProducts={fetchProductsDB} onVoltar={() => { navigate('/'); localStorage.removeItem(LS_ADMIN); setAdminAuth(null) }} />
-  if (route === 'userdash') return (
-    <UserDashboard
-      produtos={produtosMerged}
-      onVoltar={() => navigate('/')}
-      initialOrderId={initialOrderId}
-      currentUser={currentUser}
-      onUpdateUser={setCurrentUser}
-    />
-  )
+  if (route === 'admin' && adminAuth?.loggedIn) {
+    return (
+      <Suspense fallback={<div className="admin-loading-screen" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '1rem', background: '#0f172a', color: '#f8fafc' }}><i className="fa-solid fa-spinner fa-spin fa-2x"></i><span>Carregando Painel Administrativo THSM...</span></div>}>
+        <Admin produtos={produtosMerged} refreshProducts={fetchProductsDB} onVoltar={() => { navigate('/'); localStorage.removeItem(LS_ADMIN); setAdminAuth(null) }} />
+      </Suspense>
+    )
+  }
+
+  if (route === 'userdash') {
+    return (
+      <Suspense fallback={<div className="loading-container" style={{ padding: '3rem', textAlign: 'center' }}><i className="fa-solid fa-spinner fa-spin fa-2x"></i></div>}>
+        <UserDashboard
+          produtos={produtosMerged}
+          onVoltar={() => navigate('/')}
+          initialOrderId={initialOrderId}
+          currentUser={currentUser}
+          onUpdateUser={setCurrentUser}
+        />
+      </Suspense>
+    )
+  }
 
   return (
     <div className="app">
