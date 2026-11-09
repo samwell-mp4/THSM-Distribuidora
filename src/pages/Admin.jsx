@@ -1860,6 +1860,10 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
     const isNowCalote = status === 'calote'
     const isNowCaloteParcial = status === 'calote_parcial'
+    const calotePecasVal = isNowCalote ? (order.calotePecas || activeItems.reduce((s, i) => s + (Number(i.qty) || 0), 0)) : 0
+    const caloteCustoVal = isNowCalote ? (order.caloteTotalCusto || activeItems.reduce((s, i) => s + ((Number(i.preco_custo) || getItemCost(i, produtosAtuais) || 0) * (Number(i.qty) || 0)), 0)) : 0
+    const caloteVendaVal = isNowCalote ? (order.caloteTotalVenda || activeItems.reduce((s, i) => s + ((Number(i.preco) || 0) * (Number(i.qty) || 0)), 0) || order.total || order.totalOriginal || 0) : 0
+
     let updated = {
       ...order,
       items: activeItems,
@@ -1868,12 +1872,15 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       status,
       isCalote: isNowCalote,
       motivoEncerramento: isNowCalote ? 'calote_100' : (isNowCaloteParcial ? 'calote_parcial' : null),
-      calotePecas: isNowCalote ? (order.calotePecas || 0) : 0,
-      caloteTotalCusto: isNowCalote ? (order.caloteTotalCusto || 0) : 0,
-      caloteTotalVenda: isNowCalote ? (order.caloteTotalVenda || 0) : 0,
+      calotePecas: calotePecasVal,
+      caloteTotalCusto: caloteCustoVal,
+      caloteTotalVenda: caloteVendaVal,
+      total: isNowCalote ? (caloteVendaVal || order.total || order.totalOriginal || 0) : order.total,
+      totalOriginal: isNowCalote ? (caloteVendaVal || order.totalOriginal || order.total || 0) : (order.totalOriginal || order.total),
       isFinalizado: (status === 'concluido' || isNowCalote || isNowCaloteParcial) ? true : (['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'entregue', 'acerto'].includes(status) ? false : order.isFinalizado),
       dataVencimento: finalDue,
       deliveredAt: status === 'entregue' ? (order.deliveredAt || now) : order.deliveredAt,
+      finalizadoAt: isNowCalote ? (order.finalizadoAt || now) : order.finalizadoAt,
       lastModified: now,
       updatedAt: now
     }
@@ -2502,7 +2509,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         totalAcerto: 0,
         totalAvista: 0,
         totalAprazo: 0,
-        total: 0,
+        total: caloteTotalVenda,
         desconto: 0,
         descontoPercent: null,
         totalPago: 0,
@@ -3535,6 +3542,153 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
       }
     })
     setSelectedIds(new Set())
+  }
+
+  const bulkUpdateRoute = async (targetRoute) => {
+    if (selectedIds.size === 0) {
+      showToast('Selecione pelo menos um pedido', 'warning')
+      return
+    }
+
+    let finalRoute = targetRoute
+    if (finalRoute === '__NEW__') {
+      const custom = createNewRouteTag()
+      if (!custom) return
+      finalRoute = custom
+    } else if (finalRoute === '__CLEAR__') {
+      finalRoute = ''
+    }
+
+    const count = selectedIds.size
+    const idList = Array.from(selectedIds).map(String)
+    const now = Date.now()
+
+    setOrders(prev => {
+      const next = prev.map(o => {
+        if (idList.includes(String(o.id))) {
+          const updatedCustomer = {
+            ...(o.customer || {}),
+            endereco: {
+              ...(o.customer?.endereco || {}),
+              rota: finalRoute
+            }
+          }
+          return {
+            ...o,
+            customer: updatedCustomer,
+            endereco: { ...(o.endereco || {}), rota: finalRoute },
+            rota: finalRoute,
+            lastModified: now,
+            updatedAt: now
+          }
+        }
+        return o
+      })
+      LS.set(STORAGE_ORDERS, next)
+      return next
+    })
+
+    idList.forEach(id => {
+      const ord = orders.find(o => String(o.id) === id)
+      if (ord) {
+        const updatedCustomer = {
+          ...(ord.customer || {}),
+          endereco: {
+            ...(ord.customer?.endereco || {}),
+            rota: finalRoute
+          }
+        }
+        const updated = {
+          ...ord,
+          customer: updatedCustomer,
+          endereco: { ...(ord.endereco || {}), rota: finalRoute },
+          rota: finalRoute,
+          lastModified: now,
+          updatedAt: now
+        }
+        upsertOrder(updated).catch(() => {})
+
+        const userPhone = normalizePhone(ord.customer?.telefone)
+        const existingUser = usuarios.find(u => (ord.user_id && u.id === ord.user_id) || (userPhone && normalizePhone(u.telefone) === userPhone))
+        if (existingUser) {
+          const updatedUser = {
+            ...existingUser,
+            endereco: {
+              ...(existingUser.endereco || {}),
+              rota: finalRoute
+            }
+          }
+          setUsuarios(prev => prev.map(u => u.id === existingUser.id ? updatedUser : u))
+          upsertUser(updatedUser).catch(() => {})
+        }
+      }
+    })
+
+    showToast(finalRoute ? `${count} pedido(s) atribuídos à rota "${finalRoute}"!` : `Rota removida de ${count} pedido(s)!`, 'success')
+  }
+
+  const bulkUpdateStatus = (targetStatus) => {
+    if (selectedIds.size === 0) {
+      showToast('Selecione pelo menos um pedido', 'warning')
+      return
+    }
+    if (!targetStatus) return
+
+    const labels = {
+      'pre-pedido': 'Pré-pedido',
+      'pendente': 'Pendente (Separar)',
+      'em-rota': 'Em Rota',
+      'entregue': 'Entregue',
+      'acerto': 'Acerto',
+      'concluido': 'Concluído',
+      'calote_parcial': 'Calote Parcial',
+      'calote': 'Calote 100%',
+      'cancelado': 'Cancelado'
+    }
+    const label = labels[targetStatus] || targetStatus
+    if (!confirm(`Alterar etapa/status de ${selectedIds.size} pedido(s) selecionado(s) para "${label}"?`)) return
+
+    const count = selectedIds.size
+    selectedIds.forEach(id => {
+      updateOrderStatus(id, targetStatus)
+    })
+
+    showToast(`${count} pedido(s) alterados para "${label}"!`, 'success')
+  }
+
+  const bulkUpdateDueDate = (newDue) => {
+    if (selectedIds.size === 0) {
+      showToast('Selecione pelo menos um pedido', 'warning')
+      return
+    }
+    if (!newDue) {
+      showToast('Selecione uma data de vencimento válida', 'warning')
+      return
+    }
+
+    const count = selectedIds.size
+    const idList = Array.from(selectedIds).map(String)
+    const now = Date.now()
+
+    setOrders(prev => {
+      const next = prev.map(o => {
+        if (idList.includes(String(o.id))) {
+          return { ...o, dataVencimento: newDue, lastModified: now, updatedAt: now }
+        }
+        return o
+      })
+      LS.set(STORAGE_ORDERS, next)
+      return next
+    })
+
+    idList.forEach(id => {
+      const ord = orders.find(o => String(o.id) === id)
+      if (ord) {
+        upsertOrder({ ...ord, dataVencimento: newDue, lastModified: now, updatedAt: now }).catch(() => {})
+      }
+    })
+
+    showToast(`Vencimento de ${count} pedido(s) definido para ${formatDate(newDue)}!`, 'success')
   }
 
   const gerarRelatorioSemDevolucao = () => {
@@ -5421,22 +5575,175 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
             {/* Desktop selected bulk bar */}
             {selectedIds.size > 0 && (
-              <div className="admin-desktop-bulk-bar" style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)', fontWeight: 600 }}>{selectedIds.size} selecionado(s)</span>
-                <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', background: '#0284c7', color: 'white', borderColor: '#0284c7' }} onClick={() => setShowOrderReportModal(true)} title="Emitir Relatório PDF ou Excel dos pedidos selecionados">
-                  <i className="fa-solid fa-file-pdf"></i> Relatório PDF/Excel ({selectedIds.size})
+              <div
+                className="admin-desktop-bulk-bar"
+                style={{
+                  display: 'flex',
+                  gap: '0.45rem',
+                  alignItems: 'center',
+                  marginBottom: '0.85rem',
+                  flexWrap: 'wrap',
+                  padding: '0.6rem 0.85rem',
+                  background: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginRight: '0.2rem' }}>
+                  <span style={{ fontSize: '0.82rem', color: '#0f172a', fontWeight: 700 }}>
+                    <i className="fa-solid fa-list-check" style={{ color: 'var(--primary)', marginRight: '4px' }}></i>
+                    {selectedIds.size} selecionado(s)
+                  </span>
+                  <button
+                    type="button"
+                    className="admin-btn admin-btn-sec"
+                    style={{ fontSize: '0.72rem', padding: '0.2rem 0.45rem', height: '30px' }}
+                    onClick={() => setSelectedIds(new Set())}
+                    title="Desmarcar todos"
+                  >
+                    <i className="fa-solid fa-xmark"></i> Desmarcar
+                  </button>
+                </div>
+
+                {/* SELETOR DE ROTAS EM MASSA */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <select
+                    style={{
+                      fontSize: '0.74rem',
+                      padding: '0.25rem 0.5rem',
+                      height: '32px',
+                      borderRadius: '6px',
+                      border: '1px solid #0284c7',
+                      background: '#f0f9ff',
+                      color: '#0369a1',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      maxWidth: '180px'
+                    }}
+                    value=""
+                    onChange={e => {
+                      const val = e.target.value
+                      if (!val) return
+                      bulkUpdateRoute(val)
+                      e.target.value = ''
+                    }}
+                    title="Atribuir rota aos pedidos selecionados"
+                  >
+                    <option value="" disabled>🏷️ Atribuir Rota...</option>
+                    <option value="__NEW__">➕ Criar Nova Rota...</option>
+                    <option value="__CLEAR__">❌ Remover Rota (Sem Rota)</option>
+                    <optgroup label="Rotas Existentes:">
+                      {listaTodasRotas.map(r => (
+                        <option key={r} value={r}>🏷️ {r}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
+
+                {/* SELETOR DE ETAPAS / STATUS EM MASSA */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <select
+                    style={{
+                      fontSize: '0.74rem',
+                      padding: '0.25rem 0.5rem',
+                      height: '32px',
+                      borderRadius: '6px',
+                      border: '1px solid #6366f1',
+                      background: '#eef2ff',
+                      color: '#4338ca',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      maxWidth: '175px'
+                    }}
+                    value=""
+                    onChange={e => {
+                      const val = e.target.value
+                      if (!val) return
+                      bulkUpdateStatus(val)
+                      e.target.value = ''
+                    }}
+                    title="Mudar status/etapa dos pedidos selecionados"
+                  >
+                    <option value="" disabled>🔄 Mudar Etapa...</option>
+                    <option value="pre-pedido">📋 Pré-pedido</option>
+                    <option value="pendente">⏳ Pendente (Separar)</option>
+                    <option value="em-rota">🚚 Em Rota</option>
+                    <option value="entregue">📦 Entregue</option>
+                    <option value="acerto">🤝 Acerto</option>
+                    <option value="concluido">✅ Concluído</option>
+                    <option value="calote_parcial">⚠️ Calote Parcial</option>
+                    <option value="calote">🛑 Calote 100%</option>
+                    <option value="cancelado">❌ Cancelado</option>
+                  </select>
+                </div>
+
+                {/* DEFINIR DATA DE VENCIMENTO EM MASSA */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                  <input
+                    type="date"
+                    style={{
+                      fontSize: '0.72rem',
+                      padding: '0.2rem 0.4rem',
+                      height: '32px',
+                      borderRadius: '6px',
+                      border: '1px solid #cbd5e1',
+                      background: '#ffffff',
+                      color: '#334155',
+                      width: '128px'
+                    }}
+                    title="Definir Data de Vencimento para todos os selecionados"
+                    onChange={e => {
+                      const val = e.target.value
+                      if (!val) return
+                      bulkUpdateDueDate(val)
+                      e.target.value = ''
+                    }}
+                  />
+                </div>
+
+                {/* AVANÇAR ETAPA RÁPIDO */}
+                <button
+                  type="button"
+                  className="admin-btn"
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem', background: 'var(--success)', color: 'white', borderColor: 'var(--success)', height: '32px' }}
+                  onClick={() => bulkAction('confirm')}
+                  title="Avançar pedidos para a próxima etapa"
+                >
+                  <i className="fa-solid fa-arrow-right"></i> Avançar
                 </button>
-                <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} onClick={() => bulkAction('confirm')}>
-                  <i className="fa-solid fa-check"></i> Confirmar
+
+                {/* RELATÓRIO PDF / EXCEL */}
+                <button
+                  type="button"
+                  className="admin-btn"
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem', background: '#0284c7', color: 'white', borderColor: '#0284c7', height: '32px' }}
+                  onClick={() => setShowOrderReportModal(true)}
+                  title="Emitir Relatório PDF ou Excel dos pedidos selecionados"
+                >
+                  <i className="fa-solid fa-file-pdf"></i> Relatório ({selectedIds.size})
                 </button>
-                <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)' }} onClick={() => bulkAction('delete')}>
+
+                {/* EXCLUIR */}
+                <button
+                  type="button"
+                  className="admin-btn"
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem', background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)', height: '32px' }}
+                  onClick={() => bulkAction('delete')}
+                  title="Excluir pedidos selecionados"
+                >
                   <i className="fa-solid fa-trash"></i> Excluir
                 </button>
-                <button className="admin-btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', background: '#dc2626', color: 'white', borderColor: '#dc2626' }} onClick={gerarRelatorioSemDevolucao}>
-                  <i className="fa-solid fa-file-lines"></i> Relatório Sem Devolução
-                </button>
-                <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem' }} onClick={() => setSelectedIds(new Set())}>
-                  <i className="fa-solid fa-xmark"></i> Limpar
+
+                {/* RELATÓRIO SEM DEVOLUÇÃO */}
+                <button
+                  type="button"
+                  className="admin-btn"
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem', background: '#dc2626', color: 'white', borderColor: '#dc2626', height: '32px' }}
+                  onClick={gerarRelatorioSemDevolucao}
+                  title="Relatório Sem Devolução"
+                >
+                  <i className="fa-solid fa-file-lines"></i> Sem Devolução
                 </button>
               </div>
             )}
@@ -6002,19 +6309,102 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
             {selectedIds.size > 0 && (
               <div className="admin-orders-mobile-bulk-bar">
                 <div className="aombb-info">
-                  <strong>{selectedIds.size}</strong> selecionado(s)
+                  <strong>{selectedIds.size}</strong> sel.
                 </div>
                 <div className="aombb-actions">
+                  {/* Seletor Rápido de Rota Mobile */}
+                  <select
+                    style={{
+                      fontSize: '0.72rem',
+                      padding: '0.3rem 0.4rem',
+                      borderRadius: '6px',
+                      background: '#0284c7',
+                      color: 'white',
+                      border: 'none',
+                      fontWeight: 600,
+                      maxWidth: '92px'
+                    }}
+                    value=""
+                    onChange={e => {
+                      const val = e.target.value
+                      if (!val) return
+                      bulkUpdateRoute(val)
+                      e.target.value = ''
+                    }}
+                    title="Atribuir rota aos selecionados"
+                  >
+                    <option value="" disabled>🏷️ Rota</option>
+                    <option value="__NEW__">➕ Nova...</option>
+                    <option value="__CLEAR__">❌ Sem rota</option>
+                    {listaTodasRotas.map(r => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+
+                  {/* Seletor Rápido de Etapa Mobile */}
+                  <select
+                    style={{
+                      fontSize: '0.72rem',
+                      padding: '0.3rem 0.4rem',
+                      borderRadius: '6px',
+                      background: '#6366f1',
+                      color: 'white',
+                      border: 'none',
+                      fontWeight: 600,
+                      maxWidth: '88px'
+                    }}
+                    value=""
+                    onChange={e => {
+                      const val = e.target.value
+                      if (!val) return
+                      bulkUpdateStatus(val)
+                      e.target.value = ''
+                    }}
+                    title="Mudar etapa dos selecionados"
+                  >
+                    <option value="" disabled>🔄 Etapa</option>
+                    <option value="pre-pedido">Pré-pedido</option>
+                    <option value="pendente">Pendente</option>
+                    <option value="em-rota">Em Rota</option>
+                    <option value="entregue">Entregue</option>
+                    <option value="acerto">Acerto</option>
+                    <option value="concluido">Concluído</option>
+                    <option value="calote_parcial">Calote Parcial</option>
+                    <option value="calote">Calote 100%</option>
+                    <option value="cancelado">Cancelado</option>
+                  </select>
+
+                  {/* Data de Vencimento Mobile */}
+                  <input
+                    type="date"
+                    style={{
+                      fontSize: '0.7rem',
+                      padding: '0.25rem 0.35rem',
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: 'rgba(255,255,255,0.9)',
+                      color: '#0f172a',
+                      width: '80px'
+                    }}
+                    title="Definir vencimento dos selecionados"
+                    onChange={e => {
+                      const val = e.target.value
+                      if (!val) return
+                      bulkUpdateDueDate(val)
+                      e.target.value = ''
+                    }}
+                  />
+
                   <button className="admin-btn" style={{ background: '#0284c7', color: 'white', borderColor: '#0284c7', fontSize: '0.74rem', padding: '0.35rem 0.55rem' }} onClick={() => setShowOrderReportModal(true)} title="Relatório">
                     <i className="fa-solid fa-file-pdf"></i>
                   </button>
-                  <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)', fontSize: '0.74rem', padding: '0.35rem 0.55rem' }} onClick={() => bulkAction('confirm')}>
-                    <i className="fa-solid fa-check"></i>
+                  <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)', fontSize: '0.74rem', padding: '0.35rem 0.55rem' }} onClick={() => bulkAction('confirm')} title="Avançar próxima etapa">
+                    <i className="fa-solid fa-arrow-right"></i>
                   </button>
-                  <button className="admin-btn" style={{ background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)', fontSize: '0.74rem', padding: '0.35rem 0.55rem' }} onClick={() => bulkAction('delete')}>
+                  <button className="admin-btn" style={{ background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)', fontSize: '0.74rem', padding: '0.35rem 0.55rem' }} onClick={() => bulkAction('delete')} title="Excluir selecionados">
                     <i className="fa-solid fa-trash"></i>
                   </button>
-                  <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.74rem', padding: '0.35rem 0.45rem' }} onClick={() => setSelectedIds(new Set())}>
+                  <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.74rem', padding: '0.35rem 0.45rem' }} onClick={() => setSelectedIds(new Set())} title="Desmarcar todos">
                     <i className="fa-solid fa-xmark"></i>
                   </button>
                 </div>

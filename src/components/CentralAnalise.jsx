@@ -445,8 +445,15 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
     }).filter(Boolean)
   }, [despesas])
 
-  const ordersWin = useMemo(() => baseOrders.filter(o => matchStatus(o, statusFilter) && fit(getOrderPaymentDate(o), win)), [baseOrders, win, statusFilter])
-  const ordersPrev = useMemo(() => baseOrders.filter(o => matchStatus(o, statusFilter) && fit(getOrderPaymentDate(o), prevWin)), [baseOrders, prevWin, statusFilter])
+  const getOrderPaymentDateSafe = useCallback((o) => {
+    const d = getOrderPaymentDate(o)
+    if (d) return d
+    const raw = o.date || o.createdAt || o.dataInicio || o.created_at || ''
+    return raw ? String(raw).split('T')[0].split(' ')[0] : ''
+  }, [])
+
+  const ordersWin = useMemo(() => baseOrders.filter(o => matchStatus(o, statusFilter) && fit(getOrderPaymentDateSafe(o), win)), [baseOrders, win, statusFilter, getOrderPaymentDateSafe])
+  const ordersPrev = useMemo(() => baseOrders.filter(o => matchStatus(o, statusFilter) && fit(getOrderPaymentDateSafe(o), prevWin)), [baseOrders, prevWin, statusFilter, getOrderPaymentDateSafe])
   const finWin = useMemo(() => financial.filter(f => f.status !== 'cancelado' && fit(f.paidDate || f.dueDate || f.date || '', win)), [financial, win])
   const finPrev = useMemo(() => financial.filter(f => f.status !== 'cancelado' && fit(f.paidDate || f.dueDate || f.date || '', prevWin)), [financial, prevWin])
 
@@ -576,6 +583,10 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         vendaNaoRecebida += cVenda
         const devPecasCalote = (o.returnedItems || []).reduce((s, r) => s + (Number(r.returnedQty || r.qty) || 0), 0)
         totalItensDevolvidos += devPecasCalote
+
+        // Calotes entram como vendas realizadas da mercadoria colocada e peças processadas
+        vendasRealizadas += cVenda
+        totalItensVendidos += pecas
 
         if (cVenda > 0) {
           valoresCalotesArray.push(cVenda)
@@ -815,6 +826,9 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         map[k].caloteCusto += cCusto
         map[k].caloteVenda += cVenda
         map[k].vendaNaoRecebida += cVenda
+        map[k].bruto += cVenda
+        map[k].itensVendidos += pecas
+        map[k].qtd += pecas
       } else if (isParcial) {
         map[k].pedidosParciais += 1
         const totalFinal = Number(o.totalAcerto ?? o.total ?? 0)
@@ -977,7 +991,10 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
           const retQ = retMap[k] || 0
           q = Math.max(0, totalQ - retQ)
         } else if (isCalote) {
-          q = 0
+          const k = i.id != null ? String(i.id) : (i.nome || '')
+          const retQ = retMap[k] || 0
+          const calQ = Number(i.caloteQty)
+          q = !isNaN(calQ) && calQ > 0 ? calQ : Math.max(0, totalQ - retQ)
         }
 
         const c = getItemCost(i)
@@ -1791,11 +1808,17 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
 
   const linhasVenda = useMemo(() => {
     return ordersWin.map(o => {
+      const isCalote = !!(o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
       const isConcluido = o.status === 'concluido' || o.isFinalizado === true || o.status === 'acerto'
       const vOriginal = Number(o.totalOriginal || o.totalConsignado || o.total) || 0
-      const fatConcluido = isConcluido ? (Number(o.totalAcerto ?? o.totalPago ?? o.total) || 0) : 0
+      const fatConcluido = isCalote
+        ? (Number(o.caloteTotalVenda || o.totalOriginal || o.total) || 0)
+        : (isConcluido ? (Number(o.totalAcerto ?? o.totalPago ?? o.total) || 0) : 0)
       const desc = Number(o.desconto) || 0
       const qtd = (o.items || []).reduce((s, i) => s + (Number(i.qty) || 0), 0)
+      const brutoVal = isCalote
+        ? (Number(o.caloteTotalVenda || o.totalOriginal || o.total) || 0)
+        : (isConcluido ? fatConcluido : vOriginal)
       return {
         _k: o.id,
         pedido: `#${String(o.id).slice(-6)}`,
@@ -1805,9 +1828,9 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
         itens: qtd,
         mercadoriaColocada: vOriginal,
         fatConcluido,
-        bruto: isConcluido ? fatConcluido : vOriginal,
+        bruto: brutoVal,
         desc,
-        liq: isConcluido ? Math.max(0, fatConcluido - desc) : Math.max(0, vOriginal - desc),
+        liq: isCalote ? 0 : (isConcluido ? Math.max(0, fatConcluido - desc) : Math.max(0, vOriginal - desc)),
         frete: o.frete || 0,
         pag: o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto',
         status: o.status,
@@ -1838,8 +1861,11 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
     ordersWin.forEach(o => {
       const s = o.status || 'pendente'
       const vOriginal = Number(o.totalOriginal || o.totalConsignado || o.total) || 0
+      const isCalote = !!(o.isCalote || o.status === 'calote' || o.motivoEncerramento === 'calote_100')
       const isConcluido = o.status === 'concluido' || o.isFinalizado === true || o.status === 'acerto'
-      const fat = isConcluido ? (Number(o.totalAcerto ?? o.totalPago ?? o.total) || 0) : 0
+      const fat = isCalote
+        ? (Number(o.caloteTotalVenda || o.totalOriginal || o.total) || 0)
+        : (isConcluido ? (Number(o.totalAcerto ?? o.totalPago ?? o.total) || 0) : 0)
       if (!map[s]) map[s] = { _k: s, status: s, qty: 0, valor: 0, faturado: 0 }
       map[s].qty += 1
       map[s].valor += vOriginal
