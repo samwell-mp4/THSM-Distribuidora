@@ -351,7 +351,15 @@ app.post('/api/criar-usuario', async (req, res) => {
   }
 })
 
-app.use(express.static('dist'))
+app.use(express.static('dist', {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+      res.setHeader('Pragma', 'no-cache')
+      res.setHeader('Expires', '0')
+    }
+  }
+}))
 
 // Express Error Handling Middleware to catch aborted requests gracefully
 app.use((err, req, res, next) => {

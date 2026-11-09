@@ -714,7 +714,7 @@ export async function deleteOrder(id) {
     // Record in pedidos_deletados table in DB so all clients and sync know it was deleted
     try {
       if (!isNaN(numId)) {
-        await supabase.from('pedidos_deletados').upsert({ id: numId, deleted_at: new Date().toISOString() })
+        await supabase.from('pedidos_deletados').upsert({ id: numId })
       }
     } catch { }
 

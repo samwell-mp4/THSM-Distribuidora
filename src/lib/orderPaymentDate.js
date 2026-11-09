@@ -51,3 +51,36 @@ export function getOrderPaymentDate(o) {
   return raw ? String(raw).split('T')[0].split(' ')[0] : ''
 }
 
+// Obtém a data de vencimento da comanda (calculada sempre a DATA DE VENCIMENTO)
+export function getOrderDueDate(o, financial = []) {
+  if (!o) return ''
+  // 1. dataVencimento direta no pedido
+  if (o.dataVencimento) {
+    const raw = String(o.dataVencimento).trim()
+    const d = raw.includes('T') ? raw.split('T')[0] : raw.split(' ')[0]
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
+  }
+  // 2. vencimento no pedido
+  if (o.vencimento) {
+    const raw = String(o.vencimento).trim()
+    const d = raw.includes('T') ? raw.split('T')[0] : raw.split(' ')[0]
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
+  }
+  // 3. dueDate na tabela financial
+  if (Array.isArray(financial) && financial.length > 0) {
+    const f = financial.find(x => String(x.orderId || x.order_id) === String(o.id))
+    if (f?.dueDate) {
+      const raw = String(f.dueDate).trim()
+      const d = raw.includes('T') ? raw.split('T')[0] : raw.split(' ')[0]
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
+    }
+  }
+  // 4. Fallback: data do pedido / criação
+  const fallback = o.date || o.createdAt || o.dataInicio || o.created_at || ''
+  if (fallback) {
+    const raw = String(fallback).trim()
+    const d = raw.includes('T') ? raw.split('T')[0] : raw.split(' ')[0]
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
+  }
+  return ''
+}

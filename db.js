@@ -62,7 +62,9 @@ export async function initDb() {
         deleted_at timestamptz DEFAULT now()
       )
     `);
-    await client.query('ALTER TABLE pedidos_deletados ADD COLUMN IF NOT EXISTS deleted_at timestamptz DEFAULT now()');
+    try {
+      await client.query('ALTER TABLE pedidos_deletados ADD COLUMN IF NOT EXISTS deleted_at timestamptz DEFAULT now()');
+    } catch {}
     await client.query('CREATE INDEX IF NOT EXISTS idx_pedidos_deletados_id ON pedidos_deletados(id)');
 
     // 3. FINANCEIRO
@@ -818,24 +820,36 @@ export async function executeQuery(queryDesc) {
         try {
           await pool.query('ALTER TABLE pedidos_deletados ADD COLUMN IF NOT EXISTS deleted_at timestamptz DEFAULT now()');
         } catch (e) {}
+        // Tombstone table only requires id; sanitize to prevent schema mismatch errors
+        rows = rows.map(r => ({ id: Number(r.id) }));
+        if (!isArray) {
+          inputValues = { id: Number(inputValues.id) };
+        }
       }
 
       if (table === 'usuarios') {
         try {
           if (!isArray && inputValues.telefone) {
             inputValues.telefone = cleanAndNormalizePhone(inputValues.telefone);
+            const normTel = inputValues.telefone;
+            const rawTel = normTel.replace(/^55/, '');
             const { rows: existingRows } = await pool.query(
-              'SELECT id FROM usuarios WHERE telefone = $1',
-              [inputValues.telefone]
+              'SELECT id, telefone FROM usuarios WHERE telefone = $1 OR telefone = $2 OR telefone = $3 LIMIT 1',
+              [normTel, rawTel, '5555' + rawTel]
             );
             if (existingRows && existingRows.length > 0) {
               const canonicalId = existingRows[0].id;
-              if (inputValues.id && inputValues.id !== canonicalId) {
+              if (inputValues.id && String(inputValues.id) !== String(canonicalId)) {
                 // Duplicate user resolution: re-link orders and remove duplicate record
-                await pool.query('UPDATE pedidos SET user_id = $1 WHERE user_id = $2', [canonicalId, inputValues.id]);
-                await pool.query('DELETE FROM usuarios WHERE id = $1', [inputValues.id]);
+                try {
+                  await pool.query('UPDATE pedidos SET user_id = $1 WHERE user_id = $2', [canonicalId, inputValues.id]);
+                  await pool.query('DELETE FROM usuarios WHERE id = $1', [inputValues.id]);
+                } catch (relinkErr) {
+                  console.warn('Could not re-link or delete duplicate user:', relinkErr.message);
+                }
               }
               inputValues.id = canonicalId;
+              inputValues.telefone = existingRows[0].telefone || normTel;
             }
           } else if (isArray) {
             for (const r of rows) {
@@ -848,7 +862,7 @@ export async function executeQuery(queryDesc) {
       }
 
       // Fast-path 1: Targeted UPDATE by primary key UUID "id" if present (prevents user cross-contamination)
-      if (!isArray && inputValues.id && table !== 'pedidos') {
+      if (!isArray && inputValues.id && table !== 'pedidos' && table !== 'pedidos_deletados') {
         const updateKeys = Object.keys(inputValues).filter(k => k !== 'id' && k !== 'created_at');
         if (updateKeys.length > 0) {
           const updateValues = [];
@@ -871,24 +885,45 @@ export async function executeQuery(queryDesc) {
             if (table === 'usuarios' && err.message?.includes('usuarios_telefone_key')) {
               try {
                 const normTel = cleanAndNormalizePhone(inputValues.telefone);
-                const { rows: canon } = await pool.query('SELECT id FROM usuarios WHERE telefone = $1', [normTel]);
+                const rawTel = normTel.replace(/^55/, '');
+                const { rows: canon } = await pool.query(
+                  'SELECT id, telefone FROM usuarios WHERE telefone = $1 OR telefone = $2 LIMIT 1',
+                  [normTel, rawTel]
+                );
                 if (canon && canon.length > 0) {
                   const canonId = canon[0].id;
-                  await pool.query('UPDATE pedidos SET user_id = $1 WHERE user_id = $2', [canonId, inputValues.id]);
-                  await pool.query('DELETE FROM usuarios WHERE id = $1', [inputValues.id]);
-                  updateValues[updateValues.length - 1] = canonId;
-                  const resCanon = await pool.query(updateSql, updateValues);
-                  if (resCanon.rows && resCanon.rows.length > 0) {
-                    let data = resCanon.rows[0];
-                    if (single) data = Array.isArray(data) ? data[0] : data;
-                    return { data, error: null };
+                  if (inputValues.id && String(inputValues.id) !== String(canonId)) {
+                    await pool.query('UPDATE pedidos SET user_id = $1 WHERE user_id = $2', [canonId, inputValues.id]);
+                    await pool.query('DELETE FROM usuarios WHERE id = $1', [inputValues.id]);
+                  }
+                  // Update canonical user profile EXCLUDING telefone to guarantee no unique constraint conflict
+                  const updateProfileKeys = Object.keys(inputValues).filter(k => k !== 'id' && k !== 'created_at' && k !== 'telefone');
+                  if (updateProfileKeys.length > 0) {
+                    const profValues = [];
+                    const profPhrases = updateProfileKeys.map((k, i) => {
+                      let val = inputValues[k];
+                      if (typeof val === 'object' && val !== null) val = JSON.stringify(val);
+                      profValues.push(val);
+                      return `"${k}" = $${i + 1}`;
+                    });
+                    profValues.push(canonId);
+                    const profSql = `UPDATE "usuarios" SET ${profPhrases.join(', ')} WHERE "id" = $${profValues.length} RETURNING *;`;
+                    const resProf = await pool.query(profSql, profValues);
+                    if (resProf.rows && resProf.rows.length > 0) {
+                      let data = resProf.rows[0];
+                      if (single) data = Array.isArray(data) ? data[0] : data;
+                      return { data, error: null };
+                    }
+                  } else {
+                    return { data: single ? canon[0] : [canon[0]], error: null };
                   }
                 }
               } catch (inner) {
                 console.error('Failed to resolve usuarios_telefone_key conflict:', inner.message);
               }
+            } else {
+              console.error('Targeted UPDATE by ID error in upsert:', err.message);
             }
-            console.error('Targeted UPDATE by ID error in upsert:', err.message);
           }
         }
       }
@@ -974,6 +1009,22 @@ export async function executeQuery(queryDesc) {
             console.warn(`[db] Deadlock detectado em "${table}", tentando novamente (tentativa ${attempt})...`);
             await new Promise(r => setTimeout(r, 60 * attempt + Math.floor(Math.random() * 80)));
             continue;
+          }
+          if (table === 'usuarios' && queryErr.message?.includes('usuarios_telefone_key')) {
+            try {
+              const tel = rows[0]?.telefone;
+              if (tel) {
+                const norm = cleanAndNormalizePhone(tel);
+                const raw = norm.replace(/^55/, '');
+                const { rows: canon } = await pool.query('SELECT * FROM usuarios WHERE telefone = $1 OR telefone = $2 LIMIT 1', [norm, raw]);
+                if (canon && canon.length > 0) {
+                  res = { rows: canon };
+                  break;
+                }
+              }
+            } catch (inner) {
+              console.warn('Fallback on usuarios_telefone_key insert failed:', inner.message);
+            }
           }
           throw queryErr;
         }
