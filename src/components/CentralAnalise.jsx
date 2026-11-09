@@ -718,6 +718,8 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
     const mediaCustoPorCalote = pedidosCalote > 0 ? Math.round((prejuizoCaloteCusto / pedidosCalote) * 100) / 100 : 0
     const mediaVendaPorCalote = pedidosCalote > 0 ? Math.round((vendaNaoRecebida / pedidosCalote) * 100) / 100 : 0
 
+    const valorItensTabela = valorItensVendidosTabela > 0 ? valorItensVendidosTabela : valorItensColocadosTabela
+
     return {
       n,
       pedidosPagos,
@@ -734,7 +736,7 @@ export default function CentralAnalise({ orders, financial, despesas, produtos, 
       valorItensColocadosTabela,
       valorItensDevolvidosTabela,
       valorItensVendidosTabela,
-      valorItensTabela: valorItensVendidosTabela > 0 ? valorItensVendidosTabela : valorItensColocadosTabela,
+      valorItensTabela,
       descontosConcedidos,
       vendasRealizadas,
       receitaRecebida,
