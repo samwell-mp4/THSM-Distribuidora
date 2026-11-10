@@ -821,6 +821,11 @@ function App() {
       cpf: currentUser?.cpf || currentUser?.endereco?.cpf || '',
       endereco: end
     })
+    setPhoneCheckLoading(false)
+    setPhoneRegistered(false)
+    setRegisteredUserName('')
+    setRegisteredUserHasSenha(false)
+    setPhoneChecked(false)
     setPagamento('aprazo')
     setConfirmaSemDevolucao(false)
     const temDados = !!(currentUser && currentUser.nome && currentUser.telefone)
@@ -1030,6 +1035,80 @@ function App() {
     if (nums.length <= 6) return `(${nums.slice(0, 2)}) ${nums.slice(2)}`
     if (nums.length <= 10) return `(${nums.slice(0, 2)}) ${nums.slice(2, 6)}-${nums.slice(6)}`
     return `(${nums.slice(0, 2)}) ${nums.slice(2, 7)}-${nums.slice(7)}`
+  }
+
+  const checkCustomerPhoneStatus = async (phoneValue) => {
+    const digits = String(phoneValue || '').replace(/\D/g, '')
+    if (digits.length < 10) {
+      setPhoneRegistered(false)
+      setRegisteredUserName('')
+      setRegisteredUserHasSenha(false)
+      setPhoneChecked(false)
+      setPhoneCheckLoading(false)
+      return
+    }
+
+    setPhoneCheckLoading(true)
+    try {
+      const res = await checkPhoneExists(phoneValue)
+      setPhoneChecked(true)
+      if (res && res.exists && res.user) {
+        setPhoneRegistered(true)
+        setRegisteredUserName(res.user.nome || '')
+        setRegisteredUserHasSenha(Boolean(res.user.hasSenha))
+        setCustomer(prev => ({
+          ...prev,
+          nome: prev.nome || res.user.nome || '',
+          email: prev.email || res.user.email || '',
+          cpf: prev.cpf || res.user.cpf || '',
+          endereco: {
+            ...prev.endereco,
+            ...(res.user.endereco || {})
+          }
+        }))
+      } else {
+        setPhoneRegistered(false)
+        setRegisteredUserName('')
+        setRegisteredUserHasSenha(false)
+      }
+    } catch (err) {
+      console.warn('Erro ao verificar telefone:', err)
+    } finally {
+      setPhoneCheckLoading(false)
+    }
+  }
+
+  const handleCustomerPhoneChange = (val) => {
+    const formatted = formatPhone(val)
+    setCustomer(prev => ({ ...prev, telefone: formatted }))
+
+    const digits = formatted.replace(/\D/g, '')
+    if (digits.length < 10) {
+      setPhoneRegistered(false)
+      setRegisteredUserName('')
+      setRegisteredUserHasSenha(false)
+      setPhoneChecked(false)
+    }
+
+    if (phoneCheckTimeoutRef.current) {
+      clearTimeout(phoneCheckTimeoutRef.current)
+    }
+
+    if (digits.length >= 10) {
+      phoneCheckTimeoutRef.current = setTimeout(() => {
+        checkCustomerPhoneStatus(formatted)
+      }, 600)
+    }
+  }
+
+  const handleCustomerPhoneBlur = () => {
+    if (phoneCheckTimeoutRef.current) {
+      clearTimeout(phoneCheckTimeoutRef.current)
+    }
+    const digits = (customer.telefone || '').replace(/\D/g, '')
+    if (digits.length >= 10) {
+      checkCustomerPhoneStatus(customer.telefone)
+    }
   }
 
   // Landing page
@@ -1565,7 +1644,7 @@ function App() {
                   <input
                     type="text"
                     placeholder="(31) 99999-9999"
-                    value={customer.telefone}
+                    value={customer.telefone || ''}
                     onChange={e => handleCustomerPhoneChange(e.target.value)}
                     onBlur={handleCustomerPhoneBlur}
                   />
