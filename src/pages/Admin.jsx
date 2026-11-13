@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, useRef, Suspense, lazy } from 'react'
+3import { useState, useMemo, useEffect, useCallback, useRef, Suspense, lazy } from 'react'
 import './Admin.css'
 import {
   supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser,
@@ -12834,6 +12834,90 @@ function getOrderRawItems(ord) {
 function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onStatusChange, onUpdateDue, onPreApprovar, onEditAndConfirm, onEditSave, onSyncCusto, onOpenDelivery, onUpdateCustomer, onCancelOrder, onSendWhatsApp, onToggleWhatsAppNotify, onCloneOrder, onRegisterPayment, onToggleTestOrder, listaTodasRotas = [], onCreateNewRoute }) {
   const [rejectedItems, setRejectedItems] = useState(new Set())
   const [editMode, setEditMode] = useState(false)
+  const [copiedComanda, setCopiedComanda] = useState(false)
+
+  const handleCopyComanda = () => {
+    try {
+      const items = getOrderRawItems(order)
+      const nomeCliente = order.customer?.nome || order.nomeCliente || order.cliente || 'Cliente'
+      const telCliente = order.customer?.telefone || order.telefone || ''
+      const enderecoObj = order.customer?.endereco || order.endereco
+      const enderecoFormatado = typeof enderecoObj === 'string'
+        ? (enderecoObj.trim() || '—')
+        : [
+            enderecoObj?.rua ? `${enderecoObj.rua}${enderecoObj.numero ? `, ${enderecoObj.numero}` : ''}` : '',
+            enderecoObj?.complemento,
+            enderecoObj?.bairro,
+            enderecoObj?.cidade ? (enderecoObj.estado ? `${enderecoObj.cidade}/${enderecoObj.estado}` : enderecoObj.cidade) : '',
+            enderecoObj?.cep ? `CEP: ${enderecoObj.cep}` : ''
+          ].filter(Boolean).join(', ') || '—'
+
+      const totalPecas = items.reduce((s, i) => s + (Number(i.qty) || 0), 0)
+      const link = buildOrderLink(order.id)
+      const statusLabel = STATUS_LABELS[order.status] || order.status || 'Pendente'
+      const formaPag = order.pagamento === 'avista' ? 'À Vista' : order.pagamento === 'aprazo' ? 'A Prazo' : (order.pagamento || 'A Prazo')
+
+      const itensTexto = items.map(i => {
+        const q = Number(i.qty) || 0
+        const p = Number(i.preco) || 0
+        const totalItem = formatPreco(p * q)
+        const precoUn = formatPreco(p)
+        const tipoBadge = i.tipo === 'avista' ? ' (À Vista)' : i.tipo === 'aprazo' ? ' (A Prazo)' : ''
+        return `  • *${q}x* ${i.displayName || i.nome} — ${precoUn} = *${totalItem}*${tipoBadge}`
+      }).join('\n')
+
+      const textoComanda = 
+`📋 *THSM DISTRIBUIDORA — COMANDA #${order.id.toString().slice(-6)}*
+━━━━━━━━━━━━━━━━━━━━
+👤 *Cliente:* ${nomeCliente}
+${telCliente ? `📞 *Telefone:* ${telCliente}\n` : ''}📍 *Endereço:* ${enderecoFormatado}
+${order.dataVencimento ? `📅 *Vencimento:* ${order.dataVencimento}\n` : ''}💳 *Pagamento:* ${formaPag}
+📌 *Status:* ${statusLabel}
+━━━━━━━━━━━━━━━━━━━━
+📦 *ITENS DO PEDIDO:*
+${itensTexto || '  Nenhum item'}
+━━━━━━━━━━━━━━━━━━━━
+📊 *Total de Peças:* ${totalPecas} peças (${items.length} produtos)
+💰 *VALOR TOTAL:* *${formatPreco(order.total || 0)}*
+${order.valorEmAberto > 0 ? `⚠️ *Saldo Devedor / Em Aberto:* *${formatPreco(order.valorEmAberto)}*\n` : ''}━━━━━━━━━━━━━━━━━━━━
+📲 *Acompanhe e confirme seu pedido pelo link:*
+${link}
+
+_THSM Distribuidora — Agradecemos a preferência!_`
+
+      const doCopySuccess = () => {
+        setCopiedComanda(true)
+        setTimeout(() => setCopiedComanda(false), 2500)
+      }
+
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(textoComanda).then(doCopySuccess).catch(() => fallbackCopy(textoComanda))
+      } else {
+        fallbackCopy(textoComanda)
+      }
+
+      function fallbackCopy(text) {
+        const ta = document.createElement('textarea')
+        ta.value = text
+        ta.style.position = 'fixed'
+        ta.style.left = '-9999px'
+        document.body.appendChild(ta)
+        ta.focus()
+        ta.select()
+        try {
+          document.execCommand('copy')
+          doCopySuccess()
+        } catch {
+          alert('Não foi possível copiar automaticamente para a área de transferência.')
+        } finally {
+          document.body.removeChild(ta)
+        }
+      }
+    } catch (err) {
+      console.error('[Copiar Comanda] Erro:', err)
+      alert('Erro ao copiar comanda.')
+    }
+  }
   const [editedItems, setEditedItems] = useState(() => getOrderRawItems(order).map(i => {
     const c = (i.preco_custo != null && i.preco_custo !== '') ? String(i.preco_custo).replace('.', ',') : (getItemCost(i, produtos) ? String(getItemCost(i, produtos)).replace('.', ',') : '')
     return {
@@ -13244,9 +13328,36 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
   return (
     <div className="admin-overlay">
       <div className="admin-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
-        <div className="admin-modal-header">
-          <h3><i className="fa-solid fa-receipt"></i> Pedido #{order.id.toString().slice(-6)} <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent)', marginLeft: '0.4rem' }}>({getOrderRawItems(order).reduce((s, i) => s + (Number(i.qty) || 0), 0)} peças totais)</span></h3>
-          <button className="admin-modal-close" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
+        <div className="admin-modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+          <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
+            <i className="fa-solid fa-receipt"></i> Pedido #{order.id.toString().slice(-6)}
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent)' }}>
+              ({getOrderRawItems(order).reduce((s, i) => s + (Number(i.qty) || 0), 0)} peças totais)
+            </span>
+          </h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <button
+              type="button"
+              className="admin-btn"
+              style={{
+                fontSize: '0.72rem',
+                padding: '0.25rem 0.6rem',
+                background: copiedComanda ? 'var(--success)' : '#2563eb',
+                color: 'white',
+                borderColor: copiedComanda ? 'var(--success)' : '#1d4ed8',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                fontWeight: 600
+              }}
+              title="Copiar texto da comanda formatado para enviar no WhatsApp"
+              onClick={handleCopyComanda}
+            >
+              <i className={`fa-solid ${copiedComanda ? 'fa-check' : 'fa-copy'}`}></i>
+              {copiedComanda ? 'Copiado!' : 'Copiar Comanda'}
+            </button>
+            <button className="admin-modal-close" onClick={onClose}><i className="fa-solid fa-xmark"></i></button>
+          </div>
         </div>
         <div className="admin-modal-body">
           <div className="detail-section">
@@ -13406,9 +13517,6 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
                     <span className="detail-item-name" style={{ textDecoration: isRejected ? 'line-through' : 'none' }}>{i.displayName || i.nome}</span>
                     <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', fontSize: '0.75rem', marginTop: '0.2rem', color: 'var(--admin-text-sec)' }}>
                       <span><strong>{q}x</strong> {formatPreco(p)} = <strong>{formatPreco(p * q)}</strong></span>
-                      <span style={{ color: c > 0 ? '#059669' : '#f59e0b', fontWeight: 600 }}>
-                        <i className="fa-solid fa-tag"></i> Custo un.: {formatPreco(c)} {c > 0 ? `(total ${formatPreco(c * q)})` : '(sem custo)'}
-                      </span>
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -13828,6 +13936,24 @@ function OrderDetailModal({ order, financial, produtos, usuarios, onClose, onSta
             </label>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="admin-btn"
+                style={{
+                  background: copiedComanda ? 'var(--success)' : '#2563eb',
+                  color: 'white',
+                  borderColor: copiedComanda ? 'var(--success)' : '#1d4ed8',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  fontWeight: 600
+                }}
+                title="Copiar texto da comanda formatado para o WhatsApp"
+                onClick={handleCopyComanda}
+              >
+                <i className={`fa-solid ${copiedComanda ? 'fa-check' : 'fa-copy'}`}></i>
+                {copiedComanda ? 'Comanda Copiada!' : 'Copiar Comanda'}
+              </button>
               <button type="button" className="admin-btn" style={{ background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }} title="Duplicar esta comanda em um novo pedido" onClick={() => onCloneOrder?.(order)}>
                 <i className="fa-solid fa-copy"></i> Duplicar Comanda
               </button>
