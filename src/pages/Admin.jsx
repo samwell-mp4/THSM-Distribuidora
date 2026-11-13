@@ -1,4 +1,4 @@
-3import { useState, useMemo, useEffect, useCallback, useRef, Suspense, lazy } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef, Suspense, lazy } from 'react'
 import './Admin.css'
 import {
   supabase, syncAllForAdmin, getAllUsers, upsertOrders, upsertFinancial, upsertOrder, upsertUser,
