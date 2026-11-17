@@ -310,6 +310,7 @@ export default function OrderReportModal({
   // Opções de relatório
   const [includeSummary, setIncludeSummary] = useState(true)
   const [includeItemsDetail, setIncludeItemsDetail] = useState(true)
+  const [multilineItems, setMultilineItems] = useState(true) // Múltiplas linhas dos itens por padrão
   const [orientation, setOrientation] = useState('landscape')
   const [showPreviewTable, setShowPreviewTable] = useState(false)
 
@@ -883,10 +884,17 @@ export default function OrderReportModal({
 
         let prodsInline = '-'
         if (o.items && o.items.length > 0) {
-          prodsInline = o.items.map(i => {
-            const isSem = checkItemSemDevolucao(i, produtos)
-            return `${i.qty || 1}x ${cleanProductName(i.nome)}${isSem ? ' [S/DEV]' : ''}`
-          }).join(' • ')
+          if (multilineItems) {
+            prodsInline = o.items.map(i => {
+              const isSem = checkItemSemDevolucao(i, produtos)
+              return `• ${i.qty || 1}x ${cleanProductName(i.nome)}${isSem ? ' [S/DEV]' : ''}`
+            }).join('\n')
+          } else {
+            prodsInline = o.items.map(i => {
+              const isSem = checkItemSemDevolucao(i, produtos)
+              return `${i.qty || 1}x ${cleanProductName(i.nome)}${isSem ? ' [S/DEV]' : ''}`
+            }).join(' • ')
+          }
         }
 
         if (showVal) {
@@ -978,7 +986,7 @@ export default function OrderReportModal({
           fontSize: 6.0,
           cellPadding: 1.2,
           textColor: [15, 23, 42],
-          valign: 'middle'
+          valign: 'top'
         },
         footStyles: {
           fillColor: [226, 232, 240],
@@ -1070,7 +1078,7 @@ export default function OrderReportModal({
           ? (fin.zeroType === 'brinde' ? 'Brinde' : 'Devolução Total')
           : (resStatus === 'calote' ? 'Calote 100%' : 'Venda Normal')
 
-        const resumoItens = (o.items || []).map(i => `${i.qty || 1}x ${cleanProductName(i.nome)}`).join(' • ') || '-'
+        const resumoItens = (o.items || []).map(i => `${i.qty || 1}x ${cleanProductName(i.nome)}`).join(multilineItems ? '\r\n' : ' • ') || '-'
 
         mainSheetData.push([
           o.id,
@@ -1293,18 +1301,42 @@ export default function OrderReportModal({
           table { width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 7.5px; }
           tr { page-break-inside: avoid; }
           th { background: #0f172a; color: #fff; padding: 4px 5px; text-align: left; font-weight: 700; font-size: 8px; white-space: nowrap; }
-          td { padding: 3px 5px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; font-size: 7.8px; line-height: 1.25; }
+          td { padding: 3px 5px; border-bottom: 1px solid #e2e8f0; vertical-align: top; font-size: 7.8px; line-height: 1.25; }
           tr:nth-child(even) { background: #f8fafc; }
           .td-right { text-align: right; }
           .td-center { text-align: center; }
           .footer-total { background: #e2e8f0 !important; font-weight: 800; font-size: 8.5px; }
+          .prods-multiline-view { display: ${multilineItems ? 'block' : 'none'}; }
+          .prods-inline-view { display: ${multilineItems ? 'none' : 'block'}; }
+          .prod-item-row { margin: 1.5px 0; line-height: 1.25; }
+          .badge-semdev { color: #b45309; font-weight: 700; font-size: 7px; margin-left: 3px; }
           @media print {
             body { padding: 0; }
-            .no-print { display: none; }
+            .no-print { display: none !important; }
           }
         </style>
       </head>
       <body>
+        <div class="no-print" style="background: #0f172a; color: #ffffff; padding: 7px 12px; margin: -4px -4px 10px -4px; display: flex; justify-content: space-between; align-items: center; border-radius: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 2px 6px rgba(0,0,0,0.12);">
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <strong style="font-size: 11px; color: #38bdf8;">THSM DISTRIBUIDORA</strong>
+            <span style="font-size: 11px; color: #64748b;">|</span>
+            <span style="font-size: 11px; color: #cbd5e1;">Visualização de Impressão (${targetOrders.length} pedidos)</span>
+            <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: #f8fafc; background: #1e293b; padding: 3px 9px; border-radius: 4px; border: 1px solid #334155; cursor: pointer;">
+              <input type="checkbox" id="toggleMultiline" ${multilineItems ? 'checked' : ''} onchange="toggleMultilineMode(this.checked)" style="cursor: pointer;" />
+              <span>Múltiplas linhas dos itens</span>
+            </label>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button onclick="window.print()" style="background: #0284c7; color: #ffffff; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 700;">
+              🖨️ Imprimir / Salvar PDF
+            </button>
+            <button onclick="window.close()" style="background: #334155; color: #ffffff; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 11px;">
+              Fechar
+            </button>
+          </div>
+        </div>
+
         <div class="header">
           <div>
             <h1>THSM DISTRIBUIDORA</h1>
@@ -1371,10 +1403,25 @@ export default function OrderReportModal({
               const fin = getOrderFinancialDetails(o)
               const enderecoStr = formatFullAddress(o.customer?.endereco)
               const dataVenc = getOrderDueDate(o, financial)
-              const prodsInline = (o.items || []).map(i => {
-                const isSem = checkItemSemDevolucao(i, produtos)
-                return `${i.qty || 1}x ${cleanProductName(i.nome)}${isSem ? ' [S/DEV]' : ''}`
-              }).join(' • ') || '-'
+              const orderItems = o.items || []
+              let prodsContent = '-'
+              if (orderItems.length > 0) {
+                const multiHtml = orderItems.map(i => {
+                  const isSem = checkItemSemDevolucao(i, produtos)
+                  const semDevBadge = isSem ? ' <span class="badge-semdev">[S/DEV]</span>' : ''
+                  return `<div class="prod-item-row">• <strong>${i.qty || 1}x</strong> ${cleanProductName(i.nome)}${semDevBadge}</div>`
+                }).join('')
+
+                const inlineHtml = orderItems.map(i => {
+                  const isSem = checkItemSemDevolucao(i, produtos)
+                  return `${i.qty || 1}x ${cleanProductName(i.nome)}${isSem ? ' [S/DEV]' : ''}`
+                }).join(' • ')
+
+                prodsContent = `
+                  <div class="prods-multiline-view">${multiHtml}</div>
+                  <div class="prods-inline-view">${inlineHtml}</div>
+                `
+              }
 
               return `
                 <tr>
@@ -1389,7 +1436,7 @@ export default function OrderReportModal({
                   <td style="max-width: 250px;">${enderecoStr}</td>
                   <td><strong>${o.customer?.endereco?.rota || '-'}</strong></td>
                   <td class="td-center">${dev.qtdTotal} un</td>
-                  <td>${prodsInline}</td>
+                  <td>${prodsContent}</td>
                   ${showVal ? `
                     <td class="td-right">${fin.isZero ? 'R$ 0,00' : formatCurrency(fin.valorItens)}</td>
                     <td class="td-right" style="color:#6366f1;">${fin.isZero ? 'R$ 0,00' : (fin.desconto > 0 ? `- ${formatCurrency(fin.desconto)}` : '-')}</td>
@@ -1424,6 +1471,15 @@ export default function OrderReportModal({
         </div>
 
         <script>
+          function toggleMultilineMode(checked) {
+            document.querySelectorAll('.prods-multiline-view').forEach(function(el) {
+              el.style.display = checked ? 'block' : 'none';
+            });
+            document.querySelectorAll('.prods-inline-view').forEach(function(el) {
+              el.style.display = checked ? 'none' : 'block';
+            });
+          }
+
           window.onload = function() {
             setTimeout(function() { window.print(); }, 400);
           }
@@ -1711,6 +1767,31 @@ export default function OrderReportModal({
                   />
                 </div>
               </div>
+
+              {/* OPÇÃO DE FORMATAÇÃO DOS ITENS */}
+              <div style={{ marginTop: '0.85rem', paddingTop: '0.85rem', borderTop: '1px dashed #e2e8f0', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                <span className="report-filter-label" style={{ marginBottom: 0 }}>Formato dos Itens na Impressão / PDF:</span>
+                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                  <button
+                    type="button"
+                    className={`report-preset-chip ${multilineItems ? 'active' : ''}`}
+                    onClick={() => setMultilineItems(true)}
+                    title="Exibe cada item/produto com quebra de linha (parágrafo próprio)"
+                  >
+                    <i className="fa-solid fa-bars-staggered" style={{ marginRight: '5px' }}></i>
+                    Múltiplas Linhas (Quebra por produto)
+                  </button>
+                  <button
+                    type="button"
+                    className={`report-preset-chip ${!multilineItems ? 'active' : ''}`}
+                    onClick={() => setMultilineItems(false)}
+                    title="Exibe os itens em uma única linha contínua compacta"
+                  >
+                    <i className="fa-solid fa-grip-lines" style={{ marginRight: '5px' }}></i>
+                    Linha Única (Compacto inline)
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1829,7 +1910,28 @@ export default function OrderReportModal({
                 <i className="fa-solid fa-table-list" style={{ marginRight: '6px', color: '#0284c7' }}></i>
                 Pré-visualização dos Pedidos e Vencimentos ({targetOrders.length} pedidos)
               </span>
-              <i className={`fa-solid ${showPreviewTable ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <span
+                  style={{
+                    fontSize: '0.72rem',
+                    color: multilineItems ? '#0284c7' : '#64748b',
+                    background: multilineItems ? '#e0f2fe' : '#f1f5f9',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                  onClick={e => {
+                    e.stopPropagation()
+                    setMultilineItems(v => !v)
+                  }}
+                  title="Clique para alternar entre múltiplas linhas ou linha única nos itens"
+                >
+                  <i className={`fa-solid ${multilineItems ? 'fa-bars-staggered' : 'fa-grip-lines'}`} style={{ marginRight: '4px' }}></i>
+                  {multilineItems ? 'Múltiplas Linhas' : 'Linha Única'}
+                </span>
+                <i className={`fa-solid ${showPreviewTable ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
+              </div>
             </div>
 
             {showPreviewTable && (
@@ -1843,6 +1945,7 @@ export default function OrderReportModal({
                       <th>Endereço Completo</th>
                       <th>Rota</th>
                       <th>Qtd</th>
+                      <th>Produtos / Itens Descritos</th>
                       <th style={{ textAlign: 'right' }}>Valor Tabela</th>
                       <th style={{ textAlign: 'right' }}>Desconto</th>
                       <th style={{ textAlign: 'right' }}>Total Líquido</th>
@@ -1874,6 +1977,28 @@ export default function OrderReportModal({
                           <td style={{ maxWidth: '240px', fontSize: '0.72rem', color: '#334155' }}>{endStr}</td>
                           <td><strong>{o.customer?.endereco?.rota || '-'}</strong></td>
                           <td>{dev.qtdTotal} un</td>
+                          <td style={{ minWidth: '150px' }}>
+                            {multilineItems ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '0.72rem', color: '#334155' }}>
+                                {(o.items && o.items.length > 0) ? o.items.map((i, idx) => {
+                                  const isSem = checkItemSemDevolucao(i, produtos)
+                                  return (
+                                    <div key={idx} style={{ lineHeight: '1.25' }}>
+                                      • <strong>{i.qty || 1}x</strong> {cleanProductName(i.nome)}
+                                      {isSem && <span style={{ color: '#d97706', fontSize: '0.65rem', fontWeight: 700, marginLeft: '3px' }}>[S/DEV]</span>}
+                                    </div>
+                                  )
+                                }) : '-'}
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: '0.72rem', color: '#334155', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={(o.items || []).map(i => `${i.qty || 1}x ${cleanProductName(i.nome)}`).join(' • ')}>
+                                {(o.items && o.items.length > 0) ? o.items.map(i => {
+                                  const isSem = checkItemSemDevolucao(i, produtos)
+                                  return `${i.qty || 1}x ${cleanProductName(i.nome)}${isSem ? ' [S/DEV]' : ''}`
+                                }).join(' • ') : '-'}
+                              </div>
+                            )}
+                          </td>
                           <td style={{ textAlign: 'right', color: '#475569', fontWeight: 600 }}>
                             {fin.isZero ? 'R$ 0,00' : formatCurrency(fin.valorItens)}
                           </td>
@@ -1888,14 +2013,14 @@ export default function OrderReportModal({
                     })}
                     {targetOrders.length > 50 && (
                       <tr>
-                        <td colSpan="9" style={{ textAlign: 'center', padding: '0.65rem', color: '#64748b', fontStyle: 'italic' }}>
+                        <td colSpan="10" style={{ textAlign: 'center', padding: '0.65rem', color: '#64748b', fontStyle: 'italic' }}>
                           E mais {targetOrders.length - 50} pedidos (todos incluídos no PDF e no Excel)...
                         </td>
                       </tr>
                     )}
                     {targetOrders.length === 0 && (
                       <tr>
-                        <td colSpan="9" style={{ textAlign: 'center', padding: '1rem', color: '#94a3b8' }}>
+                        <td colSpan="10" style={{ textAlign: 'center', padding: '1rem', color: '#94a3b8' }}>
                           Nenhum pedido encontrado para os filtros selecionados.
                         </td>
                       </tr>
@@ -1922,6 +2047,16 @@ export default function OrderReportModal({
               />
               <i className={`fa-solid ${includePrices ? 'fa-dollar-sign' : 'fa-eye-slash'}`}></i>
               <span>{includePrices ? 'Com Valores (R$)' : 'Sem Valores (Romaneio)'}</span>
+            </label>
+
+            <label className="report-checkbox-label" style={{ fontWeight: 700, fontSize: '0.78rem', color: multilineItems ? '#0284c7' : '#64748b', background: multilineItems ? '#f0f9ff' : '#f8fafc', padding: '0.25rem 0.6rem', borderRadius: '6px', border: `1px solid ${multilineItems ? '#bae6fd' : '#cbd5e1'}`, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', userSelect: 'none' }} title="Clique para alternar entre produtos em linhas separadas (parágrafo por item) ou em linha única contínua">
+              <input
+                type="checkbox"
+                checked={multilineItems}
+                onChange={e => setMultilineItems(e.target.checked)}
+              />
+              <i className={`fa-solid ${multilineItems ? 'fa-bars-staggered' : 'fa-grip-lines'}`}></i>
+              <span>{multilineItems ? 'Múltiplas Linhas (Itens)' : '1 Linha (Itens)'}</span>
             </label>
           </div>
 

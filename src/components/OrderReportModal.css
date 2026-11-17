@@ -509,6 +509,7 @@
 .report-preview-table-wrap {
   max-height: 220px;
   overflow-y: auto;
+  overflow-x: auto;
 }
 
 .report-preview-table {
@@ -526,12 +527,14 @@
   border-bottom: 1px solid #e2e8f0;
   position: sticky;
   top: 0;
+  white-space: nowrap;
 }
 
 .report-preview-table td {
   padding: 0.45rem 0.65rem;
   border-bottom: 1px solid #f1f5f9;
   color: #1e293b;
+  vertical-align: top;
 }
 
 .report-preview-table tr:hover td {
