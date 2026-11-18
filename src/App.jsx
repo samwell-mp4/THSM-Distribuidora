@@ -13,6 +13,7 @@ import './App.css'
 const LS_SESSAO = 'thsm_sessao'
 const LS_ORDERS = 'thsm_admin_orders'
 const LS_ADMIN = 'thsm_admin_auth'
+const LS_CART = 'thsm_user_cart'
 const WEBHOOK_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/novo-pedido'
 const WEBHOOK_RECOVER_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/recuperar-senha'
 const WHATSAPP_FORCE_URL = 'https://plug-sales-dispatch-app-n8n-2.hx8235.easypanel.host/webhook/whatsapp-force'
@@ -34,7 +35,26 @@ function App() {
   const [priceRange, setPriceRange] = useState([0, 5000])
   const [onlyInStock, setOnlyInStock] = useState(false)
   const [tipoDevolucao, setTipoDevolucao] = useState('todos')
-  const [cart, setCart] = useState({})
+  const [cart, setCart] = useState(() => {
+    try {
+      const saved = localStorage.getItem(LS_CART)
+      return saved ? JSON.parse(saved) : {}
+    } catch {
+      return {}
+    }
+  })
+
+  useEffect(() => {
+    try {
+      if (cart && typeof cart === 'object' && Object.keys(cart).length > 0) {
+        localStorage.setItem(LS_CART, JSON.stringify(cart))
+      } else {
+        localStorage.removeItem(LS_CART)
+      }
+    } catch (e) {
+      console.warn('Erro ao salvar cart no localStorage:', e)
+    }
+  }, [cart])
   const [cartOpen, setCartOpen] = useState(false)
   const [toast, setToast] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
@@ -1001,6 +1021,7 @@ function App() {
 
       await upsertOrder({ ...order, user_id: userId })
       setCart({})
+      try { localStorage.removeItem(LS_CART) } catch {}
       setCheckout(null)
       showToast('Pedido enviado com sucesso!')
       navigate('/minha-conta')
@@ -1607,7 +1628,7 @@ function App() {
                   <button className="btn-next" onClick={iniciarCheckout} style={{ width: '100%' }} disabled={cartItems.length === 0}>
                     <i className="fa-solid fa-bag-shopping"></i> Finalizar Pedido
                   </button>
-                  <button className="btn-clear-cart" onClick={() => { setCart({}); showToast('Carrinho limpo', 'success') }}>
+                  <button className="btn-clear-cart" onClick={() => { setCart({}); try { localStorage.removeItem(LS_CART) } catch {}; showToast('Carrinho limpo', 'success') }}>
                     <i className="fa-solid fa-trash-can"></i> Limpar Carrinho
                   </button>
                 </div>

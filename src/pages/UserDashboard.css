@@ -1,0 +1,463 @@
+/* ==============================================================
+   THSM USER DASHBOARD (PAINEL DO CLIENTE)
+   Estilização completa, ultra-responsiva e protegida contra quebras
+   ============================================================== */
+
+/* Wrapper principal da Dashboard */
+.user-dashboard-wrapper {
+  display: flex;
+  min-height: 100vh;
+  max-width: 100vw;
+  width: 100%;
+  overflow-x: hidden;
+  position: relative;
+  background: var(--admin-bg, #f8f9fa);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--admin-text, #0f172a);
+}
+
+/* Header Móvel exclusivo da Dashboard do Usuário */
+.user-dash-mobile-header {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .user-dashboard-wrapper {
+    flex-direction: column;
+  }
+
+  .user-dash-mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0.65rem 1rem;
+    position: sticky;
+    top: 0;
+    z-index: 80;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  }
+
+  .user-dash-mobile-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .user-dash-mobile-brand img {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    border-radius: 6px;
+  }
+
+  .user-dash-mobile-title {
+    font-size: 0.88rem;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.2;
+  }
+
+  .user-dash-mobile-user {
+    font-size: 0.72rem;
+    color: #64748b;
+    font-weight: 500;
+  }
+
+  .user-dash-mobile-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: #f1f5f9;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+
+  .user-dash-mobile-back-btn:active {
+    transform: scale(0.96);
+    background: #e2e8f0;
+  }
+
+  /* Conteúdo Principal no mobile */
+  .user-dashboard-wrapper .admin-content {
+    padding: 0.85rem !important;
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px)) !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+}
+
+/* Barra inferior (Bottom Nav) em mobile com 5 abas */
+.admin-bottom-nav {
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  z-index: 99999 !important;
+  background: #ffffff !important;
+  border-top: 1px solid #e2e8f0 !important;
+  padding: 0.4rem 0.2rem calc(0.4rem + env(safe-area-inset-bottom, 0px)) !important;
+  box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08) !important;
+  display: none;
+  justify-content: space-around;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .admin-bottom-nav {
+    display: flex !important;
+  }
+
+  .admin-bottom-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    background: none;
+    border: none;
+    color: #64748b;
+    font-size: 0.65rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0.25rem 0.4rem;
+    flex: 1;
+    position: relative;
+    user-select: none;
+    transition: color 0.15s ease;
+  }
+
+  .admin-bottom-item i {
+    font-size: 1.05rem;
+    margin-bottom: 1px;
+  }
+
+  .admin-bottom-item.active {
+    color: #2563eb !important;
+    font-weight: 800;
+  }
+
+  .admin-bottom-badge {
+    position: absolute;
+    top: 0;
+    right: 25%;
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 0.62rem;
+    font-weight: 800;
+    padding: 1px 5px;
+    border-radius: 10px;
+    line-height: 1.2;
+  }
+}
+
+/* ==============================================================
+   CATÁLOGO / SHOP INTERNO DA DASHBOARD (user-shop-*)
+   ============================================================== */
+.user-shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 5rem;
+}
+
+.user-shop-card {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 1.1rem;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.user-shop-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.user-shop-card .card-cat {
+  font-size: 0.72rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.user-shop-card .card-name {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.35;
+  flex: 1;
+}
+
+.user-shop-card .card-price {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #2563eb;
+  margin-bottom: 0.9rem;
+}
+
+.btn-add-cart {
+  width: 100%;
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.btn-add-cart:hover {
+  background: #1d4ed8;
+}
+
+.qty-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.qty-control button {
+  background: none;
+  border: none;
+  color: #334155;
+  padding: 0.6rem 0.9rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background 0.15s ease;
+}
+
+.qty-control button:hover {
+  background: #e2e8f0;
+}
+
+.qty-control span {
+  font-weight: 800;
+  color: #0f172a;
+  font-size: 0.95rem;
+}
+
+/* Barra Flutuante de Checkout do Shop */
+.user-shop-cart-bar {
+  position: fixed !important;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #ffffff;
+  padding: 0.85rem 1.5rem;
+  box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.12);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 99998 !important;
+  border-top: 1px solid #cbd5e1;
+  animation: userShopSlideUp 0.25s ease-out;
+}
+
+@keyframes userShopSlideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@media (max-width: 768px) {
+  .user-shop-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 7rem;
+  }
+
+  .user-shop-card {
+    padding: 0.85rem;
+  }
+
+  .user-shop-card .card-name {
+    font-size: 0.88rem;
+  }
+
+  .user-shop-card .card-price {
+    font-size: 1.05rem;
+  }
+
+  /* Em telas móveis, a barra do carrinho fica ACIMA da barra de navegação inferior */
+  .user-shop-cart-bar {
+    bottom: calc(54px + env(safe-area-inset-bottom, 0px)) !important;
+    padding: 0.75rem 1rem !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .user-shop-cart-bar {
+    left: 260px !important;
+    bottom: 0 !important;
+  }
+}
+
+/* ==============================================================
+   TABELAS DE PEDIDOS E HISTÓRICO RESPONSIVAS
+   ============================================================== */
+.admin-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.admin-table th {
+  background: #f8fafc;
+  padding: 0.65rem 0.85rem;
+  text-align: left;
+  font-weight: 700;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.admin-table td {
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+  vertical-align: middle;
+}
+
+@media (max-width: 768px) {
+  .admin-table thead {
+    display: none;
+  }
+
+  .admin-table,
+  .admin-table tbody,
+  .admin-table tr {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .admin-table tr {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.85rem;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  }
+
+  .admin-table td {
+    padding: 0.35rem 0 !important;
+    border: none !important;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.82rem;
+  }
+
+  .admin-table td::before {
+    content: attr(data-label);
+    font-weight: 700;
+    color: #64748b;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+}
+
+/* Modais responsivos da Dashboard */
+.admin-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.admin-modal {
+  background: #ffffff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 580px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-modal-lg {
+  max-width: 780px;
+}
+
+.admin-modal-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.admin-modal-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.admin-modal-close {
+  background: none;
+  border: none;
+  font-size: 1.15rem;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 6px;
+}
+
+.admin-modal-body {
+  padding: 1.25rem;
+  overflow-y: auto;
+}
+
+.admin-modal-footer {
+  padding: 0.85rem 1.25rem;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}

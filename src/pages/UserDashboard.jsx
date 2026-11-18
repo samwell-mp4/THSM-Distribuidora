@@ -3,10 +3,13 @@ import { supabase, upsertOrder, upsertFinancial, deleteOrder as supabaseDeleteOr
 import { compressImageDataUrl } from '../lib/image'
 import { searchMatches } from '../lib/search'
 import AddressForm from '../components/AddressForm'
+import './Admin.css'
+import './UserDashboard.css'
 
 const LS_ORDERS = 'thsm_user_orders'
 const LS_FINANCIAL = 'thsm_user_financial'
 const LS_SESSAO = 'thsm_sessao'
+const LS_SHOP_CART = 'thsm_user_shop_cart'
 
 function formatPreco(v) {
   return `R$ ${Number(v).toFixed(2).replace('.', ',')}`
@@ -96,7 +99,27 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
     complemento: currentUser?.endereco?.complemento || ''
   }))
   const [savingProfile, setSavingProfile] = useState(false)
-  const [shopCart, setShopCart] = useState({})
+  const [shopCart, setShopCart] = useState(() => {
+    try {
+      const saved = localStorage.getItem(LS_SHOP_CART)
+      return saved ? JSON.parse(saved) : {}
+    } catch {
+      return {}
+    }
+  })
+
+  useEffect(() => {
+    try {
+      if (shopCart && Object.keys(shopCart).length > 0) {
+        localStorage.setItem(LS_SHOP_CART, JSON.stringify(shopCart))
+      } else {
+        localStorage.removeItem(LS_SHOP_CART)
+      }
+    } catch (e) {
+      console.warn('Erro ao salvar shopCart no localStorage:', e)
+    }
+  }, [shopCart])
+
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const handleShopCheckout = async () => {
     const items = Object.entries(shopCart)
@@ -137,6 +160,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
       
       await upsertOrder(order)
       setShopCart({})
+      try { localStorage.removeItem(LS_SHOP_CART) } catch {}
       alert('Pedido realizado com sucesso!')
       
       setAllOrders(prev => [normalizeOrder(order), ...prev])
@@ -227,11 +251,15 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
 
   const normPhone = (p) => (p || '').replace(/\D/g, '')
 
-  const belongsToUser = (o) => o && currentUser && (
-    (o.user_id != null && o.user_id === currentUser.id) ||
-    (o.userId != null && o.userId === currentUser.id) ||
-    samePhone(o.customer?.telefone, currentUser.telefone)
-  )
+  const belongsToUser = (o) => {
+    if (!o || !currentUser) return false
+    const userId = currentUser.id ? String(currentUser.id) : null
+    if (userId && (String(o.user_id) === userId || String(o.userId) === userId)) return true
+    const userEmail = (currentUser.email || '').toLowerCase().trim()
+    if (userEmail && o.customer?.email && (o.customer.email || '').toLowerCase().trim() === userEmail) return true
+    const orderPhone = o.customer?.telefone || o.telefone || o.customerTelefone || o.customer?.endereco?.telefone
+    return samePhone(orderPhone, currentUser.telefone)
+  }
 
   // Order tracking link (?pedido=ID): load the order directly (only da própria conta)
   const initialOrderHandled = useRef(false)
@@ -284,16 +312,28 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
   }, [initialOrderId, currentUser])
 
   useEffect(() => {
-    if (!currentUser?.telefone) return
+    if (!currentUser?.telefone && !currentUser?.id) return
     const rawDigits = String(currentUser.telefone || '').replace(/\D/g, '')
-    const telWith55 = rawDigits.startsWith('55') ? rawDigits : '55' + rawDigits
-    const telNo55 = rawDigits.replace(/^55/, '')
+    const telWith55 = rawDigits ? (rawDigits.startsWith('55') ? rawDigits : '55' + rawDigits) : ''
+    const telNo55 = rawDigits ? rawDigits.replace(/^55/, '') : ''
     const userId = currentUser.id || null
 
     const conds = []
     if (userId) conds.push(`user_id.eq.${userId}`)
-    if (telWith55) conds.push(`data->customer->>telefone.eq.${telWith55}`)
-    if (telNo55) conds.push(`data->customer->>telefone.eq.${telNo55}`)
+    if (telWith55) {
+      conds.push(`data->customer->>telefone.eq.${telWith55}`)
+      conds.push(`data->>telefone.eq.${telWith55}`)
+    }
+    if (telNo55) {
+      conds.push(`data->customer->>telefone.eq.${telNo55}`)
+      conds.push(`data->>telefone.eq.${telNo55}`)
+    }
+    if (currentUser?.email) {
+      const em = (currentUser.email || '').toLowerCase().trim()
+      if (em) conds.push(`data->customer->>email.eq.${em}`)
+    }
+
+    if (conds.length === 0) return
 
     supabase.from('pedidos').select('*').or(conds.join(',')).order('created_at', { ascending: false }).then(async ({ data }) => {
       if (data) {
@@ -302,19 +342,35 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
           const d = JSON.parse(localStorage.getItem('thsm_deleted_order_ids') || '[]')
           deletedSet = new Set(d.map(String))
         } catch {}
-        const orders = data.map(r => {
+        const fetchedOrders = data.map(r => {
           const raw = r.data && typeof r.data === 'object' ? { ...r.data, user_id: r.user_id, status: r.status } : r
           return normalizeOrder(raw)
         }).filter(o => o && o.id != null && !deletedSet.has(String(o.id)))
-        setAllOrders(orders)
-        setLS(LS_ORDERS, orders)
-        const orderIds = orders.filter(o => o && o.id).map(o => o.id)
+
+        setAllOrders(prev => {
+          const map = new Map()
+          // 1. Manter pedidos locais salvos no dispositivo (garante que nunca somem)
+          ;(prev || []).forEach(o => { if (o && o.id != null) map.set(String(o.id), o) })
+          // 2. Mesclar pedidos mais recentes do servidor
+          fetchedOrders.forEach(o => { if (o && o.id != null) map.set(String(o.id), o) })
+          const merged = Array.from(map.values())
+          setLS(LS_ORDERS, merged)
+          return merged
+        })
+
+        const orderIds = fetchedOrders.filter(o => o && o.id).map(o => o.id)
         if (orderIds.length > 0) {
           const { data: finData } = await supabase.from('financeiro').select('*').in('order_id', orderIds)
           if (finData) {
             const finRecords = finData.map(f => f.data || f)
-            setFinancial(finRecords)
-            setLS(LS_FINANCIAL, finRecords)
+            setFinancial(prev => {
+              const map = new Map()
+              ;(prev || []).forEach(f => { if (f && f.id != null) map.set(String(f.id), f) })
+              finRecords.forEach(f => { if (f && f.id != null) map.set(String(f.id), f) })
+              const merged = Array.from(map.values())
+              setLS(LS_FINANCIAL, merged)
+              return merged
+            })
           }
         }
       }
@@ -323,14 +379,17 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
 
   const userOrders = useMemo(() => {
     if (!currentUser) return []
-    const userPhone = normPhone(currentUser.telefone)
+    const userPhone = currentUser.telefone || ''
     const userEmail = (currentUser.email || '').toLowerCase().trim()
+    const userId = currentUser.id ? String(currentUser.id) : null
+
     return allOrders
       .filter(o => {
-        if (o.user_id != null && o.user_id === currentUser.id) return true
-        if (o.userId != null && o.userId === currentUser.id) return true
+        if (!o) return false
+        if (userId && (String(o.user_id) === userId || String(o.userId) === userId)) return true
         if (userEmail && o.customer?.email && (o.customer.email || '').toLowerCase().trim() === userEmail) return true
-        if (userPhone && normPhone(o.customer?.telefone) === userPhone) return true
+        const orderPhone = o.customer?.telefone || o.telefone || o.customerTelefone || o.customer?.endereco?.telefone
+        if (userPhone && orderPhone && samePhone(orderPhone, userPhone)) return true
         return false
       })
       .map(normalizeOrder)
@@ -556,7 +615,22 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
   }
 
   return (
-    <div className="admin">
+    <div className="admin user-dashboard-wrapper">
+      {/* Header Móvel para Cliente */}
+      <header className="user-dash-mobile-header">
+        <div className="user-dash-mobile-brand">
+          <img src="/thsmdistribuidora.webp" alt="THSM" />
+          <div>
+            <strong className="user-dash-mobile-title">THSM Distribuidora</strong>
+            <span className="user-dash-mobile-user">{currentUser?.nome ? `Olá, ${currentUser.nome.split(' ')[0]}` : 'Painel do Cliente'}</span>
+          </div>
+        </div>
+        <button className="user-dash-mobile-back-btn" onClick={onVoltar} title="Voltar para a Loja / Catálogo">
+          <i className="fa-solid fa-store"></i>
+          <span>Catálogo</span>
+        </button>
+      </header>
+
       <aside className="admin-sidebar">
         <div className="admin-logo">
           <img src="/thsmdistribuidora.webp" alt="THSM" style={{ width: '28px', height: '28px', objectFit: 'contain', borderRadius: '4px' }} />
@@ -1174,22 +1248,26 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
 
       {/* Sticky bottom nav for mobile */}
       <nav className="admin-bottom-nav">
-        <button className={`admin-bottom-item ${tab === 'conta' ? 'active' : ''}`} onClick={initConta}>
-          <i className="fa-solid fa-user-gear"></i>
-          <span>Minha Conta</span>
+        <button className={`admin-bottom-item ${tab === 'produtos' ? 'active' : ''}`} onClick={() => setTab('produtos')} title="Fazer Pedido">
+          <i className="fa-solid fa-bag-shopping"></i>
+          <span>Produtos</span>
         </button>
-        <button className={`admin-bottom-item ${tab === 'pedidos' ? 'active' : ''}`} onClick={() => setTab('pedidos')}>
+        <button className={`admin-bottom-item ${tab === 'pedidos' ? 'active' : ''}`} onClick={() => setTab('pedidos')} title="Meus Pedidos">
           <i className="fa-solid fa-clipboard-list"></i>
           <span>Pedidos</span>
         </button>
-        <button className={`admin-bottom-item ${tab === 'financeiro' ? 'active' : ''}`} onClick={() => setTab('financeiro')}>
+        <button className={`admin-bottom-item ${tab === 'financeiro' ? 'active' : ''}`} onClick={() => setTab('financeiro')} title="Financeiro">
           <i className="fa-solid fa-coins"></i>
           <span>Financeiro</span>
           {pendentes.length > 0 && <span className="admin-bottom-badge">{pendentes.length}</span>}
         </button>
-        <button className="admin-bottom-item" onClick={onVoltar}>
-          <i className="fa-solid fa-arrow-left"></i>
-          <span>Voltar</span>
+        <button className={`admin-bottom-item ${tab === 'conta' ? 'active' : ''}`} onClick={initConta} title="Minha Conta">
+          <i className="fa-solid fa-user-gear"></i>
+          <span>Conta</span>
+        </button>
+        <button className="admin-bottom-item" onClick={onVoltar} title="Voltar ao Catálogo Principal">
+          <i className="fa-solid fa-store"></i>
+          <span>Catálogo</span>
         </button>
       </nav>
 
