@@ -829,12 +829,13 @@ function sendAlertRota(tipo, contatos, orders, customText = '') {
 import AddressForm from '../components/AddressForm'
 import CloneOrderModal from '../components/CloneOrderModal'
 import { getOrderPaymentDate } from '../lib/orderPaymentDate'
+import { lazyRetry } from '../lib/lazyRetry'
 
-const MapView = lazy(() => import('../components/MapView'))
-const CentralAnalise = lazy(() => import('../components/CentralAnalise'))
-const CentralRotas = lazy(() => import('../components/ModuloRotas/CentralRotas'))
-const OrderReportModal = lazy(() => import('../components/OrderReportModal'))
-const TransferOrderModal = lazy(() => import('../components/TransferOrderModal'))
+const MapView = lazyRetry(() => import('../components/MapView'))
+const CentralAnalise = lazyRetry(() => import('../components/CentralAnalise'))
+const CentralRotas = lazyRetry(() => import('../components/ModuloRotas/CentralRotas'))
+const OrderReportModal = lazyRetry(() => import('../components/OrderReportModal'))
+const TransferOrderModal = lazyRetry(() => import('../components/TransferOrderModal'))
 
 export default function Admin({ produtos, refreshProducts, onVoltar }) {
   const [tab, setTab] = useState(() => sessionStorage.getItem('thsm_admin_tab') || 'dashboard')

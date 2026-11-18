@@ -361,6 +361,17 @@ app.use(express.static('dist', {
   }
 }))
 
+// SPA Fallback: Serve index.html for all client-side routes, while preserving 404 for missing static assets/APIs
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/assets/') || req.path.startsWith('/api/') || req.path.startsWith('/fotos/') || req.path.startsWith('/rest/')) {
+    return res.status(404).json({ error: 'Not found' })
+  }
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+  res.setHeader('Pragma', 'no-cache')
+  res.setHeader('Expires', '0')
+  res.sendFile(path.resolve('dist/index.html'))
+})
+
 // Express Error Handling Middleware to catch aborted requests gracefully
 app.use((err, req, res, next) => {
   if (err && (err.type === 'request.aborted' || err.code === 'ECONNABORTED' || err.message?.includes('aborted'))) {

@@ -1,10 +1,11 @@
-import { useState, useMemo, useEffect, useCallback, useRef, Suspense, lazy } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef, Suspense } from 'react'
 import AddressForm from './components/AddressForm'
+import { lazyRetry } from './lib/lazyRetry'
 
-const Admin = lazy(() => import('./pages/Admin'))
-const UserDashboard = lazy(() => import('./pages/UserDashboard'))
-const KitPage = lazy(() => import('./pages/KitPage'))
-const LandingPage = lazy(() => import('./pages/LandingPage'))
+const Admin = lazyRetry(() => import('./pages/Admin'))
+const UserDashboard = lazyRetry(() => import('./pages/UserDashboard'))
+const KitPage = lazyRetry(() => import('./pages/KitPage'))
+const LandingPage = lazyRetry(() => import('./pages/LandingPage'))
 import { supabase, upsertOrder, upsertUser, saveUserViaWebhook, generateLoginToken, consumeLoginToken, flushPendingOrders, normTel, samePhone, formatImageUrl, checkPhoneExists } from './lib/supabase'
 import { searchMatches } from './lib/search'
 import './App.css'
