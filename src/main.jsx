@@ -6,6 +6,7 @@ import ErrorBoundary from './ErrorBoundary.jsx'
 
 // Vite preload error handler: automatically reloads the page when a deploy updates chunk hashes
 window.addEventListener('vite:preloadError', (event) => {
+  if (event?.preventDefault) event.preventDefault()
   console.warn('[Vite] Preload error detected, reloading page to fetch latest bundle...', event)
   try {
     sessionStorage.removeItem('thsm_last_chunk_reload')

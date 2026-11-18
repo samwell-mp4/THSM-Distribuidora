@@ -62,7 +62,7 @@ export default class ErrorBoundary extends Component {
                     sessionStorage.removeItem('thsm_last_chunk_reload')
                     sessionStorage.removeItem('thsm_chunk_reload_lock')
                   } catch {}
-                  window.location.reload()
+                  window.location.href = window.location.origin + window.location.pathname + '?_v=' + Date.now()
                 }}
                 style={{ background: '#4f46e5', color: '#fff', border: 'none', borderRadius: '10px', padding: '0.7rem 1.4rem', fontSize: '0.9rem', cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
               >

@@ -25,6 +25,27 @@ function diffDays(a, b) {
   return Math.floor((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / (1000 * 60 * 60 * 24))
 }
 
+export function getDueStatus(dueDateStr, paidDateStr, status) {
+  if (status === 'pago') {
+    return { type: 'paid', days: 0, label: paidDateStr ? `Pago em ${formatDate(paidDateStr)}` : 'Pago' }
+  }
+  if (!dueDateStr) {
+    return { type: 'pending', days: 0, label: 'Pendente' }
+  }
+  const today = new Date(hoje() + 'T12:00:00').getTime()
+  const due = new Date(dueDateStr + 'T12:00:00').getTime()
+  const diff = Math.round((due - today) / (1000 * 60 * 60 * 24))
+
+  if (diff < 0) {
+    const overdueDays = Math.abs(diff)
+    return { type: 'overdue', days: overdueDays, label: `${overdueDays} ${overdueDays === 1 ? 'dia' : 'dias'} em atraso` }
+  }
+  if (diff === 0) {
+    return { type: 'today', days: 0, label: 'Vence hoje!' }
+  }
+  return { type: 'future', days: diff, label: `Faltam ${diff} ${diff === 1 ? 'dia' : 'dias'}` }
+}
+
 function hoje() {
   return new Date().toISOString().split('T')[0]
 }
@@ -112,6 +133,8 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
   const [orderSearch, setOrderSearch] = useState('')
   const [orderDateStart, setOrderDateStart] = useState('')
   const [orderDateEnd, setOrderDateEnd] = useState('')
+  const [orderStatusFilter, setOrderStatusFilter] = useState('todos')
+  const [orderSortBy, setOrderSortBy] = useState('recentes')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [editPreOrder, setEditPreOrder] = useState(false)
   const [editedPreItems, setEditedPreItems] = useState([])
@@ -444,9 +467,36 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
     return financial.filter(f => orderIds.has(f.orderId))
   }, [financial, userOrders])
 
+  const orderCounts = useMemo(() => {
+    return {
+      todos: userOrders.length,
+      emAberto: userOrders.filter(o => (Number(o.valorEmAberto) > 0) || o.status === 'calote-parcial').length,
+      pendentes: userOrders.filter(o => o.status === 'pendente' || o.status === 'pre-pedido').length,
+      entregues: userOrders.filter(o => o.status === 'entregue').length,
+      concluidos: userOrders.filter(o => o.status === 'concluido').length,
+    }
+  }, [userOrders])
+
+  const finCounts = useMemo(() => {
+    let pend = 0
+    let atras = 0
+    let pagas = 0
+    userFinancial.forEach(f => {
+      const st = getDueStatus(f.dueDate, f.paidDate, f.status)
+      if (st.type === 'paid') {
+        pagas++
+      } else if (st.type === 'overdue') {
+        atras++
+      } else {
+        pend++
+      }
+    })
+    return { todas: userFinancial.length, pendente: pend, atrasado: atras, pago: pagas }
+  }, [userFinancial])
+
   const pendentes = userFinancial.filter(f => f.status === 'pendente')
   const pendentesTotal = pendentes.reduce((s, f) => s + f.value, 0)
-  const atrasados = pendentes.filter(f => diffDays(f.dueDate, hoje()) > 0)
+  const atrasados = userFinancial.filter(f => f.status === 'pendente' && getDueStatus(f.dueDate, f.paidDate, f.status).type === 'overdue')
   const atrasadosTotal = atrasados.reduce((s, f) => s + f.value, 0)
 
   const deleteOrder = (id) => {
@@ -814,46 +864,112 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
               <div className="admin-card card-blue">
                 <i className="fa-solid fa-shopping-bag"></i>
                 <div>
-                  <strong>{userOrders.length}</strong>
+                  <strong>{orderCounts.todos}</strong>
                   <span>Total de Pedidos</span>
+                </div>
+              </div>
+              <div className="admin-card card-yellow">
+                <i className="fa-solid fa-circle-exclamation"></i>
+                <div>
+                  <strong>{orderCounts.emAberto}</strong>
+                  <span>Valor em Aberto</span>
                 </div>
               </div>
               <div className="admin-card card-yellow">
                 <i className="fa-solid fa-hourglass-half"></i>
                 <div>
-                  <strong>{userOrders.filter(o => o.status === 'pendente').length}</strong>
+                  <strong>{orderCounts.pendentes}</strong>
                   <span>Pendentes</span>
                 </div>
               </div>
               <div className="admin-card card-green">
                 <i className="fa-solid fa-check-circle"></i>
                 <div>
-                  <strong>{userOrders.filter(o => o.status === 'entregue').length}</strong>
-                  <span>Entregues</span>
+                  <strong>{orderCounts.entregues + orderCounts.concluidos}</strong>
+                  <span>Finalizados</span>
                 </div>
               </div>
             </div>
-            {/* Filters */}
-            <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '0.85rem', alignItems: 'center', flexWrap: 'wrap' }}>
+
+            {/* Abas de Status dos Pedidos */}
+            <div className="admin-tabs" style={{ marginBottom: '0.85rem' }}>
+              {[
+                { id: 'todos', label: 'Todos', count: orderCounts.todos },
+                { id: 'emAberto', label: 'Valor em Aberto', count: orderCounts.emAberto },
+                { id: 'pendente', label: 'Pendentes', count: orderCounts.pendentes },
+                { id: 'entregue', label: 'Entregues', count: orderCounts.entregues },
+                { id: 'concluido', label: 'Concluídos', count: orderCounts.concluidos },
+              ].map(t => (
+                <button
+                  key={t.id}
+                  className={`admin-tab ${orderStatusFilter === t.id ? 'active' : ''}`}
+                  onClick={() => setOrderStatusFilter(t.id)}
+                >
+                  {t.label} {t.count > 0 && <span className="tab-count">{t.count}</span>}
+                </button>
+              ))}
+            </div>
+
+            {/* Filtros de Busca, Datas e Ordenação */}
+            <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '0.95rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <div className="admin-search-prod" style={{ flex: 1, minWidth: '160px' }}>
                 <i className="fa-solid fa-search"></i>
-                <input type="text" placeholder="Buscar por produto, item ou nº do pedido..." value={orderSearch} onChange={e => setOrderSearch(e.target.value)} style={{ width: '100%' }} />
+                <input
+                  type="text"
+                  placeholder="Buscar por produto ou nº do pedido..."
+                  value={orderSearch}
+                  onChange={e => setOrderSearch(e.target.value)}
+                  style={{ width: '100%' }}
+                />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>
                 <span>Data:</span>
-                <input type="date" value={orderDateStart} onChange={e => setOrderDateStart(e.target.value)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', maxWidth: '120px' }} />
+                <input
+                  type="date"
+                  value={orderDateStart}
+                  onChange={e => setOrderDateStart(e.target.value)}
+                  style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', maxWidth: '120px' }}
+                />
                 <span>—</span>
-                <input type="date" value={orderDateEnd} onChange={e => setOrderDateEnd(e.target.value)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', maxWidth: '120px' }} />
+                <input
+                  type="date"
+                  value={orderDateEnd}
+                  onChange={e => setOrderDateEnd(e.target.value)}
+                  style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', maxWidth: '120px' }}
+                />
               </div>
-              {(orderSearch || orderDateStart || orderDateEnd) && (
-                <button className="admin-btn admin-btn-sec" style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem' }} onClick={() => { setOrderSearch(''); setOrderDateStart(''); setOrderDateEnd('') }}>
+              <select
+                value={orderSortBy}
+                onChange={e => setOrderSortBy(e.target.value)}
+                style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--admin-border)', fontSize: '0.78rem', background: '#fff', color: '#1e293b', fontWeight: 600 }}
+              >
+                <option value="recentes">Mais recentes</option>
+                <option value="antigos">Mais antigos</option>
+                <option value="maior-valor">Maior valor</option>
+                <option value="menor-valor">Menor valor</option>
+              </select>
+              {(orderSearch || orderDateStart || orderDateEnd || orderStatusFilter !== 'todos' || orderSortBy !== 'recentes') && (
+                <button
+                  className="admin-btn admin-btn-sec"
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem' }}
+                  onClick={() => { setOrderSearch(''); setOrderDateStart(''); setOrderDateEnd(''); setOrderStatusFilter('todos'); setOrderSortBy('recentes') }}
+                >
                   <i className="fa-solid fa-xmark"></i> Limpar
                 </button>
               )}
             </div>
 
             {(() => {
-              const filtered = userOrders.filter(o => {
+              let list = userOrders.filter(o => {
+                if (orderStatusFilter === 'emAberto') {
+                  if (!(Number(o.valorEmAberto) > 0 || o.status === 'calote-parcial')) return false
+                } else if (orderStatusFilter === 'pendente') {
+                  if (o.status !== 'pendente' && o.status !== 'pre-pedido') return false
+                } else if (orderStatusFilter === 'entregue') {
+                  if (o.status !== 'entregue') return false
+                } else if (orderStatusFilter === 'concluido') {
+                  if (o.status !== 'concluido') return false
+                }
                 if (orderDateStart && o.date < orderDateStart) return false
                 if (orderDateEnd && o.date > orderDateEnd) return false
                 if (orderSearch) {
@@ -869,56 +985,138 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
                 }
                 return true
               })
-              return filtered.length === 0 ? (
+
+              if (orderSortBy === 'recentes') {
+                list.sort((a, b) => new Date(b.created_at || b.createdAt || b.date || 0) - new Date(a.created_at || a.createdAt || a.date || 0))
+              } else if (orderSortBy === 'antigos') {
+                list.sort((a, b) => new Date(a.created_at || a.createdAt || a.date || 0) - new Date(b.created_at || b.createdAt || b.date || 0))
+              } else if (orderSortBy === 'maior-valor') {
+                list.sort((a, b) => (Number(b.total) || 0) - (Number(a.total) || 0))
+              } else if (orderSortBy === 'menor-valor') {
+                list.sort((a, b) => (Number(a.total) || 0) - (Number(b.total) || 0))
+              }
+
+              return list.length === 0 ? (
                 <div className="empty">
                   <i className="fa-solid fa-box-open"></i>
                   <h3>{userOrders.length === 0 ? 'Nenhum pedido encontrado' : 'Nenhum pedido com esses filtros'}</h3>
                   <p>{userOrders.length === 0 ? 'Você ainda não realizou nenhum pedido.' : 'Tente limpar os filtros para ver mais resultados.'}</p>
                 </div>
               ) : (
-                <div className="admin-table-wrap">
-                  <table className="admin-table">
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Data</th>
-                        <th>Itens</th>
-                        <th>Total</th>
-                        <th>Pagamento</th>
-                        <th>Status</th>
-                        <th>Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.map(o => (
-                        <tr key={o.id}>
-                          <td data-label="Pedido">#{o.id.toString().slice(-6)}</td>
-                          <td data-label="Data">{formatDate(o.date)}</td>
-                          <td data-label="Itens">{o.items.reduce((s, i) => s + (Number(i.qty) || 0), 0)} peças</td>
-                          <td className="td-price" data-label="Total">{formatPreco(o.total)}</td>
-                          <td data-label="Pagamento">{o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}</td>
-                          <td data-label="Status">
-                            {(() => {
-                              const stInfo = getUserOrderStatusInfo(o.status)
-                              return <span className={`status-tag ${stInfo.className}`}>{stInfo.label}</span>
-                            })()}
-                          </td>
-                          <td data-label="Ações">
-                            <div className="td-actions">
-                              {o.status === 'pre-pedido' && (
-                                <button type="button" className="action-btn action-confirm" title="Editar Comanda" onClick={() => { setSelectedOrder(o); setEditedPreItems((Array.isArray(o.items) && o.items.length > 0 ? o.items : (o.itens || [])).map(i => ({ ...i }))); setEditPreOrder(true) }}>
-                                  <i className="fa-solid fa-pen"></i>
-                                </button>
-                              )}
-                              <button className="action-btn" title="Ver detalhes" onClick={() => setSelectedOrder(o)}>
-                                <i className="fa-solid fa-eye"></i>
-                              </button>
+                <div className="dash-orders-list">
+                  {list.map(o => {
+                    const stInfo = getUserOrderStatusInfo(o.status)
+                    const totalPieces = (o.items || []).reduce((s, i) => s + (Number(i.qty) || 0), 0)
+                    const itemsList = o.items || []
+                    const dueInfo = o.vencimento ? getDueStatus(o.vencimento, o.pagoEm || o.paidDate || o.dataPagamento, o.status === 'concluido' ? 'pago' : 'pendente') : null
+
+                    return (
+                      <div key={o.id} className="dash-order-card">
+                        {/* Cabeçalho do Card */}
+                        <div className="dash-order-card-header">
+                          <div className="dash-order-card-id-box">
+                            <div className="dash-order-icon">
+                              <i className="fa-solid fa-receipt"></i>
                             </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                            <div className="dash-order-id-info">
+                              <span className="dash-order-num">Pedido #{String(o.id).slice(-6)}</span>
+                              <span className="dash-order-date">
+                                <i className="fa-regular fa-calendar"></i> {formatDate(o.date)}
+                              </span>
+                            </div>
+                          </div>
+                          <span className={`status-tag ${stInfo.className}`}>{stInfo.label}</span>
+                        </div>
+
+                        {/* Linha de Datas e Forma de Pagamento */}
+                        <div className="dash-order-dates-row">
+                          <div className="dash-order-date-item">
+                            <span className="dash-date-label">Pagamento</span>
+                            <span className="dash-date-value">
+                              <i className="fa-solid fa-credit-card" style={{ fontSize: '0.75rem', color: '#64748b' }}></i>
+                              {o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}
+                            </span>
+                          </div>
+                          {o.vencimento && (
+                            <div className="dash-order-date-item">
+                              <span className="dash-date-label">Vencimento</span>
+                              <span className={`dash-date-value ${dueInfo?.type === 'overdue' ? 'date-overdue' : dueInfo?.type === 'today' ? 'date-alert' : ''}`}>
+                                <i className="fa-solid fa-clock" style={{ fontSize: '0.75rem' }}></i>
+                                {formatDate(o.vencimento)}
+                              </span>
+                            </div>
+                          )}
+                          {(o.pagoEm || o.paidDate || o.dataPagamento) && (
+                            <div className="dash-order-date-item">
+                              <span className="dash-date-label">Data Pagamento</span>
+                              <span className="dash-date-value date-paid">
+                                <i className="fa-solid fa-circle-check" style={{ fontSize: '0.75rem' }}></i>
+                                {formatDate(o.pagoEm || o.paidDate || o.dataPagamento)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Alerta de Saldo em Aberto se houver */}
+                        {Number(o.valorEmAberto) > 0 && (
+                          <div className="dash-order-alert-box">
+                            <div className="dash-alert-left">
+                              <i className="fa-solid fa-circle-exclamation"></i>
+                              <div>
+                                <strong>Valor em Aberto</strong>
+                                <span>{o.vencimento ? `Vencimento: ${formatDate(o.vencimento)}` : 'Aguardando quitação'}</span>
+                              </div>
+                            </div>
+                            <div className="dash-alert-amount">{formatPreco(o.valorEmAberto)}</div>
+                          </div>
+                        )}
+
+                        {/* Prévia dos itens da comanda */}
+                        <div className="dash-order-items-preview">
+                          <div className="dash-items-badge">
+                            <i className="fa-solid fa-box-open" style={{ color: '#2563eb' }}></i>
+                            <span>{totalPieces} {totalPieces === 1 ? 'peça' : 'peças'} ({itemsList.length} {itemsList.length === 1 ? 'item' : 'itens'})</span>
+                          </div>
+                          <p className="dash-items-summary">
+                            {itemsList.slice(0, 3).map(i => `${i.qty || 1}x ${sanitizeUserFacingText(i.nome || i.displayName || 'Item')}`).join(', ')}
+                            {itemsList.length > 3 && ` e mais ${itemsList.length - 3} itens`}
+                          </p>
+                        </div>
+
+                        {/* Rodapé com Total e Ação de Ver Comanda */}
+                        <div className="dash-order-card-footer">
+                          <div className="dash-order-total-box">
+                            <span className="dash-total-label">Total do Pedido</span>
+                            <span className="dash-total-val">{formatPreco(o.total)}</span>
+                          </div>
+                          <div className="dash-order-actions">
+                            {o.status === 'pre-pedido' && (
+                              <button
+                                type="button"
+                                className="dash-btn-edit-order"
+                                title="Editar Comanda"
+                                onClick={() => {
+                                  setSelectedOrder(o)
+                                  setEditedPreItems((Array.isArray(o.items) && o.items.length > 0 ? o.items : (o.itens || [])).map(i => ({ ...i })))
+                                  setEditPreOrder(true)
+                                }}
+                              >
+                                <i className="fa-solid fa-pen"></i> Editar
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="dash-btn-view-order"
+                              title="Ver Comanda Completa"
+                              onClick={() => setSelectedOrder(o)}
+                            >
+                              <i className="fa-solid fa-file-invoice"></i> Ver Comanda
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )
             })()}
@@ -956,7 +1154,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
                 </div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.85rem', flexWrap: 'wrap', alignItems: 'center' }}>
               <div className="search-box" style={{ flex: 1, minWidth: 160 }}>
                 <i className="fa-solid fa-magnifying-glass"></i>
                 <input type="text" placeholder="Buscar por item..." value={finSearch} onChange={e => setFinSearch(e.target.value)} />
@@ -964,12 +1162,22 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
               </div>
               <input type="date" value={finDateStart} onChange={e => setFinDateStart(e.target.value)} style={{ padding: '0.4rem 0.5rem', borderRadius: 6, border: '1px solid var(--border)', fontSize: '0.78rem' }} title="Data início" />
               <input type="date" value={finDateEnd} onChange={e => setFinDateEnd(e.target.value)} style={{ padding: '0.4rem 0.5rem', borderRadius: 6, border: '1px solid var(--border)', fontSize: '0.78rem' }} title="Data fim" />
+              {(finSearch || finDateStart || finDateEnd || finFilter !== 'todas') && (
+                <button
+                  className="admin-btn admin-btn-sec"
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem' }}
+                  onClick={() => { setFinSearch(''); setFinDateStart(''); setFinDateEnd(''); setFinFilter('todas') }}
+                >
+                  <i className="fa-solid fa-xmark"></i> Limpar
+                </button>
+              )}
             </div>
-            <div className="admin-tabs">
+            <div className="admin-tabs" style={{ marginBottom: '0.85rem' }}>
               {[
-                { id: 'todas', label: 'Todas', count: userFinancial.length },
-                { id: 'pendente', label: 'Pendentes', count: pendentes.length },
-                { id: 'pago', label: 'Pagas', count: userFinancial.filter(f => f.status === 'pago').length },
+                { id: 'todas', label: 'Todas', count: finCounts.todas },
+                { id: 'pendente', label: 'Pendentes', count: finCounts.pendente },
+                { id: 'atrasado', label: 'Em Atraso', count: finCounts.atrasado },
+                { id: 'pago', label: 'Pagas', count: finCounts.pago },
               ].map(t => (
                 <button key={t.id} className={`admin-tab ${finFilter === t.id ? 'active' : ''}`} onClick={() => setFinFilter(t.id)}>
                   {t.label} {t.count > 0 && <span className="tab-count">{t.count}</span>}
@@ -977,78 +1185,98 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
               ))}
             </div>
             {(() => {
-              let filtered = finFilter === 'todas' ? userFinancial : userFinancial.filter(f => f.status === finFilter)
-              if (finSearch.trim()) {
-                filtered = filtered.filter(f => searchMatches(sanitizeUserFacingText(f.itemName), finSearch))
-              }
-              if (finDateStart) filtered = filtered.filter(f => f.dueDate >= finDateStart)
-              if (finDateEnd) filtered = filtered.filter(f => f.dueDate <= finDateEnd)
+              let filtered = userFinancial.filter(f => {
+                const st = getDueStatus(f.dueDate, f.paidDate, f.status)
+                if (finFilter === 'pendente') {
+                  if (st.type === 'paid' || st.type === 'overdue') return false
+                } else if (finFilter === 'atrasado') {
+                  if (st.type !== 'overdue') return false
+                } else if (finFilter === 'pago') {
+                  if (st.type !== 'paid') return false
+                }
+                if (finSearch.trim()) {
+                  if (!searchMatches(sanitizeUserFacingText(f.itemName), finSearch)) return false
+                }
+                if (finDateStart && f.dueDate < finDateStart) return false
+                if (finDateEnd && f.dueDate > finDateEnd) return false
+                return true
+              })
+
               return filtered.length === 0 ? (
                 <div className="empty">
                   <i className="fa-solid fa-coins"></i>
                   <h3>Nenhum registro financeiro</h3>
-                  <p>Você não possui contas a prazo.</p>
+                  <p>Você não possui contas com esses filtros.</p>
                 </div>
               ) : (
-                <div className="admin-table-wrap">
-                  <table className="admin-table">
-                    <thead>
-                      <tr>
-                        <th>Pedido</th>
-                        <th>Item</th>
-                        <th>Valor</th>
-                        <th>Vencimento</th>
-                        <th>Dias</th>
-                        <th>Status</th>
-                        <th>Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.map(f => {
-                        const diff = diffDays(hoje(), f.dueDate)
-                        const overdue = f.status === 'pendente' && diff > 0
-                        const order = allOrders.find(o => o.id === f.orderId)
-                        return (
-                          <tr key={f.id} className={overdue ? 'row-overdue' : ''}>
-                            <td data-label="Pedido">#{f.orderId?.toString().slice(-6) || '-'}</td>
-                            <td className="td-prod-name" data-label="Item">{sanitizeUserFacingText(f.itemName)} ({f.qty}x)</td>
-                            <td className="td-price" data-label="Valor">{formatPreco(f.value)}</td>
-                            <td data-label="Vencimento">{f.dueDate ? formatDate(f.dueDate) : '-'}</td>
-                            <td data-label="Dias">
-                              {f.status === 'pago' ? (
-                                <span className="days-ok">Pago{f.paidDate ? ` em ${formatDate(f.paidDate)}` : ''}</span>
-                              ) : diff > 0 ? (
-                                <span className="days-overdue">+{diff} dias</span>
-                              ) : diff === 0 ? (
-                                <span className="days-today">Vence hoje</span>
-                              ) : (
-                                <span className="days-future">Faltam {Math.abs(diff)} dias</span>
-                              )}
-                            </td>
-                            <td data-label="Status">
-                              <span className={`status-tag ${overdue ? 'status-atrasado' : f.status === 'pendente' ? 'status-pendente' : 'status-pago'}`}>
-                                {overdue ? 'Atrasado' : f.status === 'pendente' ? 'Pendente' : 'Pago'}
-                              </span>
-                            </td>
-                            <td data-label="Ações">
-                              <div className="td-actions">
-                                {f.status === 'pendente' && (
-                                  <button className="action-btn action-confirm" title="Pagar" onClick={() => openPayment(f)}>
-                                    <i className="fa-solid fa-credit-card"></i>
-                                  </button>
-                                )}
-                                {order && (
-                                  <button className="action-btn" title="Ver pedido" onClick={() => setSelectedOrder(order)}>
-                                    <i className="fa-solid fa-eye"></i>
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                <div className="dash-fin-list">
+                  {filtered.map(f => {
+                    const dueInfo = getDueStatus(f.dueDate, f.paidDate, f.status)
+                    const isOverdue = dueInfo.type === 'overdue'
+                    const isPaid = dueInfo.type === 'paid'
+                    const order = allOrders.find(o => o.id === f.orderId)
+
+                    return (
+                      <div
+                        key={f.id}
+                        className={`dash-fin-card ${isOverdue ? 'fin-card-overdue' : isPaid ? 'fin-card-paid' : 'fin-card-pending'}`}
+                      >
+                        {/* Header do Card Financeiro */}
+                        <div className="dash-fin-card-header">
+                          <div className="dash-fin-id-box">
+                            <i className={isPaid ? 'fa-solid fa-circle-check' : isOverdue ? 'fa-solid fa-triangle-exclamation' : 'fa-solid fa-clock'}></i>
+                            <div className="dash-fin-info">
+                              <span className="dash-fin-item-name">{sanitizeUserFacingText(f.itemName)} ({f.qty}x)</span>
+                              <span className="dash-fin-order-ref">Pedido #{f.orderId?.toString().slice(-6) || '-'}</span>
+                            </div>
+                          </div>
+                          <span className={`status-tag ${isPaid ? 'status-pago' : isOverdue ? 'status-atrasado' : 'status-pendente'}`}>
+                            {isPaid ? 'Pago' : isOverdue ? 'Em Atraso' : 'Pendente'}
+                          </span>
+                        </div>
+
+                        {/* Corpo com Valor e Prazos Claros */}
+                        <div className="dash-fin-body">
+                          <div className="dash-fin-amount-box">
+                            <span className="dash-fin-amount-label">Valor a Pagar</span>
+                            <span className="dash-fin-amount">{formatPreco(f.value)}</span>
+                          </div>
+                          <div className="dash-fin-dates-box">
+                            <span className="dash-fin-date-row">
+                              Vencimento: <strong className={isOverdue ? 'text-danger' : ''}>{f.dueDate ? formatDate(f.dueDate) : '-'}</strong>
+                            </span>
+                            <span className={`dash-fin-days-row ${isPaid ? 'days-ok' : isOverdue ? 'days-overdue' : dueInfo.type === 'today' ? 'days-today' : 'days-future'}`}>
+                              {dueInfo.label}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Ações do Card */}
+                        <div className="dash-fin-footer">
+                          {order && (
+                            <button
+                              type="button"
+                              className="dash-btn-fin-order"
+                              title="Ver Comanda"
+                              onClick={() => setSelectedOrder(order)}
+                            >
+                              <i className="fa-solid fa-file-invoice"></i> Ver Pedido
+                            </button>
+                          )}
+                          {f.status === 'pendente' && (
+                            <button
+                              type="button"
+                              className="dash-btn-pay-pix"
+                              title="Pagar via PIX"
+                              onClick={() => openPayment(f)}
+                            >
+                              <i className="fa-solid fa-qrcode"></i> Pagar via PIX
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )
             })()}
@@ -1298,10 +1526,6 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
 
       {/* Sticky bottom nav for mobile */}
       <nav className="admin-bottom-nav">
-        <button className={`admin-bottom-item ${tab === 'produtos' ? 'active' : ''}`} onClick={() => setTab('produtos')} title="Fazer Pedido">
-          <i className="fa-solid fa-bag-shopping"></i>
-          <span>Produtos</span>
-        </button>
         <button className={`admin-bottom-item ${tab === 'pedidos' ? 'active' : ''}`} onClick={() => setTab('pedidos')} title="Meus Pedidos">
           <i className="fa-solid fa-clipboard-list"></i>
           <span>Pedidos</span>
