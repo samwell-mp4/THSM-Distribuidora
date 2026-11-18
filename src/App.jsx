@@ -835,6 +835,10 @@ function App() {
     })
   }, [])
 
+  const deleteFromCart = useCallback((cartKey) => {
+    setCart(prev => { const { [cartKey]: _, ...rest } = prev; return rest })
+  }, [])
+
   const updateCartQty = useCallback((cartKey, newQty) => {
     if (newQty === '') {
       setCart(prev => prev[cartKey] ? { ...prev, [cartKey]: { ...prev[cartKey], qty: '' } } : prev)
@@ -855,10 +859,6 @@ function App() {
       return { ...prev, [cartKey]: { ...item, qty: clamped } }
     })
   }, [deleteFromCart, showToast])
-
-  const deleteFromCart = useCallback((cartKey) => {
-    setCart(prev => { const { [cartKey]: _, ...rest } = prev; return rest })
-  }, [])
 
   const iniciarCheckout = () => {
     if (cartItems.length === 0) {
