@@ -29,6 +29,48 @@ function hoje() {
   return new Date().toISOString().split('T')[0]
 }
 
+export function getUserOrderStatusInfo(status) {
+  const st = String(status || '').toLowerCase().trim()
+  switch (st) {
+    case 'pre-pedido':
+      return { label: 'Pré-Pedido', className: 'status-pre-pedido' }
+    case 'pendente':
+      return { label: 'Pendente', className: 'status-pendente' }
+    case 'confirmado':
+      return { label: 'Confirmado', className: 'status-confirmado' }
+    case 'em-andamento':
+      return { label: 'Em Andamento', className: 'status-em-andamento' }
+    case 'em-rota':
+      return { label: 'Em Rota', className: 'status-em-rota' }
+    case 'entregue':
+      return { label: 'Entregue', className: 'status-entregue' }
+    case 'acerto':
+    case 'calote_parcial':
+    case 'parcial':
+      return { label: 'Valor em Aberto', className: 'status-parcial' }
+    case 'calote':
+    case 'calote_100':
+      return { label: 'Pendente', className: 'status-pendente' }
+    case 'concluido':
+      return { label: 'Concluído', className: 'status-concluido' }
+    case 'cancelado':
+      return { label: 'Cancelado', className: 'status-cancelado' }
+    default:
+      if (st.includes('calote')) {
+        return { label: 'Valor em Aberto', className: 'status-parcial' }
+      }
+      return { label: status || 'Pendente', className: `status-${st}` }
+  }
+}
+
+export function sanitizeUserFacingText(txt) {
+  if (!txt) return ''
+  return String(txt)
+    .replace(/calote\s*parcial/gi, 'Saldo em Aberto')
+    .replace(/calote\s*100%/gi, 'Pendente')
+    .replace(/calote/gi, 'Pendente')
+}
+
 function getLS(key) {
   try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : [] } catch { return [] }
 }
@@ -855,7 +897,12 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
                           <td data-label="Itens">{o.items.reduce((s, i) => s + (Number(i.qty) || 0), 0)} peças</td>
                           <td className="td-price" data-label="Total">{formatPreco(o.total)}</td>
                           <td data-label="Pagamento">{o.pagamento === 'avista' ? 'À Vista' : o.pagamento === 'aprazo' ? 'A Prazo' : 'Misto'}</td>
-                          <td data-label="Status"><span className={`status-tag status-${o.status}`}>{o.status}</span></td>
+                          <td data-label="Status">
+                            {(() => {
+                              const stInfo = getUserOrderStatusInfo(o.status)
+                              return <span className={`status-tag ${stInfo.className}`}>{stInfo.label}</span>
+                            })()}
+                          </td>
                           <td data-label="Ações">
                             <div className="td-actions">
                               {o.status === 'pre-pedido' && (
@@ -932,7 +979,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
             {(() => {
               let filtered = finFilter === 'todas' ? userFinancial : userFinancial.filter(f => f.status === finFilter)
               if (finSearch.trim()) {
-                filtered = filtered.filter(f => searchMatches(f.itemName, finSearch))
+                filtered = filtered.filter(f => searchMatches(sanitizeUserFacingText(f.itemName), finSearch))
               }
               if (finDateStart) filtered = filtered.filter(f => f.dueDate >= finDateStart)
               if (finDateEnd) filtered = filtered.filter(f => f.dueDate <= finDateEnd)
@@ -964,7 +1011,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
                         return (
                           <tr key={f.id} className={overdue ? 'row-overdue' : ''}>
                             <td data-label="Pedido">#{f.orderId?.toString().slice(-6) || '-'}</td>
-                            <td className="td-prod-name" data-label="Item">{f.itemName} ({f.qty}x)</td>
+                            <td className="td-prod-name" data-label="Item">{sanitizeUserFacingText(f.itemName)} ({f.qty}x)</td>
                             <td className="td-price" data-label="Valor">{formatPreco(f.value)}</td>
                             <td data-label="Vencimento">{f.dueDate ? formatDate(f.dueDate) : '-'}</td>
                             <td data-label="Dias">
@@ -1026,7 +1073,10 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
                     <div className="detail-section">
                       <h4>Informações</h4>
                       <p><strong>Data:</strong> {formatDate(order.date)}</p>
-                      <p><strong>Status:</strong> <span className={`status-tag status-${order.status}`}>{order.status}</span></p>
+                      <p><strong>Status:</strong> {(() => {
+                        const stInfo = getUserOrderStatusInfo(order.status)
+                        return <span className={`status-tag ${stInfo.className}`}>{stInfo.label}</span>
+                      })()}</p>
                       {order.customer?.endereco?.cidade && (
                         <p><strong>Cidade:</strong> {order.customer.endereco.cidade} / {order.customer.endereco.estado}</p>
                       )}
@@ -1065,7 +1115,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
                           return (
                             <div key={f.id} className="detail-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                                <span className="detail-item-name">{f.itemName} ({f.qty}x)</span>
+                                <span className="detail-item-name">{sanitizeUserFacingText(f.itemName)} ({f.qty}x)</span>
                                 <span className="detail-item-qty"><strong>{formatPreco(f.value)}</strong></span>
                               </div>
                               <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '0.78rem' }}>
@@ -1288,7 +1338,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
                         <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Valor</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontWeight: 600 }}>{showPayment.itemName} ({showPayment.qty}x)</span>
+                        <span style={{ fontWeight: 600 }}>{sanitizeUserFacingText(showPayment.itemName)} ({showPayment.qty}x)</span>
                         <span style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--accent)' }}>{formatPreco(showPayment.value)}</span>
                       </div>
                     </div>
@@ -1355,7 +1405,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
                   </div>
                   <h3 style={{ margin: '0 0 0.25rem', color: 'var(--success)' }}>Pagamento Confirmado!</h3>
                   <p style={{ fontSize: '0.85rem', color: 'var(--admin-text-sec)', marginBottom: '1.25rem' }}>
-                    {showPayment.itemName} — {formatPreco(showPayment.value)}
+                    {sanitizeUserFacingText(showPayment.itemName)} — {formatPreco(showPayment.value)}
                   </p>
                   <div style={{ background: '#f9fafb', borderRadius: 10, padding: '0.75rem 1rem', marginBottom: '1.25rem', textAlign: 'left', fontSize: '0.82rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
@@ -1617,7 +1667,10 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
               <div style={{ padding: '0.5rem 0', borderBottom: '2px dashed var(--admin-border)', marginBottom: '1rem', textAlign: 'center' }}>
                 <strong style={{ fontSize: '0.9rem' }}>{showComanda.customer?.nome || 'Cliente'}</strong>
                 <p style={{ fontSize: '0.78rem', color: 'var(--admin-text-sec)' }}>
-                  {formatDate(showComanda.date)} &middot; <span className={`status-tag status-${showComanda.status}`} style={{ fontSize: '0.7rem' }}>{showComanda.status}</span>
+                  {formatDate(showComanda.date)} &middot; {(() => {
+                    const stInfo = getUserOrderStatusInfo(showComanda.status)
+                    return <span className={`status-tag ${stInfo.className}`} style={{ fontSize: '0.7rem' }}>{stInfo.label}</span>
+                  })()}
                 </p>
               </div>
 

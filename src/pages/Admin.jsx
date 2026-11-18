@@ -252,6 +252,21 @@ function PeriodFilter({ period, onChange, month, onMonth, rangeStart, onRangeSta
 }
 
 function buildStatusWhatsApp(order, newStatus, extra = {}) {
+  // NUNCA gerar mensagem de WhatsApp para pedidos em Calote ou Calote Parcial
+  if (
+    newStatus === 'calote' ||
+    newStatus === 'calote_parcial' ||
+    newStatus === 'parcial' ||
+    order?.isCalote ||
+    order?.status === 'calote' ||
+    order?.status === 'calote_parcial' ||
+    order?.status === 'parcial' ||
+    extra?.isCalote ||
+    extra?.motivo === 'calote_100' ||
+    extra?.motivo === 'calote_parcial'
+  ) {
+    return ''
+  }
   const link = buildOrderLink(order.id)
   const nome = order.customer?.nome || 'Cliente'
   const id = `#${order.id.toString().slice(-6)}`
@@ -675,13 +690,29 @@ function sendStatusWebhook(order, newStatus, extra = {}) {
       console.log(`[WhatsApp] Disparo abortado: comanda #${order?.id} está com notificarWhatsApp desativado.`)
       return
     }
-    // NUNCA disparar mensagem de WhatsApp para pedidos em Calote
-    if (newStatus === 'calote' || order?.isCalote || order?.status === 'calote' || extra?.isCalote || extra?.motivo === 'calote_100') {
-      console.log(`[WhatsApp] Disparo abortado: comanda #${order?.id} é calote (nenhuma mensagem enviada ao cliente).`)
+    // NUNCA disparar mensagem de WhatsApp para pedidos em Calote ou Calote Parcial (nem para cliente, nem para admin)
+    const isCaloteAbort = (
+      newStatus === 'calote' ||
+      newStatus === 'calote_parcial' ||
+      newStatus === 'parcial' ||
+      order?.isCalote ||
+      order?.status === 'calote' ||
+      order?.status === 'calote_parcial' ||
+      order?.status === 'parcial' ||
+      extra?.isCalote ||
+      extra?.motivo === 'calote_100' ||
+      extra?.motivo === 'calote_parcial'
+    )
+    if (isCaloteAbort) {
+      console.log(`[WhatsApp] Disparo abortado: comanda #${order?.id} é calote / calote parcial (nenhuma mensagem enviada a cliente ou admin).`)
       return
     }
     if (order?.status === 'pre-pedido' && newStatus === 'pendente') return
     const whatsappMessage = buildStatusWhatsApp(order, newStatus, extra)
+    if (!whatsappMessage) {
+      console.log(`[WhatsApp] Disparo abortado: comanda #${order?.id} sem mensagem definida.`)
+      return
+    }
     const returnedItems = extra.returnedItems || order.returnedItems || []
     const telefone = normalizePhoneDigits(order.customer?.telefone || '')
     const customer = { ...order.customer, telefone }
@@ -2791,7 +2822,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
             id: orderId + '-parcial',
             orderId,
             customerName: order.customer?.nome || '',
-            itemName: `Saldo Devedor / Calote Parcial #${String(orderId).slice(-6)}`,
+            itemName: `Saldo em Aberto #${String(orderId).slice(-6)}`,
             qty: 1,
             value: valorEmAberto,
             precoCusto: 0,
@@ -2892,8 +2923,8 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
     if (finalize) {
       if (newStatus === 'calote_parcial') {
-        showToast(`⚠️ Pedido #${String(orderId).slice(-6)} finalizado como CALOTE PARCIAL! Pago: ${formatPreco(totalPago)} | Saldo em aberto: ${formatPreco(valorEmAberto)}.`, 'warning')
-        sendStatusWebhook(updatedOrder, 'calote_parcial', webhookExtra)
+        showToast(`⚠️ Pedido #${String(orderId).slice(-6)} finalizado com Saldo em Aberto (Calote Parcial). Total pago: ${formatPreco(totalPago)} | Em aberto: ${formatPreco(valorEmAberto)}. (Sem envio de WhatsApp)`, 'warning')
+        // Não dispara webhook de WhatsApp para cliente nem admin em calote parcial
       } else {
         showToast(`Pedido #${String(orderId).slice(-6)} finalizado com sucesso! (Total pago: ${formatPreco(totalPago)})`, 'success')
         sendStatusWebhook(updatedOrder, 'concluido', webhookExtra)
@@ -3790,6 +3821,10 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
 
   const sendWhatsApp = (o) => {
     if (!o) return
+    if (o.status === 'calote' || o.status === 'calote_parcial' || o.status === 'parcial' || o.isCalote) {
+      showToast('Envio de WhatsApp bloqueado: pedido em calote / calote parcial.', 'warning')
+      return
+    }
     const phone = getOrderCustomerPhone(o)
     const raw = (phone || '').replace(/\D/g, '')
     if (!raw || raw.length < 10) {
@@ -14035,12 +14070,13 @@ _THSM Distribuidora — Agradecemos a preferência!_`
                 <i className="fa-solid fa-check-double"></i> Concluir Entrega
               </button>
             )}
-            {(order.customer?.telefone || order.telefone) && (
+            {(order.customer?.telefone || order.telefone) && order.status !== 'calote' && order.status !== 'calote_parcial' && order.status !== 'parcial' && !order.isCalote && (
               <button
                 type="button"
                 className="admin-btn"
                 style={{ background: '#10b981', color: 'white', borderColor: '#059669' }}
                 onClick={() => {
+                  if (order.status === 'calote' || order.status === 'calote_parcial' || order.status === 'parcial' || order.isCalote) return
                   if (onSendWhatsApp) {
                     onSendWhatsApp(order)
                   } else {
@@ -14048,6 +14084,7 @@ _THSM Distribuidora — Agradecemos a preferência!_`
                     const cleanPhone = raw.startsWith('55') ? raw.slice(2) : raw
                     const telefoneCom55 = '55' + cleanPhone
                     const msg = buildStatusWhatsApp(order, order.status)
+                    if (!msg) return
                     fetch(WHATSAPP_FORCE_URL, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
