@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { searchMatches, clientMatchesSearch } from '../lib/search'
 import AddressForm from './AddressForm'
+import { formatPhone } from '../lib/supabase'
 
 function formatPreco(v) {
   return `R$ ${Number(v || 0).toFixed(2).replace('.', ',')}`
