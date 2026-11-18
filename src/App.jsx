@@ -6,6 +6,7 @@ const Admin = lazyRetry(() => import('./pages/Admin'))
 const UserDashboard = lazyRetry(() => import('./pages/UserDashboard'))
 const KitPage = lazyRetry(() => import('./pages/KitPage'))
 const LandingPage = lazyRetry(() => import('./pages/LandingPage'))
+const NeutralCatalog = lazyRetry(() => import('./pages/NeutralCatalog'))
 import { supabase, upsertOrder, upsertUser, saveUserViaWebhook, generateLoginToken, consumeLoginToken, flushPendingOrders, normTel, samePhone, formatImageUrl, checkPhoneExists } from './lib/supabase'
 import { searchMatches } from './lib/search'
 import './App.css'
@@ -123,6 +124,7 @@ function App() {
     if (path.startsWith('/minha-conta')) return 'userdash'
     if (path.startsWith('/kit')) return 'kit'
     if (path.startsWith('/revender')) return 'landing'
+    if (path.startsWith('/catalogo-neutro') || path.startsWith('/vitrine') || path.startsWith('/catalogo-cliente') || path.startsWith('/catalogo-sem-marca') || path === '/catalogo') return 'neutral-catalog'
     return 'catalog'
   }, [])
 
@@ -1172,6 +1174,18 @@ function App() {
           initialOrderId={initialOrderId}
           currentUser={currentUser}
           onUpdateUser={setCurrentUser}
+        />
+      </Suspense>
+    )
+  }
+
+  // Catálogo Neutro / Sem Marca (White-Label)
+  if (route === 'neutral-catalog') {
+    return (
+      <Suspense fallback={<div className="loading-container" style={{ padding: '3rem', textAlign: 'center' }}><i className="fa-solid fa-spinner fa-spin fa-2x"></i></div>}>
+        <NeutralCatalog
+          produtos={produtosMerged}
+          onVoltar={() => navigate('/')}
         />
       </Suspense>
     )

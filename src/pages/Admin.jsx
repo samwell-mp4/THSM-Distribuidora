@@ -5136,6 +5136,10 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
         </nav>
         <div className="admin-sidebar-footer">
           <span className="admin-nav-group-title">Conta & Sistema</span>
+          <button className="admin-nav-item" onClick={() => window.open('/#/catalogo-neutro', '_blank')} title="Abrir Catálogo Sem Marca (White-Label) para clientes e revendedores">
+            <i className="fa-solid fa-store" style={{ color: '#3b82f6' }}></i>
+            <span>Catálogo Sem Marca</span>
+          </button>
           <button className="admin-nav-item" onClick={onVoltar}>
             <i className="fa-solid fa-arrow-left"></i>
             <span>Voltar ao Catálogo</span>
