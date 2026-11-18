@@ -4644,19 +4644,33 @@ html, body {
 }
 
 .admin-btn-relatorio {
-  background: #FFFFFF !important;
-  border: 1px solid var(--admin-border) !important;
-  color: #0F172A !important;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02) !important;
+  background: #F0F9FF !important;
+  border: 1px solid #BAE6FD !important;
+  color: #0369A1 !important;
+  box-shadow: 0 1px 2px rgba(2, 132, 199, 0.05) !important;
 }
 .admin-btn-relatorio:hover {
-  background: #F8FAFC !important;
-  border-color: #CBD5E1 !important;
-  color: var(--accent) !important;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+  background: #E0F2FE !important;
+  border-color: #7DD3FC !important;
+  color: #0284C7 !important;
 }
 .admin-btn-relatorio i {
   color: #0284C7 !important;
+}
+
+.admin-btn-transferir {
+  background: #FAF5FF !important;
+  border: 1px solid #E9D5FF !important;
+  color: #7C3AED !important;
+  box-shadow: 0 1px 2px rgba(124, 58, 237, 0.05) !important;
+}
+.admin-btn-transferir:hover {
+  background: #F3E8FF !important;
+  border-color: #DDD6FE !important;
+  color: #6D28D9 !important;
+}
+.admin-btn-transferir i {
+  color: #7C3AED !important;
 }
 
 .admin-btn-novo-pedido {
@@ -5443,10 +5457,10 @@ html, body {
 
 .admin-order-card {
   background: #FFFFFF;
-  border: 1px solid var(--admin-border);
-  border-radius: 12px;
+  border: 1px solid #E2E8F0;
+  border-radius: 14px;
   padding: 1rem;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.02);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -5454,10 +5468,100 @@ html, body {
   position: relative;
 }
 
+.admin-order-card:hover {
+  border-color: #CBD5E1;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.07);
+}
+
 .admin-order-card.selected {
-  border-color: #0F172A;
+  border-color: #2563EB;
   background: #F8FAFC;
-  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.1);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+/* Alerta de saldo em aberto no card do admin */
+.aoc-alert-box {
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  border-radius: 10px;
+  padding: 0.6rem 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.aoc-alert-left {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: #B45309;
+}
+
+.aoc-alert-left i {
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.aoc-alert-left strong {
+  display: block;
+  font-size: 0.82rem;
+  color: #92400E;
+}
+
+.aoc-alert-left span {
+  font-size: 0.72rem;
+  color: #B45309;
+}
+
+.aoc-alert-amount {
+  font-size: 1.05rem;
+  font-weight: 900;
+  color: #B45309;
+  white-space: nowrap;
+}
+
+/* Preview dos itens no card do admin */
+.aoc-items-preview {
+  margin: -0.15rem 0 0.1rem;
+}
+
+.aoc-items-badge {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #334155;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.2rem;
+}
+
+.aoc-items-summary {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #64748B;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Botão Ver Comanda em destaque */
+.aoc-btn-comanda {
+  background: #2563EB !important;
+  color: #FFFFFF !important;
+  border-color: #2563EB !important;
+  font-weight: 700 !important;
+  min-height: 38px !important;
+  padding: 0.5rem 1rem !important;
+  border-radius: 8px !important;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.25) !important;
+}
+
+.aoc-btn-comanda:hover {
+  background: #1D4ED8 !important;
+  border-color: #1D4ED8 !important;
 }
 
 .aoc-header {
@@ -5882,23 +5986,57 @@ html, body {
   .admin-orders-header-row {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.75rem;
+    gap: 0.65rem;
+    margin-bottom: 0.85rem;
   }
   .admin-orders-header-actions {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 0.5rem;
+    width: 100%;
   }
   .admin-btn-novo-pedido {
+    grid-column: 1 / -1;
+    order: -1;
     height: 42px !important;
     font-size: 0.88rem !important;
+    font-weight: 700 !important;
     justify-content: center;
+    border-radius: 10px !important;
   }
   .admin-btn-relatorio {
+    grid-column: 1;
     height: 38px !important;
     font-size: 0.78rem !important;
-    padding: 0 0.5rem !important;
+    padding: 0 0.4rem !important;
     justify-content: center;
+    border-radius: 8px !important;
+  }
+  .admin-btn-transferir {
+    grid-column: 2;
+    height: 38px !important;
+    font-size: 0.78rem !important;
+    padding: 0 0.4rem !important;
+    justify-content: center;
+    border-radius: 8px !important;
+  }
+  .admin-dash-table-card .admin-table-wrap {
+    display: none !important;
+  }
+  .admin-dash-last-orders-mobile {
+    display: flex !important;
+    flex-direction: column;
+    gap: 0.65rem;
+    padding: 0.4rem 0;
+  }
+  .fin-table-desktop {
+    display: none !important;
+  }
+  .fin-cards-mobile {
+    display: flex !important;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
   }
   .admin-desktop-bulk-bar {
     display: none !important;
@@ -5934,6 +6072,231 @@ html, body {
   .admin-orders-desktop {
     display: block !important;
   }
+}
+
+/* ==========================================================================
+   CARDS MODERNOS DE PEDIDOS (DASHBOARD) E FINANCEIRO (MOBILE)
+   ========================================================================== */
+
+/* Últimos Pedidos no Dashboard (Mobile) */
+.admin-dash-last-orders-mobile {
+  display: none;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.4rem 0;
+}
+
+.dash-last-order-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 0.85rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.dash-last-order-card:hover {
+  border-color: #CBD5E1;
+  transform: translateY(-1px);
+}
+
+.dloc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dloc-id {
+  font-weight: 800;
+  font-size: 0.88rem;
+  color: #0F172A;
+}
+
+.dloc-date {
+  font-size: 0.74rem;
+  color: #64748B;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.dloc-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.dloc-client {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #1E293B;
+  min-width: 0;
+}
+
+.dloc-client span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dloc-price {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0F172A;
+  white-space: nowrap;
+}
+
+.dloc-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.74rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid #F1F5F9;
+}
+
+/* Contas a Receber no Financeiro (Mobile) */
+.fin-cards-mobile {
+  display: none;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.admin-fin-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 14px;
+  padding: 1rem;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  transition: all 150ms ease;
+}
+
+.admin-fin-card.afc-overdue {
+  border-left: 4px solid #EF4444;
+}
+
+.admin-fin-card.afc-pending {
+  border-left: 4px solid #F59E0B;
+}
+
+.admin-fin-card.afc-paid {
+  border-left: 4px solid #10B981;
+}
+
+.afc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.afc-client-box {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.afc-client-box i {
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.afc-overdue .afc-client-box i { color: #EF4444; }
+.afc-pending .afc-client-box i { color: #F59E0B; }
+.afc-paid .afc-client-box i { color: #10B981; }
+
+.afc-client-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.afc-client-name {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #0F172A;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.afc-item-name {
+  font-size: 0.75rem;
+  color: #64748B;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.afc-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.8rem;
+  background: #F8FAFC;
+  border-radius: 8px;
+  border: 1px solid #F1F5F9;
+}
+
+.afc-amount-box {
+  display: flex;
+  flex-direction: column;
+}
+
+.afc-amount-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #64748B;
+  text-transform: uppercase;
+}
+
+.afc-amount {
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: #0F172A;
+}
+
+.afc-dates-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.afc-due-row {
+  font-size: 0.78rem;
+  color: #475569;
+}
+
+.afc-due-row strong.text-danger {
+  color: #DC2626 !important;
+}
+
+.afc-days-row {
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.afc-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid #F1F5F9;
 }
 
 /* ==========================================================================

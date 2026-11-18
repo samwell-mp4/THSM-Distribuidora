@@ -5329,6 +5329,39 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Cards Responsivos para Mobile/Tablet em Últimos Pedidos */}
+                <div className="admin-dash-last-orders-mobile">
+                  {dashLastOrders.map(o => (
+                    <div
+                      key={o.id}
+                      className="dash-last-order-card"
+                      onClick={() => { setTab('pedidos'); setOrderFilter('todos') }}
+                      title="Ver pedido na aba Pedidos"
+                    >
+                      <div className="dloc-header">
+                        <span className="dloc-id">Pedido #{String(o.id).slice(-6)}</span>
+                        <span className="dloc-date"><i className="fa-regular fa-calendar"></i> {formatDate(o.date)}</span>
+                      </div>
+                      <div className="dloc-body">
+                        <div className="dloc-client">
+                          <i className="fa-solid fa-user" style={{ color: 'var(--accent)' }}></i>
+                          <span>{getOrderCustomerName(o)}</span>
+                        </div>
+                        <span className="dloc-price">{formatPreco(o.total)}</span>
+                      </div>
+                      <div className="dloc-footer">
+                        <span>{[o.customer?.endereco?.cidade, o.customer?.endereco?.estado].filter(Boolean).join('/') || '-'}</span>
+                        <span className={`status-tag status-${o.status}`}>{o.status}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {dashLastOrders.length === 0 && (
+                    <div style={{ padding: '1.5rem', textAlign: 'center', color: '#64748b', fontSize: '0.82rem' }}>
+                      Nenhum pedido registrado no período
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Painel Lateral de Ações Rápidas & Insights */}
@@ -5427,14 +5460,14 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                     </button>
                   </span>
                 )}
-                <button className="admin-btn admin-btn-relatorio" style={{ background: '#0284c7', color: 'white', borderColor: '#0284c7', fontSize: '0.8rem', padding: '0.45rem 0.85rem' }} onClick={() => setShowOrderReportModal(true)} title="Emitir Relatório de Pedidos em PDF ou Excel com filtros e resumo">
+                <button className="admin-btn admin-btn-relatorio" onClick={() => setShowOrderReportModal(true)} title="Emitir Relatório de Pedidos em PDF ou Excel com filtros e resumo">
                   <i className="fa-solid fa-file-invoice-dollar"></i> <span>Relatório (PDF / Excel)</span>
                 </button>
-                <button className="admin-btn admin-btn-transferir" style={{ background: '#7c3aed', color: 'white', borderColor: '#6d28d9', fontSize: '0.8rem', padding: '0.45rem 0.85rem' }} onClick={() => setShowTransferOrderModal(true)} title="Transferir pedidos de perfis duplicados (ex: com 5555) para os clientes reais">
+                <button className="admin-btn admin-btn-transferir" onClick={() => setShowTransferOrderModal(true)} title="Transferir pedidos de perfis duplicados para os clientes reais">
                   <i className="fa-solid fa-arrow-right-arrow-left"></i> <span>Transferir Pedido</span>
                 </button>
                 <button className="admin-btn admin-btn-primary admin-btn-novo-pedido" onClick={() => setShowAddOrder(true)}>
-                  <i className="fa-solid fa-plus"></i> Novo Pedido
+                  <i className="fa-solid fa-plus"></i> <span>Novo Pedido</span>
                 </button>
               </div>
             </div>
@@ -6142,8 +6175,42 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                       </div>
                     </div>
 
+                    {/* Alerta de Saldo em Aberto se houver */}
+                    {Number(o.valorEmAberto) > 0 && (
+                      <div className="aoc-alert-box">
+                        <div className="aoc-alert-left">
+                          <i className="fa-solid fa-circle-exclamation"></i>
+                          <div>
+                            <strong>Valor em Aberto</strong>
+                            <span>{o.dataVencimento ? `Vencimento: ${formatDate(o.dataVencimento)}` : 'Aguardando quitação'}</span>
+                          </div>
+                        </div>
+                        <div className="aoc-alert-amount">{formatPreco(o.valorEmAberto)}</div>
+                      </div>
+                    )}
+
+                    {/* Prévia dos itens da comanda */}
+                    <div className="aoc-items-preview">
+                      <div className="aoc-items-badge">
+                        <i className="fa-solid fa-box-open" style={{ color: '#2563eb' }}></i>
+                        <span>{totalPieces} {totalPieces === 1 ? 'peça' : 'peças'} ({(Array.isArray(o.items) && o.items.length > 0 ? o.items : (o.itens || [])).length} itens)</span>
+                      </div>
+                      <p className="aoc-items-summary">
+                        {(Array.isArray(o.items) && o.items.length > 0 ? o.items : (o.itens || [])).slice(0, 3).map(i => `${i.qty || 1}x ${i.nome || i.displayName || 'Item'}`).join(', ')}
+                        {(Array.isArray(o.items) && o.items.length > 0 ? o.items : (o.itens || [])).length > 3 && ` e mais ${(Array.isArray(o.items) && o.items.length > 0 ? o.items : (o.itens || [])).length - 3} itens`}
+                      </p>
+                    </div>
+
                     {/* Action buttons */}
                     <div className="aoc-actions">
+                      <button
+                        type="button"
+                        className="aoc-btn aoc-btn-comanda"
+                        title="Ver Comanda Completa"
+                        onClick={() => setShowOrderDetail(o)}
+                      >
+                        <i className="fa-solid fa-file-invoice"></i> Ver Comanda
+                      </button>
                       {/* Switch de envio de WhatsApp por comanda */}
                       <label
                         className={`action-zap-switch ${o.notificarWhatsApp !== false ? 'zap-on' : 'zap-off'}`}
@@ -8647,7 +8714,7 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                       <span><i className="fa-solid fa-list-ul"></i> Contas a Receber</span>
                       <span className="fin-table-total"><strong>{formatPreco(finTotalFiltered)}</strong> <small>{filteredFin.length} registro(s)</small></span>
                     </div>
-                    <div className="admin-table-wrap">
+                    <div className="admin-table-wrap fin-table-desktop">
                       <table className="admin-table">
                         <thead>
                           <tr>
@@ -8726,6 +8793,86 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                           </tr>
                         </tfoot>
                       </table>
+                    </div>
+
+                    {/* Cartões Responsivos de Contas a Receber (Mobile) */}
+                    <div className="fin-cards-mobile">
+                      {filteredFin.map(f => {
+                        const dias = diffDays(hoje(), f.dueDate)
+                        const atrasado = f.status === 'pendente' && dias > 0
+                        const isPago = f.status === 'pago'
+                        const pm = formatPagamento(f.paymentMethod)
+
+                        return (
+                          <div
+                            key={f.id}
+                            className={`admin-fin-card ${atrasado ? 'afc-overdue' : isPago ? 'afc-paid' : 'afc-pending'}`}
+                          >
+                            <div className="afc-header">
+                              <div className="afc-client-box">
+                                <i className={isPago ? 'fa-solid fa-circle-check' : atrasado ? 'fa-solid fa-triangle-exclamation' : 'fa-solid fa-clock'}></i>
+                                <div className="afc-client-info">
+                                  <span className="afc-client-name">{f.customerName || 'Cliente'}</span>
+                                  <span className="afc-item-name">{f.itemName} ({f.qty}x)</span>
+                                </div>
+                              </div>
+                              <span className={`status-tag ${atrasado ? 'status-atrasado' : isPago ? 'status-pago' : 'status-pendente'}`}>
+                                {isPago ? 'Pago' : atrasado ? 'Em Atraso' : 'Pendente'}
+                              </span>
+                            </div>
+
+                            <div className="afc-body">
+                              <div className="afc-amount-box">
+                                <span className="afc-amount-label">Valor</span>
+                                <span className="afc-amount">{formatPreco(f.value)}</span>
+                              </div>
+                              <div className="afc-dates-box">
+                                <span className="afc-due-row">
+                                  Vencimento: <strong className={atrasado ? 'text-danger' : ''}>{f.dueDate ? formatDate(f.dueDate) : '-'}</strong>
+                                </span>
+                                <span className={`afc-days-row ${isPago ? 'days-ok' : atrasado ? 'days-overdue' : dias === 0 ? 'days-today' : 'days-future'}`}>
+                                  {isPago ? (f.paidDate ? `Pago em ${formatDate(f.paidDate)}` : 'Pago') : dias > 0 ? `+${dias} dias em atraso` : dias === 0 ? 'Vence hoje' : `Faltam ${Math.abs(dias)} dias`}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="afc-footer">
+                              {pm && (
+                                <span className="pag-badge" style={{ marginRight: 'auto', fontSize: '0.72rem' }}>
+                                  <i className={`fa-solid ${pm.icon}`}></i> {pm.label}
+                                </span>
+                              )}
+                              {f.status === 'pendente' && (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="action-btn"
+                                    title="Editar vencimento"
+                                    onClick={() => setFinEdit(f)}
+                                    style={{ width: '34px', height: '34px' }}
+                                  >
+                                    <i className="fa-solid fa-calendar"></i>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="action-btn action-confirm"
+                                    title="Quitar"
+                                    onClick={() => quitarFin(f.id)}
+                                    style={{ width: '34px', height: '34px' }}
+                                  >
+                                    <i className="fa-solid fa-check"></i>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                      {filteredFin.length === 0 && (
+                        <div style={{ padding: '1.5rem', textAlign: 'center', color: '#64748b', fontSize: '0.82rem' }}>
+                          Nenhum registro financeiro
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
