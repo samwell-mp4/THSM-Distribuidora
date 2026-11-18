@@ -4760,6 +4760,28 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
     })
   }
 
+  const setProdCartQty = (pOrId, val) => {
+    const id = typeof pOrId === 'object' ? pOrId.id : pOrId
+    const idStr = String(id)
+    const num = val === '' ? '' : Math.max(0, parseInt(val, 10) || 0)
+    if (num === 0) {
+      setProdCart(prev => {
+        const { [id]: _, ...rest } = prev
+        return rest
+      })
+      setProdCartOrder(orderPrev => orderPrev.filter(k => String(k) !== idStr))
+      return
+    }
+    setProdCartOrder(prev => prev.includes(idStr) ? prev : [...prev, idStr])
+    setProdCart(prev => {
+      const existing = prev[id]
+      if (existing) return { ...prev, [id]: { ...existing, qty: num } }
+      const p = typeof pOrId === 'object' ? pOrId : (produtosAtuais || []).find(prod => String(prod.id) === idStr) || {}
+      const pPrice = Number(p.preco) > 0 ? Number(p.preco) : (productPriceMap?.get(String(p.id)) || productPriceMap?.get(String(p.nome || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')) || 0)
+      return { ...prev, [id]: { id: p.id || id, nome: p.nome || 'Produto', preco: pPrice, preco_custo: p.preco_custo, imagem: p.imagem, tipo: 'aprazo', qty: num, semDevolucao: !!p.semDevolucao } }
+    })
+  }
+
   const prodCartItems = useMemo(() => {
     const ordered = prodCartOrder.map(id => prodCart[id]).filter(Boolean)
     const remaining = Object.values(prodCart).filter(i => i && !prodCartOrder.includes(String(i.id)))
@@ -6930,10 +6952,19 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                             </button>
 
                             {prodCart[p.id] ? (
-                              <div className="admin-cart-item-qty">
-                                <button className="qty-btn-sm" onClick={() => removeFromProdCart(p.id)}><i className="fa-solid fa-minus"></i></button>
-                                <span className="qty-val">{prodCart[p.id].qty}</span>
-                                <button className="qty-btn-sm" onClick={() => addToProdCart(p)} disabled={isOutOfStock}><i className="fa-solid fa-plus"></i></button>
+                              <div className="admin-cart-item-qty" style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                <button type="button" className="qty-btn-sm" onClick={() => removeFromProdCart(p.id)}><i className="fa-solid fa-minus"></i></button>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  value={prodCart[p.id].qty}
+                                  onChange={e => setProdCartQty(p, e.target.value)}
+                                  onClick={e => e.stopPropagation()}
+                                  title="Digite a quantidade"
+                                  style={{ width: '45px', height: '26px', textAlign: 'center', fontSize: '0.82rem', fontWeight: 700, border: '1px solid var(--admin-border)', borderRadius: '4px', background: 'white', outline: 'none' }}
+                                />
+                                <button type="button" className="qty-btn-sm" onClick={() => addToProdCart(p)} disabled={isOutOfStock}><i className="fa-solid fa-plus"></i></button>
                               </div>
                             ) : (
                               <button className={`admin-prod-card-btn ${prodCart[p.id] ? 'in-cart' : ''}`} onClick={() => addToProdCart(p)} disabled={isOutOfStock}>
@@ -7109,10 +7140,19 @@ export default function Admin({ produtos, refreshProducts, onVoltar }) {
                           <span className="admin-cart-item-name">{item.nome}</span>
                           <span className="admin-cart-item-price">{formatPreco(item.preco)}</span>
                         </div>
-                        <div className="admin-cart-item-qty">
-                          <button className="qty-btn-sm" onClick={() => removeFromProdCart(item.id)}><i className="fa-solid fa-minus"></i></button>
-                          <span>{item.qty}</span>
-                          <button className="qty-btn-sm" onClick={() => addToProdCart({ id: item.id, nome: item.nome, preco: item.preco, imagem: item.imagem })}><i className="fa-solid fa-plus"></i></button>
+                        <div className="admin-cart-item-qty" style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <button type="button" className="qty-btn-sm" onClick={() => removeFromProdCart(item.id)}><i className="fa-solid fa-minus"></i></button>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={item.qty}
+                            onChange={e => setProdCartQty(item, e.target.value)}
+                            onClick={e => e.stopPropagation()}
+                            title="Digite a quantidade"
+                            style={{ width: '45px', height: '26px', textAlign: 'center', fontSize: '0.82rem', fontWeight: 700, border: '1px solid var(--admin-border)', borderRadius: '4px', background: 'white', outline: 'none' }}
+                          />
+                          <button type="button" className="qty-btn-sm" onClick={() => addToProdCart({ id: item.id, nome: item.nome, preco: item.preco, imagem: item.imagem })}><i className="fa-solid fa-plus"></i></button>
                         </div>
                       </div>
                     ))}
@@ -12559,6 +12599,43 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
     })
   }
 
+  const setItemQty = (id, val) => {
+    const idStr = String(id)
+    const num = val === '' ? '' : Math.max(0, parseInt(val, 10) || 0)
+    if (num === 0) {
+      setCart(prev => {
+        const { [id]: _, ...rest } = prev
+        return rest
+      })
+      setCartOrder(orderPrev => orderPrev.filter(k => String(k) !== idStr))
+      return
+    }
+    setCartOrder(prev => prev.includes(idStr) ? prev : [...prev, idStr])
+    setCart(prev => {
+      const existing = prev[id]
+      if (existing) {
+        return { ...prev, [id]: { ...existing, qty: num } }
+      }
+      const p = (produtos || []).find(prod => String(prod.id) === idStr) || {}
+      const resolvedPreco = getInitialPrice(p)
+      const currentPrice = resolvedPreco > 0 ? String(resolvedPreco).replace('.', ',') : ''
+      const currentCusto = p.preco_custo != null ? String(p.preco_custo).replace('.', ',') : null
+      return {
+        ...prev,
+        [id]: {
+          id: p.id || id,
+          nome: p.nome || 'Produto',
+          preco: currentPrice,
+          preco_custo: currentCusto,
+          imagem: p.imagem,
+          qty: num,
+          tipo: 'aprazo',
+          semDevolucao: !!p.semDevolucao
+        }
+      }
+    })
+  }
+
   const setItemTipo = (id, tipo) => {
     setCart(prev => prev[id] ? { ...prev, [id]: { ...prev[id], tipo } } : prev)
   }
@@ -12816,10 +12893,19 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
                         )}
                       </div>
                       {inCart ? (
-                        <div className="add-prod-controls">
-                          <span className="add-prod-qty">{inCart.qty}x</span>
-                          <button className="qty-btn-sm" onClick={() => removeItem(p.id)}><i className="fa-solid fa-minus"></i></button>
-                          <button className="qty-btn-sm" onClick={() => addItem(p)}><i className="fa-solid fa-plus"></i></button>
+                        <div className="add-prod-controls" style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <button type="button" className="qty-btn-sm" onClick={() => removeItem(p.id)}><i className="fa-solid fa-minus"></i></button>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={inCart.qty}
+                            onChange={e => setItemQty(p.id, e.target.value)}
+                            onClick={e => e.stopPropagation()}
+                            title="Digite a quantidade"
+                            style={{ width: '45px', height: '26px', textAlign: 'center', fontSize: '0.82rem', fontWeight: 700, border: '1px solid var(--admin-border)', borderRadius: '4px', background: 'white', outline: 'none' }}
+                          />
+                          <button type="button" className="qty-btn-sm" onClick={() => addItem(p)}><i className="fa-solid fa-plus"></i></button>
                         </div>
                       ) : (
                         <button className="add-prod-add" onClick={() => addItem(p)}>
@@ -12855,6 +12941,19 @@ function AddOrderModal({ produtos, usuarios, orders, productPriceMap, initialCar
                           )}
                         </div>
                         <div className="add-prod-cart-fields">
+                          <label style={{ width: '70px', minWidth: '60px' }}>
+                            Qtd *
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={i.qty}
+                              onChange={e => setItemQty(i.id, e.target.value)}
+                              onClick={e => e.stopPropagation()}
+                              title="Digite a quantidade"
+                              style={{ textAlign: 'center', fontWeight: 700 }}
+                            />
+                          </label>
                           <label style={isZero ? { color: '#dc2626', fontWeight: 700 } : {}}>
                             Preço Unitário (R$) *
                             <input
@@ -13271,6 +13370,43 @@ _THSM Distribuidora — Agradecemos a preferência!_`
     })
   }
 
+  const setAddCartQty = (pOrId, val) => {
+    const id = typeof pOrId === 'object' ? pOrId.id : pOrId
+    const idStr = String(id)
+    const num = val === '' ? '' : Math.max(0, parseInt(val, 10) || 0)
+    if (num === 0) {
+      setAddCart(prev => {
+        const { [id]: _, ...rest } = prev
+        return rest
+      })
+      setAddCartOrder(orderPrev => orderPrev.filter(k => String(k) !== idStr))
+      return
+    }
+    setAddCartOrder(prev => prev.includes(idStr) ? prev : [...prev, idStr])
+    setAddCart(prev => {
+      const existing = prev[id]
+      if (existing) {
+        return { ...prev, [id]: { ...existing, qty: num } }
+      }
+      const p = typeof pOrId === 'object' ? pOrId : (produtos || []).find(prod => String(prod.id) === idStr) || {}
+      const unitPreco = Number(String(p.preco || 0).replace(',', '.')) || 0
+      const rawCusto = (p.preco_custo != null && p.preco_custo !== '') ? Number(String(p.preco_custo).replace(',', '.')) : (getItemCost(p, produtos) || null)
+      return {
+        ...prev,
+        [id]: {
+          id: p.id || id,
+          nome: p.nome || p.displayName || 'Produto',
+          preco: unitPreco,
+          preco_custo: rawCusto > 0 ? rawCusto : null,
+          imagem: p.imagem,
+          tipo: 'aprazo',
+          qty: num,
+          semDevolucao: !!p.semDevolucao
+        }
+      }
+    })
+  }
+
   const getAddCartItemsOrdered = () => {
     const ordered = addCartOrder.map(id => addCart[id]).filter(Boolean)
     const remaining = Object.values(addCart).filter(i => i && !addCartOrder.some(k => String(k) === String(i.id)))
@@ -13403,6 +13539,41 @@ _THSM Distribuidora — Agradecemos a preferência!_`
     })
   }
 
+  const setPreCartQty = (pOrId, val) => {
+    const id = typeof pOrId === 'object' ? pOrId.id : pOrId
+    const idStr = String(id)
+    const num = val === '' ? '' : Math.max(0, parseInt(val, 10) || 0)
+    if (num === 0) {
+      setPreAddCart(prev => {
+        const { [id]: _, ...keep } = prev
+        return keep
+      })
+      setPreAddCartOrder(ord => ord.filter(x => String(x) !== idStr))
+      return
+    }
+    setPreAddCartOrder(prev => prev.includes(idStr) ? prev : [...prev, idStr])
+    setPreAddCart(prev => {
+      const existing = prev[id]
+      if (existing) return { ...prev, [id]: { ...existing, qty: num } }
+      const p = typeof pOrId === 'object' ? pOrId : (produtos || []).find(prod => String(prod.id) === idStr) || {}
+      const unitPreco = Number(String(p.preco || 0).replace(',', '.')) || 0
+      const rawCusto = (p.preco_custo != null && p.preco_custo !== '') ? Number(String(p.preco_custo).replace(',', '.')) : (getItemCost(p, produtos) || null)
+      return {
+        ...prev,
+        [id]: {
+          id: p.id || id,
+          nome: p.nome || p.displayName || 'Produto',
+          preco: unitPreco,
+          preco_custo: rawCusto > 0 ? rawCusto : null,
+          imagem: p.imagem,
+          tipo: 'aprazo',
+          qty: num,
+          semDevolucao: !!p.semDevolucao
+        }
+      }
+    })
+  }
+
   const confirmPreReplacements = () => {
     const ordered = preAddCartOrder.map(id => preAddCart[id]).filter(Boolean)
     const remaining = Object.values(preAddCart).filter(i => i && !preAddCartOrder.some(k => String(k) === String(i.id)))
@@ -13512,10 +13683,19 @@ _THSM Distribuidora — Agradecemos a preferência!_`
                           <span className="add-prod-price">{formatPreco(p.preco)}</span>
                         </div>
                         {inCart ? (
-                          <div className="add-prod-controls">
-                            <span className="add-prod-qty">{inCart.qty}x</span>
-                            <button className="qty-btn-sm" onClick={() => removeFromAddCart(p.id)}><i className="fa-solid fa-minus"></i></button>
-                            <button className="qty-btn-sm" onClick={() => addItemToEdit(p)}><i className="fa-solid fa-plus"></i></button>
+                          <div className="add-prod-controls" style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            <button type="button" className="qty-btn-sm" onClick={() => removeFromAddCart(p.id)}><i className="fa-solid fa-minus"></i></button>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={inCart.qty}
+                              onChange={e => setAddCartQty(p, e.target.value)}
+                              onClick={e => e.stopPropagation()}
+                              title="Digite a quantidade"
+                              style={{ width: '45px', height: '26px', textAlign: 'center', fontSize: '0.82rem', fontWeight: 700, border: '1px solid var(--admin-border)', borderRadius: '4px', background: 'white', outline: 'none' }}
+                            />
+                            <button type="button" className="qty-btn-sm" onClick={() => addItemToEdit(p)}><i className="fa-solid fa-plus"></i></button>
                           </div>
                         ) : (
                           <button className="add-prod-add" onClick={() => addItemToEdit(p)}>
@@ -13550,7 +13730,15 @@ _THSM Distribuidora — Agradecemos a preferência!_`
                         <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', padding: '2px 0' }}>
                           <span><strong>{idx + 1}.</strong> {item.nome}</span>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                            <span style={{ fontWeight: 700, color: 'var(--accent, #3b82f6)' }}>{item.qty}x</span>
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={item.qty}
+                              onChange={e => setAddCartQty(item.id, e.target.value)}
+                              title="Editar quantidade"
+                              style={{ width: '46px', height: '24px', textAlign: 'center', fontSize: '0.8rem', fontWeight: 700, border: '1px solid var(--admin-border)', borderRadius: '4px', background: 'white', outline: 'none' }}
+                            />
                             <span style={{ fontSize: '0.74rem', color: 'var(--admin-text-sec, #64748b)' }}>({formatPreco(item.preco)})</span>
                           </div>
                         </div>
@@ -13836,10 +14024,19 @@ _THSM Distribuidora — Agradecemos a preferência!_`
                           <span className="add-prod-price">{formatPreco(p.preco)}</span>
                         </div>
                         {inCart ? (
-                          <div className="add-prod-controls">
-                            <span className="add-prod-qty">{inCart.qty}x</span>
-                            <button className="qty-btn-sm" onClick={() => removeFromPreCart(p.id)}><i className="fa-solid fa-minus"></i></button>
-                            <button className="qty-btn-sm" onClick={() => addToPreReplacement(p)}><i className="fa-solid fa-plus"></i></button>
+                          <div className="add-prod-controls" style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            <button type="button" className="qty-btn-sm" onClick={() => removeFromPreCart(p.id)}><i className="fa-solid fa-minus"></i></button>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={inCart.qty}
+                              onChange={e => setPreCartQty(p, e.target.value)}
+                              onClick={e => e.stopPropagation()}
+                              title="Digite a quantidade"
+                              style={{ width: '45px', height: '26px', textAlign: 'center', fontSize: '0.82rem', fontWeight: 700, border: '1px solid var(--admin-border)', borderRadius: '4px', background: 'white', outline: 'none' }}
+                            />
+                            <button type="button" className="qty-btn-sm" onClick={() => addToPreReplacement(p)}><i className="fa-solid fa-plus"></i></button>
                           </div>
                         ) : (
                           <button className="add-prod-add" style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }} onClick={() => addToPreReplacement(p)}>

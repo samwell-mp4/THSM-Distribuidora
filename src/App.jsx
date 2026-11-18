@@ -30,6 +30,7 @@ function App() {
   const [search, setSearch] = useState('')
   const [categoria, setCategoria] = useState('TODOS')
   const [selected, setSelected] = useState(null)
+  const [modalQty, setModalQty] = useState(1)
   const [currentPage, setCurrentPage] = useState(1)
   const [imageErrors, setImageErrors] = useState({})
   const [sortBy, setSortBy] = useState('nome-asc')
@@ -800,20 +801,29 @@ function App() {
     return `${pId}-${Object.values(variants).join('-')}`
   }
 
-  const addToCart = useCallback((p, variantSelections) => {
+  const addToCart = useCallback((p, variantSelections, customQty = 1) => {
     const vSel = variantSelections || selectedVariants[p.id] || {}
     const cartKey = getCartKey(p.id, vSel)
     const variantLabel = Object.values(vSel).filter(Boolean).join(', ')
     const displayName = variantLabel ? `${p.nome} (${variantLabel})` : p.nome
+    const addCount = Math.max(1, parseInt(customQty, 10) || 1)
     setCart(prev => {
       const existing = prev[cartKey]
       if (existing) {
-        if (existing.qty >= p.estoque && p.estoque > 0) { showToast('Estoque máximo atingido!', 'error'); return prev }
-        return { ...prev, [cartKey]: { ...existing, qty: existing.qty + 1 } }
+        const nextQty = existing.qty + addCount
+        if (nextQty > p.estoque && p.estoque > 0) {
+          showToast('Estoque máximo atingido!', 'error')
+          return { ...prev, [cartKey]: { ...existing, qty: p.estoque } }
+        }
+        return { ...prev, [cartKey]: { ...existing, qty: nextQty } }
       }
-      return { ...prev, [cartKey]: { id: p.id, cartKey, nome: p.nome, displayName, preco: p.preco, preco_custo: p.preco_custo != null ? Number(p.preco_custo) : null, imagem: p.imagem, qty: 1, estoque: p.estoque, variantes: vSel, semDevolucao: !!p.semDevolucao } }
+      const initialQty = (p.estoque > 0 && addCount > p.estoque) ? p.estoque : addCount
+      if (p.estoque > 0 && addCount > p.estoque) {
+        showToast('Estoque máximo atingido!', 'error')
+      }
+      return { ...prev, [cartKey]: { id: p.id, cartKey, nome: p.nome, displayName, preco: p.preco, preco_custo: p.preco_custo != null ? Number(p.preco_custo) : null, imagem: p.imagem, qty: initialQty, estoque: p.estoque, variantes: vSel, semDevolucao: !!p.semDevolucao } }
     })
-    showToast(`${displayName.substring(0, 40)} adicionado ao carrinho`)
+    showToast(`${displayName.substring(0, 40)} (${addCount}x) adicionado ao carrinho`)
   }, [showToast, selectedVariants])
 
   const removeFromCart = useCallback((cartKey) => {
@@ -824,6 +834,27 @@ function App() {
       return { ...prev, [cartKey]: { ...item, qty: item.qty - 1 } }
     })
   }, [])
+
+  const updateCartQty = useCallback((cartKey, newQty) => {
+    if (newQty === '') {
+      setCart(prev => prev[cartKey] ? { ...prev, [cartKey]: { ...prev[cartKey], qty: '' } } : prev)
+      return
+    }
+    const val = parseInt(newQty, 10)
+    if (isNaN(val) || val <= 0) {
+      deleteFromCart(cartKey)
+      return
+    }
+    setCart(prev => {
+      const item = prev[cartKey]
+      if (!item) return prev
+      const clamped = (item.estoque > 0 && val > item.estoque) ? item.estoque : val
+      if (item.estoque > 0 && val > item.estoque) {
+        showToast('Estoque máximo atingido!', 'error')
+      }
+      return { ...prev, [cartKey]: { ...item, qty: clamped } }
+    })
+  }, [deleteFromCart, showToast])
 
   const deleteFromCart = useCallback((cartKey) => {
     setCart(prev => { const { [cartKey]: _, ...rest } = prev; return rest })
@@ -1551,7 +1582,62 @@ function App() {
                   ))}
                 </div>
               )}
-              <button className="btn-add modal-add" onClick={() => { addToCart(selected); setSelected(null) }} disabled={selected.estoque <= 0}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginTop: '1rem', marginBottom: '0.75rem', padding: '0.5rem 0.75rem', background: 'var(--surface, #f8fafc)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Quantidade:</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <button
+                    type="button"
+                    className="qty-btn"
+                    onClick={() => setModalQty(prev => Math.max(1, (parseInt(prev, 10) || 1) - 1))}
+                    style={{ width: '32px', height: '32px' }}
+                  >
+                    <i className="fa-solid fa-minus"></i>
+                  </button>
+                  <input
+                    type="number"
+                    min="1"
+                    max={selected.estoque > 0 ? selected.estoque : 9999}
+                    value={modalQty}
+                    onChange={e => {
+                      const val = e.target.value
+                      if (val === '') { setModalQty(''); return }
+                      const n = parseInt(val, 10) || 1
+                      const clamped = (selected.estoque > 0 && n > selected.estoque) ? selected.estoque : n
+                      setModalQty(clamped)
+                    }}
+                    onBlur={() => { if (!modalQty || parseInt(modalQty, 10) <= 0) setModalQty(1) }}
+                    title="Digite a quantidade desejada"
+                    style={{
+                      width: '55px',
+                      height: '32px',
+                      textAlign: 'center',
+                      fontSize: '0.95rem',
+                      fontWeight: 700,
+                      border: '1px solid var(--border)',
+                      borderRadius: '6px',
+                      background: 'white',
+                      color: 'var(--text)',
+                      outline: 'none'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="qty-btn"
+                    onClick={() => setModalQty(prev => {
+                      const cur = parseInt(prev, 10) || 1
+                      if (selected.estoque > 0 && cur >= selected.estoque) {
+                        showToast('Estoque máximo!', 'error')
+                        return cur
+                      }
+                      return cur + 1
+                    })}
+                    style={{ width: '32px', height: '32px' }}
+                  >
+                    <i className="fa-solid fa-plus"></i>
+                  </button>
+                </div>
+              </div>
+              <button className="btn-add modal-add" onClick={() => { addToCart(selected, null, modalQty); setSelected(null); setModalQty(1) }} disabled={selected.estoque <= 0}>
                 <i className="fa-solid fa-bag-shopping"></i> Adicionar ao Carrinho
               </button>
             </div>
@@ -1592,12 +1678,38 @@ function App() {
                         )}
                         <p className="cart-item-price">{formatPreco(item.preco)}</p>
                       </div>
-                      <div className="cart-item-qty">
-                        <button className="qty-btn" onClick={() => removeFromCart(item.cartKey || item.id)}><i className="fa-solid fa-minus"></i></button>
-                        <span>{item.qty}</span>
-                        <button className="qty-btn" onClick={() => {
+                      <div className="cart-item-qty" style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                        <button type="button" className="qty-btn" onClick={() => removeFromCart(item.cartKey || item.id)}><i className="fa-solid fa-minus"></i></button>
+                        <input
+                          type="number"
+                          min="1"
+                          max={item.estoque > 0 ? item.estoque : 9999}
+                          value={item.qty}
+                          onChange={e => updateCartQty(item.cartKey || item.id, e.target.value)}
+                          onBlur={e => {
+                            if (!e.target.value || parseInt(e.target.value, 10) <= 0) {
+                              updateCartQty(item.cartKey || item.id, 1)
+                            }
+                          }}
+                          onClick={e => e.stopPropagation()}
+                          title="Digite a quantidade"
+                          style={{
+                            width: '45px',
+                            height: '26px',
+                            textAlign: 'center',
+                            fontSize: '0.85rem',
+                            fontWeight: 700,
+                            border: '1px solid var(--border)',
+                            borderRadius: '4px',
+                            background: 'white',
+                            color: 'var(--text)',
+                            outline: 'none',
+                            padding: '0 2px'
+                          }}
+                        />
+                        <button type="button" className="qty-btn" onClick={() => {
                           if (item.qty >= item.estoque && item.estoque > 0) { showToast('Estoque máximo!', 'error'); return }
-                          setCart(prev => ({ ...prev, [item.cartKey || item.id]: { ...prev[item.cartKey || item.id], qty: prev[item.cartKey || item.id].qty + 1 } }))
+                          setCart(prev => ({ ...prev, [item.cartKey || item.id]: { ...prev[item.cartKey || item.id], qty: Number(prev[item.cartKey || item.id].qty || 0) + 1 } }))
                         }}><i className="fa-solid fa-plus"></i></button>
                       </div>
                       <div className="cart-item-total">{formatPreco(item.preco * item.qty)}</div>

@@ -699,6 +699,38 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
     })
   }
 
+  const setPreAddCartQty = (pOrId, val) => {
+    const id = typeof pOrId === 'object' ? pOrId.id : pOrId
+    const idStr = String(id)
+    const num = val === '' ? '' : Math.max(0, parseInt(val, 10) || 0)
+    if (num === 0) {
+      setPreAddCart(prev => {
+        const { [id]: _, ...rest } = prev
+        return rest
+      })
+      setPreAddCartOrder(ord => ord.filter(x => String(x) !== idStr))
+      return
+    }
+    setPreAddCartOrder(prev => prev.includes(idStr) ? prev : [...prev, idStr])
+    setPreAddCart(prev => {
+      const existing = prev[id]
+      if (existing) return { ...prev, [id]: { ...existing, qty: num } }
+      const p = typeof pOrId === 'object' ? pOrId : (produtos || []).find(prod => String(prod.id) === idStr) || {}
+      const precoNum = Number(String(p.preco || 0).replace(',', '.')) || 0
+      return {
+        ...prev,
+        [id]: {
+          id: p.id || id,
+          nome: p.nome || 'Produto',
+          preco: precoNum,
+          imagem: p.imagem,
+          tipo: 'avista',
+          qty: num
+        }
+      }
+    })
+  }
+
   const confirmPreAdd = () => {
     const newItems = getPreAddCartItemsOrdered()
     if (newItems.length === 0) return
@@ -1756,10 +1788,19 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
                             <span className="add-prod-price">{formatPreco(p.preco)}</span>
                           </div>
                           {inCart ? (
-                            <div className="add-prod-controls">
-                              <span className="add-prod-qty">{inCart.qty}x</span>
-                              <button className="qty-btn-sm" onClick={() => removeFromPreCart(p.id)}><i className="fa-solid fa-minus"></i></button>
-                              <button className="qty-btn-sm" onClick={() => addToPreCart(p)}><i className="fa-solid fa-plus"></i></button>
+                            <div className="add-prod-controls" style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                              <button type="button" className="qty-btn-sm" onClick={() => removeFromPreCart(p.id)}><i className="fa-solid fa-minus"></i></button>
+                              <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={inCart.qty}
+                                onChange={e => setPreAddCartQty(p, e.target.value)}
+                                onClick={e => e.stopPropagation()}
+                                title="Digite a quantidade"
+                                style={{ width: '45px', height: '26px', textAlign: 'center', fontSize: '0.82rem', fontWeight: 700, border: '1px solid var(--admin-border)', borderRadius: '4px', background: 'white', outline: 'none' }}
+                              />
+                              <button type="button" className="qty-btn-sm" onClick={() => addToPreCart(p)}><i className="fa-solid fa-plus"></i></button>
                             </div>
                           ) : (
                             <button className="add-prod-add" onClick={() => addToPreCart(p)}>
@@ -1794,7 +1835,15 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
                           <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', padding: '2px 0' }}>
                             <span><strong>{idx + 1}.</strong> {item.nome}</span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                              <span style={{ fontWeight: 700, color: '#8b5cf6' }}>{item.qty}x</span>
+                              <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={item.qty}
+                                onChange={e => setPreAddCartQty(item.id, e.target.value)}
+                                title="Editar quantidade"
+                                style={{ width: '46px', height: '24px', textAlign: 'center', fontSize: '0.8rem', fontWeight: 700, border: '1px solid var(--admin-border)', borderRadius: '4px', background: 'white', outline: 'none' }}
+                              />
                               <span style={{ fontSize: '0.74rem', color: 'var(--admin-text-sec, #64748b)' }}>({formatPreco(item.preco)})</span>
                             </div>
                           </div>
