@@ -13116,8 +13116,10 @@ _THSM Distribuidora — Agradecemos a preferência!_`
   }))
   const [addSearch, setAddSearch] = useState('')
   const [addCart, setAddCart] = useState({})
+  const [addCartOrder, setAddCartOrder] = useState([])
   const [preAddSearch, setPreAddSearch] = useState('')
   const [preAddCart, setPreAddCart] = useState({})
+  const [preAddCartOrder, setPreAddCartOrder] = useState([])
   const [preReplacements, setPreReplacements] = useState([])
   const [preVencimento, setPreVencimento] = useState(() => {
     return order.dataVencimento || (() => {
@@ -13238,6 +13240,8 @@ _THSM Distribuidora — Agradecemos a preferência!_`
   }
 
   const addItemToEdit = (p) => {
+    const pIdStr = String(p.id)
+    setAddCartOrder(prev => prev.includes(pIdStr) ? prev : [...prev, pIdStr])
     const unitPreco = Number(String(p.preco || 0).replace(',', '.')) || 0
     const rawCusto = (p.preco_custo != null && p.preco_custo !== '') ? Number(String(p.preco_custo).replace(',', '.')) : (getItemCost(p, produtos) || null)
     setAddCart(prev => ({
@@ -13256,17 +13260,25 @@ _THSM Distribuidora — Agradecemos a preferência!_`
   }
 
   const removeFromAddCart = (id) => {
+    const idStr = String(id)
     setAddCart(prev => {
       if (!prev[id] || prev[id].qty <= 1) {
         const { [id]: _, ...rest } = prev
+        setAddCartOrder(orderPrev => orderPrev.filter(k => String(k) !== idStr))
         return rest
       }
       return { ...prev, [id]: { ...prev[id], qty: prev[id].qty - 1 } }
     })
   }
 
+  const getAddCartItemsOrdered = () => {
+    const ordered = addCartOrder.map(id => addCart[id]).filter(Boolean)
+    const remaining = Object.values(addCart).filter(i => i && !addCartOrder.some(k => String(k) === String(i.id)))
+    return [...ordered, ...remaining].filter(i => (Number(i.qty) || 0) > 0)
+  }
+
   const confirmAddItems = () => {
-    const newItems = Object.values(addCart).filter(i => (Number(i.qty) || 0) > 0)
+    const newItems = getAddCartItemsOrdered()
     if (newItems.length === 0) return
     setEditedItems(prev => {
       const copy = [...prev]
@@ -13289,11 +13301,36 @@ _THSM Distribuidora — Agradecemos a preferência!_`
       return copy
     })
     setAddCart({})
+    setAddCartOrder([])
     setAddSearch('')
   }
 
+  const getMergedItemsForSave = () => {
+    const pendingAdd = getAddCartItemsOrdered()
+    if (pendingAdd.length === 0) return editedItems
+    const copy = [...editedItems]
+    for (const ni of pendingAdd) {
+      const existIdx = copy.findIndex(it => (it.id != null && ni.id != null && String(it.id) === String(ni.id)) || (it.nome && ni.nome && it.nome.trim().toLowerCase() === ni.nome.trim().toLowerCase()))
+      if (existIdx >= 0) {
+        copy[existIdx] = {
+          ...copy[existIdx],
+          qty: (Number(copy[existIdx].qty) || 0) + (Number(ni.qty) || 1)
+        }
+      } else {
+        copy.push({
+          ...ni,
+          qty: Number(ni.qty) || 1,
+          preco: ni.preco != null ? String(ni.preco).replace('.', ',') : '0',
+          preco_custo: ni.preco_custo != null ? String(ni.preco_custo).replace('.', ',') : ''
+        })
+      }
+    }
+    return copy
+  }
+
   const handleEditConfirm = () => {
-    const validItems = editedItems.filter(i => (Number(i.qty) || 0) > 0).map(i => ({
+    const baseItems = getMergedItemsForSave()
+    const validItems = baseItems.filter(i => (Number(i.qty) || 0) > 0).map(i => ({
       ...i,
       qty: Number(i.qty) || 0,
       preco: parseDecimalToNumber(i.preco),
@@ -13301,11 +13338,14 @@ _THSM Distribuidora — Agradecemos a preferência!_`
     }))
     if (validItems.length === 0) { return }
     onEditAndConfirm(validItems, order.status)
+    setAddCart({})
+    setAddCartOrder([])
     setEditMode(false)
   }
 
   const handleEditSave = () => {
-    const validItems = editedItems.filter(i => (Number(i.qty) || 0) > 0).map(i => ({
+    const baseItems = getMergedItemsForSave()
+    const validItems = baseItems.filter(i => (Number(i.qty) || 0) > 0).map(i => ({
       ...i,
       qty: Number(i.qty) || 0,
       preco: parseDecimalToNumber(i.preco),
@@ -13313,6 +13353,8 @@ _THSM Distribuidora — Agradecemos a preferência!_`
     }))
     if (validItems.length === 0) { return }
     onEditSave(validItems)
+    setAddCart({})
+    setAddCartOrder([])
     setEditMode(false)
   }
 
@@ -13330,6 +13372,8 @@ _THSM Distribuidora — Agradecemos a preferência!_`
   }, [produtos, preAddSearch])
 
   const addToPreReplacement = (p) => {
+    const pIdStr = String(p.id)
+    setPreAddCartOrder(prev => prev.includes(pIdStr) ? prev : [...prev, pIdStr])
     const unitPreco = Number(String(p.preco || 0).replace(',', '.')) || 0
     const rawCusto = (p.preco_custo != null && p.preco_custo !== '') ? Number(String(p.preco_custo).replace(',', '.')) : (getItemCost(p, produtos) || null)
     setPreAddCart(prev => ({
@@ -13348,9 +13392,11 @@ _THSM Distribuidora — Agradecemos a preferência!_`
   }
 
   const removeFromPreCart = (id) => {
+    const idStr = String(id)
     setPreAddCart(prev => {
       if (!prev[id] || prev[id].qty <= 1) {
         const { [id]: _, ...keep } = prev
+        setPreAddCartOrder(ord => ord.filter(x => String(x) !== idStr))
         return keep
       }
       return { ...prev, [id]: { ...prev[id], qty: prev[id].qty - 1 } }
@@ -13358,7 +13404,9 @@ _THSM Distribuidora — Agradecemos a preferência!_`
   }
 
   const confirmPreReplacements = () => {
-    const newItems = Object.values(preAddCart).filter(i => (Number(i.qty) || 0) > 0)
+    const ordered = preAddCartOrder.map(id => preAddCart[id]).filter(Boolean)
+    const remaining = Object.values(preAddCart).filter(i => i && !preAddCartOrder.some(k => String(k) === String(i.id)))
+    const newItems = [...ordered, ...remaining].filter(i => (Number(i.qty) || 0) > 0)
     if (newItems.length === 0) return
     setPreReplacements(prev => {
       const copy = [...prev]
@@ -13380,6 +13428,7 @@ _THSM Distribuidora — Agradecemos a preferência!_`
       return copy
     })
     setPreAddCart({})
+    setPreAddCartOrder([])
     setPreAddSearch('')
   }
 
@@ -13389,7 +13438,7 @@ _THSM Distribuidora — Agradecemos a preferência!_`
         <div className="admin-modal admin-modal-lg" onClick={e => e.stopPropagation()} style={{ maxWidth: '550px' }}>
           <div className="admin-modal-header">
             <h3><i className="fa-solid fa-pen"></i> Editar Itens — Pedido #{order.id.toString().slice(-6)} ({editTotalPieces} {editTotalPieces === 1 ? 'item' : 'itens'})</h3>
-            <button className="admin-modal-close" onClick={() => { setEditMode(false); resetEditedItems(); setAddCart({}) }}><i className="fa-solid fa-xmark"></i></button>
+            <button className="admin-modal-close" onClick={() => { setEditMode(false); resetEditedItems(); setAddCart({}); setAddCartOrder([]) }}><i className="fa-solid fa-xmark"></i></button>
           </div>
           <div className="admin-modal-body">
             <div className="detail-section">
@@ -13478,11 +13527,46 @@ _THSM Distribuidora — Agradecemos a preferência!_`
                   })}
                 </div>
               )}
-              {Object.values(addCart).filter(i => i.qty > 0).length > 0 && (
-                <button className="admin-btn admin-btn-primary" style={{ marginTop: '0.5rem', fontSize: '0.82rem' }} onClick={confirmAddItems}>
-                  <i className="fa-solid fa-check"></i> Adicionar {Object.values(addCart).reduce((s, i) => s + i.qty, 0)} item(ns) ao pedido
-                </button>
-              )}
+              {(() => {
+                const addCartItemsList = getAddCartItemsOrdered()
+                if (addCartItemsList.length === 0) return null
+                return (
+                  <div style={{ marginTop: '0.6rem', padding: '0.6rem 0.75rem', background: 'var(--admin-card-bg, #f8fafc)', borderRadius: '8px', border: '1px solid var(--admin-border, #e2e8f0)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                      <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--admin-text, #1e293b)' }}>
+                        <i className="fa-solid fa-list-ol" style={{ color: 'var(--accent, #3b82f6)', marginRight: '4px' }}></i>
+                        Itens selecionados (ordem de adição):
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => { setAddCart({}); setAddCartOrder([]) }}
+                        style={{ background: 'transparent', border: 'none', color: '#ef4444', fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}
+                      >
+                        Limpar
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '110px', overflowY: 'auto' }}>
+                      {addCartItemsList.map((item, idx) => (
+                        <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', padding: '2px 0' }}>
+                          <span><strong>{idx + 1}.</strong> {item.nome}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <span style={{ fontWeight: 700, color: 'var(--accent, #3b82f6)' }}>{item.qty}x</span>
+                            <span style={{ fontSize: '0.74rem', color: 'var(--admin-text-sec, #64748b)' }}>({formatPreco(item.preco)})</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn-primary"
+                      style={{ marginTop: '0.5rem', width: '100%', fontSize: '0.82rem', justifyContent: 'center' }}
+                      onClick={confirmAddItems}
+                    >
+                      <i className="fa-solid fa-check"></i> Adicionar {addCartItemsList.reduce((s, i) => s + i.qty, 0)} item(ns) ao pedido
+                    </button>
+                  </div>
+                )
+              })()}
               {!addSearch && <p style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>Digite o nome do produto para buscá-lo no catálogo</p>}
             </div>
 
@@ -13496,7 +13580,7 @@ _THSM Distribuidora — Agradecemos a preferência!_`
             </div>
 
             <div className="modal-actions">
-              <button className="admin-btn admin-btn-sec" onClick={() => { setEditMode(false); resetEditedItems(); setAddCart({}) }}>Cancelar</button>
+              <button className="admin-btn admin-btn-sec" onClick={() => { setEditMode(false); resetEditedItems(); setAddCart({}); setAddCartOrder([]) }}>Cancelar</button>
               <button className="admin-btn" style={{ background: 'var(--accent)', color: 'white', borderColor: 'var(--accent)' }} disabled={editedItems.filter(i => (Number(i.qty) || 0) > 0).length === 0} onClick={handleEditSave}>
                 <i className="fa-solid fa-save"></i> Salvar
               </button>
@@ -13767,9 +13851,9 @@ _THSM Distribuidora — Agradecemos a preferência!_`
                   })}
                 </div>
               )}
-              {Object.values(preAddCart).filter(i => i.qty > 0).length > 0 && (
+              {preAddCartOrder.map(id => preAddCart[id]).filter(i => (Number(i?.qty) || 0) > 0).length > 0 && (
                 <button className="admin-btn" style={{ marginTop: '0.4rem', fontSize: '0.78rem', background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }} onClick={confirmPreReplacements}>
-                  <i className="fa-solid fa-check"></i> Adicionar {Object.values(preAddCart).reduce((s, i) => s + (Number(i.qty) || 0), 0)} substituto(s) ao pedido
+                  <i className="fa-solid fa-check"></i> Adicionar {preAddCartOrder.map(id => preAddCart[id]).filter(Boolean).reduce((s, i) => s + (Number(i.qty) || 0), 0)} substituto(s) ao pedido
                 </button>
               )}
               {preReplacements.length > 0 && (

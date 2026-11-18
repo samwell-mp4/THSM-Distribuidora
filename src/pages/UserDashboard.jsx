@@ -140,6 +140,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
   const [editedPreItems, setEditedPreItems] = useState([])
   const [preAddSearch, setPreAddSearch] = useState('')
   const [preAddCart, setPreAddCart] = useState({})
+  const [preAddCartOrder, setPreAddCartOrder] = useState([])
   const [showUserDelivery, setShowUserDelivery] = useState(null)
   const [userReturnQtys, setUserReturnQtys] = useState({})
   const [userPayQtys, setUserPayQtys] = useState({})
@@ -539,15 +540,45 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
     setPaymentStep('review')
   }
 
-  const savePrePedidoEdits = (editedItems) => {
+  const getPreAddCartItemsOrdered = () => {
+    const ordered = preAddCartOrder.map(id => preAddCart[id]).filter(Boolean)
+    const remaining = Object.values(preAddCart).filter(i => i && !preAddCartOrder.some(k => String(k) === String(i.id)))
+    return [...ordered, ...remaining].filter(i => (Number(i.qty) || 0) > 0)
+  }
+
+  const getMergedPreItems = () => {
+    const pending = getPreAddCartItemsOrdered()
+    if (pending.length === 0) return editedPreItems
+    const copy = [...editedPreItems]
+    for (const ni of pending) {
+      const existIdx = copy.findIndex(it => String(it.id) === String(ni.id))
+      if (existIdx >= 0) {
+        copy[existIdx] = {
+          ...copy[existIdx],
+          qty: (Number(copy[existIdx].qty) || 0) + (Number(ni.qty) || 0)
+        }
+      } else {
+        copy.push({
+          ...ni,
+          qty: Number(ni.qty) || 1,
+          preco: Number(String(ni.preco).replace(',', '.')) || 0
+        })
+      }
+    }
+    return copy
+  }
+
+  const savePrePedidoEdits = (currentEditedItems) => {
     if (!selectedOrder) return
-    const totalAvista = Math.round(editedItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + (Number(String(i.preco).replace(',', '.')) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
-    const totalAprazo = Math.round(editedItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + (Number(String(i.preco).replace(',', '.')) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
+    const rawItems = currentEditedItems || getMergedPreItems()
+    const validItems = rawItems.filter(i => (Number(i.qty) || 0) > 0)
+    const totalAvista = Math.round(validItems.filter(i => i.tipo === 'avista').reduce((s, i) => s + (Number(String(i.preco).replace(',', '.')) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
+    const totalAprazo = Math.round(validItems.filter(i => i.tipo === 'aprazo').reduce((s, i) => s + (Number(String(i.preco).replace(',', '.')) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
     const total = Math.round((totalAvista + totalAprazo) * 100) / 100
     const now = Date.now()
     const updated = allOrders.map(o => String(o.id) === String(selectedOrder.id) ? {
       ...o,
-      items: editedItems,
+      items: validItems,
       totalAvista,
       totalAprazo,
       total,
@@ -556,8 +587,10 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
     } : o)
     setAllOrders(updated)
     setLS(LS_ORDERS, updated)
-    setSelectedOrder(prev => ({ ...prev, items: editedItems, totalAvista, totalAprazo, total, lastModified: now, updatedAt: now }))
-    upsertOrder({ ...selectedOrder, items: editedItems, totalAvista, totalAprazo, total, lastModified: now, updatedAt: now })
+    setSelectedOrder(prev => ({ ...prev, items: validItems, totalAvista, totalAprazo, total, lastModified: now, updatedAt: now }))
+    upsertOrder({ ...selectedOrder, items: validItems, totalAvista, totalAprazo, total, lastModified: now, updatedAt: now })
+    setPreAddCart({})
+    setPreAddCartOrder([])
     setEditPreOrder(false)
   }
 
@@ -638,6 +671,8 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
   }, [produtos, preAddSearch])
 
   const addToPreCart = (p) => {
+    const pIdStr = String(p.id)
+    setPreAddCartOrder(prev => prev.includes(pIdStr) ? prev : [...prev, pIdStr])
     const precoNum = Number(String(p.preco || 0).replace(',', '.')) || 0
     setPreAddCart(prev => ({
       ...prev,
@@ -653,9 +688,11 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
   }
 
   const removeFromPreCart = (id) => {
+    const idStr = String(id)
     setPreAddCart(prev => {
       if (!prev[id] || prev[id].qty <= 1) {
         const { [id]: _, ...rest } = prev
+        setPreAddCartOrder(ord => ord.filter(x => String(x) !== idStr))
         return rest
       }
       return { ...prev, [id]: { ...prev[id], qty: prev[id].qty - 1 } }
@@ -663,7 +700,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
   }
 
   const confirmPreAdd = () => {
-    const newItems = Object.values(preAddCart).filter(i => (Number(i.qty) || 0) > 0)
+    const newItems = getPreAddCartItemsOrdered()
     if (newItems.length === 0) return
     setEditedPreItems(prev => {
       const copy = [...prev]
@@ -685,6 +722,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
       return copy
     })
     setPreAddCart({})
+    setPreAddCartOrder([])
     setPreAddSearch('')
   }
 
@@ -1657,7 +1695,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
           <div className="admin-modal admin-modal-lg" onClick={e => e.stopPropagation()} style={{ maxWidth: '550px' }}>
             <div className="admin-modal-header">
               <h3><i className="fa-solid fa-pen"></i> Editar Comanda — Pedido #{selectedOrder.id.toString().slice(-6)} ({editedPreItems.filter(i => i.qty > 0).reduce((s, i) => s + (Number(i.qty) || 0), 0)} peças totais)</h3>
-              <button className="admin-modal-close" onClick={() => setEditPreOrder(false)}><i className="fa-solid fa-xmark"></i></button>
+              <button className="admin-modal-close" onClick={() => { setEditPreOrder(false); setPreAddCart({}); setPreAddCartOrder([]) }}><i className="fa-solid fa-xmark"></i></button>
             </div>
             <div className="admin-modal-body">
               <div style={{ marginBottom: '1rem' }}>
@@ -1733,11 +1771,46 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
                     })}
                   </div>
                 )}
-                {Object.values(preAddCart).filter(i => i.qty > 0).length > 0 && (
-                  <button className="admin-btn" style={{ marginTop: '0.5rem', fontSize: '0.82rem', background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6' }} onClick={confirmPreAdd}>
-                    <i className="fa-solid fa-check"></i> Adicionar {Object.values(preAddCart).reduce((s, i) => s + i.qty, 0)} item(ns)
-                  </button>
-                )}
+                {(() => {
+                  const preAddCartItems = getPreAddCartItemsOrdered()
+                  if (preAddCartItems.length === 0) return null
+                  return (
+                    <div style={{ marginTop: '0.6rem', padding: '0.6rem 0.75rem', background: 'var(--admin-card-bg, #f8fafc)', borderRadius: '8px', border: '1px solid var(--admin-border, #e2e8f0)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--admin-text, #1e293b)' }}>
+                          <i className="fa-solid fa-list-ol" style={{ color: '#8b5cf6', marginRight: '4px' }}></i>
+                          Itens selecionados (ordem de adição):
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { setPreAddCart({}); setPreAddCartOrder([]) }}
+                          style={{ background: 'transparent', border: 'none', color: '#ef4444', fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}
+                        >
+                          Limpar
+                        </button>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '110px', overflowY: 'auto' }}>
+                        {preAddCartItems.map((item, idx) => (
+                          <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', padding: '2px 0' }}>
+                            <span><strong>{idx + 1}.</strong> {item.nome}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <span style={{ fontWeight: 700, color: '#8b5cf6' }}>{item.qty}x</span>
+                              <span style={{ fontSize: '0.74rem', color: 'var(--admin-text-sec, #64748b)' }}>({formatPreco(item.preco)})</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        className="admin-btn"
+                        style={{ marginTop: '0.5rem', width: '100%', fontSize: '0.82rem', background: '#8b5cf6', color: 'white', borderColor: '#8b5cf6', justifyContent: 'center' }}
+                        onClick={confirmPreAdd}
+                      >
+                        <i className="fa-solid fa-check"></i> Adicionar {preAddCartItems.reduce((s, i) => s + (Number(i.qty) || 0), 0)} item(ns)
+                      </button>
+                    </div>
+                  )
+                })()}
                 {!preAddSearch && <p style={{ fontSize: '0.75rem', color: 'var(--admin-text-sec)' }}>Digite o nome do produto para buscá-lo no catálogo</p>}
               </div>
 
@@ -1747,7 +1820,7 @@ export default function UserDashboard({ produtos = [], onVoltar, initialOrderId,
               </div>
 
               <div className="modal-actions">
-                <button className="admin-btn admin-btn-sec" onClick={() => setEditPreOrder(false)}>Cancelar</button>
+                <button className="admin-btn admin-btn-sec" onClick={() => { setEditPreOrder(false); setPreAddCart({}); setPreAddCartOrder([]) }}>Cancelar</button>
                 <button className="admin-btn" style={{ background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} disabled={editedPreItems.filter(i => i.qty > 0).length === 0} onClick={() => savePrePedidoEdits(editedPreItems.filter(i => i.qty > 0))}>
                   <i className="fa-solid fa-check"></i> Salvar Alterações
                 </button>
