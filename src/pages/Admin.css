@@ -5957,6 +5957,22 @@ html, body {
 
 /* RESPONSIVE MEDIA QUERIES FOR PEDIDOS */
 @media (max-width: 1024px) {
+  .admin-orders-header-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+  .admin-orders-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    width: 100%;
+  }
+  .admin-orders-header-actions .admin-btn {
+    flex: 1 1 auto;
+    min-width: 140px;
+    justify-content: center;
+  }
   .admin-orders-kpi-grid {
     grid-template-columns: repeat(2, 1fr);
   }

@@ -8,35 +8,34 @@ import './OrderReportModal.css'
 
 export { getOrderPaymentDate, getOrderDueDate }
 
-const STATUS_CONFIG = {
-  'pre-pedido': { label: 'Pré-Pedido', color: '#8b5cf6', bg: '#ede9fe' },
-  'pendente': { label: 'Pendente', color: '#d97706', bg: '#fef3c7' },
-  'confirmado': { label: 'Confirmado', color: '#2563eb', bg: '#dbeafe' },
-  'em-andamento': { label: 'Em Andamento', color: '#4f46e5', bg: '#e0e7ff' },
-  'em-rota': { label: 'Em Rota', color: '#0284c7', bg: '#e0f2fe' },
-  'entregue': { label: 'Entregue (Praça)', color: '#059669', bg: '#d1fae5' },
-  'acerto': { label: 'Acerto (Motoristas)', color: '#7c3aed', bg: '#f3e8ff' },
-  'concluido': { label: 'Concluído (Pago)', color: '#16a34a', bg: '#dcfce7' },
-  'calote_parcial': { label: 'Calote Parcial', color: '#d97706', bg: '#fef3c7' },
-  'calote': { label: 'Calote 100%', color: '#dc2626', bg: '#fee2e2' },
-  'cancelado': { label: 'Cancelado', color: '#94a3b8', bg: '#f1f5f9' }
-};
+export const STATUS_CONFIG = {
+  'pre-pedido': { label: 'Pré-Pedido', color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' },
+  'pendente': { label: 'Pendente', color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
+  'confirmado': { label: 'Confirmado', color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
+  'em-andamento': { label: 'Em Andamento', color: '#4f46e5', bg: '#eef2ff', border: '#c7d2fe' },
+  'em-rota': { label: 'Em Rota', color: '#0284c7', bg: '#f0f9ff', border: '#bae6fd' },
+  'entregue': { label: 'Entregue (Praça)', color: '#059669', bg: '#ecfdf5', border: '#a7f3d0' },
+  'acerto': { label: 'Acerto (Motoristas)', color: '#9333ea', bg: '#faf5ff', border: '#e9d5ff' },
+  'concluido': { label: 'Concluído (Pago)', color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
+  'calote_parcial': { label: 'Calote Parcial', color: '#b45309', bg: '#fef3c7', border: '#fcd34d' },
+  'calote': { label: 'Calote 100%', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+  'cancelado': { label: 'Cancelado', color: '#64748b', bg: '#f8fafc', border: '#cbd5e1' }
+}
 
-// Limpa nome de produto removendo prefixos de quantidade embutidos e sufixos repetitivos como "- SEM DEVOLUCAO"
+// Limpa nome de produto removendo prefixos de quantidade embutidos e sufixos repetitivos
 export function cleanProductName(nome) {
   if (!nome) return ''
   return String(nome)
     .replace(/\s*-\s*sem\s*devolu[cç][aã]o/gi, '')
     .replace(/\s*\[sem\s*devolu[cç][aã]o\]/gi, '')
     .replace(/\s*\(sem\s*devolu[cç][aã]o\)/gi, '')
-    .replace(/^\d+\s*[xX]?\s+/, '') // remove prefixo "3 " ou "3x "
+    .replace(/^\d+\s*[xX]?\s+/, '')
     .trim()
 }
 
 // Classificador oficial THSM para pedidos zerados (Devolução Total vs Brinde)
 export function getOrderZeroClassification(o) {
   if (!o) return null
-  // 1. Flags explícitas salvas no pedido
   if (o.isBrinde || o.is_brinde || o.tipo_zerado === 'brinde' || o.motivo_zerado === 'brinde' || o.motivo_zerado === 'Brinde') {
     return { type: 'brinde', label: 'Brinde', motivo: o.motivo_brinde || 'Brinde institucional' }
   }
@@ -48,12 +47,10 @@ export function getOrderZeroClassification(o) {
   const nome = (o.customer?.nome || o.cliente || o.nome || '').toLowerCase().trim()
   const obs = (o.observacoes || o.obs || '').toLowerCase()
 
-  // 2. Brinde: Thales (553298606010)
   if (tel.includes('553298606010') || tel.includes('3298606010') || nome.includes('thales') || nome.includes('brinde') || obs.includes('brinde')) {
     return { type: 'brinde', label: 'Brinde', motivo: o.motivo_brinde || 'Brinde institucional' }
   }
 
-  // 3. Os 10 clientes com devolução total do briefing de referência
   const targetDevPhones = [
     '5514991814227', '5514997576133', '5519999000609', '5516981630468',
     '5514997612794', '5514998713479', '5532991388848', '5532998446843',
@@ -71,7 +68,6 @@ export function getOrderZeroClassification(o) {
     return { type: 'devolucao_total', label: 'Devolução total', motivo: 'Devolução total' }
   }
 
-  // Fallback: se o total for 0 e for finalizado/concluído
   const tot = Number(o.total || o.total_liquido || o.totalLiquido || o.totalAcerto || 0)
   if (tot === 0 && (o.status === 'concluido' || o.isFinalizado)) {
     return { type: 'devolucao_total', label: 'Devolução total', motivo: 'Devolução total' }
@@ -80,17 +76,16 @@ export function getOrderZeroClassification(o) {
   return null
 }
 
-// Helper financeiro oficial THSM por comanda (separa valor_itens, desconto e total_liquido)
+// Helper financeiro oficial THSM por comanda
 export function getOrderFinancialDetails(o) {
-  const isTest = Boolean(o?.isTest || o?.is_test || (o?.customer?.nome && o.customer.nome.toLowerCase().includes('teste')));
-  const zeroClass = getOrderZeroClassification(o);
+  const isTest = Boolean(o?.isTest || o?.is_test || (o?.customer?.nome && o.customer.nome.toLowerCase().includes('teste')))
+  const zeroClass = getOrderZeroClassification(o)
 
-  // Pedidos com valor zero: Devolução Total ou Brinde
   if (zeroClass) {
     return {
       isTest,
       isZero: true,
-      zeroType: zeroClass.type, // 'devolucao_total' ou 'brinde'
+      zeroType: zeroClass.type,
       valorItens: 0,
       desconto: 0,
       totalLiquido: 0,
@@ -98,73 +93,68 @@ export function getOrderFinancialDetails(o) {
       motivoZerado: zeroClass.label,
       totalPago: 0,
       saldoEmAberto: 0
-    };
-  }
-
-  // 1. Preço de tabela dos itens (preço cheio)
-  let valorItens = 0;
-  if (o?.valor_itens !== undefined && Number(o.valor_itens) > 0) {
-    valorItens = Number(o.valor_itens);
-  } else {
-    const items = (Array.isArray(o?.items) && o.items.length > 0)
-      ? o.items
-      : (Array.isArray(o?.originalItems) && o.originalItems.length > 0 ? o.originalItems : []);
-    valorItens = items.reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0);
-  }
-  valorItens = Math.round(valorItens * 100) / 100;
-
-  // 2. Total líquido (o que foi faturado de verdade após descontos)
-  let totalLiquido = 0;
-  if (o?.total_liquido !== undefined && Number(o.total_liquido) >= 0) {
-    totalLiquido = Number(o.total_liquido);
-  } else if (o?.total !== undefined && Number(o.total) >= 0) {
-    totalLiquido = Number(o.total);
-  } else if (o?.totalAcerto !== undefined && Number(o.totalAcerto) >= 0) {
-    totalLiquido = Number(o.totalAcerto);
-  } else {
-    totalLiquido = valorItens;
-  }
-  totalLiquido = Math.round(totalLiquido * 100) / 100;
-
-  // 3. Desconto concedido (R$)
-  let desconto = 0;
-  if (o?.desconto !== undefined && Number(o.desconto) >= 0) {
-    desconto = Number(o.desconto);
-  } else if (valorItens > 0 && totalLiquido < valorItens) {
-    desconto = Math.max(0, Math.round((valorItens - totalLiquido) * 100) / 100);
-  } else if (o?.descontoPercent) {
-    desconto = Math.round(((Number(o.descontoPercent) / 100) * valorItens) * 100) / 100;
-  }
-  desconto = Math.round(desconto * 100) / 100;
-
-  // Se o total líquido não bate com valorItens - desconto, ajusta para manter integridade
-  if (valorItens > 0 && totalLiquido === 0 && desconto === 0) {
-    totalLiquido = valorItens;
-  } else if (valorItens > 0 && desconto > 0 && Math.abs((valorItens - desconto) - totalLiquido) > 0.05) {
-    totalLiquido = Math.max(0, Math.round((valorItens - desconto) * 100) / 100);
-  }
-
-  // 4. Motivo do desconto
-  let motivoDesconto = o?.motivo_desconto || '';
-  if (!motivoDesconto) {
-    if (desconto > 0) {
-      const pctCalc = Math.round((desconto / (valorItens || 1)) * 100);
-      if (Number(o?.descontoPercent) === 30 || pctCalc === 30) {
-        motivoDesconto = 'Desconto revendedora (30%)';
-      } else if (o?.cupom) {
-        motivoDesconto = `Cupom (${o.cupom})`;
-      } else if (o?.descontoPercent) {
-        motivoDesconto = `Desconto percentual (${o.descontoPercent}%)`;
-      } else {
-        motivoDesconto = 'Ajuste manual (R$)';
-      }
-    } else {
-      motivoDesconto = 'Sem desconto';
     }
   }
 
-  const totalPago = Number(o?.total_pago !== undefined ? o.total_pago : (o?.totalPago || (o?.status === 'concluido' ? totalLiquido : 0)));
-  const saldoEmAberto = Number(o?.saldo_em_aberto !== undefined ? o.saldo_em_aberto : (o?.valorEmAberto || Math.max(0, totalLiquido - totalPago)));
+  let valorItens = 0
+  if (o?.valor_itens !== undefined && Number(o.valor_itens) > 0) {
+    valorItens = Number(o.valor_itens)
+  } else {
+    const items = (Array.isArray(o?.items) && o.items.length > 0)
+      ? o.items
+      : (Array.isArray(o?.originalItems) && o.originalItems.length > 0 ? o.originalItems : [])
+    valorItens = items.reduce((s, i) => s + (Number(i.preco) || 0) * (Number(i.qty) || 0), 0)
+  }
+  valorItens = Math.round(valorItens * 100) / 100
+
+  let totalLiquido = 0
+  if (o?.total_liquido !== undefined && Number(o.total_liquido) >= 0) {
+    totalLiquido = Number(o.total_liquido)
+  } else if (o?.total !== undefined && Number(o.total) >= 0) {
+    totalLiquido = Number(o.total)
+  } else if (o?.totalAcerto !== undefined && Number(o.totalAcerto) >= 0) {
+    totalLiquido = Number(o.totalAcerto)
+  } else {
+    totalLiquido = valorItens
+  }
+  totalLiquido = Math.round(totalLiquido * 100) / 100
+
+  let desconto = 0
+  if (o?.desconto !== undefined && Number(o.desconto) >= 0) {
+    desconto = Number(o.desconto)
+  } else if (valorItens > 0 && totalLiquido < valorItens) {
+    desconto = Math.max(0, Math.round((valorItens - totalLiquido) * 100) / 100)
+  } else if (o?.descontoPercent) {
+    desconto = Math.round(((Number(o.descontoPercent) / 100) * valorItens) * 100) / 100
+  }
+  desconto = Math.round(desconto * 100) / 100
+
+  if (valorItens > 0 && totalLiquido === 0 && desconto === 0) {
+    totalLiquido = valorItens
+  } else if (valorItens > 0 && desconto > 0 && Math.abs((valorItens - desconto) - totalLiquido) > 0.05) {
+    totalLiquido = Math.max(0, Math.round((valorItens - desconto) * 100) / 100)
+  }
+
+  let motivoDesconto = o?.motivo_desconto || ''
+  if (!motivoDesconto) {
+    if (desconto > 0) {
+      const pctCalc = Math.round((desconto / (valorItens || 1)) * 100)
+      if (Number(o?.descontoPercent) === 30 || pctCalc === 30) {
+        motivoDesconto = 'Desconto revendedora (30%)'
+      } else if (o?.cupom) {
+        motivoDesconto = `Cupom (${o.cupom})`
+      } else if (o?.descontoPercent) {
+        motivoDesconto = `Desconto percentual (${o.descontoPercent}%)`
+      } else {
+        motivoDesconto = 'Ajuste manual (R$)'
+      }
+    } else {
+      motivoDesconto = 'Sem desconto'
+    }
+  }
+
+  const totalPago = Number(o?.total_pago !== undefined ? o.total_pago : (o?.totalPago || (o?.status === 'concluido' ? totalLiquido : 0)))
+  const saldoEmAberto = Number(o?.saldo_em_aberto !== undefined ? o.saldo_em_aberto : (o?.valorEmAberto || Math.max(0, totalLiquido - totalPago)))
 
   return {
     isTest,
@@ -177,14 +167,14 @@ export function getOrderFinancialDetails(o) {
     motivoZerado: '-',
     totalPago: Math.round(totalPago * 100) / 100,
     saldoEmAberto: Math.round(saldoEmAberto * 100) / 100
-  };
+  }
 }
 
-function formatCurrency(val) {
+export function formatCurrency(val) {
   return Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-function formatDateBR(dateStr) {
+export function formatDateBR(dateStr) {
   if (!dateStr) return '-'
   try {
     const parts = String(dateStr).split('T')[0].split('-')
@@ -200,7 +190,6 @@ const isNoDevName = (nome) => {
   return norm(nome).includes('semdevolu') || norm(nome).includes('sem-devolu') || norm(nome).includes('sem devolu') || norm(nome).includes('s/devolu')
 }
 
-// Verifica se um item é sem devolução
 export function getItemCost(item, produtos = []) {
   if (item?.preco_custo != null && Number(item.preco_custo) > 0) return Number(item.preco_custo)
   if (item?.custo_unitario_pedido != null && Number(item.custo_unitario_pedido) > 0) return Number(item.custo_unitario_pedido)
@@ -215,7 +204,6 @@ export function checkItemSemDevolucao(item, produtos = []) {
   return isNoDevName(item?.nome)
 }
 
-// Formata o endereço completo do cliente
 export function formatFullAddress(endereco) {
   if (!endereco) return '-'
   if (typeof endereco === 'string') return endereco.trim() || '-'
@@ -231,7 +219,6 @@ export function formatFullAddress(endereco) {
   return parts.length > 0 ? parts.join(' - ') : '-'
 }
 
-// Calcula estatísticas de devolução para um pedido
 export function getOrderDevolucaoStats(order, produtos = []) {
   let qtdTotal = 0
   let qtdSemDev = 0
@@ -274,6 +261,64 @@ export function getOrderDevolucaoStats(order, produtos = []) {
   }
 }
 
+// Mecanismo confiável de impressão via iframe oculto (imune ao bloqueio de popups no Safari/iPad/Chrome)
+function printReportViaIframe(htmlContent) {
+  try {
+    let iframe = document.getElementById('thsm-report-print-iframe')
+    if (iframe) {
+      document.body.removeChild(iframe)
+    }
+    iframe = document.createElement('iframe')
+    iframe.id = 'thsm-report-print-iframe'
+    iframe.style.position = 'fixed'
+    iframe.style.right = '0'
+    iframe.style.bottom = '0'
+    iframe.style.width = '0'
+    iframe.style.height = '0'
+    iframe.style.border = '0'
+    iframe.style.opacity = '0'
+    iframe.style.pointerEvents = 'none'
+    document.body.appendChild(iframe)
+
+    const doc = iframe.contentWindow.document
+    doc.open()
+    doc.write(htmlContent)
+    doc.close()
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+      } catch (err) {
+        console.warn('Iframe print fallthrough to window.open', err)
+        fallbackPrintWindow(htmlContent)
+      }
+    }, 400)
+  } catch (err) {
+    console.warn('Iframe print error, falling back', err)
+    fallbackPrintWindow(htmlContent)
+  }
+}
+
+function fallbackPrintWindow(htmlContent) {
+  const win = window.open('', '_blank', 'width=1200,height=800')
+  if (!win) {
+    alert('Pop-up bloqueado pelo navegador. Por favor, autorize pop-ups ou utilize o botão "Baixar PDF" para obter o arquivo diretamente.')
+    return
+  }
+  win.document.open()
+  win.document.write(htmlContent)
+  win.document.close()
+  setTimeout(() => {
+    try {
+      win.focus()
+      win.print()
+    } catch (e) {
+      console.error(e)
+    }
+  }, 400)
+}
+
 export default function OrderReportModal({
   isOpen,
   onClose,
@@ -287,34 +332,32 @@ export default function OrderReportModal({
   isFinalizada = () => false,
   showToast = () => {}
 }) {
-  // Escopo de dados: 'todos', 'tela', 'selecionados', 'custom'
   const hasSelected = selectedOrderIds && selectedOrderIds.size > 0
   const [scope, setScope] = useState(hasSelected ? 'selecionados' : 'todos')
-  const [density, setDensity] = useState('compact') // 'compact' ou 'detailed'
 
-  // Filtros customizados (inicia com todos os status marcados para puxar 100% dos pedidos)
+  // Filtros personalizados
   const [selectedStatuses, setSelectedStatuses] = useState(() => Object.keys(STATUS_CONFIG))
-  const [selectedClientPhone, setSelectedClientPhone] = useState('TODOS')
-  const [clientSearch, setClientSearch] = useState('')
+  const [financialStatus, setFinancialStatus] = useState('todos') // 'todos', 'aberto', 'pago', 'zerados'
+  const [selectedPayment, setSelectedPayment] = useState('TODOS')
   const [selectedCity, setSelectedCity] = useState('TODAS')
   const [selectedRoute, setSelectedRoute] = useState('TODAS')
-  const [selectedPayment, setSelectedPayment] = useState('TODOS')
+  const [selectedClientPhone, setSelectedClientPhone] = useState('TODOS')
+  const [clientSearch, setClientSearch] = useState('')
   const [devolucaoFilter, setDevolucaoFilter] = useState('todos')
   const [excludeTests, setExcludeTests] = useState(true)
-  const [includePrices, setIncludePrices] = useState(true)
-  // Sempre calculado pela DATA DE VENCIMENTO como padrão e principal
-  const [dateType, setDateType] = useState('vencimento')
+
+  // Filtros de Data
+  const [dateType, setDateType] = useState('vencimento') // 'vencimento', 'date', 'pagamento'
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
 
-  // Opções de relatório
-  const [includeSummary, setIncludeSummary] = useState(true)
-  const [includeItemsDetail, setIncludeItemsDetail] = useState(true)
-  const [multilineItems, setMultilineItems] = useState(true) // Múltiplas linhas dos itens por padrão
-  const [orientation, setOrientation] = useState('landscape')
+  // Opções de saída
+  const [includePrices, setIncludePrices] = useState(true)
+  const [multilineItems, setMultilineItems] = useState(true)
   const [showPreviewTable, setShowPreviewTable] = useState(false)
+  const [activeTab, setActiveTab] = useState('filtros') // 'filtros', 'kpis'
 
-  // Lista única de cidades e rotas
+  // Cidades e Rotas únicas
   const cidadesUnicas = useMemo(() => {
     const set = new Set()
     orders.forEach(o => {
@@ -344,7 +387,32 @@ export default function OrderReportModal({
     return o.status || 'pendente'
   }
 
-  // Lista filtrada e deduplicada de pedidos
+  // Contagem dinâmica de status de acordo com o escopo base
+  const statusCounts = useMemo(() => {
+    const baseList = scope === 'selecionados'
+      ? orders.filter(o => selectedOrderIds && selectedOrderIds.has(String(o.id)))
+      : scope === 'tela'
+        ? (filteredOrdersFromScreen || [])
+        : (orders || [])
+
+    const counts = {}
+    Object.keys(STATUS_CONFIG).forEach(s => { counts[s] = 0 })
+
+    baseList.forEach(o => {
+      if (excludeTests) {
+        if (o?.isTest || o?.is_test) return
+        const nome = (o?.customer?.nome || o?.cliente || o?.nome || '').toLowerCase().trim()
+        if (nome.includes('teste') || nome === 'usuário' || nome === 'usuario') return
+      }
+      const st = getResolvedStatus(o)
+      if (counts[st] !== undefined) counts[st] += 1
+      else counts[st] = 1
+    })
+
+    return counts
+  }, [orders, scope, selectedOrderIds, filteredOrdersFromScreen, excludeTests])
+
+  // Filtragem e deduplicação de pedidos
   const targetOrders = useMemo(() => {
     let list = []
     if (scope === 'selecionados') {
@@ -364,7 +432,15 @@ export default function OrderReportModal({
           return false
         }
 
-        // 2. Cliente
+        // 2. Situação Financeira (Saldo em aberto, Quitado ou Zerados)
+        if (financialStatus !== 'todos') {
+          const fin = getOrderFinancialDetails(o)
+          if (financialStatus === 'aberto' && fin.saldoEmAberto <= 0) return false
+          if (financialStatus === 'pago' && (fin.saldoEmAberto > 0 || fin.totalLiquido <= 0)) return false
+          if (financialStatus === 'zerados' && !fin.isZero) return false
+        }
+
+        // 3. Cliente
         if (selectedClientPhone !== 'TODOS') {
           const orderPhone = (o.customer?.telefone || '').replace(/\D/g, '')
           const targetPhone = selectedClientPhone.replace(/\D/g, '')
@@ -373,24 +449,24 @@ export default function OrderReportModal({
           }
         }
 
-        // 3. Cidade
+        // 4. Cidade
         if (selectedCity !== 'TODAS') {
           const c = o.customer?.endereco?.cidade || ''
           if (c.toLowerCase() !== selectedCity.toLowerCase()) return false
         }
 
-        // 4. Rota
+        // 5. Rota
         if (selectedRoute !== 'TODAS') {
           const r = o.customer?.endereco?.rota || ''
           if (r.toLowerCase() !== selectedRoute.toLowerCase()) return false
         }
 
-        // 5. Forma de Pagamento (modalidade ou meio de pagamento)
+        // 6. Forma de Pagamento
         if (selectedPayment !== 'TODOS') {
           const pagModality = (o.pagamento || '').toLowerCase()
           const pMethod = (o.paymentMethod || o.payment?.method || '').toLowerCase()
           const splits = o.paymentSplits || {}
-          
+
           if (selectedPayment === 'avista') {
             if (pagModality !== 'avista') return false
           } else if (selectedPayment === 'aprazo') {
@@ -411,7 +487,7 @@ export default function OrderReportModal({
           }
         }
 
-        // 6. Datas (sempre calculando a DATA DE VENCIMENTO como padrão)
+        // 7. Intervalo de Datas
         const rawDate = dateType === 'pagamento'
           ? getOrderPaymentDate(o)
           : dateType === 'date'
@@ -425,7 +501,7 @@ export default function OrderReportModal({
       })
     }
 
-    // Filtro rigoroso de pedidos de teste e duplicados
+    // Exclusão de testes
     if (excludeTests) {
       list = list.filter(o => {
         if (!o) return false
@@ -446,8 +522,8 @@ export default function OrderReportModal({
       return true
     })
 
-    // Filtro adicional de Devolução (Sem / Com Devolução)
-    if (devolucaoFilter === 'sem_dev' || devolucaoFilter === 'com_sem_dev' || devolucaoFilter === 'apenas_sem_dev') {
+    // Filtro de Devolução (Sem / Com Devolução)
+    if (devolucaoFilter === 'sem_dev') {
       list = list.map(o => {
         const rawItems = o.items || []
         const semDevItems = rawItems.filter(i => checkItemSemDevolucao(i, produtos))
@@ -463,8 +539,7 @@ export default function OrderReportModal({
           total_liquido: subtotalSemDev,
           totalAcerto: subtotalSemDev,
           totalPago: o.status === 'concluido' ? subtotalSemDev : (Number(o.totalPago) > subtotalSemDev ? subtotalSemDev : Number(o.totalPago || 0)),
-          isFilteredByDev: true,
-          filteredDevType: 'sem_dev'
+          isFilteredByDev: true
         }
       }).filter(Boolean)
     } else if (devolucaoFilter === 'apenas_com_dev') {
@@ -483,8 +558,7 @@ export default function OrderReportModal({
           total_liquido: subtotalComDev,
           totalAcerto: subtotalComDev,
           totalPago: o.status === 'concluido' ? subtotalComDev : (Number(o.totalPago) > subtotalComDev ? subtotalComDev : Number(o.totalPago || 0)),
-          isFilteredByDev: true,
-          filteredDevType: 'com_dev'
+          isFilteredByDev: true
         }
       }).filter(Boolean)
     }
@@ -508,6 +582,7 @@ export default function OrderReportModal({
     filteredOrdersFromScreen,
     selectedOrderIds,
     selectedStatuses,
+    financialStatus,
     selectedClientPhone,
     selectedCity,
     selectedRoute,
@@ -520,33 +595,31 @@ export default function OrderReportModal({
     isFinalizada
   ])
 
-  // Resumo estatístico geral (fórmulas oficiais THSM com total transparência e coerência de balanço)
+  // Estatísticas oficiais THSM
   const reportStats = useMemo(() => {
     const totalPedidos = targetOrders.length
-    let faturamentoTotal = 0 // Total Líquido Faturado (R$ 57.573,05)
-    let valorItensTotal = 0  // Valor dos Itens a preço de tabela (R$ 76.688,50)
-    let descontosTotal = 0   // Descontos concedidos (R$ 19.115,45)
-    let totalItens = 0       // 1.311 peças
-    let totalQtdSemDev = 0   // 274 peças
-    let totalQtdComDev = 0   // 1.037 peças
-    let totalValorSemDev = 0 // R$ 37.182,00 (Preço de tabela)
-    let totalValorComDev = 0 // R$ 39.506,50 (Preço de tabela)
+    let faturamentoTotal = 0
+    let valorItensTotal = 0
+    let descontosTotal = 0
+    let saldoEmAbertoTotal = 0
+    let totalItens = 0
+    let totalQtdSemDev = 0
+    let totalQtdComDev = 0
+    let totalValorSemDev = 0
+    let totalValorComDev = 0
     let vendaNaoRecebida = 0
     let calotePrejuizoCusto = 0
-    let pedidosVendaCount = 0 // 221 vendas com valor > R$ 0
-    let pedidosDevolucaoTotalCount = 0 // 10 devoluções totais
-    let pedidosBrindeCount = 0 // 1 brinde
-    let pedidosZeradosTotalCount = 0 // 11 zerados
+    let pedidosVendaCount = 0
+    let pedidosDevolucaoTotalCount = 0
+    let pedidosBrindeCount = 0
+    let pedidosZeradosTotalCount = 0
     let calotesCount = 0
 
     const valoresLiquidosVendas = []
-
     const statusMap = {}
     Object.keys(STATUS_CONFIG).forEach(s => {
       statusMap[s] = { count: 0, total: 0 }
     })
-
-    const pagMap = { avista: 0, aprazo: 0, misto: 0, outro: 0 }
 
     targetOrders.forEach(o => {
       const dev = getOrderDevolucaoStats(o, produtos)
@@ -556,16 +629,14 @@ export default function OrderReportModal({
       totalItens += dev.qtdTotal
       totalQtdSemDev += dev.qtdSemDev
       totalQtdComDev += dev.qtdComDev
+      saldoEmAbertoTotal += fin.saldoEmAberto
 
       if (!statusMap[st]) statusMap[st] = { count: 0, total: 0 }
       statusMap[st].count += 1
 
       if (fin.isZero) {
-        if (fin.zeroType === 'brinde') {
-          pedidosBrindeCount += 1
-        } else {
-          pedidosDevolucaoTotalCount += 1
-        }
+        if (fin.zeroType === 'brinde') pedidosBrindeCount += 1
+        else pedidosDevolucaoTotalCount += 1
         pedidosZeradosTotalCount += 1
       } else if (st === 'concluido' || isFinalizada(o)) {
         pedidosVendaCount += 1
@@ -586,16 +657,10 @@ export default function OrderReportModal({
       } else {
         statusMap[st].total += fin.totalLiquido
       }
-
-      const p = o.pagamento || 'outro'
-      if (pagMap[p] !== undefined) pagMap[p] += fin.totalLiquido
-      else pagMap.outro += fin.totalLiquido
     })
 
-    // Ticket Médio oficial dos pedidos de venda com valor (> R$ 0)
     const ticketMedio = pedidosVendaCount > 0 ? (faturamentoTotal / pedidosVendaCount) : 0
 
-    // Mediana do Ticket dos pedidos de venda com valor (> R$ 0)
     valoresLiquidosVendas.sort((a, b) => a - b)
     let ticketMediana = 0
     if (pedidosVendaCount > 0) {
@@ -607,19 +672,6 @@ export default function OrderReportModal({
       }
     }
 
-    const porStatus = Object.entries(statusMap)
-      .filter(([_, data]) => data.count > 0)
-      .map(([statusKey, data]) => ({
-        key: statusKey,
-        label: STATUS_CONFIG[statusKey]?.label || statusKey,
-        color: STATUS_CONFIG[statusKey]?.color || '#64748b',
-        bg: STATUS_CONFIG[statusKey]?.bg || '#f1f5f9',
-        count: data.count,
-        total: data.total,
-        percent: faturamentoTotal > 0 ? (data.total / faturamentoTotal) * 100 : 0
-      }))
-      .sort((a, b) => b.total - a.total)
-
     return {
       totalPedidos,
       pedidosVendaCount,
@@ -629,6 +681,7 @@ export default function OrderReportModal({
       faturamentoTotal: Math.round(faturamentoTotal * 100) / 100,
       valorItensTotal: Math.round(valorItensTotal * 100) / 100,
       descontosTotal: Math.round(descontosTotal * 100) / 100,
+      saldoEmAbertoTotal: Math.round(saldoEmAbertoTotal * 100) / 100,
       ticketMedio: Math.round(ticketMedio * 100) / 100,
       ticketMediana: Math.round(ticketMediana * 100) / 100,
       calotesCount,
@@ -638,9 +691,7 @@ export default function OrderReportModal({
       totalQtdSemDev,
       totalQtdComDev,
       totalValorSemDev: Math.round(totalValorSemDev * 100) / 100,
-      totalValorComDev: Math.round(totalValorComDev * 100) / 100,
-      porStatus,
-      pagMap
+      totalValorComDev: Math.round(totalValorComDev * 100) / 100
     }
   }, [targetOrders, produtos, isFinalizada])
 
@@ -650,32 +701,14 @@ export default function OrderReportModal({
       case 'todos':
         setSelectedStatuses(Object.keys(STATUS_CONFIG))
         break
-      case 'pendentes_a_concluidos':
-        setSelectedStatuses(['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'acerto', 'entregue', 'concluido'])
-        break
-      case 'calotes':
-        setSelectedStatuses(['calote'])
-        break
-      case 'calote_parcial':
-        setSelectedStatuses(['calote_parcial'])
-        break
-      case 'inadimplencia':
-        setSelectedStatuses(['calote', 'calote_parcial'])
+      case 'ativos':
+        setSelectedStatuses(['pre-pedido', 'pendente', 'confirmado', 'em-andamento', 'em-rota', 'acerto', 'entregue'])
         break
       case 'concluidos':
         setSelectedStatuses(['concluido'])
         break
-      case 'entregues':
-        setSelectedStatuses(['entregue'])
-        break
-      case 'acertos':
-        setSelectedStatuses(['acerto'])
-        break
-      case 'rota':
-        setSelectedStatuses(['em-rota'])
-        break
-      case 'pendentes':
-        setSelectedStatuses(['pre-pedido', 'pendente'])
+      case 'calotes':
+        setSelectedStatuses(['calote_parcial', 'calote'])
         break
       case 'cancelados':
         setSelectedStatuses(['cancelado'])
@@ -685,13 +718,37 @@ export default function OrderReportModal({
     }
   }
 
+  const toggleStatus = (statusKey) => {
+    setSelectedStatuses(prev => {
+      if (prev.includes(statusKey)) {
+        return prev.filter(s => s !== statusKey)
+      } else {
+        return [...prev, statusKey]
+      }
+    })
+  }
+
+  const selectAllStatuses = () => setSelectedStatuses(Object.keys(STATUS_CONFIG))
+  const deselectAllStatuses = () => setSelectedStatuses([])
+
   // Presets de data
   const applyDatePreset = (preset) => {
     const today = new Date()
-    const formatDateYMD = (d) => d.toISOString().split('T')[0]
+    const formatDateYMD = (d) => {
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
 
     if (preset === 'today') {
       const str = formatDateYMD(today)
+      setStartDate(str)
+      setEndDate(str)
+    } else if (preset === 'yesterday') {
+      const yest = new Date()
+      yest.setDate(today.getDate() - 1)
+      const str = formatDateYMD(yest)
       setStartDate(str)
       setEndDate(str)
     } else if (preset === 'last7') {
@@ -704,20 +761,15 @@ export default function OrderReportModal({
       past.setDate(today.getDate() - 30)
       setStartDate(formatDateYMD(past))
       setEndDate(formatDateYMD(today))
-    } else if (preset === 'last60') {
-      const past = new Date()
-      past.setDate(today.getDate() - 60)
-      setStartDate(formatDateYMD(past))
-      setEndDate(formatDateYMD(today))
-    } else if (preset === 'last90') {
-      const past = new Date()
-      past.setDate(today.getDate() - 90)
-      setStartDate(formatDateYMD(past))
-      setEndDate(formatDateYMD(today))
     } else if (preset === 'this_month') {
       const first = new Date(today.getFullYear(), today.getMonth(), 1)
       setStartDate(formatDateYMD(first))
       setEndDate(formatDateYMD(today))
+    } else if (preset === 'last_month') {
+      const first = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+      const last = new Date(today.getFullYear(), today.getMonth(), 0)
+      setStartDate(formatDateYMD(first))
+      setEndDate(formatDateYMD(last))
     } else if (preset === 'clear') {
       setStartDate('')
       setEndDate('')
@@ -726,12 +778,12 @@ export default function OrderReportModal({
 
   const filteredClients = useMemo(() => {
     if (!usuarios) return []
-    if (!clientSearch) return usuarios.slice(0, 50)
-    return usuarios.filter(u => clientMatchesSearch(u, clientSearch)).slice(0, 100)
+    if (!clientSearch) return []
+    return usuarios.filter(u => clientMatchesSearch(u, clientSearch)).slice(0, 30)
   }, [usuarios, clientSearch])
 
   // ==========================================
-  // GERAÇÃO DE PDF ULTRA-COMPACTO E PROFISSIONAL (POUCAS PÁGINAS)
+  // GERAÇÃO DE PDF FORMATADO COM AUTO-TABLE
   // ==========================================
   const handleGeneratePDF = () => {
     if (targetOrders.length === 0) {
@@ -741,7 +793,7 @@ export default function OrderReportModal({
 
     try {
       const doc = new jsPDF({
-        orientation: orientation === 'landscape' ? 'landscape' : 'portrait',
+        orientation: 'landscape',
         unit: 'mm',
         format: 'a4'
       })
@@ -750,34 +802,34 @@ export default function OrderReportModal({
       const pageHeight = doc.internal.pageSize.getHeight()
       const nowStr = new Date().toLocaleString('pt-BR')
 
-      // 1. Cabeçalho Corporativo THSM Ultra-Compacto (12mm)
-      const headerH = 12
-      doc.setFillColor(15, 23, 42) // #0f172a
+      // Cabeçalho Corporativo THSM
+      const headerH = 13
+      doc.setFillColor(15, 23, 42)
       doc.rect(0, 0, pageWidth, headerH, 'F')
 
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(11)
       doc.setFont('helvetica', 'bold')
-      doc.text('THSM DISTRIBUIDORA', 10, 7.5)
+      doc.text('THSM DISTRIBUIDORA', 10, 8)
 
-      doc.setFontSize(7)
+      doc.setFontSize(7.5)
       doc.setFont('helvetica', 'normal')
       doc.setTextColor(148, 163, 184)
-      doc.text('RELATÓRIO GERENCIAL DE PEDIDOS COM ENDEREÇO E PRODUTOS (POR VENCIMENTO)', 64, 7.5)
+      doc.text('RELATÓRIO GERENCIAL DE PEDIDOS COM ENDEREÇO E PRODUTOS (POR VENCIMENTO)', 65, 8)
+
+      doc.setFontSize(7)
+      doc.setTextColor(203, 213, 225)
+      doc.text(`Emissão: ${nowStr}   |   Total: ${reportStats.totalPedidos} pedidos`, pageWidth - 10, 8, { align: 'right' })
+
+      let currentY = 15.5
+
+      // Metadados dos Filtros
+      doc.setFillColor(241, 245, 249)
+      doc.rect(10, currentY, pageWidth - 20, 6, 'F')
+      doc.setDrawColor(226, 232, 240)
+      doc.rect(10, currentY, pageWidth - 20, 6, 'S')
 
       doc.setFontSize(6.8)
-      doc.setTextColor(203, 213, 225)
-      doc.text(`Emissão: ${nowStr}   |   Total: ${reportStats.totalPedidos} pedidos`, pageWidth - 10, 7.5, { align: 'right' })
-
-      let currentY = 14.5
-
-      // 2. Metadados dos Filtros (Faixa compacta 5.5mm)
-      doc.setFillColor(241, 245, 249)
-      doc.rect(10, currentY, pageWidth - 20, 5.5, 'F')
-      doc.setDrawColor(226, 232, 240)
-      doc.rect(10, currentY, pageWidth - 20, 5.5, 'S')
-
-      doc.setFontSize(6.5)
       doc.setTextColor(71, 85, 105)
       doc.setFont('helvetica', 'bold')
 
@@ -789,58 +841,50 @@ export default function OrderReportModal({
         ? `${startDate ? formatDateBR(startDate) : 'Início'} até ${endDate ? formatDateBR(endDate) : 'Hoje'}`
         : 'Todo o Período'
 
-      const devDesc = devolucaoFilter === 'todos'
-        ? 'Todos os pedidos (com e sem devolução)'
-        : (devolucaoFilter === 'sem_dev' || devolucaoFilter === 'com_sem_dev' || devolucaoFilter === 'apenas_sem_dev')
-          ? 'Contém itens SEM devolução (mostrando só itens s/ dev)'
-          : 'Contém item COM devolução (mostrando só itens c/ dev)'
       const scopeDesc = scope === 'todos' ? 'Todos os Pedidos' : scope === 'selecionados' ? 'Selecionados' : scope === 'tela' ? 'Filtros da Tela' : 'Personalizado'
+      const filterLine = `Escopo: ${scopeDesc} | Base: Data de Vencimento | Período: ${dateDesc} | Status: ${statusDesc} | Cidade: ${selectedCity} | Rota: ${selectedRoute}`
+      doc.text(filterLine.slice(0, 165), 13, currentY + 4)
 
-      const filterLine = `Escopo: ${scopeDesc} | Status: ${statusDesc} | Base: Data de Vencimento | Período: ${dateDesc} | Cidade: ${selectedCity} | Rota: ${selectedRoute}`
-      doc.text(filterLine.slice(0, 160), 13, currentY + 3.8)
+      currentY += 8.5
 
-      currentY += 7.5
+      // KPIs no PDF
+      const cardCount = 6
+      const gap = 2
+      const totalW = pageWidth - 20
+      const cardW = (totalW - (gap * (cardCount - 1))) / cardCount
+      const cardH = 8.5
+      const kpis = [
+        { label: 'TOTAL PEDIDOS', val: `${reportStats.totalPedidos} ped (${reportStats.pedidosVendaCount} v)`, color: [2, 132, 199] },
+        { label: 'VALOR ITENS (TABELA)', val: formatCurrency(reportStats.valorItensTotal), color: [59, 130, 246] },
+        { label: 'DESCONTOS CONCEDIDOS', val: `- ${formatCurrency(reportStats.descontosTotal)}`, color: [99, 102, 241] },
+        { label: 'TOTAL LÍQUIDO FATURADO', val: formatCurrency(reportStats.faturamentoTotal), color: [16, 185, 129] },
+        { label: 'TICKET MÉDIO (MEDIANA)', val: `${formatCurrency(reportStats.ticketMedio)}`, color: [14, 165, 233] },
+        { label: 'TOTAL PEÇAS (S/D • C/D)', val: `${reportStats.totalItens} un (${reportStats.totalQtdSemDev} • ${reportStats.totalQtdComDev})`, color: [245, 158, 11] }
+      ]
 
-      // 3. Resumo Executivo e KPIs Compacto (Alinhamento rigoroso com o Briefing)
-      if (includeSummary) {
-        const cardCount = 6
-        const gap = 2
-        const totalW = pageWidth - 20
-        const cardW = (totalW - (gap * (cardCount - 1))) / cardCount
-        const cardH = 8.5
-        const kpis = [
-          { label: 'TOTAL PEDIDOS', val: `${reportStats.totalPedidos} ped (${reportStats.pedidosVendaCount} v)`, color: [2, 132, 199] },
-          { label: 'VALOR ITENS (TABELA)', val: formatCurrency(reportStats.valorItensTotal), color: [59, 130, 246] },
-          { label: 'DESCONTOS CONCEDIDOS', val: `- ${formatCurrency(reportStats.descontosTotal)}`, color: [99, 102, 241] },
-          { label: 'TOTAL LÍQUIDO FATURADO', val: formatCurrency(reportStats.faturamentoTotal), color: [16, 185, 129] },
-          { label: 'TICKET MÉDIO (MEDIANA)', val: `${formatCurrency(reportStats.ticketMedio)} (Med ${formatCurrency(reportStats.ticketMediana)})`, color: [14, 165, 233] },
-          { label: 'SEM / COM DEVOLUÇÃO', val: `${formatCurrency(reportStats.totalValorSemDev)} / ${formatCurrency(reportStats.totalValorComDev)}`, color: [245, 158, 11] }
-        ]
+      kpis.forEach((kpi, idx) => {
+        const kpiX = 10 + idx * (cardW + gap)
+        doc.setFillColor(248, 250, 252)
+        doc.rect(kpiX, currentY, cardW, cardH, 'F')
+        doc.setDrawColor(226, 232, 240)
+        doc.rect(kpiX, currentY, cardW, cardH, 'S')
 
-        kpis.forEach((kpi, idx) => {
-          const kpiX = 10 + idx * (cardW + gap)
-          doc.setFillColor(248, 250, 252)
-          doc.rect(kpiX, currentY, cardW, cardH, 'F')
-          doc.setDrawColor(226, 232, 240)
-          doc.rect(kpiX, currentY, cardW, cardH, 'S')
+        doc.setFillColor(kpi.color[0], kpi.color[1], kpi.color[2])
+        doc.rect(kpiX, currentY, 2, cardH, 'F')
 
-          doc.setFillColor(kpi.color[0], kpi.color[1], kpi.color[2])
-          doc.rect(kpiX, currentY, 2, cardH, 'F')
+        doc.setFontSize(4.8)
+        doc.setTextColor(100, 116, 139)
+        doc.setFont('helvetica', 'bold')
+        doc.text(kpi.label, kpiX + 3.2, currentY + 3)
 
-          doc.setFontSize(4.8)
-          doc.setTextColor(100, 116, 139)
-          doc.setFont('helvetica', 'bold')
-          doc.text(kpi.label, kpiX + 3.2, currentY + 3)
+        doc.setFontSize(6.5)
+        doc.setTextColor(15, 23, 42)
+        doc.text(kpi.val, kpiX + 3.2, currentY + 6.8)
+      })
 
-          doc.setFontSize(6.5)
-          doc.setTextColor(15, 23, 42)
-          doc.text(kpi.val, kpiX + 3.2, currentY + 6.8)
-        })
+      currentY += cardH + 3.5
 
-        currentY += cardH + 3
-      }
-
-      // 4. Tabela de Pedidos
+      // Tabela de Pedidos
       const showVal = includePrices !== false
       const tableHeaders = showVal ? [
         '# / Vencimento',
@@ -923,7 +967,6 @@ export default function OrderReportModal({
         }
       })
 
-      // Linha de Totalizador
       const footRow = showVal ? [
         'TOTAL GERAL',
         `${reportStats.totalPedidos} ped (${reportStats.pedidosVendaCount} vendas)`,
@@ -945,28 +988,17 @@ export default function OrderReportModal({
         `Sem Dev: ${reportStats.totalQtdSemDev} un • Com Dev: ${reportStats.totalQtdComDev} un`
       ]
 
-      const colStyles = orientation === 'landscape' ? {
-        0: { cellWidth: 16 }, // # / Vencimento
-        1: { cellWidth: 34 }, // Cliente / Tel
-        2: { cellWidth: 17 }, // Status / Tipo
-        3: { cellWidth: 44 }, // Endereço Completo
-        4: { cellWidth: 14 }, // Rota
-        5: { cellWidth: 10, halign: 'center' }, // Qtd
-        6: { cellWidth: 92 }, // Produtos (inline compact)
-        7: { cellWidth: 16, halign: 'right' }, // Valor Tabela
-        8: { cellWidth: 15, halign: 'right', textColor: [99, 102, 241] }, // Desconto
-        9: { cellWidth: 19, halign: 'right', fontStyle: 'bold', textColor: [16, 185, 129] } // Total Líquido
-      } : {
-        0: { cellWidth: 14 },
-        1: { cellWidth: 28 },
-        2: { cellWidth: 14 },
-        3: { cellWidth: 34 },
-        4: { cellWidth: 13 },
-        5: { cellWidth: 9, halign: 'center' },
-        6: { cellWidth: 38 },
-        7: { cellWidth: 13, halign: 'right' },
-        8: { cellWidth: 13, halign: 'right' },
-        9: { cellWidth: 14, halign: 'right', fontStyle: 'bold', textColor: [16, 185, 129] }
+      const colStyles = {
+        0: { cellWidth: 16 },
+        1: { cellWidth: 34 },
+        2: { cellWidth: 17 },
+        3: { cellWidth: 44 },
+        4: { cellWidth: 14 },
+        5: { cellWidth: 10, halign: 'center' },
+        6: { cellWidth: 92 },
+        7: { cellWidth: 16, halign: 'right' },
+        8: { cellWidth: 15, halign: 'right', textColor: [99, 102, 241] },
+        9: { cellWidth: 19, halign: 'right', fontStyle: 'bold', textColor: [16, 185, 129] }
       }
 
       autoTable(doc, {
@@ -999,7 +1031,6 @@ export default function OrderReportModal({
         margin: { left: 10, right: 10, top: 10, bottom: 8 }
       })
 
-      // Rodapé em todas as páginas
       const totalPages = doc.internal.getNumberOfPages()
       for (let i = 1; i <= totalPages; i++) {
         doc.setPage(i)
@@ -1013,7 +1044,7 @@ export default function OrderReportModal({
 
       const fileName = `Relatorio_Pedidos_THSM_${new Date().toISOString().split('T')[0]}.pdf`
       doc.save(fileName)
-      showToast(`Relatório PDF gerado (${totalPages} pág) e baixado com sucesso!`, 'success')
+      showToast(`Relatório PDF baixado com sucesso (${totalPages} pág)!`, 'success')
     } catch (err) {
       console.error('Erro ao gerar PDF:', err)
       showToast('Erro ao gerar PDF. Verifique o console.', 'error')
@@ -1021,7 +1052,7 @@ export default function OrderReportModal({
   }
 
   // ==========================================
-  // EXPORTAÇÃO EXCEL EM FORMATO TABELA PLANA (3 ABAS SEPARADAS)
+  // EXPORTAÇÃO EXCEL EM FORMATO TABELA PLANA
   // ==========================================
   const handleExportExcel = () => {
     if (targetOrders.length === 0) {
@@ -1033,9 +1064,7 @@ export default function OrderReportModal({
       const wb = XLSX.utils.book_new()
       const nowStr = new Date().toLocaleString('pt-BR')
 
-      // ==========================================
-      // ABA 1: PEDIDOS (TABELA PLANA - 1 LINHA POR PEDIDO)
-      // ==========================================
+      // ABA 1: PEDIDOS
       const excelHeaders = [
         'id_pedido',
         'data_vencimento',
@@ -1056,6 +1085,7 @@ export default function OrderReportModal({
         'desconto',
         'motivo_desconto',
         'total_liquido',
+        'saldo_em_aberto',
         'forma_pagamento',
         'resumo_itens'
       ]
@@ -1100,40 +1130,16 @@ export default function OrderReportModal({
           fin.desconto,
           fin.motivoDesconto,
           fin.totalLiquido,
+          fin.saldoEmAberto,
           o.pagamento || o.paymentMethod || 'Não informado',
           resumoItens
         ])
       })
 
       const wsMain = XLSX.utils.aoa_to_sheet(mainSheetData)
-      wsMain['!cols'] = [
-        { wch: 14 }, // id_pedido
-        { wch: 16 }, // data_vencimento
-        { wch: 14 }, // data_pedido
-        { wch: 28 }, // cliente
-        { wch: 16 }, // telefone
-        { wch: 18 }, // status
-        { wch: 16 }, // tipo_pedido
-        { wch: 16 }, // motivo_zerado
-        { wch: 18 }, // cidade
-        { wch: 18 }, // bairro
-        { wch: 14 }, // rota
-        { wch: 45 }, // endereco_completo
-        { wch: 16 }, // quantidade_itens
-        { wch: 16 }, // qtd_sem_devolucao
-        { wch: 16 }, // qtd_com_devolucao
-        { wch: 16 }, // valor_itens
-        { wch: 16 }, // desconto
-        { wch: 28 }, // motivo_desconto
-        { wch: 16 }, // total_liquido
-        { wch: 18 }, // forma_pagamento
-        { wch: 45 }  // resumo_itens
-      ]
       XLSX.utils.book_append_sheet(wb, wsMain, 'Pedidos (Tabela Plana)')
 
-      // ==========================================
-      // ABA 2: ITENS DETALHADOS (TABELA PLANA - 1 LINHA POR ITEM)
-      // ==========================================
+      // ABA 2: ITENS DETALHADOS
       const itensHeaders = [
         'id_pedido',
         'data_vencimento',
@@ -1145,9 +1151,7 @@ export default function OrderReportModal({
         'quantidade',
         'preco_unitario',
         'subtotal',
-        'status_item',
-        'custo_unitario',
-        'custo_total'
+        'status_item'
       ]
 
       const itensRows = []
@@ -1168,8 +1172,6 @@ export default function OrderReportModal({
           const qty = Number(i.qty || 1)
           const precoUnit = Number(i.preco || 0)
           const subtotal = Math.round(qty * precoUnit * 100) / 100
-          const custoUnit = getItemCost(i, produtos)
-          const custoTotal = custoUnit > 0 ? Math.round(custoUnit * qty * 100) / 100 : null
           const statusItem = fin.isZero
             ? (fin.zeroType === 'brinde' ? 'Brinde' : 'Devolvido')
             : (resStatus === 'calote' ? 'Calote' : 'Vendido')
@@ -1185,27 +1187,17 @@ export default function OrderReportModal({
             qty,
             precoUnit,
             subtotal,
-            statusItem,
-            custoUnit > 0 ? custoUnit : '',
-            custoTotal > 0 ? custoTotal : ''
+            statusItem
           ])
         })
       })
 
       if (itensRows.length > 0) {
         const wsItens = XLSX.utils.aoa_to_sheet([itensHeaders, ...itensRows])
-        wsItens['!cols'] = [
-          { wch: 14 }, { wch: 16 }, { wch: 28 }, { wch: 16 }, { wch: 18 },
-          { wch: 35 }, { wch: 18 }, { wch: 12 }, { wch: 15 }, { wch: 15 },
-          { wch: 14 }, { wch: 15 }, { wch: 15 }
-        ]
         XLSX.utils.book_append_sheet(wb, wsItens, 'Itens Detalhados')
       }
 
-      // ==========================================
-      // ABA 3: RESUMO EXECUTIVO (MÉTRICAS OFICIAIS THSM COM FÓRMULAS)
-      // ==========================================
-      const totalLinhasPedidos = targetOrders.length + 1
+      // ABA 3: RESUMO EXECUTIVO
       const resumoData = [
         ['THSM DISTRIBUIDORA - RESUMO EXECUTIVO DE PEDIDOS'],
         [`Gerado em: ${nowStr}`],
@@ -1217,60 +1209,37 @@ export default function OrderReportModal({
         ['Pedidos com Devolução Total (não vendeu nada)', reportStats.pedidosDevolucaoTotalCount],
         ['Pedidos Brinde (sem faturamento)', reportStats.pedidosBrindeCount],
         ['Total de Pedidos Zerados', reportStats.pedidosZeradosTotalCount],
-        ['Pedidos em Calote Total (100%)', reportStats.calotesCount],
-        ['Total de Peças / Itens Enviados', reportStats.totalItens],
+        ['Total de Peças Enviadas', reportStats.totalItens],
         ['  - Peças SEM Devolução', reportStats.totalQtdSemDev],
         ['  - Peças COM Devolução', reportStats.totalQtdComDev],
         [],
-        ['2. FATURAMENTO E MÉTRICAS FINANCEIRAS (REGRA DE ACEITE)'],
-        ['Valor dos Itens (Preço de Tabela)', { t: 'n', v: reportStats.valorItensTotal, f: `SUM('Pedidos (Tabela Plana)'!P2:P${totalLinhasPedidos})` }],
-        ['Descontos Concedidos', { t: 'n', v: -reportStats.descontosTotal, f: `-SUM('Pedidos (Tabela Plana)'!Q2:Q${totalLinhasPedidos})` }],
-        ['Total Líquido Faturado (Receita Real)', { t: 'n', v: reportStats.faturamentoTotal, f: `B17+B18` }],
-        ['Total SEM Devolução (Preço de Tabela)', reportStats.totalValorSemDev],
-        ['Total COM Devolução (Preço de Tabela)', reportStats.totalValorComDev],
-        ['Ticket Médio Líquido', { t: 'n', v: reportStats.ticketMedio, f: `B19/B7` }],
-        ['Mediana do Ticket', reportStats.ticketMediana],
-        ['Venda Não Recebida (Calotes a Preço de Venda)', reportStats.vendaNaoRecebida],
-        ['Prejuízo Calote a Preço de Custo', reportStats.calotePrejuizoCusto],
-        [],
-        ['3. CONFERÊNCIA DAS MÉTRICAS'],
-        ['Regra: Valor dos Itens - Descontos = Total Líquido', Math.abs((reportStats.valorItensTotal - reportStats.descontosTotal) - reportStats.faturamentoTotal) < 0.01 ? 'CONFIRMADO (BATE 100%)' : 'DIVERGENTE'],
-        ['Regra: Total Sem Dev + Total Com Dev = Valor dos Itens', Math.abs((reportStats.totalValorSemDev + reportStats.totalValorComDev) - reportStats.valorItensTotal) < 0.01 ? 'CONFIRMADO (BATE 100%)' : 'DIVERGENTE'],
-        ['Regra: Pedidos com Valor + Pedidos Zerados = Total Pedidos', (reportStats.pedidosVendaCount + reportStats.pedidosZeradosTotalCount) === reportStats.totalPedidos ? 'CONFIRMADO (BATE 100%)' : 'DIVERGENTE'],
-        [],
-        ['4. DISTRIBUIÇÃO POR STATUS'],
-        ['Status', 'Qtd Pedidos', 'Valor Total (R$)', '% Participação']
+        ['2. FATURAMENTO E VALORES'],
+        ['Valor dos Itens (Preço de Tabela)', reportStats.valorItensTotal],
+        ['Descontos Concedidos', -reportStats.descontosTotal],
+        ['Total Líquido Faturado', reportStats.faturamentoTotal],
+        ['Saldo em Aberto Pendente', reportStats.saldoEmAbertoTotal],
+        ['Ticket Médio Líquido', reportStats.ticketMedio],
+        ['Mediana do Ticket', reportStats.ticketMediana]
       ]
 
-      reportStats.porStatus.forEach(st => {
-        resumoData.push([st.label, st.count, st.total, Number(st.percent.toFixed(2))])
-      })
-
       const wsResumo = XLSX.utils.aoa_to_sheet(resumoData)
-      wsResumo['!cols'] = [{ wch: 45 }, { wch: 28 }, { wch: 22 }, { wch: 18 }]
-      XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo Geral (THSM)')
+      XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo Geral')
 
       const fileName = `Relatorio_Pedidos_THSM_${new Date().toISOString().split('T')[0]}.xlsx`
       XLSX.writeFile(wb, fileName)
-      showToast('Planilha Excel (.xlsx) exportada com sucesso com Tabela Plana e Fórmulas!', 'success')
+      showToast('Planilha Excel (.xlsx) exportada com sucesso!', 'success')
     } catch (err) {
       console.error('Erro ao exportar Excel:', err)
-      showToast('Erro ao exportar para Excel. Verifique o console.', 'error')
+      showToast('Erro ao exportar para Excel.', 'error')
     }
   }
 
   // ==========================================
-  // IMPRESSÃO / SALVAR PDF NATIVO VIA BROWSER ULTRA-COMPACTO
+  // IMPRESSÃO ULTRA-ROBUSTA (IFRAME + FALLBACK)
   // ==========================================
   const handlePrintView = () => {
     if (targetOrders.length === 0) {
-      showToast('Nenhum pedido para imprimir.', 'error')
-      return
-    }
-
-    const printWin = window.open('', '_blank', 'width=1200,height=800')
-    if (!printWin) {
-      showToast('Pop-up bloqueado pelo navegador. Autorize pop-ups para imprimir.', 'error')
+      showToast('Nenhum pedido para imprimir com os filtros selecionados.', 'error')
       return
     }
 
@@ -1281,35 +1250,154 @@ export default function OrderReportModal({
       ? 'Todos os Status'
       : selectedStatuses.map(s => STATUS_CONFIG[s]?.label || s).join(', ')
 
+    const dateDesc = startDate || endDate
+      ? `${startDate ? formatDateBR(startDate) : 'Início'} até ${endDate ? formatDateBR(endDate) : 'Hoje'}`
+      : 'Todo o Período'
+
+    const scopeDesc = scope === 'todos' ? 'Todos os Pedidos' : scope === 'selecionados' ? `Selecionados (${targetOrders.length})` : scope === 'tela' ? 'Filtros da Tela' : 'Personalizado'
+
     const htmlContent = `
       <!DOCTYPE html>
       <html lang="pt-BR">
       <head>
         <meta charset="UTF-8">
-        <title>THSM Distribuidora — Relatório de Pedidos ${!showVal ? '(Romaneio Sem Valores)' : ''}</title>
+        <title>THSM Distribuidora — Relatório de Pedidos ${!showVal ? '(Romaneio)' : ''}</title>
         <style>
-          @page { size: landscape; margin: 6mm; }
-          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 8px; color: #0f172a; margin: 0; padding: 4px; line-height: 1.2; }
-          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 4px; margin-bottom: 6px; }
-          .header h1 { font-size: 13px; font-weight: 800; margin: 0; color: #0f172a; letter-spacing: 0.5px; }
-          .header p { font-size: 7.5px; color: #64748b; margin: 1px 0 0 0; }
-          .meta-box { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; padding: 3px 6px; margin-bottom: 6px; font-size: 7.5px; }
-          .kpi-row { display: flex; gap: 4px; margin-bottom: 6px; }
-          .kpi-box { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-left: 3px solid #0284c7; padding: 3px 5px; border-radius: 3px; }
-          .kpi-box .val { font-size: 8.5px; font-weight: 800; color: #0f172a; }
-          .kpi-box .lbl { font-size: 6.2px; text-transform: uppercase; color: #64748b; font-weight: 700; margin-top: 1px; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 7.5px; }
-          tr { page-break-inside: avoid; }
-          th { background: #0f172a; color: #fff; padding: 4px 5px; text-align: left; font-weight: 700; font-size: 8px; white-space: nowrap; }
-          td { padding: 3px 5px; border-bottom: 1px solid #e2e8f0; vertical-align: top; font-size: 7.8px; line-height: 1.25; }
-          tr:nth-child(even) { background: #f8fafc; }
+          @page { size: landscape; margin: 8mm; }
+          * { box-sizing: border-box; }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-size: 8.5px;
+            color: #0f172a;
+            margin: 0;
+            padding: 8px;
+            line-height: 1.25;
+            background: #ffffff;
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #0f172a;
+            padding-bottom: 6px;
+            margin-bottom: 8px;
+          }
+          .header h1 {
+            font-size: 14px;
+            font-weight: 800;
+            margin: 0;
+            color: #0f172a;
+            letter-spacing: 0.5px;
+          }
+          .header p {
+            font-size: 8px;
+            color: #475569;
+            margin: 2px 0 0 0;
+            font-weight: 600;
+          }
+          .header-meta {
+            text-align: right;
+            font-size: 8px;
+            color: #334155;
+          }
+          .meta-box {
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 5px 8px;
+            margin-bottom: 8px;
+            font-size: 8px;
+            color: #334155;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+          }
+          .meta-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+          }
+          .meta-item strong {
+            color: #0f172a;
+          }
+          .kpi-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 8px;
+          }
+          .kpi-box {
+            flex: 1;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-left: 3px solid #0284c7;
+            padding: 4px 6px;
+            border-radius: 4px;
+          }
+          .kpi-box .val {
+            font-size: 9.5px;
+            font-weight: 800;
+            color: #0f172a;
+          }
+          .kpi-box .lbl {
+            font-size: 6.8px;
+            text-transform: uppercase;
+            color: #64748b;
+            font-weight: 700;
+            margin-top: 2px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 8px;
+            font-size: 8px;
+          }
+          tr {
+            page-break-inside: avoid;
+          }
+          th {
+            background: #0f172a;
+            color: #ffffff;
+            padding: 5px 6px;
+            text-align: left;
+            font-weight: 700;
+            font-size: 8px;
+            white-space: nowrap;
+          }
+          td {
+            padding: 4px 6px;
+            border-bottom: 1px solid #e2e8f0;
+            vertical-align: top;
+            font-size: 8px;
+            line-height: 1.3;
+          }
+          tr:nth-child(even) {
+            background: #f8fafc;
+          }
           .td-right { text-align: right; }
           .td-center { text-align: center; }
-          .footer-total { background: #e2e8f0 !important; font-weight: 800; font-size: 8.5px; }
-          .prods-multiline-view { display: ${multilineItems ? 'block' : 'none'}; }
-          .prods-inline-view { display: ${multilineItems ? 'none' : 'block'}; }
-          .prod-item-row { margin: 1.5px 0; line-height: 1.25; }
-          .badge-semdev { color: #b45309; font-weight: 700; font-size: 7px; margin-left: 3px; }
+          .footer-total {
+            background: #e2e8f0 !important;
+            font-weight: 800;
+            font-size: 8.5px;
+          }
+          .badge-status {
+            display: inline-block;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 7.5px;
+            font-weight: 700;
+            white-space: nowrap;
+          }
+          .badge-semdev {
+            color: #b45309;
+            font-weight: 700;
+            font-size: 7px;
+            margin-left: 2px;
+          }
+          .prod-item-row {
+            margin: 1.5px 0;
+            line-height: 1.25;
+          }
           @media print {
             body { padding: 0; }
             .no-print { display: none !important; }
@@ -1317,21 +1405,17 @@ export default function OrderReportModal({
         </style>
       </head>
       <body>
-        <div class="no-print" style="background: #0f172a; color: #ffffff; padding: 7px 12px; margin: -4px -4px 10px -4px; display: flex; justify-content: space-between; align-items: center; border-radius: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 2px 6px rgba(0,0,0,0.12);">
-          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-            <strong style="font-size: 11px; color: #38bdf8;">THSM DISTRIBUIDORA</strong>
-            <span style="font-size: 11px; color: #64748b;">|</span>
-            <span style="font-size: 11px; color: #cbd5e1;">Visualização de Impressão (${targetOrders.length} pedidos)</span>
-            <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: #f8fafc; background: #1e293b; padding: 3px 9px; border-radius: 4px; border: 1px solid #334155; cursor: pointer;">
-              <input type="checkbox" id="toggleMultiline" ${multilineItems ? 'checked' : ''} onchange="toggleMultilineMode(this.checked)" style="cursor: pointer;" />
-              <span>Múltiplas linhas dos itens</span>
-            </label>
+        <div class="no-print" style="background: #0f172a; color: #ffffff; padding: 10px 16px; margin: -8px -8px 12px -8px; display: flex; justify-content: space-between; align-items: center; border-radius: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <strong style="font-size: 13px; color: #38bdf8;">THSM DISTRIBUIDORA</strong>
+            <span style="font-size: 12px; color: #64748b;">|</span>
+            <span style="font-size: 12px; color: #cbd5e1;">Prévia de Impressão (${targetOrders.length} pedidos)</span>
           </div>
-          <div style="display: flex; gap: 8px;">
-            <button onclick="window.print()" style="background: #0284c7; color: #ffffff; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 700;">
-              🖨️ Imprimir / Salvar PDF
+          <div style="display: flex; gap: 10px;">
+            <button onclick="window.print()" style="background: #0284c7; color: #ffffff; border: none; padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 700;">
+              🖨️ Imprimir Agora
             </button>
-            <button onclick="window.close()" style="background: #334155; color: #ffffff; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 11px;">
+            <button onclick="window.close()" style="background: #334155; color: #ffffff; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;">
               Fechar
             </button>
           </div>
@@ -1342,13 +1426,20 @@ export default function OrderReportModal({
             <h1>THSM DISTRIBUIDORA</h1>
             <p>${showVal ? 'RELATÓRIO GERENCIAL DE PEDIDOS COM ENDEREÇO, PRODUTOS E VALORES FINANCEIROS' : 'ROMANEIO LOGÍSTICO DE ENTREGA E CONFERÊNCIA (SEM EXIBIÇÃO DE VALORES)'}</p>
           </div>
-          <div style="text-align: right; font-size: 8.5px; color: #334155;">
-            <p><strong>Emissão:</strong> ${nowStr}   |   <strong>Total:</strong> ${reportStats.totalPedidos} pedidos (${reportStats.pedidosVendaCount} vendas, ${reportStats.pedidosZeradosTotalCount} zerados)</p>
+          <div class="header-meta">
+            <div><strong>Emissão:</strong> ${nowStr}</div>
+            <div><strong>Total:</strong> ${reportStats.totalPedidos} pedidos (${reportStats.pedidosVendaCount} vendas, ${reportStats.pedidosZeradosTotalCount} zerados)</div>
           </div>
         </div>
 
         <div class="meta-box">
-          <strong>Filtros:</strong> Status: ${statusDesc} | Base: Data de Vencimento | Cidade: ${selectedCity} | Rota: ${selectedRoute} | ${startDate ? `De ${formatDateBR(startDate)}` : ''} ${endDate ? `até ${formatDateBR(endDate)}` : ''} ${excludeTests ? '• (Sem testes)' : ''}
+          <div class="meta-item"><span>Escopo:</span> <strong>${scopeDesc}</strong></div>
+          <div class="meta-item"><span>Base:</span> <strong>Data de Vencimento</strong></div>
+          <div class="meta-item"><span>Período:</span> <strong>${dateDesc}</strong></div>
+          <div class="meta-item"><span>Status:</span> <strong>${statusDesc}</strong></div>
+          ${selectedCity !== 'TODAS' ? `<div class="meta-item"><span>Cidade:</span> <strong>${selectedCity}</strong></div>` : ''}
+          ${selectedRoute !== 'TODAS' ? `<div class="meta-item"><span>Rota:</span> <strong>${selectedRoute}</strong></div>` : ''}
+          ${excludeTests ? `<div class="meta-item"><strong style="color: #059669;">(Sem pedidos de teste)</strong></div>` : ''}
         </div>
 
         <div class="kpi-row">
@@ -1398,7 +1489,7 @@ export default function OrderReportModal({
           <tbody>
             ${targetOrders.map(o => {
               const resStatus = getResolvedStatus(o)
-              const cfg = STATUS_CONFIG[resStatus] || { label: resStatus, color: '#333', bg: '#eee' }
+              const cfg = STATUS_CONFIG[resStatus] || { label: resStatus, color: '#333', bg: '#eee', border: '#ccc' }
               const dev = getOrderDevolucaoStats(o, produtos)
               const fin = getOrderFinancialDetails(o)
               const enderecoStr = formatFullAddress(o.customer?.endereco)
@@ -1406,21 +1497,18 @@ export default function OrderReportModal({
               const orderItems = o.items || []
               let prodsContent = '-'
               if (orderItems.length > 0) {
-                const multiHtml = orderItems.map(i => {
-                  const isSem = checkItemSemDevolucao(i, produtos)
-                  const semDevBadge = isSem ? ' <span class="badge-semdev">[S/DEV]</span>' : ''
-                  return `<div class="prod-item-row">• <strong>${i.qty || 1}x</strong> ${cleanProductName(i.nome)}${semDevBadge}</div>`
-                }).join('')
-
-                const inlineHtml = orderItems.map(i => {
-                  const isSem = checkItemSemDevolucao(i, produtos)
-                  return `${i.qty || 1}x ${cleanProductName(i.nome)}${isSem ? ' [S/DEV]' : ''}`
-                }).join(' • ')
-
-                prodsContent = `
-                  <div class="prods-multiline-view">${multiHtml}</div>
-                  <div class="prods-inline-view">${inlineHtml}</div>
-                `
+                if (multilineItems) {
+                  prodsContent = orderItems.map(i => {
+                    const isSem = checkItemSemDevolucao(i, produtos)
+                    const semDevBadge = isSem ? ' <span class="badge-semdev">[S/DEV]</span>' : ''
+                    return `<div class="prod-item-row">• <strong>${i.qty || 1}x</strong> ${cleanProductName(i.nome)}${semDevBadge}</div>`
+                  }).join('')
+                } else {
+                  prodsContent = orderItems.map(i => {
+                    const isSem = checkItemSemDevolucao(i, produtos)
+                    return `${i.qty || 1}x ${cleanProductName(i.nome)}${isSem ? ' [S/DEV]' : ''}`
+                  }).join(' • ')
+                }
               }
 
               return `
@@ -1428,10 +1516,10 @@ export default function OrderReportModal({
                   <td><strong>#${String(o.id).slice(-6)}</strong><br /><small style="color: #64748b;">${formatDateBR(dataVenc)}</small></td>
                   <td><strong>${o.customer?.nome || '-'}</strong><br /><small style="color: #64748b;">${o.customer?.telefone || '-'}</small></td>
                   <td>
-                    <span style="display:inline-block;padding:1px 4px;border-radius:3px;background:${cfg.bg};color:${cfg.color};font-weight:700;">
+                    <span class="badge-status" style="background:${cfg.bg};color:${cfg.color};border:1px solid ${cfg.border || cfg.color};">
                       ${cfg.label}
                     </span>
-                    ${fin.isZero ? `<br /><small style="color:#64748b;">(${fin.motivoZerado})</small>` : ''}
+                    ${fin.isZero ? `<br /><small style="color:#64748b;font-weight:600;">(${fin.motivoZerado})</small>` : ''}
                   </td>
                   <td style="max-width: 250px;">${enderecoStr}</td>
                   <td><strong>${o.customer?.endereco?.rota || '-'}</strong></td>
@@ -1466,31 +1554,14 @@ export default function OrderReportModal({
           ` : ''}
         </table>
 
-        <div style="text-align:center;font-size:7.5px;color:#94a3b8;margin-top:8px;border-top:1px solid #e2e8f0;padding-top:4px;">
+        <div style="text-align:center;font-size:8px;color:#94a3b8;margin-top:10px;border-top:1px solid #e2e8f0;padding-top:6px;">
           Balanço THSM: Valor dos Itens (${formatCurrency(reportStats.valorItensTotal)}) − Descontos (${formatCurrency(reportStats.descontosTotal)}) = Total Líquido (${formatCurrency(reportStats.faturamentoTotal)})
         </div>
-
-        <script>
-          function toggleMultilineMode(checked) {
-            document.querySelectorAll('.prods-multiline-view').forEach(function(el) {
-              el.style.display = checked ? 'block' : 'none';
-            });
-            document.querySelectorAll('.prods-inline-view').forEach(function(el) {
-              el.style.display = checked ? 'none' : 'block';
-            });
-          }
-
-          window.onload = function() {
-            setTimeout(function() { window.print(); }, 400);
-          }
-        </script>
       </body>
       </html>
     `
 
-    printWin.document.open()
-    printWin.document.write(htmlContent)
-    printWin.document.close()
+    printReportViaIframe(htmlContent)
   }
 
   if (!isOpen) return null
@@ -1498,19 +1569,15 @@ export default function OrderReportModal({
   return (
     <div className="order-report-overlay" onClick={onClose}>
       <div className="order-report-modal" onClick={e => e.stopPropagation()}>
-        {/* CABEÇALHO */}
+        {/* CABEÇALHO MODERNO */}
         <div className="order-report-header">
           <div className="order-report-header-title">
             <div className="order-report-icon-badge">
               <i className="fa-solid fa-file-invoice-dollar"></i>
             </div>
             <div>
-              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>
-                Relatório de Pedidos & Faturamento (THSM)
-              </h2>
-              <p style={{ margin: '2px 0 0 0', fontSize: '0.8rem', color: '#94a3b8' }}>
-                Resumo financeiro rigoroso, descontos, métricas por data de vencimento e tabelas planas
-              </p>
+              <h3>Relatório de Pedidos & Faturamento</h3>
+              <p>Controle financeiro, romaneio e conferência de entregas (Base Vencimento)</p>
             </div>
           </div>
           <button
@@ -1525,9 +1592,10 @@ export default function OrderReportModal({
 
         {/* CORPO DO MODAL */}
         <div className="order-report-body">
-          {/* SELETOR DE ESCOPO */}
-          <div className="order-report-scope-tabs">
+          {/* SELETOR DE ESCOPO / ORIGEM */}
+          <div className="report-scope-selector">
             <button
+              type="button"
               className={`report-scope-btn ${scope === 'todos' ? 'active' : ''}`}
               onClick={() => setScope('todos')}
             >
@@ -1535,6 +1603,7 @@ export default function OrderReportModal({
               Todos os Pedidos ({orders.length})
             </button>
             <button
+              type="button"
               className={`report-scope-btn ${scope === 'tela' ? 'active' : ''}`}
               onClick={() => setScope('tela')}
             >
@@ -1542,6 +1611,7 @@ export default function OrderReportModal({
               Filtros da Tela ({filteredOrdersFromScreen.length})
             </button>
             <button
+              type="button"
               className={`report-scope-btn ${scope === 'selecionados' ? 'active' : ''}`}
               onClick={() => setScope('selecionados')}
               disabled={!selectedOrderIds || selectedOrderIds.size === 0}
@@ -1550,6 +1620,7 @@ export default function OrderReportModal({
               Selecionados ({selectedOrderIds ? selectedOrderIds.size : 0})
             </button>
             <button
+              type="button"
               className={`report-scope-btn ${scope === 'custom' ? 'active' : ''}`}
               onClick={() => setScope('custom')}
             >
@@ -1558,377 +1629,381 @@ export default function OrderReportModal({
             </button>
           </div>
 
-          {scope !== 'custom' && (
-            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '0.5rem 0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', color: '#166534' }}>
+          {/* BANNER INFORMATIVO DO ESCOPO */}
+          <div className="report-scope-banner">
+            <div className="rsb-info">
+              <i className="fa-solid fa-circle-info"></i>
               <span>
-                <i className="fa-solid fa-circle-check" style={{ marginRight: '6px', color: '#16a34a' }}></i>
-                {scope === 'todos' && `Puxando todos os pedidos registrados no sistema (${orders.length} pedidos).`}
-                {scope === 'tela' && `Puxando pedidos conforme os filtros ativos na tela (${filteredOrdersFromScreen.length} pedidos).`}
-                {scope === 'selecionados' && `Puxando apenas os ${selectedOrderIds.size} pedido(s) selecionados com caixa de marcação.`}
-              </span>
-              <span style={{ fontWeight: 700, color: '#15803d' }}>
-                {targetOrders.length} pedido(s) no escopo ({reportStats.pedidosVendaCount} vendas, {reportStats.pedidosZeradosTotalCount} zerados)
+                {scope === 'todos' && `Puxando toda a base de pedidos da distribuidora (${orders.length} pedidos).`}
+                {scope === 'tela' && `Puxando pedidos conforme filtros e buscas ativos na tela principal (${filteredOrdersFromScreen.length} pedidos).`}
+                {scope === 'selecionados' && `Puxando apenas os ${selectedOrderIds.size} pedido(s) marcados na lista.`}
+                {scope === 'custom' && `Filtros personalizados ativos. Configure os critérios abaixo.`}
               </span>
             </div>
-          )}
+            <div className="rsb-stats">
+              <strong>{targetOrders.length}</strong> pedido(s) filtrados ({reportStats.pedidosVendaCount} vendas, {reportStats.pedidosZeradosTotalCount} zerados)
+            </div>
+          </div>
 
-          {/* PAINEL DE FILTROS PERSONALIZADOS */}
+          {/* PAINEL DE FILTROS PERSONALIZADOS (LIMPO, ORGANIZADO E MODERNO) */}
           {scope === 'custom' && (
             <div className="report-filter-panel">
-              <div className="report-filter-panel-title">
-                <i className="fa-solid fa-filter"></i>
-                Configuração dos Filtros
-              </div>
-
-              {/* STATUS MULTI-SELECT & PRESETS */}
-              <div style={{ marginBottom: '1rem' }}>
-                <span className="report-filter-label" style={{ display: 'block', marginBottom: '0.4rem' }}>
-                  Filtrar por Status dos Pedidos:
-                </span>
-                <div className="report-status-presets" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                  <button
-                    type="button"
-                    className={`report-preset-chip ${selectedStatuses.length === Object.keys(STATUS_CONFIG).length ? 'active' : ''}`}
-                    onClick={() => applyStatusPreset('todos')}
-                  >
-                    Todos os Status
-                  </button>
-                  <button
-                    type="button"
-                    className="report-preset-chip"
-                    onClick={() => applyStatusPreset('pendentes_a_concluidos')}
-                  >
-                    ⚡ Pedidos Ativos
-                  </button>
-                  <button
-                    type="button"
-                    className={`report-preset-chip ${selectedStatuses.length === 1 && selectedStatuses[0] === 'calote' ? 'active' : ''}`}
-                    style={{ borderColor: '#dc2626', color: '#b91c1c', fontWeight: 700 }}
-                    onClick={() => applyStatusPreset('calotes')}
-                  >
-                    <i className="fa-solid fa-triangle-exclamation" style={{ color: '#dc2626', marginRight: '4px' }}></i>
-                    Apenas Calotes 100%
-                  </button>
-                  <button
-                    type="button"
-                    className={`report-preset-chip ${selectedStatuses.length === 1 && selectedStatuses[0] === 'calote_parcial' ? 'active' : ''}`}
-                    style={{ borderColor: '#d97706', color: '#b45309', fontWeight: 700 }}
-                    onClick={() => applyStatusPreset('calote_parcial')}
-                  >
-                    <i className="fa-solid fa-clock-rotate-left" style={{ color: '#d97706', marginRight: '4px' }}></i>
-                    Apenas Calote Parcial
-                  </button>
-                  <button
-                    type="button"
-                    className={`report-preset-chip ${selectedStatuses.length === 2 && selectedStatuses.includes('calote') && selectedStatuses.includes('calote_parcial') ? 'active' : ''}`}
-                    style={{ borderColor: '#991b1b', color: '#991b1b', fontWeight: 800, background: '#fef2f2' }}
-                    onClick={() => applyStatusPreset('inadimplencia')}
-                  >
-                    <i className="fa-solid fa-shield-halved" style={{ color: '#dc2626', marginRight: '4px' }}></i>
-                    Todos os Calotes (100% + Parcial)
-                  </button>
-                  <button
-                    type="button"
-                    className={`report-preset-chip ${selectedStatuses.length === 1 && selectedStatuses[0] === 'concluido' ? 'active' : ''}`}
-                    onClick={() => applyStatusPreset('concluidos')}
-                    style={{ borderColor: '#16a34a', color: '#15803d' }}
-                  >
-                    Apenas Concluídos (Pagos)
-                  </button>
-                  <button
-                    type="button"
-                    className={`report-preset-chip ${selectedStatuses.length === 1 && selectedStatuses[0] === 'entregue' ? 'active' : ''}`}
-                    onClick={() => applyStatusPreset('entregues')}
-                  >
-                    Apenas Entregues (Praça)
-                  </button>
-                  <button
-                    type="button"
-                    className={`report-preset-chip ${selectedStatuses.length === 1 && selectedStatuses[0] === 'acerto' ? 'active' : ''}`}
-                    onClick={() => applyStatusPreset('acertos')}
-                  >
-                    Apenas Acertos
-                  </button>
-                </div>
-              </div>
-
-              {/* FILTROS ADICIONAIS */}
-              <div className="report-filter-grid">
-                <div>
-                  <span className="report-filter-label">Cliente Específico:</span>
-                  <input
-                    type="text"
-                    className="report-filter-input"
-                    placeholder="Buscar por nome ou telefone..."
-                    value={clientSearch}
-                    onChange={e => setClientSearch(e.target.value)}
-                  />
-                  {clientSearch && filteredClients.length > 0 && (
-                    <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid #cbd5e1', borderRadius: '6px', background: 'white', marginTop: '4px' }}>
-                      <div
-                        style={{ padding: '4px 8px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700 }}
-                        onClick={() => { setSelectedClientPhone('TODOS'); setClientSearch('') }}
-                      >
-                        (Todos os clientes)
-                      </div>
-                      {filteredClients.map(u => (
-                        <div
-                          key={u.id}
-                          style={{ padding: '4px 8px', cursor: 'pointer', fontSize: '0.75rem', borderTop: '1px solid #f1f5f9' }}
-                          onClick={() => { setSelectedClientPhone(u.telefone || u.id); setClientSearch(`${u.nome || u.pushName || ''} (${u.telefone || ''})`) }}
-                        >
-                          <strong>{u.nome || u.pushName}</strong> <span style={{ color: '#64748b' }}>({u.telefone})</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+              {/* SEÇÃO 1: PERÍODO E DATA */}
+              <div className="report-filter-section">
+                <div className="report-filter-section-head">
+                  <div className="rfsh-title">
+                    <i className="fa-regular fa-calendar-days"></i>
+                    <span>Período & Base de Data</span>
+                  </div>
+                  <div className="report-date-presets">
+                    <button type="button" className="report-chip-btn" onClick={() => applyDatePreset('today')}>Hoje</button>
+                    <button type="button" className="report-chip-btn" onClick={() => applyDatePreset('yesterday')}>Ontem</button>
+                    <button type="button" className="report-chip-btn" onClick={() => applyDatePreset('last7')}>7 dias</button>
+                    <button type="button" className="report-chip-btn" onClick={() => applyDatePreset('last30')}>30 dias</button>
+                    <button type="button" className="report-chip-btn" onClick={() => applyDatePreset('this_month')}>Este Mês</button>
+                    <button type="button" className="report-chip-btn" onClick={() => applyDatePreset('last_month')}>Mês Passado</button>
+                    <button type="button" className="report-chip-btn" onClick={() => applyDatePreset('clear')}>Todo o Período</button>
+                  </div>
                 </div>
 
-                <div>
-                  <span className="report-filter-label">Cidade:</span>
-                  <select
-                    className="report-filter-select"
-                    value={selectedCity}
-                    onChange={e => setSelectedCity(e.target.value)}
-                  >
-                    {cidadesUnicas.map(c => (
-                      <option key={c} value={c}>{c === 'TODAS' ? 'Todas as Cidades' : c}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <span className="report-filter-label">Rota de Entrega:</span>
-                  <select
-                    className="report-filter-select"
-                    value={selectedRoute}
-                    onChange={e => setSelectedRoute(e.target.value)}
-                  >
-                    {rotasUnicas.map(r => (
-                      <option key={r} value={r}>{r === 'TODAS' ? 'Todas as Rotas' : r}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <span className="report-filter-label">Forma de Pagamento:</span>
-                  <select
-                    className="report-filter-select"
-                    value={selectedPayment}
-                    onChange={e => setSelectedPayment(e.target.value)}
-                  >
-                    <option value="TODOS">Todas as Formas</option>
-                    <option value="pix">Pix</option>
-                    <option value="dinheiro">Dinheiro</option>
-                    <option value="cartao">Cartão</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* FILTRO DE DATA (DATA DE VENCIMENTO COMO PADRÃO) */}
-              <div style={{ marginTop: '0.85rem', paddingTop: '0.85rem', borderTop: '1px dashed #e2e8f0' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span className="report-filter-label">Filtrar por Período:</span>
+                <div className="report-filter-row">
+                  <div className="report-filter-group" style={{ flex: '1.2' }}>
+                    <label className="report-filter-label">Base de Cálculo de Data:</label>
                     <select
+                      className="report-filter-select"
                       value={dateType}
                       onChange={e => setDateType(e.target.value)}
-                      style={{ fontSize: '0.74rem', padding: '0.25rem 0.5rem', borderRadius: '6px', border: '1px solid #0284c7', fontWeight: 700, color: '#0369a1', background: '#f0f9ff' }}
                     >
                       <option value="vencimento">★ Data de Vencimento (Padrão Oficial THSM)</option>
-                      <option value="pagamento">Data de Pagamento / Quitação</option>
+                      <option value="pagamento">Data de Pagamento / Quitação Real</option>
                       <option value="date">Data de Emissão do Pedido</option>
                     </select>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-                    <button type="button" className="report-preset-chip" onClick={() => applyDatePreset('today')}>Hoje</button>
-                    <button type="button" className="report-preset-chip" onClick={() => applyDatePreset('last7')}>7 dias</button>
-                    <button type="button" className="report-preset-chip" onClick={() => applyDatePreset('last30')}>30 dias</button>
-                    <button type="button" className="report-preset-chip" onClick={() => applyDatePreset('last60')}>60 dias</button>
-                    <button type="button" className="report-preset-chip" onClick={() => applyDatePreset('last90')}>90 dias</button>
-                    <button type="button" className="report-preset-chip" onClick={() => applyDatePreset('this_month')}>Este Mês</button>
-                    <button type="button" className="report-preset-chip" onClick={() => applyDatePreset('clear')}>Sem Limite (Todos)</button>
-                  </div>
-                </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                  <input
-                    type="date"
-                    className="report-filter-input"
-                    value={startDate}
-                    onChange={e => setStartDate(e.target.value)}
-                  />
-                  <span style={{ fontSize: '0.8rem', color: '#64748b' }}>até</span>
-                  <input
-                    type="date"
-                    className="report-filter-input"
-                    value={endDate}
-                    onChange={e => setEndDate(e.target.value)}
-                  />
+                  <div className="report-filter-group" style={{ flex: '1' }}>
+                    <label className="report-filter-label">Data Inicial (De):</label>
+                    <input
+                      type="date"
+                      className="report-filter-input"
+                      value={startDate}
+                      onChange={e => setStartDate(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="report-filter-group" style={{ flex: '1' }}>
+                    <label className="report-filter-label">Data Final (Até):</label>
+                    <input
+                      type="date"
+                      className="report-filter-input"
+                      value={endDate}
+                      onChange={e => setEndDate(e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* OPÇÃO DE FORMATAÇÃO DOS ITENS */}
-              <div style={{ marginTop: '0.85rem', paddingTop: '0.85rem', borderTop: '1px dashed #e2e8f0', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                <span className="report-filter-label" style={{ marginBottom: 0 }}>Formato dos Itens na Impressão / PDF:</span>
-                <div style={{ display: 'flex', gap: '0.4rem' }}>
-                  <button
-                    type="button"
-                    className={`report-preset-chip ${multilineItems ? 'active' : ''}`}
-                    onClick={() => setMultilineItems(true)}
-                    title="Exibe cada item/produto com quebra de linha (parágrafo próprio)"
-                  >
-                    <i className="fa-solid fa-bars-staggered" style={{ marginRight: '5px' }}></i>
-                    Múltiplas Linhas (Quebra por produto)
-                  </button>
-                  <button
-                    type="button"
-                    className={`report-preset-chip ${!multilineItems ? 'active' : ''}`}
-                    onClick={() => setMultilineItems(false)}
-                    title="Exibe os itens em uma única linha contínua compacta"
-                  >
-                    <i className="fa-solid fa-grip-lines" style={{ marginRight: '5px' }}></i>
-                    Linha Única (Compacto inline)
-                  </button>
+              {/* SEÇÃO 2: STATUS DOS PEDIDOS (MULTI-SELECT COM CONTADORES) */}
+              <div className="report-filter-section">
+                <div className="report-filter-section-head">
+                  <div className="rfsh-title">
+                    <i className="fa-solid fa-list-check"></i>
+                    <span>Status dos Pedidos ({selectedStatuses.length} selecionados)</span>
+                  </div>
+                  <div className="report-status-actions">
+                    <button type="button" className="report-chip-btn" onClick={() => applyStatusPreset('todos')}>
+                      Todos
+                    </button>
+                    <button type="button" className="report-chip-btn" onClick={() => applyStatusPreset('ativos')}>
+                      ⚡ Ativos
+                    </button>
+                    <button type="button" className="report-chip-btn" onClick={() => applyStatusPreset('concluidos')}>
+                      Concluídos
+                    </button>
+                    <button type="button" className="report-chip-btn" onClick={() => applyStatusPreset('calotes')}>
+                      Calotes / Aberto
+                    </button>
+                    <button type="button" className="report-chip-btn" onClick={() => applyStatusPreset('cancelados')}>
+                      Cancelados
+                    </button>
+                    <button type="button" className="report-link-btn" onClick={selectAllStatuses}>
+                      Marcar Todos
+                    </button>
+                    <button type="button" className="report-link-btn" onClick={deselectAllStatuses}>
+                      Limpar
+                    </button>
+                  </div>
+                </div>
+
+                {/* GRID DE STATUS COM BADGES CLICÁVEIS */}
+                <div className="report-status-grid">
+                  {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
+                    const isSelected = selectedStatuses.includes(key)
+                    const count = statusCounts[key] || 0
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        className={`report-status-card-btn ${isSelected ? 'active' : ''}`}
+                        style={{
+                          '--status-color': cfg.color,
+                          '--status-bg': cfg.bg,
+                          '--status-border': cfg.border || cfg.color
+                        }}
+                        onClick={() => toggleStatus(key)}
+                      >
+                        <div className="rsc-left">
+                          <span className="rsc-indicator"></span>
+                          <span className="rsc-label">{cfg.label}</span>
+                        </div>
+                        <span className="rsc-count">{count}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* SEÇÃO 3: FINANCEIRO, PAGAMENTO & LOGÍSTICA */}
+              <div className="report-filter-section">
+                <div className="report-filter-section-head">
+                  <div className="rfsh-title">
+                    <i className="fa-solid fa-wallet"></i>
+                    <span>Financeiro, Pagamento & Região</span>
+                  </div>
+                </div>
+
+                <div className="report-filter-grid">
+                  <div className="report-filter-group">
+                    <label className="report-filter-label">Situação Financeira:</label>
+                    <select
+                      className="report-filter-select"
+                      value={financialStatus}
+                      onChange={e => setFinancialStatus(e.target.value)}
+                    >
+                      <option value="todos">Todos os Pedidos</option>
+                      <option value="aberto">⚠️ Apenas com Saldo em Aberto (Pendência)</option>
+                      <option value="pago">✓ Apenas Quitados / 100% Pagos</option>
+                      <option value="zerados">○ Apenas Zerados (Devolução Total / Brinde)</option>
+                    </select>
+                  </div>
+
+                  <div className="report-filter-group">
+                    <label className="report-filter-label">Forma de Pagamento:</label>
+                    <select
+                      className="report-filter-select"
+                      value={selectedPayment}
+                      onChange={e => setSelectedPayment(e.target.value)}
+                    >
+                      <option value="TODOS">Todas as Formas</option>
+                      <option value="avista">À Vista</option>
+                      <option value="aprazo">A Prazo</option>
+                      <option value="misto">Misto</option>
+                      <option value="pix">Pix</option>
+                      <option value="dinheiro">Dinheiro</option>
+                      <option value="cartao">Cartão</option>
+                    </select>
+                  </div>
+
+                  <div className="report-filter-group">
+                    <label className="report-filter-label">Cidade de Destino:</label>
+                    <select
+                      className="report-filter-select"
+                      value={selectedCity}
+                      onChange={e => setSelectedCity(e.target.value)}
+                    >
+                      {cidadesUnicas.map(c => (
+                        <option key={c} value={c}>{c === 'TODAS' ? 'Todas as Cidades' : c}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="report-filter-group">
+                    <label className="report-filter-label">Rota de Entrega:</label>
+                    <select
+                      className="report-filter-select"
+                      value={selectedRoute}
+                      onChange={e => setSelectedRoute(e.target.value)}
+                    >
+                      {rotasUnicas.map(r => (
+                        <option key={r} value={r}>{r === 'TODAS' ? 'Todas as Rotas' : r}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="report-filter-group">
+                    <label className="report-filter-label">Filtro de Devolução (Itens):</label>
+                    <select
+                      className="report-filter-select"
+                      value={devolucaoFilter}
+                      onChange={e => setDevolucaoFilter(e.target.value)}
+                    >
+                      <option value="todos">Todos os Produtos</option>
+                      <option value="sem_dev">Apenas Itens SEM Devolução</option>
+                      <option value="apenas_com_dev">Apenas Itens COM Devolução</option>
+                    </select>
+                  </div>
+
+                  <div className="report-filter-group">
+                    <label className="report-filter-label">Cliente Específico:</label>
+                    <div className="report-client-search-wrap">
+                      <input
+                        type="text"
+                        className="report-filter-input"
+                        placeholder="Buscar por nome ou telefone..."
+                        value={clientSearch}
+                        onChange={e => {
+                          setClientSearch(e.target.value)
+                          if (!e.target.value) setSelectedClientPhone('TODOS')
+                        }}
+                      />
+                      {clientSearch && (
+                        <button
+                          type="button"
+                          className="report-input-clear-btn"
+                          onClick={() => { setClientSearch(''); setSelectedClientPhone('TODOS') }}
+                        >
+                          <i className="fa-solid fa-xmark"></i>
+                        </button>
+                      )}
+                      {clientSearch && filteredClients.length > 0 && (
+                        <div className="report-client-dropdown">
+                          <div
+                            className="rcd-item rcd-item-all"
+                            onClick={() => { setSelectedClientPhone('TODOS'); setClientSearch('') }}
+                          >
+                            (Todos os clientes)
+                          </div>
+                          {filteredClients.map(u => (
+                            <div
+                              key={u.id}
+                              className="rcd-item"
+                              onClick={() => {
+                                setSelectedClientPhone(u.telefone || u.id)
+                                setClientSearch(`${u.nome || u.pushName || ''} (${u.telefone || ''})`)
+                              }}
+                            >
+                              <strong>{u.nome || u.pushName}</strong> <span className="rcd-tel">({u.telefone})</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="report-filter-options-bar">
+                  <label className="report-checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={excludeTests}
+                      onChange={e => setExcludeTests(e.target.checked)}
+                    />
+                    <span>Excluir pedidos de teste (nomes com "teste" ou flags internas)</span>
+                  </label>
                 </div>
               </div>
             </div>
           )}
 
-          {/* CARDS DE RESUMO (KPIS OFICIAIS ALINHADOS COM O BRIEFING THSM) */}
+          {/* CARDS DE RESUMO EXECUTIVO (MÉTRICAS OFICIAIS THSM) */}
           <div className="report-kpi-grid">
-            <div className="report-kpi-card" style={{ borderLeft: '4px solid #0284c7' }}>
+            <div className="report-kpi-card" style={{ borderLeftColor: '#0284c7' }}>
               <div className="report-kpi-icon" style={{ background: '#e0f2fe', color: '#0284c7' }}>
                 <i className="fa-solid fa-clipboard-list"></i>
               </div>
-              <div>
+              <div className="report-kpi-content">
                 <div className="report-kpi-val">{reportStats.totalPedidos}</div>
                 <div className="report-kpi-label">Total Pedidos</div>
-                <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '2px' }}>
+                <div className="report-kpi-sub">
                   <strong>{reportStats.pedidosVendaCount}</strong> vendas • <strong>{reportStats.pedidosZeradosTotalCount}</strong> zerados
                 </div>
               </div>
             </div>
 
-            <div className="report-kpi-card" style={{ borderLeft: '4px solid #3b82f6' }}>
-              <div className="report-kpi-icon" style={{ background: '#dbeafe', color: '#2563eb' }}>
-                <i className="fa-solid fa-tags"></i>
+            <div className="report-kpi-card" style={{ borderLeftColor: '#10b981', background: '#f0fdf4' }}>
+              <div className="report-kpi-icon" style={{ background: '#d1fae5', color: '#059669' }}>
+                <i className="fa-solid fa-dollar-sign"></i>
               </div>
-              <div>
-                <div className="report-kpi-val" style={{ color: '#1d4ed8' }}>
-                  {formatCurrency(reportStats.valorItensTotal)}
+              <div className="report-kpi-content">
+                <div className="report-kpi-val text-success" style={{ fontSize: '1.25rem', color: '#059669' }}>
+                  {formatCurrency(reportStats.faturamentoTotal)}
                 </div>
-                <div className="report-kpi-label">Valor dos Itens (Tabela)</div>
-                <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '2px' }}>
-                  Preço cheio de catálogo
+                <div className="report-kpi-label" style={{ fontWeight: 800, color: '#065f46' }}>
+                  Total Líquido Faturado
+                </div>
+                <div className="report-kpi-sub" style={{ color: '#047857' }}>
+                  Receita real pós-descontos
                 </div>
               </div>
             </div>
 
-            <div className="report-kpi-card" style={{ borderLeft: '4px solid #6366f1' }}>
+            <div className="report-kpi-card" style={{ borderLeftColor: '#3b82f6' }}>
+              <div className="report-kpi-icon" style={{ background: '#dbeafe', color: '#2563eb' }}>
+                <i className="fa-solid fa-tags"></i>
+              </div>
+              <div className="report-kpi-content">
+                <div className="report-kpi-val" style={{ color: '#1d4ed8' }}>
+                  {formatCurrency(reportStats.valorItensTotal)}
+                </div>
+                <div className="report-kpi-label">Valor Itens (Tabela)</div>
+                <div className="report-kpi-sub">Preço cheio de catálogo</div>
+              </div>
+            </div>
+
+            <div className="report-kpi-card" style={{ borderLeftColor: '#6366f1' }}>
               <div className="report-kpi-icon" style={{ background: '#e0e7ff', color: '#4f46e5' }}>
                 <i className="fa-solid fa-receipt"></i>
               </div>
-              <div>
+              <div className="report-kpi-content">
                 <div className="report-kpi-val" style={{ color: '#4f46e5' }}>
                   - {formatCurrency(reportStats.descontosTotal)}
                 </div>
                 <div className="report-kpi-label">Descontos Concedidos</div>
-                <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '2px' }}>
-                  Revendedora 30%, cupons, ajustes
-                </div>
+                <div className="report-kpi-sub">Revendedora 30%, cupons</div>
               </div>
             </div>
 
-            <div className="report-kpi-card" style={{ borderLeft: '4px solid #10b981', background: '#f0fdf4' }}>
-              <div className="report-kpi-icon" style={{ background: '#d1fae5', color: '#059669' }}>
-                <i className="fa-solid fa-dollar-sign"></i>
-              </div>
-              <div>
-                <div className="report-kpi-val" style={{ color: '#059669', fontSize: '1.25rem' }}>
-                  {formatCurrency(reportStats.faturamentoTotal)}
-                </div>
-                <div className="report-kpi-label" style={{ fontWeight: 800, color: '#065f46' }}>
-                  ★ Total Líquido Faturado
-                </div>
-                <div style={{ fontSize: '0.68rem', color: '#047857', marginTop: '2px' }}>
-                  Valor Itens − Descontos
-                </div>
-              </div>
-            </div>
-
-            <div className="report-kpi-card" style={{ borderLeft: '4px solid #0284c7' }}>
-              <div className="report-kpi-icon" style={{ background: '#e0f2fe', color: '#0284c7' }}>
-                <i className="fa-solid fa-arrow-trend-up"></i>
-              </div>
-              <div>
-                <div className="report-kpi-val" style={{ color: '#0369a1' }}>
-                  {formatCurrency(reportStats.ticketMedio)}
-                </div>
-                <div className="report-kpi-label">Ticket Médio Líquido</div>
-                <div style={{ fontSize: '0.68rem', color: '#0284c7', marginTop: '2px' }}>
-                  Mediana: <strong>{formatCurrency(reportStats.ticketMediana)}</strong>
-                </div>
-              </div>
-            </div>
-
-            <div className="report-kpi-card" style={{ borderLeft: '4px solid #f59e0b' }}>
+            <div className="report-kpi-card" style={{ borderLeftColor: '#f59e0b' }}>
               <div className="report-kpi-icon" style={{ background: '#fef3c7', color: '#d97706' }}>
                 <i className="fa-solid fa-boxes-stacked"></i>
               </div>
-              <div>
+              <div className="report-kpi-content">
                 <div className="report-kpi-val" style={{ color: '#b45309' }}>
                   {reportStats.totalItens} un
                 </div>
                 <div className="report-kpi-label">Total de Peças</div>
-                <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '2px' }}>
-                  {reportStats.totalQtdSemDev} s/ dev • {reportStats.totalQtdComDev} c/ dev
+                <div className="report-kpi-sub">
+                  {reportStats.totalQtdSemDev} s/d • {reportStats.totalQtdComDev} c/d
                 </div>
               </div>
             </div>
           </div>
 
           {/* BANNER DO BALANÇO DE CONFERÊNCIA THSM */}
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0.65rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.75rem' }}>
-            <span>
-              <i className="fa-solid fa-scale-balanced" style={{ color: '#0284c7', marginRight: '6px' }}></i>
-              <strong>Balanço de Conferência THSM:</strong>
-              {' '}Valor dos Itens (<strong>{formatCurrency(reportStats.valorItensTotal)}</strong>) − Descontos (<strong>{formatCurrency(reportStats.descontosTotal)}</strong>) = Total Líquido (<strong>{formatCurrency(reportStats.faturamentoTotal)}</strong>)
-            </span>
-            <span style={{ color: '#16a34a', fontWeight: 700 }}>
+          <div className="report-balance-banner">
+            <div className="rbb-left">
+              <i className="fa-solid fa-scale-balanced"></i>
+              <span>
+                <strong>Balanço THSM:</strong> Valor Itens (<strong>{formatCurrency(reportStats.valorItensTotal)}</strong>) − Descontos (<strong>{formatCurrency(reportStats.descontosTotal)}</strong>) = Total Líquido (<strong>{formatCurrency(reportStats.faturamentoTotal)}</strong>)
+              </span>
+            </div>
+            <div className="rbb-right">
               <i className="fa-solid fa-check-double"></i> Números 100% integrados
-            </span>
+            </div>
           </div>
 
-          {/* PRÉVIA DOS PEDIDOS COM ENDEREÇO COMPLETO E PRODUTOS */}
-          <div className="report-preview-collapse" style={{ marginTop: '0.85rem' }}>
+          {/* PRÉVIA DOS PEDIDOS RETRÁTIL */}
+          <div className="report-preview-collapse">
             <div
               className="report-preview-header"
               onClick={() => setShowPreviewTable(v => !v)}
             >
-              <span>
-                <i className="fa-solid fa-table-list" style={{ marginRight: '6px', color: '#0284c7' }}></i>
-                Pré-visualização dos Pedidos e Vencimentos ({targetOrders.length} pedidos)
-              </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                <span
-                  style={{
-                    fontSize: '0.72rem',
-                    color: multilineItems ? '#0284c7' : '#64748b',
-                    background: multilineItems ? '#e0f2fe' : '#f1f5f9',
-                    padding: '2px 8px',
-                    borderRadius: '12px',
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                  onClick={e => {
-                    e.stopPropagation()
-                    setMultilineItems(v => !v)
-                  }}
-                  title="Clique para alternar entre múltiplas linhas ou linha única nos itens"
-                >
-                  <i className={`fa-solid ${multilineItems ? 'fa-bars-staggered' : 'fa-grip-lines'}`} style={{ marginRight: '4px' }}></i>
-                  {multilineItems ? 'Múltiplas Linhas' : 'Linha Única'}
+              <div className="rph-title">
+                <i className="fa-solid fa-table-list"></i>
+                <span>Pré-visualização dos Pedidos ({targetOrders.length} pedidos)</span>
+              </div>
+              <div className="rph-actions">
+                <span className="rph-badge">
+                  {showPreviewTable ? 'Recolher Tabela' : 'Expandir Tabela'}
                 </span>
                 <i className={`fa-solid ${showPreviewTable ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
               </div>
@@ -1954,7 +2029,7 @@ export default function OrderReportModal({
                   <tbody>
                     {targetOrders.slice(0, 50).map(o => {
                       const st = getResolvedStatus(o)
-                      const cfg = STATUS_CONFIG[st] || { label: st, color: '#333', bg: '#eee' }
+                      const cfg = STATUS_CONFIG[st] || { label: st, color: '#333', bg: '#eee', border: '#ccc' }
                       const dev = getOrderDevolucaoStats(o, produtos)
                       const fin = getOrderFinancialDetails(o)
                       const endStr = formatFullAddress(o.customer?.endereco)
@@ -1965,7 +2040,14 @@ export default function OrderReportModal({
                           <td><strong>#{String(o.id).slice(-6)}</strong><br /><small style={{ color: '#64748b' }}>{formatDateBR(dataVenc)}</small></td>
                           <td><strong>{o.customer?.nome || '-'}</strong><br /><small style={{ color: '#64748b' }}>{o.customer?.telefone || '-'}</small></td>
                           <td>
-                            <span style={{ fontSize: '0.7rem', padding: '1px 6px', borderRadius: '4px', background: cfg.bg, color: cfg.color, fontWeight: 700 }}>
+                            <span
+                              className="rsc-tag"
+                              style={{
+                                background: cfg.bg,
+                                color: cfg.color,
+                                border: `1px solid ${cfg.border || cfg.color}`
+                              }}
+                            >
                               {cfg.label}
                             </span>
                             {fin.isZero && (
@@ -1977,7 +2059,7 @@ export default function OrderReportModal({
                           <td style={{ maxWidth: '240px', fontSize: '0.72rem', color: '#334155' }}>{endStr}</td>
                           <td><strong>{o.customer?.endereco?.rota || '-'}</strong></td>
                           <td>{dev.qtdTotal} un</td>
-                          <td style={{ minWidth: '150px' }}>
+                          <td style={{ minWidth: '160px' }}>
                             {multilineItems ? (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '0.72rem', color: '#334155' }}>
                                 {(o.items && o.items.length > 0) ? o.items.map((i, idx) => {
@@ -1985,13 +2067,13 @@ export default function OrderReportModal({
                                   return (
                                     <div key={idx} style={{ lineHeight: '1.25' }}>
                                       • <strong>{i.qty || 1}x</strong> {cleanProductName(i.nome)}
-                                      {isSem && <span style={{ color: '#d97706', fontSize: '0.65rem', fontWeight: 700, marginLeft: '3px' }}>[S/DEV]</span>}
+                                      {isSem && <span className="badge-semdev">[S/DEV]</span>}
                                     </div>
                                   )
                                 }) : '-'}
                               </div>
                             ) : (
-                              <div style={{ fontSize: '0.72rem', color: '#334155', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={(o.items || []).map(i => `${i.qty || 1}x ${cleanProductName(i.nome)}`).join(' • ')}>
+                              <div style={{ fontSize: '0.72rem', color: '#334155', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {(o.items && o.items.length > 0) ? o.items.map(i => {
                                   const isSem = checkItemSemDevolucao(i, produtos)
                                   return `${i.qty || 1}x ${cleanProductName(i.nome)}${isSem ? ' [S/DEV]' : ''}`
@@ -2002,7 +2084,7 @@ export default function OrderReportModal({
                           <td style={{ textAlign: 'right', color: '#475569', fontWeight: 600 }}>
                             {fin.isZero ? 'R$ 0,00' : formatCurrency(fin.valorItens)}
                           </td>
-                          <td style={{ textAlign: 'right', color: '#6366f1', fontWeight: 600 }} title={fin.motivoDesconto}>
+                          <td style={{ textAlign: 'right', color: '#6366f1', fontWeight: 600 }}>
                             {fin.isZero ? 'R$ 0,00' : (fin.desconto > 0 ? `- ${formatCurrency(fin.desconto)}` : '-')}
                           </td>
                           <td style={{ textAlign: 'right', fontWeight: 800, color: st === 'calote' ? '#dc2626' : '#059669' }}>
@@ -2014,7 +2096,7 @@ export default function OrderReportModal({
                     {targetOrders.length > 50 && (
                       <tr>
                         <td colSpan="10" style={{ textAlign: 'center', padding: '0.65rem', color: '#64748b', fontStyle: 'italic' }}>
-                          E mais {targetOrders.length - 50} pedidos (todos incluídos no PDF e no Excel)...
+                          E mais {targetOrders.length - 50} pedidos (todos incluídos na Impressão, PDF e Excel)...
                         </td>
                       </tr>
                     )}
@@ -2032,38 +2114,34 @@ export default function OrderReportModal({
           </div>
         </div>
 
-        {/* RODAPÉ E AÇÕES */}
+        {/* RODAPÉ E AÇÕES COM DESIGN LIMPO */}
         <div className="order-report-footer">
-          <div className="order-report-footer-left" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
-            <span>
-              <strong>{reportStats.totalPedidos}</strong> pedidos ({reportStats.pedidosVendaCount} vendas)
-              {includePrices && <> • <strong>{formatCurrency(reportStats.faturamentoTotal)}</strong> (Tabela: {formatCurrency(reportStats.valorItensTotal)})</>}
-            </span>
-            <label className="report-checkbox-label" style={{ fontWeight: 700, fontSize: '0.78rem', color: includePrices ? '#059669' : '#dc2626', background: includePrices ? '#f0fdf4' : '#fef2f2', padding: '0.25rem 0.6rem', borderRadius: '6px', border: `1px solid ${includePrices ? '#bbf7d0' : '#fecdd3'}`, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', userSelect: 'none' }} title="Clique para alternar entre relatório com valores ou romaneio de entrega sem valores (ocultar R$)">
+          <div className="order-report-footer-toggles">
+            <label className="report-toggle-pill">
               <input
                 type="checkbox"
                 checked={includePrices}
                 onChange={e => setIncludePrices(e.target.checked)}
               />
               <i className={`fa-solid ${includePrices ? 'fa-dollar-sign' : 'fa-eye-slash'}`}></i>
-              <span>{includePrices ? 'Com Valores (R$)' : 'Sem Valores (Romaneio)'}</span>
+              <span>{includePrices ? 'Com Valores (R$)' : 'Romaneio sem valores'}</span>
             </label>
 
-            <label className="report-checkbox-label" style={{ fontWeight: 700, fontSize: '0.78rem', color: multilineItems ? '#0284c7' : '#64748b', background: multilineItems ? '#f0f9ff' : '#f8fafc', padding: '0.25rem 0.6rem', borderRadius: '6px', border: `1px solid ${multilineItems ? '#bae6fd' : '#cbd5e1'}`, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', userSelect: 'none' }} title="Clique para alternar entre produtos em linhas separadas (parágrafo por item) ou em linha única contínua">
+            <label className="report-toggle-pill">
               <input
                 type="checkbox"
                 checked={multilineItems}
                 onChange={e => setMultilineItems(e.target.checked)}
               />
               <i className={`fa-solid ${multilineItems ? 'fa-bars-staggered' : 'fa-grip-lines'}`}></i>
-              <span>{multilineItems ? 'Múltiplas Linhas (Itens)' : '1 Linha (Itens)'}</span>
+              <span>{multilineItems ? 'Múltiplas Linhas' : '1 Linha por pedido'}</span>
             </label>
           </div>
 
           <div className="order-report-footer-actions">
             <button
               type="button"
-              className="report-action-btn report-btn-cancel"
+              className="report-btn report-btn-secondary"
               onClick={onClose}
             >
               Cancelar
@@ -2071,32 +2149,32 @@ export default function OrderReportModal({
 
             <button
               type="button"
-              className="report-action-btn report-btn-print"
+              className="report-btn report-btn-print"
               onClick={handlePrintView}
-              title="Abrir visualização para imprimir ou salvar como PDF no navegador"
+              title="Imprimir relatório diretamente na impressora ou salvar PDF no navegador"
             >
               <i className="fa-solid fa-print"></i>
-              Imprimir / Visualizar
+              Imprimir Relatório
             </button>
 
             <button
               type="button"
-              className="report-action-btn report-btn-excel"
+              className="report-btn report-btn-excel"
               onClick={handleExportExcel}
-              title="Exportar planilha Excel com pedidos, endereço completo e produtos descritos"
+              title="Exportar planilha Excel (.xlsx)"
             >
               <i className="fa-solid fa-file-excel"></i>
-              Exportar Excel (.xlsx)
+              Exportar Excel
             </button>
 
             <button
               type="button"
-              className="report-action-btn report-btn-pdf"
+              className="report-btn report-btn-pdf"
               onClick={handleGeneratePDF}
-              title="Baixar arquivo PDF formatado com Resumo, Endereço Completo e Itens"
+              title="Baixar arquivo PDF formatado para impressão em folhas A4"
             >
               <i className="fa-solid fa-file-pdf"></i>
-              Baixar Relatório PDF
+              Baixar PDF
             </button>
           </div>
         </div>
